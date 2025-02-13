@@ -279,3 +279,19 @@
     @apply bg-background text-foreground overflow-hidden;
   }
 }
+
+/* Add these styles to your CSS */
+@media (max-width: 768px) {
+  .grid-stack > .grid-stack-item {
+    min-height: auto !important;
+    margin-bottom: 8px !important;
+  }
+  
+  .grid-stack > .grid-stack-item > .grid-stack-item-content {
+    inset: 4px !important;
+  }
+  
+  .grid-stack {
+    min-height: calc(100vh - 200px) !important;
+  }
+}

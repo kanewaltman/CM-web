@@ -21,11 +21,11 @@ const defaultLayout = [
 
 // Mobile layout configuration (single column)
 const mobileLayout = [
-  { x: 0, y: 0, w: 1, h: 6 }, // TradingViewChart
-  { x: 0, y: 6, w: 1, h: 6 }, // OrderBook
+  { x: 0, y: 0, w: 1, h: 6 },  // TradingViewChart
+  { x: 0, y: 6, w: 1, h: 6 },  // OrderBook
   { x: 0, y: 12, w: 1, h: 4 }, // TradeForm
   { x: 0, y: 16, w: 1, h: 4 }, // MarketOverview
-  { x: 0, y: 20, w: 1, h: 4 }, // RecentTrades
+  { x: 0, y: 20, w: 1, h: 4 }  // RecentTrades
 ];
 
 // Breakpoint for mobile view
@@ -38,7 +38,6 @@ function App() {
 
   // Initialize grid with current mode
   const initializeGrid = useCallback((mobile: boolean) => {
-    // Wait for DOM elements to be ready
     const gridElement = document.querySelector('.grid-stack');
     const gridItems = document.querySelectorAll('.grid-stack-item');
     
@@ -50,17 +49,21 @@ function App() {
     const g = GridStack.init({
       float: false,
       cellHeight: mobile ? '100px' : 'auto',
-      minRow: 3,
+      minRow: mobile ? 24 : 3,
       margin: 8,
       column: mobile ? 1 : 12,
+      disableOneColumnMode: true,
       acceptWidgets: true,
       removable: '#trash',
       draggable: {
         handle: '.widget-header',
       },
       animate: true,
-      maxRow: 12,
+      maxRow: mobile ? 24 : 12,
     });
+
+    // Clear existing layout
+    g.removeAll();
 
     // Batch update for smoother transitions
     g.batchUpdate();
@@ -68,9 +71,21 @@ function App() {
     
     gridItems.forEach((item, index) => {
       if (layout[index]) {
-        g.addWidget(item, layout[index]);
+        // Force height calculation for mobile
+        const config = {
+          ...layout[index],
+          autoPosition: mobile,
+          height: mobile ? layout[index].h : undefined
+        };
+        g.addWidget(item, config);
       }
     });
+    
+    // Ensure proper layout after adding widgets
+    if (mobile) {
+      g.compact();
+    }
+    
     g.commit();
 
     return g;
@@ -122,13 +137,19 @@ function App() {
         cleanupGrid();
         setIsMobile(mobile);
         
-        // Add setTimeout to delay grid initialization
+        // Add delay for DOM updates
         setTimeout(() => {
           const newGrid = initializeGrid(mobile);
           if (newGrid) {
             setGrid(newGrid);
+            // Force compact layout after initialization on mobile
+            if (mobile) {
+              setTimeout(() => {
+                newGrid.compact();
+              }, 100);
+            }
           }
-        }, 100); // Small delay to ensure DOM elements are ready
+        }, 150);
       }
     });
   }, [isMobile, initializeGrid, cleanupGrid]);
