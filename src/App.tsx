@@ -38,8 +38,14 @@ function App() {
 
   // Initialize grid with current mode
   const initializeGrid = useCallback((mobile: boolean) => {
+    // Wait for DOM elements to be ready
     const gridElement = document.querySelector('.grid-stack');
-    if (!gridElement) return null;
+    const gridItems = document.querySelectorAll('.grid-stack-item');
+    
+    if (!gridElement || !gridItems.length) {
+      console.warn('Grid elements not found, retrying...');
+      return null;
+    }
 
     const g = GridStack.init({
       float: false,
@@ -56,14 +62,14 @@ function App() {
       maxRow: 12,
     });
 
-    // Apply layout
-    const items = document.querySelectorAll('.grid-stack-item');
+    // Batch update for smoother transitions
+    g.batchUpdate();
     const layout = mobile ? mobileLayout : defaultLayout;
     
-    g.batchUpdate();
-    items.forEach((item, index) => {
-      const config = layout[index];
-      g.addWidget(item, config);
+    gridItems.forEach((item, index) => {
+      if (layout[index]) {
+        g.addWidget(item, layout[index]);
+      }
     });
     g.commit();
 
@@ -89,7 +95,17 @@ function App() {
   // Cleanup function for grid
   const cleanupGrid = useCallback(() => {
     if (grid) {
+      // Save current positions if needed
+      // const positions = grid.save();
+      
+      // Properly destroy grid instance
       grid.destroy(false); // false = don't remove DOM elements
+      
+      // Remove any leftover gridstack-specific classes
+      document.querySelectorAll('.grid-stack-item').forEach(item => {
+        item.classList.remove('ui-draggable', 'ui-resizable', 'ui-draggable-handle');
+      });
+      
       setGrid(null);
     }
   }, [grid]);
