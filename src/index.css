@@ -1,0 +1,281 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+
+  /* Border Radius */
+  --radius-sm: 0.3rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.8rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Background Elevation Levels */
+  --color-bg-base: 0 0% 100%;          /* Main app background */
+  --color-bg-surface: 0 0% 98%;       /* First level elevation (cards) */
+  --color-bg-surface-alt: 0 0% 96%;   /* Alternative surface color */
+  --color-bg-elevated: 0 0% 100%;     /* Elevated components (popovers, dropdowns) */
+  --color-bg-inset: 0 0% 95%;         /* Inset areas (scrollable containers) */
+  --color-bg-subtle: 0 0% 96%;        /* Subtle backgrounds */
+  
+  /* Widget Specific */
+  --color-widget-bg: 0 0% 90%;        /* Widget background */
+  --color-widget-header: 0 0% 95%;   /* Widget header */
+  --color-widget-content: 0 0% 95%;   /* Widget content area */
+  --color-widget-inset: 0 0% 100%;     /* Widget inset areas (scrollable) */
+
+  background-color: hsl(var(--color-bg-base));
+
+  /* Scrollbar Custom Properties */
+  --scrollbar-size: 4px;
+  --scrollbar-thumb-radius: 4px;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+
+  /* Theme Colors - Light */
+  --color-background-main: var(--color-bg-base);
+  --color-background-elevated: var(--color-bg-elevated);
+  --color-background-subtle: var(--color-bg-subtle);
+  --color-background-overlay: var(--color-bg-elevated);
+  
+  --color-foreground-default: 215 25% 27%;
+  --color-foreground-muted: 215 25% 40%;
+  --color-foreground-subtle: 0 0% 45%;
+  
+  --color-border-default: 0 0% 90%;
+  --color-border-muted: 0 0% 85%;
+  
+  --color-primary-default: 0 0% 9%;
+  --color-primary-foreground: 0 0% 98%;
+  
+  --color-accent-default: 0 0% 96%;
+  --color-accent-foreground: 0 0% 9%;
+  
+  --color-success-default: 142 72% 29%;
+  --color-success-foreground: 0 0% 98%;
+  
+  --color-warning-default: 38 92% 50%;
+  --color-warning-foreground: 0 0% 98%;
+  
+  --color-destructive-default: 0 84% 60%;
+  --color-destructive-foreground: 0 0% 98%;
+
+  /* Trading Colors */
+  --color-buy: 145 80% 38%;
+  --color-sell: 0 84% 60%;
+
+  /* Component Specific */
+  --color-input-background: var(--color-bg-inset);
+  --color-input-border: 0 0% 90%;
+  --color-input-ring: 215 25% 27%;
+  
+  /* Focus & Interactive States */
+  --color-focus-ring: 215 25% 27%;
+  --color-hover-overlay: 0 0% 0%;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark {
+  /* Background Elevation Levels - All flattened to same level */
+  --color-bg-base: 0 0% 4%;           /* Main app background */
+  --color-bg-surface: 0 0% 4%;        /* First level elevation */
+  --color-bg-surface-alt: 0 0% 4%;    /* Alternative surface color */
+  --color-bg-elevated: 0 0% 4%;       /* Elevated components */
+  --color-bg-inset: 0 0% 4%;          /* Inset areas */
+  --color-bg-subtle: 0 0% 4%;         /* Subtle backgrounds */
+  
+  /* Widget Specific - All flattened */
+  --color-widget-bg: 0 0% 7%;         /* Widget background */
+  --color-widget-header: 0 0% 7%;     /* Widget header */
+  --color-widget-content: 0 0% 7%;    /* Widget content area */
+  --color-widget-inset: 0 0% 6%;      /* Widget inset areas */
+
+  background-color: hsl(var(--color-bg-base));
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+
+  /* Theme Colors - Dark */
+  --color-background-main: var(--color-bg-base);
+  --color-background-elevated: var(--color-bg-elevated);
+  --color-background-subtle: var(--color-bg-subtle);
+  --color-background-overlay: var(--color-bg-elevated);
+  
+  --color-foreground-default: 0 0% 98%;
+  --color-foreground-muted: 0 0% 64%;
+  --color-foreground-subtle: 0 0% 50%;
+  
+  --color-border-default: 0 0% 08%;
+  --color-border-muted: 0 0% 20%;
+  
+  --color-primary-default: 0 0% 98%;
+  --color-primary-foreground: 0 0% 9%;
+  
+  --color-accent-default: 0 0% 15%;
+  --color-accent-foreground: 0 0% 98%;
+  
+  --color-success-default: 142 72% 29%;
+  --color-success-foreground: 0 0% 98%;
+  
+  --color-warning-default: 38 92% 50%;
+  --color-warning-foreground: 0 0% 98%;
+  
+  --color-destructive-default: 0 63% 31%;
+  --color-destructive-foreground: 0 0% 98%;
+
+  /* Component Specific */
+  --color-input-background: var(--color-bg-inset);
+  --color-input-border: 0 0% 15%;
+  --color-input-ring: 0 0% 83%;
+  
+  /* Focus & Interactive States */
+  --color-focus-ring: 0 0% 83%;
+  --color-hover-overlay: 0 0% 100%;
+}
+
+/* Add GridStack specific styles */
+.grid-stack {
+  background: transparent;
+}
+
+.grid-stack-item-content {
+  inset: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+}
+
+.light .grid-stack-item-content {
+  background: hsl(var(--color-widget-bg));
+  border: 1px solid hsla(var(--color-border-default) / 0.05);
+  box-shadow: 0px 1px 2px hsla(var(--color-hover-overlay) / 0.05);
+}
+
+.dark .grid-stack-item-content {
+  background: hsl(var(--color-widget-bg));
+  border: 1px solid hsla(var(--color-border-default) / 0.1);
+  box-shadow: none;
+}
+
+/* Widget header styling */
+.widget-header {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: move;
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  background: hsl(var(--color-widget-header));
+}
+
+.widget-content {
+  background: hsl(var(--color-widget-content));
+}
+
+.widget-inset {
+  background: hsl(var(--color-widget-inset)) !important;
+}
+
+/* Make header buttons clickable */
+.widget-header button {
+  cursor: pointer;
+}
+
+.widget-header button:hover {
+  pointer-events: auto;
+}
+
+/* Add these table styles after the widget styles section */
+.table-container {
+  background: hsl(var(--color-widget-inset));
+}
+
+/* Custom Scrollbar Styling */
+@supports (scrollbar-width: thin) {
+  /* Firefox */
+  .scrollbar-thin,
+  .scrollbar-main {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+  }
+}
+
+/* Webkit browsers */
+.scrollbar-thin::-webkit-scrollbar,
+.scrollbar-main::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.scrollbar-thin::-webkit-scrollbar-track,
+.scrollbar-main::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-color);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb,
+.scrollbar-main::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+/* Remove scrollbar buttons and corner */
+.scrollbar-thin::-webkit-scrollbar-button,
+.scrollbar-main::-webkit-scrollbar-button,
+.scrollbar-thin::-webkit-scrollbar-corner,
+.scrollbar-main::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Hover effects */
+.scrollbar-thin::-webkit-scrollbar-thumb:hover,
+.scrollbar-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover,
+.dark .scrollbar-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@layer base {
+  :root {
+    --background: var(--color-bg-base);
+    --foreground: var(--color-foreground-default);
+    --card: var(--color-bg-surface);
+    --card-foreground: var(--color-foreground-default);
+    --popover: var(--color-bg-elevated);
+    --popover-foreground: var(--color-foreground-default);
+    --primary: var(--color-primary-default);
+    --primary-foreground: var(--color-primary-foreground);
+    --secondary: var(--color-bg-subtle);
+    --secondary-foreground: var(--color-foreground-default);
+    --muted: var(--color-bg-subtle);
+    --muted-foreground: var(--color-foreground-muted);
+    --accent: var(--color-accent-default);
+    --accent-foreground: var(--color-accent-foreground);
+    --destructive: var(--color-destructive-default);
+    --destructive-foreground: var(--color-destructive-foreground);
+    --border: var(--color-border-default);
+    --input: var(--color-input-border);
+    --ring: var(--color-focus-ring);
+    --radius: var(--radius-md);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground overflow-hidden;
+  }
+}
