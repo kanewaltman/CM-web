@@ -105,10 +105,14 @@ function App() {
       if (mobile !== isMobile) {
         cleanupGrid();
         setIsMobile(mobile);
-        const newGrid = initializeGrid(mobile);
-        if (newGrid) {
-          setGrid(newGrid);
-        }
+        
+        // Add setTimeout to delay grid initialization
+        setTimeout(() => {
+          const newGrid = initializeGrid(mobile);
+          if (newGrid) {
+            setGrid(newGrid);
+          }
+        }, 100); // Small delay to ensure DOM elements are ready
       }
     });
   }, [isMobile, initializeGrid, cleanupGrid]);
