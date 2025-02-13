@@ -43,19 +43,15 @@ function App() {
   // Cleanup function for grid
   const cleanupGrid = useCallback(() => {
     if (grid) {
-      // Properly destroy grid instance
-      grid.destroy(false); // false = don't remove DOM elements
-      
-      // Remove any leftover gridstack-specific classes
+      grid.destroy(false);
       document.querySelectorAll('.grid-stack-item').forEach(item => {
         item.classList.remove('ui-draggable', 'ui-resizable', 'ui-draggable-handle');
       });
-      
       setGrid(null);
     }
   }, [grid]);
 
-  // Modify handleGridResize to use the grid parameter
+  // Handle grid resize
   const handleGridResize = useCallback(() => {
     if (!grid) return;
     
@@ -77,12 +73,12 @@ function App() {
         const node = item.gridstackNode;
         if (!node) return;
         
-        // Use grid.isAreaEmpty instead of collide
+        // Use grid.isAreaEmpty for collision detection
         const hasCollision = !grid.isAreaEmpty(node.x || 0, node.y || 0, node.w || 1, node.h || 1);
         
         if (hasCollision) {
           node.y = maxY;
-          grid.update(item, node.x || 0, maxY);
+          grid.update(item, { x: node.x || 0, y: maxY });
         }
         maxY = Math.max(maxY, (node.y || 0) + (node.h || 1));
       });
