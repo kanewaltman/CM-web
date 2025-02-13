@@ -42,7 +42,7 @@ function App() {
     if (!gridElement) return null;
 
     const g = GridStack.init({
-      float: true,
+      float: false,
       cellHeight: mobile ? '100px' : 'auto',
       minRow: 3,
       margin: 8,
@@ -52,6 +52,8 @@ function App() {
       draggable: {
         handle: '.widget-header',
       },
+      animate: true,
+      maxRow: 12,
     });
 
     // Apply layout
