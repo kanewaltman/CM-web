@@ -47,45 +47,151 @@ function App() {
     }
 
     const g = GridStack.init({
-      float: false,
+      float: true,
       cellHeight: mobile ? '100px' : 'auto',
       minRow: mobile ? 24 : 3,
       margin: 8,
       column: mobile ? 1 : 12,
       disableOneColumnMode: true,
-      acceptWidgets: true,
-      removable: '#trash',
+      animate: true,
       draggable: {
         handle: '.widget-header',
       },
-      animate: true,
-      maxRow: mobile ? 24 : 12,
+      resizable: {
+        handles: 'e, se, s, sw, w',
+        autoHide: true,
+        start: (event) => {
+          const grid = event.target.gridstackNode.grid;
+          grid.batchUpdate();
+        },
+        resize: (event) => {
+          const grid = event.target.gridstackNode.grid;
+          const node = event.target.gridstackNode;
+          
+          // Get all nodes except current one
+          const otherNodes = grid.engine.nodes.filter(n => n !== node);
+          
+          // Find nodes that need to be moved
+          const affectedNodes = otherNodes.filter(n => {
+            const collision = grid.collide(node, n);
+            return collision && (
+              (node.x <= n.x && node.x + node.w > n.x) || // Collision from left
+              (node.y <= n.y && node.y + node.h > n.y)    // Collision from top
+            );
+          });
+
+          if (affectedNodes.length) {
+            // Try to maintain relative positions when possible
+            affectedNodes.forEach(affected => {
+              let newX = affected.x;
+              let newY = affected.y;
+
+              // If horizontal collision, try to move right
+              if (node.x + node.w > affected.x) {
+                newX = Math.min(node.x + node.w, grid.column - affected.w);
+              }
+
+              // If vertical collision or can't move horizontally, move down
+              if (node.y + node.h > affected.y || newX === affected.x) {
+                newY = node.y + node.h;
+              }
+
+              // Check if new position is valid
+              const canMove = !otherNodes.some(other => 
+                other !== affected && 
+                grid.collide({...affected, x: newX, y: newY}, other)
+              );
+
+              if (canMove) {
+                grid.move(affected.el, newX, newY);
+              } else {
+                // Find next available position
+                const nextPos = grid.findEmptyPosition(affected.w, affected.h, newX, newY);
+                if (nextPos) {
+                  grid.move(affected.el, nextPos.x, nextPos.y);
+                }
+              }
+            });
+          }
+
+          grid._updateContainerHeight();
+        },
+        stop: (event) => {
+          const grid = event.target.gridstackNode.grid;
+          grid.batchUpdate();
+          grid.compact();
+          grid.commit();
+        }
+      },
+      // Allow widgets to float freely
+      float: true,
+      // Disable strict positioning
+      strictCellPositioning: false,
+      // Enable collision detection but with more flexible handling
+      collision: {
+        wait: false,
+        reposition: true
+      }
     });
 
-    // Clear existing layout
-    g.removeAll();
+    // Add window resize handler for the grid
+    const handleGridResize = () => {
+      if (!grid) return;
+      
+      grid.batchUpdate();
+      const items = grid.getGridItems();
+      
+      // Sort items by position for predictable layout
+      items.sort((a, b) => {
+        const nodeA = a.gridstackNode;
+        const nodeB = b.gridstackNode;
+        return nodeA.y - nodeB.y || nodeA.x - nodeB.x;
+      });
+      
+      // Process items sequentially
+      let maxY = 0;
+      items.forEach(item => {
+        const node = item.gridstackNode;
+        const collisions = grid.collide(node);
+        
+        if (collisions) {
+          node.y = maxY;
+          grid.update(item, node.x, node.y);
+        }
+        maxY = Math.max(maxY, node.y + node.h);
+      });
+      
+      grid.compact();
+      grid._updateContainerHeight();
+      grid.commit();
+    };
 
-    // Batch update for smoother transitions
+    // Debounce the resize handler
+    let resizeTimeout: number;
+    window.addEventListener('resize', () => {
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+      resizeTimeout = window.setTimeout(handleGridResize, 100);
+    });
+
+    // Initialize layout
     g.batchUpdate();
     const layout = mobile ? mobileLayout : defaultLayout;
     
     gridItems.forEach((item, index) => {
       if (layout[index]) {
-        // Force height calculation for mobile
         const config = {
           ...layout[index],
-          autoPosition: mobile,
-          height: mobile ? layout[index].h : undefined
+          autoPosition: false,
+          minWidth: 2,
+          maxWidth: 12
         };
         g.addWidget(item, config);
       }
     });
     
-    // Ensure proper layout after adding widgets
-    if (mobile) {
-      g.compact();
-    }
-    
+    g.compact();
     g.commit();
 
     return g;
@@ -137,19 +243,13 @@ function App() {
         cleanupGrid();
         setIsMobile(mobile);
         
-        // Add delay for DOM updates
+        // Add setTimeout to delay grid initialization
         setTimeout(() => {
           const newGrid = initializeGrid(mobile);
           if (newGrid) {
             setGrid(newGrid);
-            // Force compact layout after initialization on mobile
-            if (mobile) {
-              setTimeout(() => {
-                newGrid.compact();
-              }, 100);
-            }
           }
-        }, 150);
+        }, 100); // Small delay to ensure DOM elements are ready
       }
     });
   }, [isMobile, initializeGrid, cleanupGrid]);
