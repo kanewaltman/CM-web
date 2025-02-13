@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { GridStack } from 'gridstack';
+import { GridStack, GridStackWidget } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
@@ -35,8 +35,66 @@ function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const resizeFrameRef = useRef<number>();
+  const [savedDesktopLayout, setSavedDesktopLayout] = useState<GridStackWidget[]>(() => {
+    const saved = localStorage.getItem('desktop-layout');
+    return saved ? JSON.parse(saved) : defaultLayout;
+  });
 
-  // Initialize grid with current mode
+  // Cleanup function for grid
+  const cleanupGrid = useCallback(() => {
+    if (grid) {
+      // Properly destroy grid instance
+      grid.destroy(false); // false = don't remove DOM elements
+      
+      // Remove any leftover gridstack-specific classes
+      document.querySelectorAll('.grid-stack-item').forEach(item => {
+        item.classList.remove('ui-draggable', 'ui-resizable', 'ui-draggable-handle');
+      });
+      
+      setGrid(null);
+    }
+  }, [grid]);
+
+  // Modify handleGridResize to use the grid parameter
+  const handleGridResize = useCallback(() => {
+    if (!grid) return;
+    
+    try {
+      grid.batchUpdate();
+      const items = grid.getGridItems();
+      
+      // Sort items by position for predictable layout
+      items.sort((a, b) => {
+        const nodeA = a.gridstackNode;
+        const nodeB = b.gridstackNode;
+        if (!nodeA || !nodeB) return 0;
+        return (nodeA.y || 0) - (nodeB.y || 0) || (nodeA.x || 0) - (nodeB.x || 0);
+      });
+      
+      // Process items sequentially
+      let maxY = 0;
+      items.forEach(item => {
+        const node = item.gridstackNode;
+        if (!node) return;
+        
+        // Use grid.isAreaEmpty instead of collide
+        const hasCollision = !grid.isAreaEmpty(node.x || 0, node.y || 0, node.w || 1, node.h || 1);
+        
+        if (hasCollision) {
+          node.y = maxY;
+          grid.update(item, node.x || 0, maxY);
+        }
+        maxY = Math.max(maxY, (node.y || 0) + (node.h || 1));
+      });
+      
+      grid.compact();
+      grid.commit();
+    } catch (error) {
+      console.warn('Grid resize failed:', error);
+    }
+  }, [grid]);
+
+  // Modify the grid initialization to properly handle events
   const initializeGrid = useCallback((mobile: boolean) => {
     const gridElement = document.querySelector('.grid-stack');
     const gridItems = document.querySelectorAll('.grid-stack-item');
@@ -46,156 +104,155 @@ function App() {
       return null;
     }
 
-    const g = GridStack.init({
-      float: true,
-      cellHeight: mobile ? '100px' : 'auto',
-      minRow: mobile ? 24 : 3,
-      margin: 8,
-      column: mobile ? 1 : 12,
-      disableOneColumnMode: true,
-      animate: true,
-      draggable: {
-        handle: '.widget-header',
-      },
-      resizable: {
-        handles: 'e, se, s, sw, w',
-        autoHide: true,
-        start: (event) => {
-          const grid = event.target.gridstackNode.grid;
-          grid.batchUpdate();
+    try {
+      // Get the latest saved layout from localStorage when initializing desktop mode
+      const latestSavedLayout = !mobile ? (() => {
+        const saved = localStorage.getItem('desktop-layout');
+        console.log('Loading saved desktop layout:', saved);
+        return saved ? JSON.parse(saved) : defaultLayout;
+      })() : mobileLayout;
+
+      const g = GridStack.init({
+        float: true,
+        cellHeight: mobile ? '100px' : 'auto',
+        minRow: mobile ? 24 : 3,
+        margin: 8,
+        column: mobile ? 1 : 12,
+        animate: true,
+        draggable: {
+          handle: '.widget-header',
+          scroll: false,
+          appendTo: 'body'
         },
-        resize: (event) => {
-          const grid = event.target.gridstackNode.grid;
-          const node = event.target.gridstackNode;
-          
-          // Get all nodes except current one
-          const otherNodes = grid.engine.nodes.filter(n => n !== node);
-          
-          // Find nodes that need to be moved
-          const affectedNodes = otherNodes.filter(n => {
-            const collision = grid.collide(node, n);
-            return collision && (
-              (node.x <= n.x && node.x + node.w > n.x) || // Collision from left
-              (node.y <= n.y && node.y + node.h > n.y)    // Collision from top
-            );
-          });
+        resizable: {
+          handles: 'e, se, s, sw, w',
+          autoHide: true
+        }
+      });
 
-          if (affectedNodes.length) {
-            // Try to maintain relative positions when possible
-            affectedNodes.forEach(affected => {
-              let newX = affected.x;
-              let newY = affected.y;
+      // Initialize with appropriate layout
+      g.batchUpdate();
+      g.removeAll();
+      
+      // Add widgets with their saved positions
+      gridItems.forEach((item, index) => {
+        if (latestSavedLayout[index]) {
+          const config = {
+            ...latestSavedLayout[index],
+            autoPosition: false,
+            minWidth: mobile ? 1 : 2,
+            maxWidth: mobile ? 1 : 12,
+            x: latestSavedLayout[index].x,
+            y: latestSavedLayout[index].y,
+            w: latestSavedLayout[index].w,
+            h: latestSavedLayout[index].h
+          };
+          g.addWidget(item, config);
+        }
+      });
+      
+      g.compact();
+      g.commit();
 
-              // If horizontal collision, try to move right
-              if (node.x + node.w > affected.x) {
-                newX = Math.min(node.x + node.w, grid.column - affected.w);
-              }
+      // Add layout change listeners for desktop mode
+      if (!mobile && g.on) {
+        g.on('change', () => {
+          const currentLayout = g.save(true) as GridStackWidget[];
+          if (currentLayout && currentLayout.length > 0) {
+            console.log('Saving desktop layout:', currentLayout);
+            localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
+            setSavedDesktopLayout(currentLayout);
+          }
+        });
 
-              // If vertical collision or can't move horizontally, move down
-              if (node.y + node.h > affected.y || newX === affected.x) {
-                newY = node.y + node.h;
-              }
+        g.on('dragstop resizestop', () => {
+          setTimeout(() => {
+            const currentLayout = g.save(true) as GridStackWidget[];
+            if (currentLayout && currentLayout.length > 0) {
+              console.log('Saving desktop layout after drag/resize:', currentLayout);
+              localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
+              setSavedDesktopLayout(currentLayout);
+            }
+          }, 0);
+        });
+      }
 
-              // Check if new position is valid
-              const canMove = !otherNodes.some(other => 
-                other !== affected && 
-                grid.collide({...affected, x: newX, y: newY}, other)
-              );
+      return g;
+    } catch (error) {
+      console.error('Grid initialization failed:', error);
+      return null;
+    }
+  }, []);
 
-              if (canMove) {
-                grid.move(affected.el, newX, newY);
-              } else {
-                // Find next available position
-                const nextPos = grid.findEmptyPosition(affected.w, affected.h, newX, newY);
-                if (nextPos) {
-                  grid.move(affected.el, nextPos.x, nextPos.y);
-                }
+  // Define saveCurrentLayout first
+  const saveCurrentLayout = useCallback(() => {
+    if (grid && !isMobile && grid.engine && typeof grid.save === 'function') {
+      try {
+        const currentLayout = grid.save(true) as GridStackWidget[];
+        if (currentLayout && currentLayout.length > 0) {
+          console.log('Saving desktop layout:', currentLayout);
+          localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
+          setSavedDesktopLayout(currentLayout);
+        }
+      } catch (error) {
+        console.warn('Failed to save layout:', error);
+      }
+    }
+  }, [grid, isMobile]);
+
+  // Handle resize with requestAnimationFrame for smooth transitions
+  const handleResize = useCallback(() => {
+    if (resizeFrameRef.current) {
+      cancelAnimationFrame(resizeFrameRef.current);
+    }
+
+    resizeFrameRef.current = requestAnimationFrame(() => {
+      const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      if (mobile !== isMobile) {
+        // Save desktop layout before switching to mobile
+        if (!mobile && grid && grid.engine) {
+          saveCurrentLayout();
+        }
+
+        cleanupGrid();
+        setIsMobile(mobile);
+        
+        // Wait for state updates to complete before initializing new grid
+        setTimeout(() => {
+          const newGrid = initializeGrid(mobile);
+          if (newGrid) {
+            newGrid.batchUpdate();
+            
+            // Get fresh references to grid items after initialization
+            const updatedItems = newGrid.getGridItems();
+            
+            // Enable dragging and resizing for all valid items
+            updatedItems.forEach(item => {
+              if (item && item.gridstackNode) {
+                newGrid.movable(item, true);
+                newGrid.resizable(item, true);
               }
             });
+
+            newGrid.commit();
+            setGrid(newGrid);
+
+            // Save initial layout after grid is set up
+            if (!mobile) {
+              setTimeout(() => {
+                const currentLayout = newGrid.save(true) as GridStackWidget[];
+                if (currentLayout && currentLayout.length > 0) {
+                  console.log('Saving initial desktop layout:', currentLayout);
+                  localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
+                  setSavedDesktopLayout(currentLayout);
+                }
+              }, 100);
+            }
           }
-
-          grid._updateContainerHeight();
-        },
-        stop: (event) => {
-          const grid = event.target.gridstackNode.grid;
-          grid.batchUpdate();
-          grid.compact();
-          grid.commit();
-        }
-      },
-      // Allow widgets to float freely
-      float: true,
-      // Disable strict positioning
-      strictCellPositioning: false,
-      // Enable collision detection but with more flexible handling
-      collision: {
-        wait: false,
-        reposition: true
+        }, 100);
       }
     });
-
-    // Add window resize handler for the grid
-    const handleGridResize = () => {
-      if (!grid) return;
-      
-      grid.batchUpdate();
-      const items = grid.getGridItems();
-      
-      // Sort items by position for predictable layout
-      items.sort((a, b) => {
-        const nodeA = a.gridstackNode;
-        const nodeB = b.gridstackNode;
-        return nodeA.y - nodeB.y || nodeA.x - nodeB.x;
-      });
-      
-      // Process items sequentially
-      let maxY = 0;
-      items.forEach(item => {
-        const node = item.gridstackNode;
-        const collisions = grid.collide(node);
-        
-        if (collisions) {
-          node.y = maxY;
-          grid.update(item, node.x, node.y);
-        }
-        maxY = Math.max(maxY, node.y + node.h);
-      });
-      
-      grid.compact();
-      grid._updateContainerHeight();
-      grid.commit();
-    };
-
-    // Debounce the resize handler
-    let resizeTimeout: number;
-    window.addEventListener('resize', () => {
-      if (resizeTimeout) {
-        clearTimeout(resizeTimeout);
-      }
-      resizeTimeout = window.setTimeout(handleGridResize, 100);
-    });
-
-    // Initialize layout
-    g.batchUpdate();
-    const layout = mobile ? mobileLayout : defaultLayout;
-    
-    gridItems.forEach((item, index) => {
-      if (layout[index]) {
-        const config = {
-          ...layout[index],
-          autoPosition: false,
-          minWidth: 2,
-          maxWidth: 12
-        };
-        g.addWidget(item, config);
-      }
-    });
-    
-    g.compact();
-    g.commit();
-
-    return g;
-  }, []);
+  }, [isMobile, initializeGrid, cleanupGrid, grid, saveCurrentLayout]);
 
   const resetLayout = useCallback(() => {
     if (grid) {
@@ -210,49 +267,55 @@ function App() {
       });
       
       grid.commit();
+      
+      // Update saved layout when resetting to default
+      if (!isMobile) {
+        setSavedDesktopLayout(defaultLayout);
+        localStorage.setItem('desktop-layout', JSON.stringify(defaultLayout));
+      }
     }
   }, [grid, isMobile]);
 
-  // Cleanup function for grid
-  const cleanupGrid = useCallback(() => {
-    if (grid) {
-      // Save current positions if needed
-      // const positions = grid.save();
-      
-      // Properly destroy grid instance
-      grid.destroy(false); // false = don't remove DOM elements
-      
-      // Remove any leftover gridstack-specific classes
-      document.querySelectorAll('.grid-stack-item').forEach(item => {
-        item.classList.remove('ui-draggable', 'ui-resizable', 'ui-draggable-handle');
-      });
-      
-      setGrid(null);
+  const copyLayout = useCallback(() => {
+    if (grid && !isMobile) {
+      const currentLayout = grid.save(true) as GridStackWidget[];
+      return JSON.stringify(currentLayout);
     }
-  }, [grid]);
+    return '';
+  }, [grid, isMobile]);
 
-  // Handle resize with requestAnimationFrame for smooth transitions
-  const handleResize = useCallback(() => {
-    if (resizeFrameRef.current) {
-      cancelAnimationFrame(resizeFrameRef.current);
-    }
-
-    resizeFrameRef.current = requestAnimationFrame(() => {
-      const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
-      if (mobile !== isMobile) {
-        cleanupGrid();
-        setIsMobile(mobile);
-        
-        // Add setTimeout to delay grid initialization
-        setTimeout(() => {
-          const newGrid = initializeGrid(mobile);
-          if (newGrid) {
-            setGrid(newGrid);
-          }
-        }, 100); // Small delay to ensure DOM elements are ready
+  const pasteLayout = useCallback((layoutData: string) => {
+    if (grid && !isMobile) {
+      try {
+        const newLayout = JSON.parse(layoutData) as GridStackWidget[];
+        if (Array.isArray(newLayout) && newLayout.length === grid.getGridItems().length) {
+          grid.batchUpdate();
+          grid.removeAll();
+          
+          const items = document.querySelectorAll('.grid-stack-item');
+          items.forEach((item, index) => {
+            if (newLayout[index]) {
+              const config = {
+                ...newLayout[index],
+                autoPosition: false,
+                minWidth: 2,
+                maxWidth: 12
+              };
+              grid.addWidget(item, config);
+            }
+          });
+          
+          grid.commit();
+          
+          // Save the pasted layout as the new default
+          localStorage.setItem('desktop-layout', layoutData);
+          setSavedDesktopLayout(newLayout);
+        }
+      } catch (error) {
+        console.error('Failed to parse layout data:', error);
       }
-    });
-  }, [isMobile, initializeGrid, cleanupGrid]);
+    }
+  }, [grid, isMobile]);
 
   useEffect(() => {
     // Initial grid setup
@@ -286,7 +349,11 @@ function App() {
       <TopBar />
       <main className="h-[calc(100vh-64px)] mt-16 overflow-y-auto scrollbar-main">
         <div className="max-w-[1920px] mx-auto px-4">
-          <ControlBar onResetLayout={resetLayout} />
+          <ControlBar 
+            onResetLayout={resetLayout} 
+            onCopyLayout={copyLayout}
+            onPasteLayout={pasteLayout}
+          />
           <div className="grid-stack">
             <div className="grid-stack-item" gs-x="0" gs-y="0" gs-w={isMobile ? "1" : "8"} gs-h="6">
               <div className="grid-stack-item-content">

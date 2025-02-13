@@ -1,23 +1,63 @@
-import { ChevronDown, LayoutGrid, RotateCcw } from 'lucide-react';
+import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 interface ControlBarProps {
   onResetLayout: () => void;
+  onCopyLayout: () => string;
+  onPasteLayout: (layout: string) => void;
 }
 
-export function ControlBar({ onResetLayout }: ControlBarProps) {
+export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: ControlBarProps) {
   const { theme } = useTheme();
   const colors = getThemeValues(theme);
   const [isOpen, setIsOpen] = useState(false);
+  const { toast } = useToast();
+
+  const handleCopyLayout = () => {
+    const layoutData = onCopyLayout();
+    navigator.clipboard.writeText(layoutData).then(() => {
+      toast({
+        title: "Layout copied",
+        description: "Layout configuration has been copied to clipboard",
+      });
+    }).catch((err) => {
+      console.error('Failed to copy layout:', err);
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy layout to clipboard",
+        variant: "destructive",
+      });
+    });
+  };
+
+  const handlePasteLayout = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      onPasteLayout(text);
+      toast({
+        title: "Layout pasted",
+        description: "New layout has been applied",
+      });
+    } catch (err) {
+      console.error('Failed to paste layout:', err);
+      toast({
+        title: "Failed to paste",
+        description: "Could not paste layout from clipboard",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -77,6 +117,15 @@ export function ControlBar({ onResetLayout }: ControlBarProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8}>
+              <DropdownMenuItem onClick={handleCopyLayout}>
+                <Copy className="h-4 w-4 mr-2 opacity-50" />
+                <span>Copy Layout</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePasteLayout}>
+                <Clipboard className="h-4 w-4 mr-2 opacity-50" />
+                <span>Paste Layout</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onResetLayout}>
                 <RotateCcw className="h-4 w-4 mr-2 opacity-50" />
                 <span>Reset Layout</span>
