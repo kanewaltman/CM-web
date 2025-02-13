@@ -6,7 +6,6 @@ import { Slider } from './ui/slider';
 import { WidgetContainer } from './ui/widget-container';
 
 export function TradeForm() {
-  const [orderType, setOrderType] = useState('limit');
   const [side, setSide] = useState('buy');
 
   return (

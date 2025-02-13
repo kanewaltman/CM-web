@@ -35,7 +35,9 @@ function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const resizeFrameRef = useRef<number>();
-  const [savedDesktopLayout, setSavedDesktopLayout] = useState<GridStackWidget[]>(() => {
+
+  // Remove savedDesktopLayout state and only keep the setter
+  const [, setSavedDesktopLayout] = useState<GridStackWidget[]>(() => {
     const saved = localStorage.getItem('desktop-layout');
     return saved ? JSON.parse(saved) : defaultLayout;
   });
@@ -318,6 +320,7 @@ function App() {
     const newGrid = initializeGrid(isMobile);
     if (newGrid) {
       setGrid(newGrid);
+      handleGridResize();
     }
 
     // Add resize listener
@@ -338,7 +341,7 @@ function App() {
       window.removeEventListener('resize', handleResize);
       cleanupGrid();
     };
-  }, [initializeGrid, isMobile, handleResize, cleanupGrid]);
+  }, [initializeGrid, isMobile, handleResize, cleanupGrid, handleGridResize]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
