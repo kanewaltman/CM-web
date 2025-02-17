@@ -58,7 +58,14 @@ function Calendar({
         ...classNames,
       }}
       {...props}
-    />
+    >
+      <nav_button_previous>
+        <ChevronLeftIcon className="h-4 w-4" />
+      </nav_button_previous>
+      <nav_button_next>
+        <ChevronRightIcon className="h-4 w-4" />
+      </nav_button_next>
+    </DayPicker>
   );
 }
 Calendar.displayName = 'Calendar';
