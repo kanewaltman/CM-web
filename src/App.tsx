@@ -107,6 +107,11 @@ function App() {
       const savedLayout = !mobile ? localStorage.getItem('desktop-layout') : null;
       const layoutConfig = savedLayout ? JSON.parse(savedLayout) : (mobile ? mobileLayout : defaultLayout);
 
+      // Create a map of layout items by their IDs for efficient lookup
+      const layoutConfigMap = new Map(
+        layoutConfig.map((item: GridStackWidget) => [item.id, item])
+      );
+
       const options: GridStackOptions = {
         float: false,
         cellHeight: mobile ? '100px' : 'auto',
@@ -134,16 +139,25 @@ function App() {
       g.batchUpdate();
       g.removeAll(false);
       
-      // Add widgets with their saved positions
+      // Add widgets with their saved positions, using ID matching
       gridItems.forEach((item, index) => {
-        // Find matching layout config by index or id
-        const config = layoutConfig[index] || defaultLayout[index];
-        if (config) {
-          const widgetConfig = {
+        const itemId = item.getAttribute('data-gs-id') || defaultLayout[index].id;
+        
+        // Try to find saved config by ID first, fall back to default if not found
+        const config = layoutConfigMap.get(itemId) || defaultLayout[index];
+        
+        // Type guard to ensure config has required properties
+        const isValidConfig = (cfg: any): cfg is GridStackWidget => {
+          return cfg && typeof cfg.x === 'number' && typeof cfg.y === 'number' && 
+                 typeof cfg.w === 'number' && typeof cfg.h === 'number';
+        };
+        
+        if (isValidConfig(config)) {
+          const widgetConfig: GridStackWidget = {
             autoPosition: false,
             minW: mobile ? 1 : 2,
             maxW: mobile ? 1 : 12,
-            id: config.id || `widget-${index}`,
+            id: itemId,
             x: config.x,
             y: config.y,
             w: config.w,
@@ -248,7 +262,7 @@ function App() {
           const node = item.gridstackNode;
           if (!node) return null;
           return {
-            id: node.id,
+            id: node.id || defaultLayout[items.indexOf(item)].id, // Fallback to default layout ID if not set
             x: node.x,
             y: node.y,
             w: node.w,
