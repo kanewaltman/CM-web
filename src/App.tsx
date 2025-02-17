@@ -149,7 +149,16 @@ function App() {
             w: latestSavedLayout[index].w,
             h: latestSavedLayout[index].h
           };
-          g.addWidget(item as GridStackElement, config);
+          
+          // Convert HTMLElement to a GridStack widget with proper type casting
+          const gridItem = item as unknown as GridStackElement;
+          g.makeWidget(gridItem);
+          
+          // Then update its position and size
+          const gsItem = g.engine.nodes.find(n => n.el === gridItem);
+          if (gsItem?.el) {
+            g.update(gsItem.el, config);
+          }
         }
       });
       
