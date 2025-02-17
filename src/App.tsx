@@ -124,7 +124,7 @@ function App() {
           handles: 'e, se, s, sw, w',
           autoHide: true
         },
-        staticGrid: false,
+        staticGrid: mobile, // Lock widgets in mobile mode
         removable: false,
         acceptWidgets: false
       };
@@ -135,7 +135,7 @@ function App() {
       g.batchUpdate();
       g.removeAll(false);
       
-      // Convert HTMLElements to GridStack widgets and add them
+      // Add widgets with their saved positions
       gridItems.forEach((item, index) => {
         if (latestSavedLayout[index]) {
           const config = {
@@ -149,9 +149,7 @@ function App() {
             w: latestSavedLayout[index].w,
             h: latestSavedLayout[index].h
           };
-          // Make the widget first, then add it
-          const widget = g.makeWidget(item as GridStackElement);
-          g.update(widget, config);
+          g.addWidget(item as GridStackElement, config);
         }
       });
       
@@ -166,6 +164,10 @@ function App() {
             localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
             setSavedDesktopLayout(currentLayout);
           }
+        });
+
+        g.on('dragstop resizestop', () => {
+          saveCurrentLayout();
         });
       }
 
