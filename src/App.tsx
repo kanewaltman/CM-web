@@ -135,7 +135,7 @@ function App() {
       g.batchUpdate();
       g.removeAll(false);
       
-      // Add widgets with their saved positions
+      // Convert HTMLElements to GridStack widgets and add them
       gridItems.forEach((item, index) => {
         if (latestSavedLayout[index]) {
           const config = {
@@ -149,7 +149,9 @@ function App() {
             w: latestSavedLayout[index].w,
             h: latestSavedLayout[index].h
           };
-          g.addWidget(item as GridStackElement, config);
+          // Make the widget first, then add it
+          const widget = g.makeWidget(item as GridStackElement);
+          g.update(widget, config);
         }
       });
       
@@ -158,23 +160,12 @@ function App() {
 
       // Add layout change listeners for desktop mode
       if (!mobile) {
-        // Updated event handling for v11.3.0
         g.on('change', (_event: Event, _items: GridStackNode[]) => {
           const currentLayout = g.save(true) as GridStackWidget[];
           if (currentLayout && Array.isArray(currentLayout) && currentLayout.length > 0) {
             localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
             setSavedDesktopLayout(currentLayout);
           }
-        });
-
-        g.on('dragstop resizestop', (_event: Event, _element: Element) => {
-          setTimeout(() => {
-            const currentLayout = g.save(true) as GridStackWidget[];
-            if (currentLayout && Array.isArray(currentLayout) && currentLayout.length > 0) {
-              localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
-              setSavedDesktopLayout(currentLayout);
-            }
-          }, 0);
         });
       }
 
@@ -216,6 +207,7 @@ function App() {
             });
           }
         });
+        grid.compact();
         grid.commit();
         saveCurrentLayout();
       } catch (error) {
@@ -227,8 +219,19 @@ function App() {
   const handleCopyLayout = useCallback(() => {
     if (grid && !isMobile) {
       try {
-        const currentLayout = grid.save(true);
-        return JSON.stringify(currentLayout);
+        const items = grid.getGridItems();
+        const currentLayout = grid.save(true) as GridStackWidget[];
+        
+        // Ensure each layout item has an ID from the corresponding widget
+        const layoutWithIds = currentLayout.map((item, index) => {
+          const widgetNode = items[index]?.gridstackNode;
+          return {
+            ...item,
+            id: widgetNode?.id || defaultLayout[index].id || `widget-${index}`
+          };
+        });
+        
+        return JSON.stringify(layoutWithIds);
       } catch (error) {
         console.error('Failed to copy layout:', error);
         return '';
@@ -238,43 +241,79 @@ function App() {
   }, [grid, isMobile]);
 
   const handlePasteLayout = useCallback((layoutStr: string) => {
-    if (grid && !isMobile) {
-      try {
-        const layoutData = JSON.parse(layoutStr) as GridStackWidget[];
-        if (Array.isArray(layoutData) && layoutData.length > 0) {
-          grid.batchUpdate();
-          const items = grid.getGridItems();
-          
-          // Create a map of current items by their IDs
-          const itemsById = new Map();
-          items.forEach(item => {
-            if (item.gridstackNode?.id) {
-              itemsById.set(item.gridstackNode.id, item);
-            }
-          });
+    if (!grid || isMobile) {
+      console.warn('Grid not initialized or in mobile mode');
+      return;
+    }
 
-          // Apply new layout matching by ID
-          layoutData.forEach((newConfig) => {
-            if (newConfig.id) {
-              const matchingItem = itemsById.get(newConfig.id);
-              if (matchingItem && matchingItem.gridstackNode) {
-                grid.update(matchingItem, {
-                  x: newConfig.x,
-                  y: newConfig.y,
-                  w: newConfig.w,
-                  h: newConfig.h
-                });
-              }
-            }
-          });
-          
-          grid.compact();
-          grid.commit();
-          saveCurrentLayout();
-        }
-      } catch (error) {
-        console.error('Failed to parse or apply layout:', error);
+    try {
+      console.log('Attempting to parse layout:', layoutStr);
+      const layoutData = JSON.parse(layoutStr) as GridStackWidget[];
+      
+      if (!Array.isArray(layoutData)) {
+        console.error('Invalid layout data: not an array');
+        return;
       }
+
+      if (layoutData.length === 0) {
+        console.error('Empty layout data');
+        return;
+      }
+
+      console.log('Parsed layout data:', layoutData);
+      
+      grid.batchUpdate();
+      const items = grid.getGridItems();
+      console.log('Current grid items:', items);
+
+      // Create a map of current items by their IDs and positions
+      const itemsById = new Map();
+      const itemsByIndex = new Map();
+      items.forEach((item, index) => {
+        if (item.gridstackNode?.id) {
+          itemsById.set(item.gridstackNode.id, item);
+        }
+        itemsByIndex.set(index, item);
+      });
+
+      let updatedCount = 0;
+      // Apply new layout matching by ID or index as fallback
+      layoutData.forEach((newConfig, index) => {
+        // Try to find matching item by ID first
+        let matchingItem = newConfig.id ? itemsById.get(newConfig.id) : null;
+        
+        // Fallback to index-based matching if no ID match
+        if (!matchingItem) {
+          matchingItem = itemsByIndex.get(index);
+        }
+
+        if (matchingItem && matchingItem.gridstackNode) {
+          console.log('Updating item:', newConfig.id || `index ${index}`, 'with config:', newConfig);
+          grid.update(matchingItem, {
+            x: newConfig.x,
+            y: newConfig.y,
+            w: newConfig.w,
+            h: newConfig.h
+          });
+          updatedCount++;
+        } else {
+          console.warn('No matching item found for:', newConfig.id || `index ${index}`);
+        }
+      });
+
+      console.log('Updated', updatedCount, 'items');
+      
+      if (updatedCount > 0) {
+        grid.compact();
+        grid.commit();
+        saveCurrentLayout();
+      } else {
+        console.warn('No items were updated');
+        grid.commit();
+      }
+    } catch (error) {
+      console.error('Failed to parse or apply layout:', error);
+      grid?.commit(); // Ensure we commit even if there's an error
     }
   }, [grid, isMobile, saveCurrentLayout]);
 
@@ -330,69 +369,6 @@ function App() {
       }
     });
   }, [isMobile, initializeGrid, cleanupGrid, grid, saveCurrentLayout]);
-
-  const resetLayout = useCallback(() => {
-    if (grid) {
-      const layout = isMobile ? mobileLayout : defaultLayout;
-      grid.batchUpdate();
-      grid.removeAll();
-      
-      const items = document.querySelectorAll('.grid-stack-item');
-      items.forEach((item, index) => {
-        const config = layout[index];
-        grid.addWidget(item, config);
-      });
-      
-      grid.commit();
-      
-      // Update saved layout when resetting to default
-      if (!isMobile) {
-        setSavedDesktopLayout(defaultLayout);
-        localStorage.setItem('desktop-layout', JSON.stringify(defaultLayout));
-      }
-    }
-  }, [grid, isMobile]);
-
-  const copyLayout = useCallback(() => {
-    if (grid && !isMobile) {
-      const currentLayout = grid.save(true) as GridStackWidget[];
-      return JSON.stringify(currentLayout);
-    }
-    return '';
-  }, [grid, isMobile]);
-
-  const pasteLayout = useCallback((layoutData: string) => {
-    if (grid && !isMobile) {
-      try {
-        const newLayout = JSON.parse(layoutData) as GridStackWidget[];
-        if (Array.isArray(newLayout) && newLayout.length === grid.getGridItems().length) {
-          grid.batchUpdate();
-          grid.removeAll();
-          
-          const items = document.querySelectorAll('.grid-stack-item');
-          items.forEach((item, index) => {
-            if (newLayout[index]) {
-              const config = {
-                ...newLayout[index],
-                autoPosition: false,
-                minWidth: 2,
-                maxWidth: 12
-              };
-              grid.addWidget(item, config);
-            }
-          });
-          
-          grid.commit();
-          
-          // Save the pasted layout as the new default
-          localStorage.setItem('desktop-layout', layoutData);
-          setSavedDesktopLayout(newLayout);
-        }
-      } catch (error) {
-        console.error('Failed to parse layout data:', error);
-      }
-    }
-  }, [grid, isMobile]);
 
   useEffect(() => {
     // Initial grid setup
