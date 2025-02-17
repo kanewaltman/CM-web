@@ -103,10 +103,9 @@ function App() {
     }
 
     try {
-      const latestSavedLayout = !mobile ? (() => {
-        const saved = localStorage.getItem('desktop-layout');
-        return saved ? JSON.parse(saved) : defaultLayout;
-      })() : mobileLayout;
+      // Get saved layout or default layout
+      const savedLayout = !mobile ? localStorage.getItem('desktop-layout') : null;
+      const layoutConfig = savedLayout ? JSON.parse(savedLayout) : (mobile ? mobileLayout : defaultLayout);
 
       const options: GridStackOptions = {
         float: false,
@@ -124,7 +123,7 @@ function App() {
           handles: 'e, se, s, sw, w',
           autoHide: true
         },
-        staticGrid: mobile, // Lock widgets in mobile mode
+        staticGrid: mobile,
         removable: false,
         acceptWidgets: false
       };
@@ -137,27 +136,23 @@ function App() {
       
       // Add widgets with their saved positions
       gridItems.forEach((item, index) => {
-        if (latestSavedLayout[index]) {
-          const config = {
-            ...latestSavedLayout[index],
+        // Find matching layout config by index or id
+        const config = layoutConfig[index] || defaultLayout[index];
+        if (config) {
+          const widgetConfig = {
             autoPosition: false,
             minW: mobile ? 1 : 2,
             maxW: mobile ? 1 : 12,
-            id: latestSavedLayout[index].id || `widget-${index}`,
-            x: latestSavedLayout[index].x,
-            y: latestSavedLayout[index].y,
-            w: latestSavedLayout[index].w,
-            h: latestSavedLayout[index].h
+            id: config.id || `widget-${index}`,
+            x: config.x,
+            y: config.y,
+            w: config.w,
+            h: config.h
           };
           
-          // Convert HTMLElement to a GridStack widget with proper type casting
-          const gridItem = item as unknown as GridStackElement;
-          g.makeWidget(gridItem);
-          
-          // Then update its position and size
-          const gsItem = g.engine.nodes.find(n => n.el === gridItem);
-          if (gsItem?.el) {
-            g.update(gsItem.el, config);
+          const gridItem = g.makeWidget(item as unknown as GridStackElement);
+          if (gridItem) {
+            g.update(gridItem, widgetConfig);
           }
         }
       });
@@ -191,8 +186,25 @@ function App() {
   const saveCurrentLayout = useCallback(() => {
     if (grid && !isMobile && grid.engine && typeof grid.save === 'function') {
       try {
-        const currentLayout = grid.save(true) as GridStackWidget[];
-        if (currentLayout && currentLayout.length > 0) {
+        // Save only the layout configuration, not the content
+        const currentLayout = grid.getGridItems()
+          .map(item => {
+            const node = item.gridstackNode;
+            if (!node?.id || node.x === undefined || node.y === undefined || 
+                node.w === undefined || node.h === undefined) return null;
+            
+            const layoutItem: GridStackWidget = {
+              id: node.id,
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h
+            };
+            return layoutItem;
+          })
+          .filter((item): item is GridStackWidget => item !== null);
+
+        if (currentLayout.length > 0) {
           localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
           setSavedDesktopLayout(currentLayout);
         }
@@ -231,30 +243,20 @@ function App() {
     if (grid && !isMobile) {
       try {
         const items = grid.getGridItems();
-        const currentLayout = grid.save(true) as GridStackWidget[];
-        
-        // Create a complete snapshot of each widget's configuration
-        const layoutWithConfig = currentLayout.map((item, index) => {
-          const widgetNode = items[index]?.gridstackNode;
-          if (!widgetNode) return item;
-          
+        // Only save essential layout information
+        const layoutConfig = items.map(item => {
+          const node = item.gridstackNode;
+          if (!node) return null;
           return {
-            ...item,
-            id: widgetNode.id || defaultLayout[index].id || `widget-${index}`,
-            x: widgetNode.x,
-            y: widgetNode.y,
-            w: widgetNode.w,
-            h: widgetNode.h,
-            minW: widgetNode.minW,
-            maxW: widgetNode.maxW,
-            locked: widgetNode.locked,
-            noResize: widgetNode.noResize,
-            noMove: widgetNode.noMove,
-            autoPosition: false
+            id: node.id,
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h
           };
-        });
+        }).filter(Boolean);
         
-        return JSON.stringify(layoutWithConfig);
+        return JSON.stringify(layoutConfig);
       } catch (error) {
         console.error('Failed to copy layout:', error);
         return '';
@@ -270,7 +272,7 @@ function App() {
     }
 
     try {
-      const layoutData = JSON.parse(layoutStr) as GridStackWidget[];
+      const layoutData = JSON.parse(layoutStr);
       
       if (!Array.isArray(layoutData) || layoutData.length === 0) {
         console.error('Invalid or empty layout data');
@@ -288,50 +290,26 @@ function App() {
         }
       });
 
-      // First pass: Disable animations and collect all positions
-      grid.setAnimation(false);
-      const newPositions = new Map();
-      layoutData.forEach((newConfig) => {
-        if (newConfig.id) {
-          newPositions.set(newConfig.id, {
-            ...newConfig,
-            autoPosition: false
-          });
+      // Update positions in a single pass
+      layoutData.forEach((config) => {
+        if (config.id) {
+          const item = itemsById.get(config.id);
+          if (item && item.gridstackNode) {
+            grid.update(item, {
+              x: config.x,
+              y: config.y,
+              w: config.w,
+              h: config.h,
+              autoPosition: false
+            });
+          }
         }
       });
-
-      // Second pass: Update all widgets at once
-      let updatedCount = 0;
-      newPositions.forEach((config, id) => {
-        const item = itemsById.get(id);
-        if (item && item.gridstackNode) {
-          // Preserve exact configuration from copy
-          grid.update(item, {
-            x: config.x,
-            y: config.y,
-            w: config.w,
-            h: config.h,
-            minW: config.minW,
-            maxW: config.maxW,
-            locked: config.locked,
-            noResize: config.noResize,
-            noMove: config.noMove,
-            autoPosition: false
-          });
-          updatedCount++;
-        }
-      });
-
-      if (updatedCount > 0) {
-        saveCurrentLayout();
-      }
       
-      // Re-enable animations and commit changes
-      grid.setAnimation(true);
+      saveCurrentLayout();
       grid.commit();
     } catch (error) {
       console.error('Failed to parse or apply layout:', error);
-      grid?.setAnimation(true);
       grid?.commit();
     }
   }, [grid, isMobile, saveCurrentLayout]);
