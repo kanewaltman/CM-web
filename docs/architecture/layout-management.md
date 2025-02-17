@@ -77,6 +77,48 @@ function saveLayout(): LayoutState {
 localStorage.setItem('gridLayout', JSON.stringify(saveLayout()));
 ```
 
+### Optimized Layout Loading
+```typescript
+// Use the optimized loading strategy for more reliable layout restoration
+function loadLayoutSafely(grid: GridStack, layout: GridStackNode[]) {
+  // Phase 1: Load with scaled-down sizes (80% of final size)
+  const scaledLayout = layout.map(widget => ({
+    ...widget,
+    w: Math.max(1, Math.floor((widget.w ?? 1) * 0.8)),
+    h: Math.max(1, Math.floor((widget.h ?? 1) * 0.8))
+  }));
+
+  grid.batchUpdate();
+  try {
+    grid.removeAll();
+    scaledLayout.forEach(widget => grid.addWidget(widget));
+  } finally {
+    grid.commit();
+  }
+
+  // Phase 2: Restore to original sizes
+  setTimeout(() => {
+    grid.batchUpdate();
+    try {
+      layout.forEach(widget => {
+        const el = grid.engine.nodes.find(n => n.id === widget.id);
+        if (el?.el && widget.w !== undefined && widget.h !== undefined) {
+          grid.update(el.el, { w: widget.w, h: widget.h });
+        }
+      });
+    } finally {
+      grid.commit();
+    }
+  }, 50);
+}
+```
+
+This two-phase loading strategy significantly improves layout restoration reliability by:
+1. Initially loading widgets at 80% of their final size
+2. Allowing GridStack's layout engine more flexibility in initial placement
+3. Smoothly transitioning to the final layout after initial positioning
+4. Using batch updates for performance and visual smoothness
+
 ### Layout Copy/Paste
 ```typescript
 // Copy current layout with widget IDs
