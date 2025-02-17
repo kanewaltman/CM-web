@@ -11,6 +11,7 @@ GridStack provides our application with:
 - Layout persistence
 - Touch device support
 - Mobile-first responsive design
+- Predictable widget swapping behavior
 
 ## Integration Points
 
@@ -31,13 +32,14 @@ Our GridStack implementation includes:
 - Responsive breakpoints with mobile/desktop layouts
 - Widget position tracking with collision detection
 - Save/restore functionality with JSON serialization
+- Optimized widget swapping behavior
 
 ## Configuration
 
 Current GridStack configuration includes:
 ```typescript
 const gridstackOptions: GridStackOptions = {
-  float: true,
+  float: false, // Disabled to improve widget swapping behavior
   animate: true,
   column: 12,
   margin: 8,
@@ -64,6 +66,23 @@ const gridstackOptions: GridStackOptions = {
   }
 };
 ```
+
+### Key Configuration Choices
+
+1. **Float Disabled (`float: false`)**
+   - Improves predictability of widget swapping
+   - Prevents widgets from automatically floating up to fill gaps
+   - Maintains grid structure during drag operations
+
+2. **Drag Configuration**
+   - Header-only dragging for better UX
+   - Scroll disabled during drag for smoother operation
+   - Append to body for proper z-indexing
+
+3. **Resize Configuration**
+   - Multiple handle positions for flexible resizing
+   - Auto-hiding handles for cleaner UI
+   - Maintains aspect ratios where appropriate
 
 ## Best Practices
 
