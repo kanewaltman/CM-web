@@ -146,11 +146,15 @@
 
 /* Add GridStack specific styles */
 .grid-stack {
-  background: transparent;
+  background: transparent !important;
+}
+
+.grid-stack-item {
+  touch-action: none;
 }
 
 .grid-stack-item-content {
-  inset: 4px;
+  inset: 4px !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -177,6 +181,7 @@
   border-top-left-radius: var(--radius-xl);
   border-top-right-radius: var(--radius-xl);
   background: hsl(var(--color-widget-header));
+  z-index: 1;
 }
 
 .widget-content {
@@ -282,10 +287,11 @@
   }
 }
 
-/* GridStack resize handles */
+/* Updated GridStack resize handles for v11.3.0 */
 .grid-stack > .grid-stack-item > .ui-resizable-handle {
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
+  z-index: 2;
 }
 
 .grid-stack > .grid-stack-item:hover > .ui-resizable-handle {
@@ -298,16 +304,18 @@
   opacity: 0.8;
   z-index: 100;
   transition: transform 0.1s ease-in-out;
+  will-change: transform;
 }
 
 .grid-stack > .grid-stack-item.ui-draggable-dragging {
   cursor: grabbing !important;
 }
 
-/* Placeholder styling */
+/* Updated placeholder styling for v11.3.0 */
 .grid-stack .grid-stack-placeholder > .placeholder-content {
   background: rgba(128, 128, 128, 0.1) !important;
   border: 1px dashed rgba(128, 128, 128, 0.3) !important;
   border-radius: var(--radius-xl);
   transition: all 0.1s ease-in-out;
+  pointer-events: none;
 }

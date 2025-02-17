@@ -1,82 +1,6 @@
 # Widget Container
 
-The `WidgetContainer` component is a crucial integration point between our application's UI components and the GridStack layout system. It provides a standardized wrapper for all widgets in the dashboard.
-
-## GridStack v11 Migration Notes
-
-### Content Rendering Changes
-The way widget content is rendered has changed significantly in GridStack v11. Our `WidgetContainer` implementation needs to adapt to these changes:
-
-```typescript
-// BEFORE (v10)
-function createWidget(config: WidgetConfig) {
-  return {
-    content: `
-      <div class="grid-stack-item-content">
-        <WidgetContainer>...</WidgetContainer>
-      </div>
-    `
-  };
-}
-
-// AFTER (v11)
-// 1. Define the render callback
-GridStack.renderCB = function(el: HTMLElement, widget: GridStackWidget) {
-  const container = document.createElement('div');
-  container.className = 'widget-container';
-  // Mount React component using createRoot
-  const root = createRoot(container);
-  root.render(
-    <WidgetContainer
-      title={widget.content.title}
-      config={widget.content.config}
-    />
-  );
-  el.appendChild(container);
-};
-
-// 2. Add widget with content as data
-function createWidget(config: WidgetConfig) {
-  return {
-    id: config.id,
-    content: {
-      title: config.title,
-      config: config.widgetConfig,
-      type: config.type
-    }
-  };
-}
-```
-
-### Drag & Drop Integration
-The side panel drag & drop system has been completely rewritten in v11. Our implementation should be updated:
-
-```typescript
-// Update drag source configuration
-GridStack.setupDragIn('.widget-template', {
-  dragIn: {
-    // Define widget configurations for each draggable type
-    'chart-widget': {
-      w: 3,
-      h: 2,
-      content: {
-        type: 'chart',
-        title: 'New Chart',
-        config: { /* default chart config */ }
-      }
-    },
-    'calendar-widget': {
-      w: 2,
-      h: 3,
-      content: {
-        type: 'calendar',
-        title: 'New Calendar',
-        config: { /* default calendar config */ }
-      }
-    }
-  }
-});
-```
+The `WidgetContainer` component is a crucial integration point between our application's UI components and the GridStack v11.3.0 layout system. It provides a standardized wrapper for all widgets in the dashboard.
 
 ## Implementation
 
@@ -85,6 +9,8 @@ interface WidgetContainerProps {
   title: string;
   children: React.ReactNode;
   headerControls?: React.ReactNode;
+  id?: string; // Added for v11.3.0 widget tracking
+  onResize?: (dimensions: { width: number; height: number }) => void;
 }
 ```
 
@@ -94,9 +20,9 @@ The `WidgetContainer` is designed to work seamlessly with GridStack's grid-item 
 
 ### Grid Item Structure
 ```html
-<div class="grid-stack-item">
+<div class="grid-stack-item" gs-id="unique-widget-id">
   <div class="grid-stack-item-content">
-    <WidgetContainer>
+    <WidgetContainer title="Widget Title" id="unique-widget-id">
       {/* Widget Content */}
     </WidgetContainer>
   </div>
@@ -105,20 +31,41 @@ The `WidgetContainer` is designed to work seamlessly with GridStack's grid-item 
 
 ### Key Features
 
-1. **Resize Handling**
-   - Automatically adjusts content on resize events
-   - Maintains aspect ratios when needed
-   - Optimizes re-renders during resize
+1. **Enhanced Mobile Support**
+   - Touch-friendly drag handles
+   - Mobile-optimized resize controls
+   - Proper touch event handling
+   ```typescript
+   // CSS improvements for mobile
+   .grid-stack-item {
+     touch-action: none;
+   }
+   ```
 
-2. **Drag Handle**
-   - Header acts as the drag handle
+2. **Improved Drag Handle**
+   - Header acts as the drag handle with better touch support
+   - Visual feedback during drag operations
    - Prevents content interaction during drag
-   - Provides visual feedback during drag operations
+   ```typescript
+   // Header configuration
+   const headerProps = {
+     className: 'widget-header',
+     style: { cursor: isDragging ? 'grabbing' : 'grab' }
+   };
+   ```
 
-3. **State Management**
-   - Preserves widget state during moves
-   - Handles minimize/maximize transitions
-   - Manages widget configuration persistence
+3. **Performance Optimizations**
+   - Uses ResizeObserver for efficient size tracking
+   - Implements will-change transform for smooth animations
+   - Optimizes re-renders during resize operations
+   ```typescript
+   useEffect(() => {
+     const resizeObserver = new ResizeObserver((entries) => {
+       // Efficient resize handling
+     });
+     return () => resizeObserver.disconnect();
+   }, []);
+   ```
 
 ## Usage Example
 
@@ -126,9 +73,15 @@ The `WidgetContainer` is designed to work seamlessly with GridStack's grid-item 
 import { WidgetContainer } from '@/components/ui/widget-container';
 
 function ChartWidget() {
+  const handleResize = useCallback((dimensions) => {
+    // Handle resize with new dimensions
+  }, []);
+
   return (
     <WidgetContainer
       title="Market Overview"
+      id="chart-widget-1"
+      onResize={handleResize}
       headerControls={
         <CustomControls />
       }
@@ -139,24 +92,6 @@ function ChartWidget() {
 }
 ```
 
-## GridStack-Specific Props
-
-While the base props are simple, the component internally handles several GridStack-specific attributes:
-
-```typescript
-// Internal GridStack attributes handled by the container
-interface GridStackAttributes {
-  'gs-x': number;
-  'gs-y': number;
-  'gs-w': number;
-  'gs-h': number;
-  'gs-id': string;
-  'gs-no-resize'?: boolean;
-  'gs-no-move'?: boolean;
-  'gs-locked'?: boolean;
-}
-```
-
 ## Best Practices
 
 1. **Content Sizing**
@@ -164,30 +99,37 @@ interface GridStackAttributes {
    // Ensure content respects container boundaries
    <div className="h-full flex flex-col">
      <div className="widget-content flex-1 overflow-hidden">
-       {children}
+       <div className="h-full overflow-auto scrollbar-thin">
+         {children}
+       </div>
      </div>
    </div>
    ```
 
 2. **Performance Optimization**
    ```typescript
-   // Memoize content when appropriate
+   // Memoize content and use content visibility
    const MemoizedContent = React.memo(WidgetContent);
    
-   // Use content visibility for off-screen widgets
    <div className="widget-content" style={{ contentVisibility: 'auto' }}>
+     <MemoizedContent />
+   </div>
    ```
 
-3. **Event Handling**
+3. **Mobile Responsiveness**
    ```typescript
-   // Handle resize events efficiently
-   useEffect(() => {
-     const handleResize = debounce(() => {
-       // Update widget content
-     }, 100);
-     
-     return () => handleResize.cancel();
-   }, []);
+   // Handle mobile-specific layout
+   const isMobile = useMediaQuery('(max-width: 768px)');
+   
+   <WidgetContainer
+     {...props}
+     className={cn(
+       'widget-container',
+       isMobile && 'widget-container-mobile'
+     )}
+   >
+     {children}
+   </WidgetContainer>
    ```
 
 ## Common Patterns
@@ -195,9 +137,9 @@ interface GridStackAttributes {
 ### Responsive Content
 ```typescript
 function ResponsiveWidget() {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   
-  // Update dimensions on resize
   useEffect(() => {
     const resizeObserver = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
@@ -212,7 +154,7 @@ function ResponsiveWidget() {
   }, []);
   
   return (
-    <WidgetContainer title="Responsive Content">
+    <WidgetContainer title="Responsive Content" ref={containerRef}>
       <ResponsiveContent {...dimensions} />
     </WidgetContainer>
   );

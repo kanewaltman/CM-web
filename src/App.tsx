@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { GridStack, GridStackWidget } from 'gridstack';
+import { GridStack, GridStackWidget, GridStackOptions } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
@@ -12,11 +12,11 @@ import { Toaster } from './components/ui/toaster';
 
 // Default desktop layout configuration
 const defaultLayout = [
-  { x: 0, y: 0, w: 8, h: 6 }, // TradingViewChart
-  { x: 8, y: 0, w: 4, h: 6 }, // OrderBook
-  { x: 0, y: 6, w: 4, h: 4 }, // TradeForm
-  { x: 4, y: 6, w: 4, h: 4 }, // MarketOverview
-  { x: 8, y: 6, w: 4, h: 4 }, // RecentTrades
+  { x: 0, y: 0, w: 8, h: 6, id: 'chart' }, // TradingViewChart
+  { x: 8, y: 0, w: 4, h: 6, id: 'orderbook' }, // OrderBook
+  { x: 0, y: 6, w: 4, h: 4, id: 'tradeform' }, // TradeForm
+  { x: 4, y: 6, w: 4, h: 4, id: 'market' }, // MarketOverview
+  { x: 8, y: 6, w: 4, h: 4, id: 'trades' }, // RecentTrades
 ];
 
 // Mobile layout configuration (single column)
@@ -103,14 +103,13 @@ function App() {
     }
 
     try {
-      // Get the latest saved layout from localStorage when initializing desktop mode
       const latestSavedLayout = !mobile ? (() => {
         const saved = localStorage.getItem('desktop-layout');
         console.log('Loading saved desktop layout:', saved);
         return saved ? JSON.parse(saved) : defaultLayout;
       })() : mobileLayout;
 
-      const g = GridStack.init({
+      const options: GridStackOptions = {
         float: true,
         cellHeight: mobile ? '100px' : 'auto',
         minRow: mobile ? 24 : 3,
@@ -125,12 +124,20 @@ function App() {
         resizable: {
           handles: 'e, se, s, sw, w',
           autoHide: true
-        }
-      });
+        },
+        disableOneColumnMode: false,
+        staticGrid: false,
+        // New v11.3.0 options
+        removable: false, // Prevent accidental widget removal
+        acceptWidgets: false, // Disable external widget dropping
+        dragInOptions: { revert: 'invalid', scroll: false, appendTo: 'body', helper: 'clone' }
+      };
+
+      const g = GridStack.init(options, gridElement);
 
       // Initialize with appropriate layout
       g.batchUpdate();
-      g.removeAll();
+      g.removeAll(false); // false to prevent DOM removal
       
       // Add widgets with their saved positions
       gridItems.forEach((item, index) => {
@@ -138,8 +145,9 @@ function App() {
           const config = {
             ...latestSavedLayout[index],
             autoPosition: false,
-            minWidth: mobile ? 1 : 2,
-            maxWidth: mobile ? 1 : 12,
+            minW: mobile ? 1 : 2,
+            maxW: mobile ? 1 : 12,
+            id: latestSavedLayout[index].id || `widget-${index}`,
             x: latestSavedLayout[index].x,
             y: latestSavedLayout[index].y,
             w: latestSavedLayout[index].w,
@@ -153,9 +161,10 @@ function App() {
       g.commit();
 
       // Add layout change listeners for desktop mode
-      if (!mobile && g.on) {
-        g.on('change', () => {
-          const currentLayout = g.save(true) as GridStackWidget[];
+      if (!mobile) {
+        // Updated event handling for v11.3.0
+        g.on('change', (event, items) => {
+          const currentLayout = g.save(true);
           if (currentLayout && currentLayout.length > 0) {
             console.log('Saving desktop layout:', currentLayout);
             localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
@@ -163,9 +172,9 @@ function App() {
           }
         });
 
-        g.on('dragstop resizestop', () => {
+        g.on('dragstop resizestop', (event, element) => {
           setTimeout(() => {
-            const currentLayout = g.save(true) as GridStackWidget[];
+            const currentLayout = g.save(true);
             if (currentLayout && currentLayout.length > 0) {
               console.log('Saving desktop layout after drag/resize:', currentLayout);
               localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
