@@ -224,16 +224,28 @@ function App() {
         const items = grid.getGridItems();
         const currentLayout = grid.save(true) as GridStackWidget[];
         
-        // Ensure each layout item has an ID from the corresponding widget
-        const layoutWithIds = currentLayout.map((item, index) => {
+        // Create a complete snapshot of each widget's configuration
+        const layoutWithConfig = currentLayout.map((item, index) => {
           const widgetNode = items[index]?.gridstackNode;
+          if (!widgetNode) return item;
+          
           return {
             ...item,
-            id: widgetNode?.id || defaultLayout[index].id || `widget-${index}`
+            id: widgetNode.id || defaultLayout[index].id || `widget-${index}`,
+            x: widgetNode.x,
+            y: widgetNode.y,
+            w: widgetNode.w,
+            h: widgetNode.h,
+            minW: widgetNode.minW,
+            maxW: widgetNode.maxW,
+            locked: widgetNode.locked,
+            noResize: widgetNode.noResize,
+            noMove: widgetNode.noMove,
+            autoPosition: false
           };
         });
         
-        return JSON.stringify(layoutWithIds);
+        return JSON.stringify(layoutWithConfig);
       } catch (error) {
         console.error('Failed to copy layout:', error);
         return '';
@@ -249,73 +261,69 @@ function App() {
     }
 
     try {
-      console.log('Attempting to parse layout:', layoutStr);
       const layoutData = JSON.parse(layoutStr) as GridStackWidget[];
       
-      if (!Array.isArray(layoutData)) {
-        console.error('Invalid layout data: not an array');
+      if (!Array.isArray(layoutData) || layoutData.length === 0) {
+        console.error('Invalid or empty layout data');
         return;
       }
-
-      if (layoutData.length === 0) {
-        console.error('Empty layout data');
-        return;
-      }
-
-      console.log('Parsed layout data:', layoutData);
       
       grid.batchUpdate();
       const items = grid.getGridItems();
-      console.log('Current grid items:', items);
-
-      // Create a map of current items by their IDs and positions
+      
+      // Create a map of current items by their IDs
       const itemsById = new Map();
-      const itemsByIndex = new Map();
-      items.forEach((item, index) => {
+      items.forEach((item) => {
         if (item.gridstackNode?.id) {
           itemsById.set(item.gridstackNode.id, item);
         }
-        itemsByIndex.set(index, item);
       });
 
-      let updatedCount = 0;
-      // Apply new layout matching by ID or index as fallback
-      layoutData.forEach((newConfig, index) => {
-        // Try to find matching item by ID first
-        let matchingItem = newConfig.id ? itemsById.get(newConfig.id) : null;
-        
-        // Fallback to index-based matching if no ID match
-        if (!matchingItem) {
-          matchingItem = itemsByIndex.get(index);
+      // First pass: Disable animations and collect all positions
+      grid.setAnimation(false);
+      const newPositions = new Map();
+      layoutData.forEach((newConfig) => {
+        if (newConfig.id) {
+          newPositions.set(newConfig.id, {
+            ...newConfig,
+            autoPosition: false
+          });
         }
+      });
 
-        if (matchingItem && matchingItem.gridstackNode) {
-          console.log('Updating item:', newConfig.id || `index ${index}`, 'with config:', newConfig);
-          grid.update(matchingItem, {
-            x: newConfig.x,
-            y: newConfig.y,
-            w: newConfig.w,
-            h: newConfig.h
+      // Second pass: Update all widgets at once
+      let updatedCount = 0;
+      newPositions.forEach((config, id) => {
+        const item = itemsById.get(id);
+        if (item && item.gridstackNode) {
+          // Preserve exact configuration from copy
+          grid.update(item, {
+            x: config.x,
+            y: config.y,
+            w: config.w,
+            h: config.h,
+            minW: config.minW,
+            maxW: config.maxW,
+            locked: config.locked,
+            noResize: config.noResize,
+            noMove: config.noMove,
+            autoPosition: false
           });
           updatedCount++;
-        } else {
-          console.warn('No matching item found for:', newConfig.id || `index ${index}`);
         }
       });
 
-      console.log('Updated', updatedCount, 'items');
-      
       if (updatedCount > 0) {
-        grid.compact();
-        grid.commit();
         saveCurrentLayout();
-      } else {
-        console.warn('No items were updated');
-        grid.commit();
       }
+      
+      // Re-enable animations and commit changes
+      grid.setAnimation(true);
+      grid.commit();
     } catch (error) {
       console.error('Failed to parse or apply layout:', error);
-      grid?.commit(); // Ensure we commit even if there's an error
+      grid?.setAnimation(true);
+      grid?.commit();
     }
   }, [grid, isMobile, saveCurrentLayout]);
 
