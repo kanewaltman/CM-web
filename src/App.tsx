@@ -109,7 +109,7 @@ function App() {
       })() : mobileLayout;
 
       const options: GridStackOptions = {
-        float: true,
+        float: false,
         cellHeight: mobile ? '100px' : 'auto',
         minRow: mobile ? 24 : 3,
         margin: 8,
@@ -125,8 +125,8 @@ function App() {
           autoHide: true
         },
         staticGrid: false,
-        removable: false, // Prevent accidental widget removal
-        acceptWidgets: false // Disable external widget dropping
+        removable: false,
+        acceptWidgets: false
       };
 
       const g = GridStack.init(options, gridElement as HTMLElement);
