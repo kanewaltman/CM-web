@@ -200,6 +200,84 @@ function App() {
     }
   }, [grid, isMobile]);
 
+  const handleResetLayout = useCallback(() => {
+    if (grid && !isMobile) {
+      try {
+        grid.batchUpdate();
+        const items = grid.getGridItems();
+        items.forEach((item, index) => {
+          const defaultConfig = defaultLayout[index];
+          if (defaultConfig && item.gridstackNode) {
+            grid.update(item, {
+              x: defaultConfig.x,
+              y: defaultConfig.y,
+              w: defaultConfig.w,
+              h: defaultConfig.h
+            });
+          }
+        });
+        grid.commit();
+        saveCurrentLayout();
+      } catch (error) {
+        console.error('Failed to reset layout:', error);
+      }
+    }
+  }, [grid, isMobile, saveCurrentLayout]);
+
+  const handleCopyLayout = useCallback(() => {
+    if (grid && !isMobile) {
+      try {
+        const currentLayout = grid.save(true);
+        return JSON.stringify(currentLayout);
+      } catch (error) {
+        console.error('Failed to copy layout:', error);
+        return '';
+      }
+    }
+    return '';
+  }, [grid, isMobile]);
+
+  const handlePasteLayout = useCallback((layoutStr: string) => {
+    if (grid && !isMobile) {
+      try {
+        const layoutData = JSON.parse(layoutStr) as GridStackWidget[];
+        if (Array.isArray(layoutData) && layoutData.length > 0) {
+          grid.batchUpdate();
+          const items = grid.getGridItems();
+          
+          // Create a map of current items by their IDs
+          const itemsById = new Map();
+          items.forEach(item => {
+            if (item.gridstackNode?.id) {
+              itemsById.set(item.gridstackNode.id, item);
+            }
+          });
+
+          // Apply new layout matching by ID
+          layoutData.forEach((newConfig) => {
+            if (newConfig.id) {
+              const matchingItem = itemsById.get(newConfig.id);
+              if (matchingItem && matchingItem.gridstackNode) {
+                grid.update(matchingItem, {
+                  x: newConfig.x,
+                  y: newConfig.y,
+                  w: newConfig.w,
+                  h: newConfig.h
+                });
+              }
+            }
+          });
+          
+          grid.compact();
+          grid.commit();
+          saveCurrentLayout();
+        }
+      } catch (error) {
+        console.error('Failed to parse or apply layout:', error);
+      }
+    }
+  }, [grid, isMobile, saveCurrentLayout]);
+
   // Handle resize with requestAnimationFrame for smooth transitions
   const handleResize = useCallback(() => {
     if (resizeFrameRef.current) {
@@ -350,9 +428,9 @@ function App() {
       <main className="h-[calc(100vh-64px)] mt-16 overflow-y-auto scrollbar-main">
         <div className="max-w-[1920px] mx-auto px-4">
           <ControlBar 
-            onResetLayout={resetLayout} 
-            onCopyLayout={copyLayout}
-            onPasteLayout={pasteLayout}
+            onResetLayout={handleResetLayout}
+            onCopyLayout={handleCopyLayout}
+            onPasteLayout={handlePasteLayout}
           />
           <div className="grid-stack">
             <div className="grid-stack-item" gs-x="0" gs-y="0" gs-w={isMobile ? "1" : "8"} gs-h="6">
