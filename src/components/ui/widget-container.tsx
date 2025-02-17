@@ -42,7 +42,7 @@ export function WidgetContainer({
           className={cn(
             "h-full overflow-auto scrollbar-thin rounded-lg p-3",
             "dark:bg-[rgba(0,0,0,0.16)] dark:border-[rgba(255,255,255,0.02)]",
-            "bg-[#F6F6F6] border-[rgba(0,0,0,0.00)]",
+            "bg-[#F6F6F6] border-[rgba(0,0,0,0.06)]",
             "border"
           )}
         >
