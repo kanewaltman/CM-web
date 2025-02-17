@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { GridStack, GridStackWidget, GridStackOptions } from 'gridstack';
+import { GridStack, GridStackWidget, GridStackOptions, GridStackNode, GridStackElement } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
@@ -105,7 +105,6 @@ function App() {
     try {
       const latestSavedLayout = !mobile ? (() => {
         const saved = localStorage.getItem('desktop-layout');
-        console.log('Loading saved desktop layout:', saved);
         return saved ? JSON.parse(saved) : defaultLayout;
       })() : mobileLayout;
 
@@ -125,19 +124,16 @@ function App() {
           handles: 'e, se, s, sw, w',
           autoHide: true
         },
-        disableOneColumnMode: false,
         staticGrid: false,
-        // New v11.3.0 options
         removable: false, // Prevent accidental widget removal
-        acceptWidgets: false, // Disable external widget dropping
-        dragInOptions: { revert: 'invalid', scroll: false, appendTo: 'body', helper: 'clone' }
+        acceptWidgets: false // Disable external widget dropping
       };
 
-      const g = GridStack.init(options, gridElement);
+      const g = GridStack.init(options, gridElement as HTMLElement);
 
       // Initialize with appropriate layout
       g.batchUpdate();
-      g.removeAll(false); // false to prevent DOM removal
+      g.removeAll(false);
       
       // Add widgets with their saved positions
       gridItems.forEach((item, index) => {
@@ -153,7 +149,7 @@ function App() {
             w: latestSavedLayout[index].w,
             h: latestSavedLayout[index].h
           };
-          g.addWidget(item, config);
+          g.addWidget(item as GridStackElement, config);
         }
       });
       
@@ -163,20 +159,18 @@ function App() {
       // Add layout change listeners for desktop mode
       if (!mobile) {
         // Updated event handling for v11.3.0
-        g.on('change', (event, items) => {
-          const currentLayout = g.save(true);
-          if (currentLayout && currentLayout.length > 0) {
-            console.log('Saving desktop layout:', currentLayout);
+        g.on('change', (_event: Event, _items: GridStackNode[]) => {
+          const currentLayout = g.save(true) as GridStackWidget[];
+          if (currentLayout && Array.isArray(currentLayout) && currentLayout.length > 0) {
             localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
             setSavedDesktopLayout(currentLayout);
           }
         });
 
-        g.on('dragstop resizestop', (event, element) => {
+        g.on('dragstop resizestop', (_event: Event, _element: Element) => {
           setTimeout(() => {
-            const currentLayout = g.save(true);
-            if (currentLayout && currentLayout.length > 0) {
-              console.log('Saving desktop layout after drag/resize:', currentLayout);
+            const currentLayout = g.save(true) as GridStackWidget[];
+            if (currentLayout && Array.isArray(currentLayout) && currentLayout.length > 0) {
               localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
               setSavedDesktopLayout(currentLayout);
             }
@@ -197,7 +191,6 @@ function App() {
       try {
         const currentLayout = grid.save(true) as GridStackWidget[];
         if (currentLayout && currentLayout.length > 0) {
-          console.log('Saving desktop layout:', currentLayout);
           localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
           setSavedDesktopLayout(currentLayout);
         }
@@ -249,7 +242,6 @@ function App() {
               setTimeout(() => {
                 const currentLayout = newGrid.save(true) as GridStackWidget[];
                 if (currentLayout && currentLayout.length > 0) {
-                  console.log('Saving initial desktop layout:', currentLayout);
                   localStorage.setItem('desktop-layout', JSON.stringify(currentLayout));
                   setSavedDesktopLayout(currentLayout);
                 }
