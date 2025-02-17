@@ -33,6 +33,7 @@ Our GridStack implementation includes:
 - Widget position tracking with collision detection
 - Save/restore functionality with JSON serialization
 - Optimized widget swapping behavior
+- Robust copy/paste functionality with widget ID preservation
 
 ## Configuration
 
@@ -120,6 +121,60 @@ grid.addWidget({
   }
 });
 ```
+
+### Layout Copy/Paste
+```typescript
+// Copy layout with widget ID preservation
+function handleCopyLayout() {
+  const items = grid.getGridItems();
+  const layoutConfig = items.map(item => {
+    const node = item.gridstackNode;
+    if (!node) return null;
+    return {
+      id: node.id || defaultLayout[items.indexOf(item)].id, // Fallback to default ID
+      x: node.x,
+      y: node.y,
+      w: node.w,
+      h: node.h
+    };
+  }).filter(Boolean);
+  
+  return JSON.stringify(layoutConfig);
+}
+
+// Paste layout with widget ID mapping
+function handlePasteLayout(layoutStr: string) {
+  const layoutData = JSON.parse(layoutStr);
+  
+  grid.batchUpdate();
+  const items = grid.getGridItems();
+  
+  // Map items by their IDs for efficient lookup
+  const itemsById = new Map();
+  items.forEach((item) => {
+    if (item.gridstackNode?.id) {
+      itemsById.set(item.gridstackNode.id, item);
+    }
+  });
+
+  // Update positions while preserving widget identities
+  layoutData.forEach((config) => {
+    if (config.id) {
+      const item = itemsById.get(config.id);
+      if (item && item.gridstackNode) {
+        grid.update(item, {
+          x: config.x,
+          y: config.y,
+          w: config.w,
+          h: config.h,
+          autoPosition: false
+        });
+      }
+    }
+  });
+  
+  grid.commit();
+}
 
 ### Saving Layouts
 ```typescript

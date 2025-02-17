@@ -77,6 +77,61 @@ function saveLayout(): LayoutState {
 localStorage.setItem('gridLayout', JSON.stringify(saveLayout()));
 ```
 
+### Layout Copy/Paste
+```typescript
+// Copy current layout with widget IDs
+function copyLayout() {
+  const items = grid.getGridItems();
+  const layoutConfig = items.map(item => {
+    const node = item.gridstackNode;
+    if (!node) return null;
+    return {
+      id: node.id || defaultLayout[items.indexOf(item)].id, // Fallback to default layout ID
+      x: node.x,
+      y: node.y,
+      w: node.w,
+      h: node.h
+    };
+  }).filter(Boolean);
+  
+  return JSON.stringify(layoutConfig);
+}
+
+// Paste layout with proper widget mapping
+function pasteLayout(layoutStr: string) {
+  const layoutData = JSON.parse(layoutStr);
+  
+  grid.batchUpdate();
+  const items = grid.getGridItems();
+  
+  // Create a map of current items by their IDs
+  const itemsById = new Map();
+  items.forEach((item) => {
+    if (item.gridstackNode?.id) {
+      itemsById.set(item.gridstackNode.id, item);
+    }
+  });
+
+  // Update positions in a single pass
+  layoutData.forEach((config) => {
+    if (config.id) {
+      const item = itemsById.get(config.id);
+      if (item && item.gridstackNode) {
+        grid.update(item, {
+          x: config.x,
+          y: config.y,
+          w: config.w,
+          h: config.h,
+          autoPosition: false
+        });
+      }
+    }
+  });
+  
+  grid.commit();
+}
+```
+
 ### Restoring Layouts
 ```typescript
 async function restoreLayout() {
