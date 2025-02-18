@@ -211,55 +211,90 @@ function App() {
     // Initialize all widgets with correct attributes
     g.batchUpdate();
     try {
+      // First remove all gs-* attributes to start fresh
       gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
         const element = item as HTMLElement;
-        const gsId = element.getAttribute('gs-id');
-        
-        // Find the layout configuration for this widget
-        const layoutNode = layoutToApply.find(node => node.id === gsId);
-        const defaultNode = defaultLayout.find(node => node.id === gsId);
-        
-        if (layoutNode && defaultNode) {
-          // Clear existing gs-* attributes except gs-id
-          Array.from(element.attributes)
-            .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
-            .forEach(attr => element.removeAttribute(attr.name));
-
-          // Set all required attributes
-          element.setAttribute('gs-x', String(layoutNode.x));
-          element.setAttribute('gs-y', String(layoutNode.y));
-          element.setAttribute('gs-w', String(layoutNode.w));
-          element.setAttribute('gs-h', String(layoutNode.h));
-          element.setAttribute('gs-min-w', String(defaultNode.minW ?? 2));
-          element.setAttribute('gs-min-h', String(defaultNode.minH ?? 2));
-          element.setAttribute('gs-auto-position', 'false');
-        }
+        Array.from(element.attributes)
+          .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
+          .forEach(attr => element.removeAttribute(attr.name));
       });
-    } finally {
-      g.commit();
-    }
 
-    // Make sure the grid recognizes the layout
-    g.batchUpdate();
-    try {
-      layoutToApply.forEach(node => {
-        if (node.id) {
-          const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-          if (item) {
-            g.update(item as HTMLElement, {
-              x: node.x,
-              y: node.y,
-              w: node.w,
-              h: node.h,
-              autoPosition: false
-            });
+      // Then apply the layout in order
+      layoutToApply.forEach((node, index) => {
+        const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
+        if (element) {
+          // Set minimum constraints
+          const defaultNode = defaultLayout.find(d => d.id === node.id);
+          if (defaultNode) {
+            element.setAttribute('gs-min-w', String(defaultNode.minW ?? 2));
+            element.setAttribute('gs-min-h', String(defaultNode.minH ?? 2));
           }
+          
+          // Force position and size
+          element.setAttribute('gs-x', String(node.x));
+          element.setAttribute('gs-y', String(node.y));
+          element.setAttribute('gs-w', String(node.w));
+          element.setAttribute('gs-h', String(node.h));
+          element.setAttribute('gs-auto-position', 'false');
+          
+          // Update the grid engine directly
+          g.update(element, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            autoPosition: false
+          });
         }
       });
-      g.compact();
     } finally {
       g.commit();
     }
+
+    // Force a relayout
+    requestAnimationFrame(() => {
+      g.batchUpdate();
+      try {
+        // Ensure widgets are in correct positions
+        layoutToApply.forEach(node => {
+          const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
+          if (element) {
+            const currentNode = g.engine.nodes.find(n => n.el === element);
+            if (currentNode) {
+              // Force position update if not matching
+              if (currentNode.x !== node.x || currentNode.y !== node.y) {
+                g.update(element, {
+                  x: node.x,
+                  y: node.y,
+                  w: node.w,
+                  h: node.h,
+                  autoPosition: false
+                });
+              }
+            }
+          }
+        });
+        
+        // Force compact to ensure proper layout
+        g.compact();
+        
+        // Additional step to ensure positions
+        g.engine.nodes.forEach(node => {
+          if (node.el) {
+            const layout = layoutToApply.find(l => l.id === node.id);
+            if (layout) {
+              g.update(node.el, {
+                x: layout.x,
+                y: layout.y,
+                autoPosition: false
+              });
+            }
+          }
+        });
+      } finally {
+        g.commit();
+      }
+    });
 
     // Set up layout saving with debounce
     if (!mobile) {
