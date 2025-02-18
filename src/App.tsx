@@ -66,35 +66,61 @@ function App() {
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
-    // Load saved layout or use default
-    const savedLayout = !mobile ? localStorage.getItem('desktop-layout') : null;
-    const layoutToLoad = savedLayout ? JSON.parse(savedLayout) : (mobile ? mobileLayout : defaultLayout);
-
     g.batchUpdate();
     try {
-      // Update positions of existing items instead of removing/recreating them
-      const items = g.getGridItems();
-      const itemsById = new Map(
-        items.map(item => {
-          const id = item.getAttribute('data-gs-id');
-          return id ? [id, item] : null;
-        }).filter((entry): entry is [string, HTMLElement] => entry !== null)
-      );
+      // First, ensure all widgets are properly initialized with default positions
+      defaultLayout.forEach((node: GridStackWidget) => {
+        const existingItem = gridElement.querySelector(`[gs-id="${node.id}"]`);
+        if (existingItem) {
+          g.update(existingItem as HTMLElement, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h
+          });
+        }
+      });
 
-      layoutToLoad.forEach((node: GridStackWidget) => {
-        if (node.id) {
-          const item = itemsById.get(node.id);
-          if (item) {
-            g.update(item, {
-              x: node.x,
-              y: node.y,
-              w: node.w,
-              h: node.h
+      // Then, if there's a saved layout and we're not in mobile mode, apply it
+      if (!mobile) {
+        const savedLayout = localStorage.getItem('desktop-layout');
+        if (savedLayout) {
+          try {
+            const layoutData = JSON.parse(savedLayout);
+            // Only apply saved layout if it has valid data
+            if (Array.isArray(layoutData) && layoutData.length > 0) {
+              layoutData.forEach((node: GridStackWidget) => {
+                if (node.id) {
+                  const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+                  if (item) {
+                    g.update(item as HTMLElement, {
+                      x: node.x,
+                      y: node.y,
+                      w: node.w,
+                      h: node.h
+                    });
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            console.error('Failed to load saved layout:', error);
+            // If saved layout is invalid, fall back to default
+            defaultLayout.forEach((node: GridStackWidget) => {
+              const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+              if (item) {
+                g.update(item as HTMLElement, {
+                  x: node.x,
+                  y: node.y,
+                  w: node.w,
+                  h: node.h
+                });
+              }
             });
           }
         }
-      });
-      
+      }
+
       g.compact();
     } finally {
       g.commit();
@@ -105,7 +131,7 @@ function App() {
       const saveLayout = () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
-          const serializedLayout = g.save(true);
+          const serializedLayout = g.save(false); // Only save positions
           localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
         }, 100);
       };

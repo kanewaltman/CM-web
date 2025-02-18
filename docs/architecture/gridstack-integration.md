@@ -157,4 +157,98 @@ grid.on('dragstop resizestop', (event, element) => {
 ## Related Documentation
 - [Widget Container Component](../components/ui/widget-container.md)
 - [Layout Management](../architecture/layout-management.md)
-- [State Persistence](../architecture/state-management.md) 
+- [State Persistence](../architecture/state-management.md)
+
+## Layout Management
+
+### Widget Structure
+Each widget in the grid should have:
+- A unique `gs-id` attribute (not `data-gs-id`)
+- Position attributes (`gs-x`, `gs-y`, `gs-w`, `gs-h`)
+- A `grid-stack-item` class
+- A `grid-stack-item-content` class on the inner content container
+
+```html
+<div class="grid-stack-item" 
+  gs-id="chart"
+  gs-x="0" 
+  gs-y="0" 
+  gs-w="8" 
+  gs-h="6">
+  <WidgetContainer>
+    <!-- Widget content -->
+  </WidgetContainer>
+</div>
+```
+
+### Layout Operations
+
+#### Saving Layouts
+```typescript
+// Save only positions, not content
+const layout = grid.save(false);
+localStorage.setItem('desktop-layout', JSON.stringify(layout));
+```
+
+#### Loading/Restoring Layouts
+```typescript
+// Load without recreating widgets (preserves content)
+grid.batchUpdate();
+try {
+  grid.load(layoutData, false); // false = don't add/remove widgets
+  grid.compact();
+} finally {
+  grid.commit();
+}
+```
+
+### Best Practices
+
+1. **Preserve Widget Content**
+   - Use `load(layout, false)` to update positions without recreating widgets
+   - Never use `removeAll()` when applying layouts
+   - Wrap layout operations in `batchUpdate()/commit()` pairs
+
+2. **Layout Management**
+   - Save layouts without content using `save(false)`
+   - Always call `compact()` after loading layouts
+   - Use `batchUpdate()` for atomic operations
+
+3. **Widget Identification**
+   - Use `gs-id` attributes (not `data-gs-id`)
+   - Keep IDs consistent between saved layouts and DOM elements
+   - Ensure unique IDs across all widgets
+
+4. **Event Handling**
+```typescript
+// Debounced layout saving
+let saveTimeout: NodeJS.Timeout;
+const saveLayout = () => {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    const serializedLayout = grid.save(false);
+    localStorage.setItem('layout-key', JSON.stringify(serializedLayout));
+  }, 100);
+};
+
+grid.on('change', saveLayout);
+grid.on('resizestop dragstop', saveLayout);
+```
+
+### Common Issues
+
+1. **Disappearing Widget Content**
+   - Cause: Recreating widgets instead of updating positions
+   - Solution: Use `load(layout, false)` to preserve widgets
+
+2. **Layout Reset Issues**
+   - Cause: Using `removeAll()` before loading layouts
+   - Solution: Update positions with `load(layout, false)`
+
+3. **Inconsistent Layouts**
+   - Cause: Missing `compact()` after updates
+   - Solution: Always call `compact()` after loading layouts
+
+4. **Performance Issues**
+   - Cause: Individual updates without batching
+   - Solution: Use `batchUpdate()/commit()` for multiple changes 
