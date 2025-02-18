@@ -14,6 +14,43 @@ interface WidgetContainerProps {
 }
 ```
 
+## Usage Guidelines
+
+### Important: Widget Container Usage
+
+The `WidgetContainer` should ONLY be used at the GridStack layout level (typically in `App.tsx` or your main layout component). Individual widget components should NOT wrap themselves in `WidgetContainer`. This prevents duplicate headers and maintains proper GridStack integration.
+
+✅ Correct Implementation:
+```tsx
+// In App.tsx or layout component
+<div className="grid-stack-item" gs-id="market">
+  <WidgetContainer title="Market Overview">
+    <MarketOverview />
+  </WidgetContainer>
+</div>
+
+// In MarketOverview.tsx
+export function MarketOverview() {
+  return (
+    <div className="widget-content">
+      {/* Widget content here */}
+    </div>
+  );
+}
+```
+
+❌ Incorrect Implementation:
+```tsx
+// Don't wrap widgets in WidgetContainer inside their own components
+export function MarketOverview() {
+  return (
+    <WidgetContainer title="Market Overview">
+      {/* Widget content here */}
+    </WidgetContainer>
+  );
+}
+```
+
 ## GridStack Integration
 
 The `WidgetContainer` is designed to work seamlessly with GridStack's grid-item functionality:
@@ -23,7 +60,7 @@ The `WidgetContainer` is designed to work seamlessly with GridStack's grid-item 
 <div class="grid-stack-item" gs-id="unique-widget-id">
   <div class="grid-stack-item-content">
     <WidgetContainer title="Widget Title" id="unique-widget-id">
-      {/* Widget Content */}
+      {/* Widget Content Component */}
     </WidgetContainer>
   </div>
 </div>
@@ -46,26 +83,33 @@ The `WidgetContainer` is designed to work seamlessly with GridStack's grid-item 
    - Header acts as the drag handle with better touch support
    - Visual feedback during drag operations
    - Prevents content interaction during drag
+
+3. **Content Styling**
+   - Widget content should use the following base classes:
    ```typescript
-   // Header configuration
-   const headerProps = {
-     className: 'widget-header',
-     style: { cursor: isDragging ? 'grabbing' : 'grab' }
-   };
+   className={cn(
+     "h-full overflow-auto scrollbar-thin rounded-lg p-3",
+     "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+   )}
    ```
 
-3. **Performance Optimizations**
-   - Uses ResizeObserver for efficient size tracking
-   - Implements will-change transform for smooth animations
-   - Optimizes re-renders during resize operations
-   ```typescript
-   useEffect(() => {
-     const resizeObserver = new ResizeObserver((entries) => {
-       // Efficient resize handling
-     });
-     return () => resizeObserver.disconnect();
-   }, []);
-   ```
+## Best Practices
+
+1. **Widget Component Structure**
+   - Keep widget components focused on their content
+   - Use consistent content styling
+   - Handle internal state and logic independently
+   - Don't include container-level concerns
+
+2. **Layout Management**
+   - Handle all widget container wrapping at the layout level
+   - Maintain widget IDs and positions in the layout configuration
+   - Use the GridStack API for dynamic layout changes
+
+3. **Performance**
+   - Implement proper cleanup in widget components
+   - Use appropriate memoization for expensive calculations
+   - Handle resize events efficiently
 
 ## Usage Example
 
@@ -91,46 +135,6 @@ function ChartWidget() {
   );
 }
 ```
-
-## Best Practices
-
-1. **Content Sizing**
-   ```typescript
-   // Ensure content respects container boundaries
-   <div className="h-full flex flex-col">
-     <div className="widget-content flex-1 overflow-hidden">
-       <div className="h-full overflow-auto scrollbar-thin">
-         {children}
-       </div>
-     </div>
-   </div>
-   ```
-
-2. **Performance Optimization**
-   ```typescript
-   // Memoize content and use content visibility
-   const MemoizedContent = React.memo(WidgetContent);
-   
-   <div className="widget-content" style={{ contentVisibility: 'auto' }}>
-     <MemoizedContent />
-   </div>
-   ```
-
-3. **Mobile Responsiveness**
-   ```typescript
-   // Handle mobile-specific layout
-   const isMobile = useMediaQuery('(max-width: 768px)');
-   
-   <WidgetContainer
-     {...props}
-     className={cn(
-       'widget-container',
-       isMobile && 'widget-container-mobile'
-     )}
-   >
-     {children}
-   </WidgetContainer>
-   ```
 
 ## Common Patterns
 
