@@ -12,6 +12,20 @@ The layout system is built on GridStack v11.3.0 and provides:
 - Mobile/desktop layout switching
 - Copy/paste layout functionality
 
+### Critical Layout Behaviors
+
+Our implementation addresses several critical layout requirements:
+
+1. **Layout Preservation**
+   - Exact widget positions must be maintained on refresh
+   - Vertical ordering must be preserved
+   - No unwanted compaction during initialization
+
+2. **Interactive Behavior**
+   - Real-time compaction during user interactions
+   - Natural widget swapping
+   - Smooth drag and resize operations
+
 ### Layout Types
 
 We maintain three types of layouts:
@@ -62,77 +76,97 @@ const defaultLayout: LayoutWidget[] = [
 ];
 ```
 
-### Initialization Process
+### Initialization Strategy
 
-The grid initialization follows a specific sequence to ensure consistent layout across environments:
+The key to reliable layout handling is a two-phase initialization:
 
-1. **Clean Start**
 ```typescript
-// Remove existing gs-* attributes except gs-id
-element.attributes
-  .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
-  .forEach(attr => element.removeAttribute(attr.name));
+// Phase 1: Static Layout Preservation
+const options: GridStackOptions = {
+  float: false,      // Default compaction behavior
+  staticGrid: true,  // Start static to ensure layout
+  // ... other options
+};
+
+// Initialize grid with static behavior
+const g = GridStack.init(options, gridElement);
+
+// Apply exact layout positions
+g.batchUpdate();
+try {
+  layoutToApply.forEach(node => {
+    const element = gridElement.querySelector(`[gs-id="${node.id}"]`);
+    if (element) {
+      // Force exact position and size
+      element.setAttribute('gs-x', String(node.x));
+      element.setAttribute('gs-y', String(node.y));
+      element.setAttribute('gs-w', String(node.w));
+      element.setAttribute('gs-h', String(node.h));
+      element.setAttribute('gs-auto-position', 'false');
+      
+      // Update grid engine
+      g.update(element, {
+        x: node.x,
+        y: node.y,
+        w: node.w,
+        h: node.h,
+        autoPosition: false
+      });
+    }
+  });
+} finally {
+  g.commit();
+}
+
+// Phase 2: Enable Interactive Features
+setTimeout(() => {
+  g.batchUpdate();
+  try {
+    // Restore default GridStack behavior
+    g.setStatic(false);
+    g.opts.float = false;
+    
+    // Re-enable widget interactions
+    g.enableMove(true);
+    g.enableResize(true);
+  } finally {
+    g.commit();
+  }
+}, 100);
 ```
+
+#### Key Configuration Points
+
+1. **Initial Grid Options**
+   ```typescript
+   {
+     float: false,     // Default compaction behavior
+     staticGrid: true, // Prevent movement during initialization
+     minRow: 1,       // Allow widgets at y:0
+     animate: true,    // Smooth transitions
+     margin: 4,       // Widget spacing
+     column: 12       // Desktop column count
+   }
+   ```
 
 2. **Layout Application**
-```typescript
-// Apply layout in order
-layoutToApply.forEach(node => {
-  const element = document.querySelector(`[gs-id="${node.id}"]`);
-  if (element) {
-    // Set minimum constraints
-    element.setAttribute('gs-min-w', String(defaultNode.minW));
-    element.setAttribute('gs-min-h', String(defaultNode.minH));
-    
-    // Force position and size
-    element.setAttribute('gs-x', String(node.x));
-    element.setAttribute('gs-y', String(node.y));
-    element.setAttribute('gs-w', String(node.w));
-    element.setAttribute('gs-h', String(node.h));
-    
-    // Update grid engine
-    grid.update(element, {
-      x: node.x,
-      y: node.y,
-      w: node.w,
-      h: node.h,
-      autoPosition: false
-    });
-  }
-});
-```
+   - Remove existing grid attributes
+   - Apply layout without sorting
+   - Force exact positions through both attributes and engine updates
+   - Double-pass position verification
 
-3. **Layout Enforcement**
-```typescript
-// Force relayout after DOM update
-requestAnimationFrame(() => {
-  grid.batchUpdate();
-  try {
-    // Verify and force correct positions
-    layoutToApply.forEach(node => {
-      const element = document.querySelector(`[gs-id="${node.id}"]`);
-      if (element) {
-        const currentNode = grid.engine.nodes.find(n => n.el === element);
-        if (currentNode?.x !== node.x || currentNode?.y !== node.y) {
-          grid.update(element, { x: node.x, y: node.y });
-        }
-      }
-    });
-    grid.compact();
-  } finally {
-    grid.commit();
-  }
-});
-```
+3. **Interactive Behavior Restoration**
+   - Re-enable grid features after layout is stable
+   - Restore default compaction behavior
+   - Re-initialize drag and resize capabilities
 
 ### Layout Persistence
 
-Layouts are saved to localStorage with debouncing to prevent excessive writes:
+Layout saving is implemented with debouncing to prevent excessive storage operations:
 
 ```typescript
 const saveLayout = debounce(() => {
-  const items = grid.getGridItems();
-  const serializedLayout = items
+  const serializedLayout = grid.getGridItems()
     .map(item => ({
       id: item.gridstackNode.id,
       x: item.gridstackNode.x,
@@ -152,7 +186,7 @@ const saveLayout = debounce(() => {
 
 ### Layout Validation
 
-All layouts must pass validation before being applied:
+Layouts must pass validation before being applied:
 
 ```typescript
 const isValidLayout = (layout: GridStackWidget[]) => {
@@ -163,11 +197,75 @@ const isValidLayout = (layout: GridStackWidget[]) => {
   return defaultLayout.every(defaultWidget => {
     const savedWidget = layout.find(w => w.id === defaultWidget.id);
     return savedWidget && 
-           savedWidget.w >= defaultWidget.minW && 
-           savedWidget.h >= defaultWidget.minH;
+           (savedWidget.w ?? 0) >= (defaultWidget.minW ?? 2) && 
+           (savedWidget.h ?? 0) >= (defaultWidget.minH ?? 2);
   });
 };
 ```
+
+### Best Practices
+
+1. **Layout Initialization**
+   - Start with static grid to prevent unwanted movement
+   - Apply exact positions without sorting
+   - Use both DOM attributes and engine updates
+   - Enable interactive features only after layout is stable
+
+2. **Position Preservation**
+   - Never sort layouts during initialization
+   - Maintain exact coordinates
+   - Prevent automatic compaction during setup
+   - Double-verify positions
+
+3. **Interactive Behavior**
+   - Enable compaction after initialization
+   - Allow natural widget swapping
+   - Maintain smooth animations
+   - Preserve user-specified positions
+
+4. **Layout Persistence**
+   - Validate layouts before saving
+   - Use debounced save operations
+   - Maintain minimum size constraints
+   - Preserve all widget attributes
+
+### Common Issues Solved
+
+1. **Vertical Position Swapping**
+   - Problem: Widgets would swap vertical positions on refresh
+   - Solution: Static initialization and exact position forcing
+
+2. **Unwanted Compaction**
+   - Problem: Automatic left-right compaction changing layouts
+   - Solution: Two-phase initialization with initial static grid
+
+3. **Interactive Behavior**
+   - Problem: Lost widget interaction after position preservation
+   - Solution: Proper restoration of GridStack features
+
+4. **Layout Stability**
+   - Problem: Inconsistent layout restoration
+   - Solution: Comprehensive position forcing and verification
+
+### Mobile Considerations
+
+1. **Single Column Mode**
+   ```typescript
+   const mobileLayout = [
+     { x: 0, y: 0, w: 1, h: 6, id: 'chart' },
+     { x: 0, y: 6, w: 1, h: 6, id: 'orderbook' },
+     // ... other widgets
+   ];
+   ```
+
+2. **Mobile Options**
+   ```typescript
+   const mobileOptions = {
+     column: 1,
+     cellHeight: '100px',
+     margin: 4
+   };
+   ```
 
 ## Best Practices
 
