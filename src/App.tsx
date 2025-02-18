@@ -190,69 +190,19 @@ function App() {
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
-    // Ensure proper initialization
-    g.batchUpdate();
-    try {
-      // First remove all constraints
-      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-        const element = item as HTMLElement;
-        element.removeAttribute('gs-min-w');
-        element.removeAttribute('gs-min-h');
-        element.removeAttribute('gs-max-w');
-        element.removeAttribute('gs-max-h');
-      });
-      g.commit();
-    } finally {
-      g.commit();
-    }
-
+    // Skip initial layout application if we're loading from scratch
+    // This lets the HTML attributes define the initial layout
     if (!mobile) {
-      // Try to load saved layout first
       const savedLayout = localStorage.getItem('desktop-layout');
       if (savedLayout) {
         try {
           const layoutData = JSON.parse(savedLayout);
           if (isValidLayout(layoutData)) {
-            g.batchUpdate();
-            try {
-              // First ensure all widgets have correct min sizes
-              gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-                const element = item as HTMLElement;
-                const widgetId = element.getAttribute('gs-id');
-                const layoutWidget = layoutData.find((w: LayoutWidget) => w.id === widgetId);
-                if (layoutWidget) {
-                  element.setAttribute('gs-min-w', String(layoutWidget.minW));
-                  element.setAttribute('gs-min-h', String(layoutWidget.minH));
-                }
-              });
-
-              // Then apply the layout
-              layoutData.forEach((node: LayoutWidget) => {
-                if (node.id) {
-                  const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-                  if (item) {
-                    g.update(item as HTMLElement, {
-                      x: node.x,
-                      y: node.y,
-                      w: node.w,
-                      h: node.h,
-                      autoPosition: false
-                    });
-                  }
-                }
-              });
-            } finally {
-              g.commit();
-            }
-          } else {
-            applyLayout(defaultLayout, gridElement);
+            applyLayout(layoutData, gridElement);
           }
         } catch (error) {
           console.error('Failed to load saved layout:', error);
-          applyLayout(defaultLayout, gridElement);
         }
-      } else {
-        applyLayout(defaultLayout, gridElement);
       }
 
       // Set up layout saving
@@ -486,48 +436,58 @@ function App() {
               gs-id="chart"
               gs-x="0" 
               gs-y="0" 
-              gs-w={isMobile ? "1" : "8"} 
-              gs-h="6">
+              gs-w={isMobile ? "1" : "6"} 
+              gs-h="6"
+              gs-min-w="2"
+              gs-min-h="2">
               <WidgetContainer title="BTC/USDT">
                 <TradingViewChart />
               </WidgetContainer>
             </div>
             <div className="grid-stack-item" 
               gs-id="orderbook"
-              gs-x={isMobile ? "0" : "8"} 
-              gs-y={isMobile ? "6" : "0"} 
-              gs-w={isMobile ? "1" : "4"} 
-              gs-h="6">
+              gs-x="6" 
+              gs-y="0" 
+              gs-w={isMobile ? "1" : "3"} 
+              gs-h="6"
+              gs-min-w="2"
+              gs-min-h="2">
               <WidgetContainer title="Order Book">
                 <OrderBook />
               </WidgetContainer>
             </div>
             <div className="grid-stack-item" 
               gs-id="tradeform"
-              gs-x="0" 
-              gs-y={isMobile ? "12" : "6"} 
-              gs-w={isMobile ? "1" : "4"} 
-              gs-h="4">
+              gs-x="9" 
+              gs-y="0" 
+              gs-w={isMobile ? "1" : "3"} 
+              gs-h="4"
+              gs-min-w="2"
+              gs-min-h="2">
               <WidgetContainer title="Trade">
                 <TradeForm />
               </WidgetContainer>
             </div>
             <div className="grid-stack-item" 
               gs-id="market"
-              gs-x={isMobile ? "0" : "4"} 
-              gs-y={isMobile ? "16" : "6"} 
-              gs-w={isMobile ? "1" : "4"} 
-              gs-h="4">
+              gs-x="9" 
+              gs-y="4" 
+              gs-w={isMobile ? "1" : "3"} 
+              gs-h="4"
+              gs-min-w="2"
+              gs-min-h="2">
               <WidgetContainer title="Market Overview">
                 <MarketOverview />
               </WidgetContainer>
             </div>
             <div className="grid-stack-item" 
               gs-id="trades"
-              gs-x={isMobile ? "0" : "8"} 
-              gs-y={isMobile ? "20" : "6"} 
-              gs-w={isMobile ? "1" : "4"} 
-              gs-h="4">
+              gs-x="0" 
+              gs-y="6" 
+              gs-w={isMobile ? "1" : "9"} 
+              gs-h="2"
+              gs-min-w="2"
+              gs-min-h="2">
               <WidgetContainer title="Recent Trades">
                 <RecentTrades />
               </WidgetContainer>
