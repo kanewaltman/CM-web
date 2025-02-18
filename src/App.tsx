@@ -162,7 +162,7 @@ function App() {
     }
 
     const options: GridStackOptions = {
-      float: false, // Re-enable compacting
+      float: false, // Enable real-time compaction
       cellHeight: mobile ? '100px' : 'auto',
       margin: 4,
       column: mobile ? 1 : 12,
@@ -181,9 +181,9 @@ function App() {
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
-    // Temporarily disable grid and compacting
+    // Temporarily disable grid and compaction
     g.setStatic(true);
-    g.opts.float = true; // Temporarily disable compacting
+    g.opts.float = true; // Temporarily disable compaction during initialization
 
     // Get the layout to apply
     let layoutToApply = defaultLayout;
@@ -207,12 +207,6 @@ function App() {
     const sortedLayout = [...layoutToApply].sort((a, b) => {
       if (a.y !== b.y) return a.y - b.y;
       return a.x - b.x;
-    });
-
-    // Create a map of original y-positions
-    const originalYPositions = new Map<string, number>();
-    sortedLayout.forEach(node => {
-      originalYPositions.set(node.id, node.y);
     });
 
     // Initialize all widgets with correct attributes
@@ -254,65 +248,16 @@ function App() {
           });
         }
       });
-
-      // Add custom compaction handler to preserve vertical order
-      g.engine.nodes.forEach(node => {
-        if (node.el && node.id) {
-          const originalY = originalYPositions.get(node.id);
-          if (originalY !== undefined) {
-            Object.defineProperty(node, '_origY', {
-              value: originalY,
-              writable: false,
-              configurable: true
-            });
-          }
-        }
-      });
-
-      // Override the default compaction behavior
-      const originalCompact = g.engine.compact;
-      g.engine.compact = function(layout?: CompactOptions, doSort?: boolean) {
-        // Sort nodes by their original Y position before compacting
-        this.nodes.sort((a, b) => {
-          const aOrigY = (a as any)._origY ?? a.y;
-          const bOrigY = (b as any)._origY ?? b.y;
-          if (aOrigY !== bOrigY) return aOrigY - bOrigY;
-          return (a.x ?? 0) - (b.x ?? 0);
-        });
-        
-        // Call original compact
-        originalCompact.apply(this, [layout, doSort]);
-        
-        // Ensure nodes maintain their relative vertical order
-        const nodes = this.nodes.slice();
-        nodes.sort((a, b) => {
-          const aOrigY = (a as any)._origY ?? a.y;
-          const bOrigY = (b as any)._origY ?? b.y;
-          return aOrigY - bOrigY;
-        });
-        
-        let currentY = 0;
-        nodes.forEach(node => {
-          if (node.y !== currentY) {
-            node.y = currentY;
-            node.autoPosition = false;
-          }
-          currentY = node.y + (node.h ?? 0);
-        });
-
-        return this;
-      };
     } finally {
       g.commit();
     }
 
-    // Re-enable grid features and compacting after a short delay
+    // Re-enable grid features and compaction after a short delay
     setTimeout(() => {
       g.batchUpdate();
       try {
         g.setStatic(false);
-        g.opts.float = false; // Re-enable compacting
-        g.compact(); // Perform initial compaction
+        g.opts.float = false; // Re-enable real-time compaction for user interactions
       } finally {
         g.commit();
       }
