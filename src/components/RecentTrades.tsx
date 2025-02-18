@@ -1,5 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { WidgetContainer } from './ui/widget-container';
+import { cn } from '@/lib/utils';
 
 const trades = [
   { time: '12:30:45', price: '50,123.45', amount: '0.1235', side: 'buy' },
@@ -10,29 +10,30 @@ const trades = [
 
 export function RecentTrades() {
   return (
-    <WidgetContainer title="Recent Trades">
-      <div className="h-full overflow-auto scrollbar-thin widget-inset table-container">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Amount</TableHead>
+    <div className={cn(
+      "h-full overflow-auto scrollbar-thin rounded-lg p-3",
+      "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+    )}>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Time</TableHead>
+            <TableHead>Price</TableHead>
+            <TableHead>Amount</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {trades.map((trade, i) => (
+            <TableRow key={i}>
+              <TableCell>{trade.time}</TableCell>
+              <TableCell className={trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}>
+                {trade.price}
+              </TableCell>
+              <TableCell>{trade.amount}</TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {trades.map((trade, i) => (
-              <TableRow key={i}>
-                <TableCell>{trade.time}</TableCell>
-                <TableCell className={trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}>
-                  {trade.price}
-                </TableCell>
-                <TableCell>{trade.amount}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </WidgetContainer>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

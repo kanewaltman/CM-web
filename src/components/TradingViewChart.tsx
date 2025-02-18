@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi } from 'lightweight-charts';
-import { WidgetContainer } from './ui/widget-container';
+import { cn } from '@/lib/utils';
 
 export function TradingViewChart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -102,16 +102,11 @@ export function TradingViewChart() {
   }, [containerSize.width, containerSize.height]);
 
   return (
-    <WidgetContainer 
-      title="BTC/USDT"
-      headerControls={
-        <div className="text-sm">
-          <span className="text-green-500">$50,123.45</span>
-          <span className="ml-2 text-green-500">+2.34%</span>
-        </div>
-      }
-    >
+    <div className={cn(
+      "h-full overflow-auto scrollbar-thin rounded-lg p-3",
+      "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+    )}>
       <div ref={chartContainerRef} className="w-full h-full" />
-    </WidgetContainer>
+    </div>
   );
 }

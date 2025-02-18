@@ -1,7 +1,7 @@
 import { ChevronDown, Maximize2, MoreHorizontal } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 interface WidgetContainerProps {
   children: React.ReactNode;
@@ -11,22 +11,6 @@ interface WidgetContainerProps {
 
 export function WidgetContainer({ children, title, headerControls }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Prevent widget nesting by removing duplicate content
-    if (containerRef.current) {
-      const parent = containerRef.current.parentElement;
-      if (parent?.classList.contains('grid-stack-item')) {
-        const contents = parent.querySelectorAll('.grid-stack-item-content');
-        if (contents.length > 1) {
-          // Keep only the first content div
-          for (let i = 1; i < contents.length; i++) {
-            contents[i].remove();
-          }
-        }
-      }
-    }
-  }, []);
 
   return (
     <div ref={containerRef} className="grid-stack-item-content h-full">
@@ -52,15 +36,8 @@ export function WidgetContainer({ children, title, headerControls }: WidgetConta
         </div>
 
         {/* Content wrapper */}
-        <div className="widget-content flex-1 px-2 pb-2 overflow-hidden">
-          <div 
-            className={cn(
-              "h-full overflow-auto scrollbar-thin rounded-lg p-3 widget-inset",
-              "border border-[hsl(var(--color-widget-inset-border))]"
-            )}
-          >
-            {children}
-          </div>
+        <div className="flex-1 min-h-0 px-2 pb-2 overflow-auto">
+          {children}
         </div>
       </div>
     </div>
