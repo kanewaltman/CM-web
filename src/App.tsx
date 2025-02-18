@@ -162,7 +162,7 @@ function App() {
     }
 
     const options: GridStackOptions = {
-      float: true, // Enable float to prevent unwanted compaction
+      float: false, // Re-enable compacting
       cellHeight: mobile ? '100px' : 'auto',
       margin: 4,
       column: mobile ? 1 : 12,
@@ -181,8 +181,9 @@ function App() {
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
-    // Temporarily disable grid
+    // Temporarily disable grid and compacting
     g.setStatic(true);
+    g.opts.float = true; // Temporarily disable compacting
 
     // Get the layout to apply
     let layoutToApply = defaultLayout;
@@ -245,9 +246,16 @@ function App() {
       g.commit();
     }
 
-    // Re-enable grid features after a short delay
+    // Re-enable grid features and compacting after a short delay
     setTimeout(() => {
-      g.setStatic(false);
+      g.batchUpdate();
+      try {
+        g.setStatic(false);
+        g.opts.float = false; // Re-enable compacting
+        g.compact(); // Perform initial compaction
+      } finally {
+        g.commit();
+      }
     }, 100);
 
     // Set up layout saving with debounce
