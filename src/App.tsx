@@ -169,7 +169,7 @@ function App() {
       cellHeight: mobile ? '100px' : 'auto',
       margin: 4,
       column: mobile ? 1 : 12,
-      animate: false, // Disable GridStack's animation during initialization
+      animate: true, // Keep animations enabled by default
       draggable: {
         handle: '.widget-header',
       },
@@ -183,6 +183,9 @@ function App() {
 
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
+
+    // Temporarily disable animations during layout application
+    g.setAnimation(false);
 
     // Get the layout to apply
     let layoutToApply = defaultLayout;
@@ -269,7 +272,7 @@ function App() {
         try {
           g.setStatic(false);
           g.opts.float = false;
-          g.opts.animate = true; // Re-enable animations after initialization
+          g.setAnimation(true); // Re-enable animations
           g.enableMove(true);
           g.enableResize(true);
         } finally {
@@ -512,6 +515,11 @@ function App() {
         }
         .grid-stack-item {
           transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
+        }
+        /* Ensure GridStack's own animations work properly */
+        .grid-stack-item.ui-draggable-dragging,
+        .grid-stack-item.ui-resizable-resizing {
+          transition: none !important;
         }
       `}</style>
       <TopBar />
