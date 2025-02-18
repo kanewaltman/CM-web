@@ -104,15 +104,17 @@ function App() {
 
         // Ensure proper sizing after layout is applied
         setTimeout(() => {
-          g.batchUpdate();
+          if (!gridRef.current) return;
+          
+          gridRef.current.batchUpdate();
           try {
             layout.forEach((node: GridStackWidget) => {
-              if (node.id) {
+              if (node.id && gridRef.current) {
                 const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
                 if (item) {
                   const defaultWidget = defaultLayout.find(w => w.id === node.id);
                   if (defaultWidget) {
-                    g.update(item as HTMLElement, {
+                    gridRef.current.update(item as HTMLElement, {
                       w: Math.max(node.w || 0, defaultWidget.w),
                       h: Math.max(node.h || 0, defaultWidget.h)
                     });
@@ -121,7 +123,9 @@ function App() {
               }
             });
           } finally {
-            g.commit();
+            if (gridRef.current) {
+              gridRef.current.commit();
+            }
           }
         }, 0);
 
