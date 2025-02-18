@@ -11,16 +11,17 @@ import 'gridstack/dist/gridstack.min.css';
 
 // Initialize with default options
 const grid = GridStack.init({
-  float: true,          // widgets can float
+  float: false,         // disabled to prevent unwanted widget floating
   animate: true,        // smooth transitions
-  column: 12,           // 12-column grid
-  margin: 8,            // gap between widgets
-  cellHeight: 60,       // base height unit
-  draggable: {          // dragging configuration
+  column: 12,          // 12-column grid
+  margin: 8,           // gap between widgets
+  cellHeight: 'auto',  // dynamic height based on content
+  draggable: {         // dragging configuration
     handle: '.widget-header'
   },
-  resizable: {          // resizing configuration
-    handles: 'e,se,s,sw,w'
+  resizable: {         // resizing configuration
+    handles: 'e,se,s,sw,w',
+    autoHide: true
   }
 });
 ```
@@ -407,4 +408,256 @@ function restoreLastValidLayout() {
    // Use the new utility for creating widget structure
    const el = GridStack.Utils.createWidgetDivs();
    grid.makeWidget(el);
-   ``` 
+   ```
+
+## Layout Persistence
+
+### Layout Application
+```typescript
+const applyLayout = (layout: GridStackWidget[]) => {
+  grid.batchUpdate();
+  try {
+    // Clean slate approach - remove old attributes
+    gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+      const element = item as HTMLElement;
+      element.removeAttribute('gs-x');
+      element.removeAttribute('gs-y');
+      element.removeAttribute('gs-w');
+      element.removeAttribute('gs-h');
+    });
+
+    // Apply new layout
+    layout.forEach((node: GridStackWidget) => {
+      if (node.id) {
+        const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+        if (item) {
+          grid.update(item as HTMLElement, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h
+          });
+        }
+      }
+    });
+
+    grid.compact(); // Ensure no gaps
+  } finally {
+    grid.commit();
+  }
+};
+```
+
+### Layout Validation
+```typescript
+const isValidLayout = (layout: GridStackWidget[]) => {
+  if (!Array.isArray(layout) || layout.length !== defaultLayout.length) {
+    return false;
+  }
+  
+  // Verify all required widgets are present
+  return defaultLayout.every(defaultWidget => 
+    layout.some(savedWidget => savedWidget.id === defaultWidget.id)
+  );
+};
+```
+
+### Save and Restore
+```typescript
+// Save layout
+const saveLayout = () => {
+  const serializedLayout = grid.save(false);
+  if (isValidLayout(serializedLayout)) {
+    localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+  }
+};
+
+// Restore layout
+const restoreLayout = () => {
+  const savedLayout = localStorage.getItem('desktop-layout');
+  if (savedLayout) {
+    try {
+      const layoutData = JSON.parse(savedLayout);
+      if (isValidLayout(layoutData)) {
+        applyLayout(layoutData);
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to restore layout:', error);
+    }
+  }
+  applyLayout(defaultLayout);
+  return false;
+};
+```
+
+## Responsive Behavior
+
+### Breakpoint Management
+```typescript
+const MOBILE_BREAKPOINT = 768;
+
+const handleResize = () => {
+  const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
+  if (mobile !== isMobile) {
+    setIsMobile(mobile);
+    initializeGrid(mobile);
+  }
+};
+```
+
+## Best Practices
+
+1. **Layout Application**
+   - Always use the clean slate approach when applying layouts
+   - Apply layouts atomically using batchUpdate/commit
+   - Validate layouts before saving or restoring
+   - Handle errors gracefully with fallbacks
+
+2. **Widget Management**
+   - Maintain consistent widget IDs
+   - Use proper widget cleanup on removal
+   - Handle widget content resizing appropriately
+   - Implement proper mobile/desktop transitions
+
+3. **Performance**
+   - Debounce layout save operations
+   - Use efficient layout validation
+   - Optimize compact operations
+   - Minimize unnecessary layout updates
+
+4. **Error Handling**
+   - Validate layouts before applying
+   - Provide fallback layouts
+   - Log errors appropriately
+   - Maintain layout integrity 
+
+## Widget Size Management
+
+### Minimum Size Constraints
+To prevent widgets from becoming too small and maintain layout integrity, we implement size constraints:
+
+1. **Widget Attributes**
+   ```typescript
+   // Set minimum size constraints on widget elements
+   element.setAttribute('gs-min-w', String(Math.min(2, defaultWidget.w)));
+   element.setAttribute('gs-min-h', String(Math.min(2, defaultWidget.h)));
+   ```
+
+2. **Layout Validation**
+   ```typescript
+   const hasValidSizes = widgets.every(widget => {
+     return widget.w >= Math.min(2, defaultSize.w) && 
+            widget.h >= Math.min(2, defaultSize.h);
+   });
+   ```
+
+### Size Restoration
+When applying layouts, we ensure widget sizes are properly maintained:
+
+```typescript
+const applyLayout = (layout: GridStackWidget[]) => {
+  grid.batchUpdate();
+  try {
+    // First pass: Apply minimum size constraints
+    layout.forEach(node => {
+      const defaultWidget = defaultLayout.find(w => w.id === node.id);
+      grid.update(element, {
+        w: Math.max(node.w || 0, defaultWidget?.w || 2),
+        h: Math.max(node.h || 0, defaultWidget?.h || 2)
+      });
+    });
+
+    // Second pass: Ensure proper sizing
+    setTimeout(() => {
+      grid.batchUpdate();
+      layout.forEach(node => {
+        const defaultWidget = defaultLayout.find(w => w.id === node.id);
+        if (defaultWidget) {
+          grid.update(element, {
+            w: Math.max(node.w || 0, defaultWidget.w),
+            h: Math.max(node.h || 0, defaultWidget.h)
+          });
+        }
+      });
+      grid.commit();
+    }, 0);
+  } finally {
+    grid.commit();
+  }
+};
+```
+
+## Layout Persistence
+
+### Layout Validation
+```typescript
+const isValidLayout = (layout: GridStackWidget[]) => {
+  if (!Array.isArray(layout) || layout.length !== defaultLayout.length) {
+    return false;
+  }
+  
+  // Verify all required widgets are present with valid sizes
+  return defaultLayout.every(defaultWidget => {
+    const savedWidget = layout.find(w => w.id === defaultWidget.id);
+    return savedWidget && 
+           (savedWidget.w ?? 0) >= Math.min(2, defaultWidget.w) && 
+           (savedWidget.h ?? 0) >= Math.min(2, defaultWidget.h);
+  });
+};
+```
+
+### Save and Restore
+```typescript
+// Save layout with size validation
+const saveLayout = () => {
+  const serializedLayout = grid.save(false);
+  if (isValidLayout(serializedLayout)) {
+    localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+  }
+};
+
+// Restore layout with size constraints
+const restoreLayout = () => {
+  const savedLayout = localStorage.getItem('desktop-layout');
+  if (savedLayout) {
+    try {
+      const layoutData = JSON.parse(savedLayout);
+      if (isValidLayout(layoutData)) {
+        applyLayout(layoutData);
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to restore layout:', error);
+    }
+  }
+  applyLayout(defaultLayout);
+  return false;
+};
+```
+
+## Best Practices
+
+1. **Size Management**
+   - Always enforce minimum widget sizes
+   - Use two-pass layout application for reliable sizing
+   - Validate sizes before saving layouts
+   - Maintain default size references
+
+2. **Layout Application**
+   - Use batch updates for atomic changes
+   - Apply size constraints before position updates
+   - Handle layout validation comprehensively
+   - Provide fallback to default sizes
+
+3. **Performance**
+   - Use setTimeout for reliable size updates
+   - Batch related size operations
+   - Validate layouts efficiently
+   - Cache default widget references
+
+4. **Error Handling**
+   - Validate sizes before saving
+   - Handle missing or invalid sizes
+   - Provide fallback sizes
+   - Log size-related errors 

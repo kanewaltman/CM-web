@@ -61,83 +61,130 @@ function App() {
         autoHide: true
       },
       staticGrid: mobile,
+      disableOneColumnMode: true, // Prevent automatic column reduction
     };
 
     const g = GridStack.init(options, gridElement as GridStackElement);
+    
+    // Set minimum widget size constraints
+    g.opts.minW = 2;
     gridRef.current = g;
 
-    g.batchUpdate();
-    try {
-      // First, ensure all widgets are properly initialized with default positions
-      defaultLayout.forEach((node: GridStackWidget) => {
-        const existingItem = gridElement.querySelector(`[gs-id="${node.id}"]`);
-        if (existingItem) {
-          g.update(existingItem as HTMLElement, {
-            x: node.x,
-            y: node.y,
-            w: node.w,
-            h: node.h
-          });
-        }
-      });
+    // Function to safely apply layout
+    const applyLayout = (layout: GridStackWidget[]) => {
+      g.batchUpdate();
+      try {
+        // First, ensure all widgets have their minimum sizes set
+        gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+          const element = item as HTMLElement;
+          const widgetId = element.getAttribute('gs-id');
+          const defaultWidget = defaultLayout.find(w => w.id === widgetId);
+          if (defaultWidget) {
+            element.setAttribute('gs-min-w', String(Math.min(2, defaultWidget.w)));
+            element.setAttribute('gs-min-h', String(Math.min(2, defaultWidget.h)));
+          }
+        });
 
-      // Then, if there's a saved layout and we're not in mobile mode, apply it
-      if (!mobile) {
-        const savedLayout = localStorage.getItem('desktop-layout');
-        if (savedLayout) {
+        // Apply the layout with size constraints
+        layout.forEach((node: GridStackWidget) => {
+          if (node.id) {
+            const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+            if (item) {
+              const defaultWidget = defaultLayout.find(w => w.id === node.id);
+              g.update(item as HTMLElement, {
+                x: node.x,
+                y: node.y,
+                w: Math.max(node.w || 0, defaultWidget?.w || 2), // Ensure minimum width
+                h: Math.max(node.h || 0, defaultWidget?.h || 2), // Ensure minimum height
+                autoPosition: false
+              });
+            }
+          }
+        });
+
+        // Ensure proper sizing after layout is applied
+        setTimeout(() => {
+          g.batchUpdate();
           try {
-            const layoutData = JSON.parse(savedLayout);
-            // Only apply saved layout if it has valid data
-            if (Array.isArray(layoutData) && layoutData.length > 0) {
-              layoutData.forEach((node: GridStackWidget) => {
-                if (node.id) {
-                  const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-                  if (item) {
+            layout.forEach((node: GridStackWidget) => {
+              if (node.id) {
+                const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+                if (item) {
+                  const defaultWidget = defaultLayout.find(w => w.id === node.id);
+                  if (defaultWidget) {
                     g.update(item as HTMLElement, {
-                      x: node.x,
-                      y: node.y,
-                      w: node.w,
-                      h: node.h
+                      w: Math.max(node.w || 0, defaultWidget.w),
+                      h: Math.max(node.h || 0, defaultWidget.h)
                     });
                   }
                 }
-              });
-            }
-          } catch (error) {
-            console.error('Failed to load saved layout:', error);
-            // If saved layout is invalid, fall back to default
-            defaultLayout.forEach((node: GridStackWidget) => {
-              const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-              if (item) {
-                g.update(item as HTMLElement, {
-                  x: node.x,
-                  y: node.y,
-                  w: node.w,
-                  h: node.h
-                });
               }
             });
+          } finally {
+            g.commit();
           }
+        }, 0);
+
+      } finally {
+        g.commit();
+      }
+    };
+
+    if (!mobile) {
+      // Try to load saved layout first
+      const savedLayout = localStorage.getItem('desktop-layout');
+      if (savedLayout) {
+        try {
+          const layoutData = JSON.parse(savedLayout);
+          if (Array.isArray(layoutData) && layoutData.length === defaultLayout.length) {
+            // Verify all required widgets are present and have valid sizes
+            const hasAllWidgets = defaultLayout.every(defaultWidget => {
+              const savedWidget = layoutData.find(w => w.id === defaultWidget.id);
+              return savedWidget && 
+                     (savedWidget.w ?? 0) >= Math.min(2, defaultWidget.w) && 
+                     (savedWidget.h ?? 0) >= Math.min(2, defaultWidget.h);
+            });
+            if (hasAllWidgets) {
+              applyLayout(layoutData);
+            } else {
+              applyLayout(defaultLayout);
+            }
+          } else {
+            applyLayout(defaultLayout);
+          }
+        } catch (error) {
+          console.error('Failed to load saved layout:', error);
+          applyLayout(defaultLayout);
         }
+      } else {
+        applyLayout(defaultLayout);
       }
 
-      g.compact();
-    } finally {
-      g.commit();
-    }
-    
-    if (!mobile) {
+      // Set up layout saving with size validation
       let saveTimeout: NodeJS.Timeout;
       const saveLayout = () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
-          const serializedLayout = g.save(false); // Only save positions
-          localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+          const serializedLayout = g.save(false);
+          if (Array.isArray(serializedLayout) && serializedLayout.length === defaultLayout.length) {
+            // Verify all widgets have valid sizes before saving
+            const hasValidSizes = defaultLayout.every(defaultWidget => {
+              const savedWidget = serializedLayout.find(w => w.id === defaultWidget.id);
+              return savedWidget && 
+                     (savedWidget.w ?? 0) >= Math.min(2, defaultWidget.w) && 
+                     (savedWidget.h ?? 0) >= Math.min(2, defaultWidget.h);
+            });
+            if (hasValidSizes) {
+              localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+            }
+          }
         }, 100);
       };
 
       g.on('change', saveLayout);
       g.on('resizestop dragstop', saveLayout);
+    } else {
+      applyLayout(mobileLayout);
     }
 
     return g;
