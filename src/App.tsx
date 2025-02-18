@@ -22,11 +22,11 @@ const defaultLayout = [
 
 // Mobile layout configuration (single column)
 const mobileLayout = [
-  { x: 0, y: 0, w: 1, h: 6 },  // TradingViewChart
-  { x: 0, y: 6, w: 1, h: 6 },  // OrderBook
-  { x: 0, y: 12, w: 1, h: 4 }, // TradeForm
-  { x: 0, y: 16, w: 1, h: 4 }, // MarketOverview
-  { x: 0, y: 20, w: 1, h: 4 }  // RecentTrades
+  { x: 0, y: 0, w: 1, h: 6, id: 'chart', minW: 2, minH: 2 },
+  { x: 0, y: 6, w: 1, h: 6, id: 'orderbook', minW: 2, minH: 2 },
+  { x: 0, y: 12, w: 1, h: 4, id: 'tradeform', minW: 2, minH: 2 },
+  { x: 0, y: 16, w: 1, h: 4, id: 'market', minW: 2, minH: 2 },
+  { x: 0, y: 20, w: 1, h: 4, id: 'trades', minW: 2, minH: 2 }
 ];
 
 // Breakpoint for mobile view
@@ -190,89 +190,112 @@ function App() {
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
-    // Skip initial layout application if we're loading from scratch
-    // This lets the HTML attributes define the initial layout
+    // Get the layout to apply first
+    let layoutToApply = defaultLayout;
     if (!mobile) {
       const savedLayout = localStorage.getItem('desktop-layout');
       if (savedLayout) {
         try {
-          const layoutData = JSON.parse(savedLayout);
-          if (isValidLayout(layoutData)) {
-            applyLayout(layoutData, gridElement);
+          const parsedLayout = JSON.parse(savedLayout);
+          if (isValidLayout(parsedLayout)) {
+            layoutToApply = parsedLayout;
           }
         } catch (error) {
-          console.error('Failed to load saved layout:', error);
+          console.error('Failed to parse saved layout:', error);
         }
       }
+    } else {
+      layoutToApply = mobileLayout;
+    }
 
-      // Set up layout saving
+    // Initialize all widgets with correct attributes
+    g.batchUpdate();
+    try {
+      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+        const element = item as HTMLElement;
+        const gsId = element.getAttribute('gs-id');
+        
+        // Find the layout configuration for this widget
+        const layoutNode = layoutToApply.find(node => node.id === gsId);
+        const defaultNode = defaultLayout.find(node => node.id === gsId);
+        
+        if (layoutNode && defaultNode) {
+          // Clear existing gs-* attributes except gs-id
+          Array.from(element.attributes)
+            .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
+            .forEach(attr => element.removeAttribute(attr.name));
+
+          // Set all required attributes
+          element.setAttribute('gs-x', String(layoutNode.x));
+          element.setAttribute('gs-y', String(layoutNode.y));
+          element.setAttribute('gs-w', String(layoutNode.w));
+          element.setAttribute('gs-h', String(layoutNode.h));
+          element.setAttribute('gs-min-w', String(defaultNode.minW ?? 2));
+          element.setAttribute('gs-min-h', String(defaultNode.minH ?? 2));
+          element.setAttribute('gs-auto-position', 'false');
+        }
+      });
+    } finally {
+      g.commit();
+    }
+
+    // Make sure the grid recognizes the layout
+    g.batchUpdate();
+    try {
+      layoutToApply.forEach(node => {
+        if (node.id) {
+          const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+          if (item) {
+            g.update(item as HTMLElement, {
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              autoPosition: false
+            });
+          }
+        }
+      });
+      g.compact();
+    } finally {
+      g.commit();
+    }
+
+    // Set up layout saving with debounce
+    if (!mobile) {
       let saveTimeout: NodeJS.Timeout;
       const saveLayout = () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
           const items = g.getGridItems();
-          
-          // Sort items by position before saving to ensure consistent order
-          const sortedItems = [...items].sort((a, b) => {
-            const aNode = a.gridstackNode;
-            const bNode = b.gridstackNode;
-            if (!aNode || !bNode) return 0;
-            
-            const aY = aNode.y ?? 0;
-            const bY = bNode.y ?? 0;
-            if (aY !== bY) return aY - bY;
-            
-            const aX = aNode.x ?? 0;
-            const bX = bNode.x ?? 0;
-            return aX - bX;
-          });
+          const serializedLayout = items
+            .map(item => {
+              const node = item.gridstackNode;
+              if (!node || !node.id) return null;
 
-          // Create layout with sorted positions
-          const serializedLayout = sortedItems.map(item => {
-            const node = item.gridstackNode;
-            if (!node || !node.id) return null;
+              const defaultWidget = defaultLayout.find(w => w.id === node.id);
+              if (!defaultWidget) return null;
 
-            // Get the original widget config for min sizes
-            const defaultWidget = defaultLayout.find(w => w.id === node.id);
-            
-            return {
-              id: node.id,
-              x: node.x ?? 0,
-              y: node.y ?? 0,
-              w: Math.max(node.w ?? 2, defaultWidget?.minW ?? 2),
-              h: Math.max(node.h ?? 2, defaultWidget?.minH ?? 2),
-              minW: defaultWidget?.minW ?? 2,
-              minH: defaultWidget?.minH ?? 2
-            } as LayoutWidget;
-          }).filter((item): item is LayoutWidget => item !== null);
-          
+              return {
+                id: node.id,
+                x: node.x ?? 0,
+                y: node.y ?? 0,
+                w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
+                h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
+                minW: defaultWidget.minW ?? 2,
+                minH: defaultWidget.minH ?? 2
+              };
+            })
+            .filter((item): item is LayoutWidget => item !== null);
+
           if (isValidLayout(serializedLayout)) {
-            // Before saving, verify no overlaps
-            const hasOverlaps = serializedLayout.some((widget1, i) => 
-              serializedLayout.some((widget2, j) => {
-                if (i === j) return false;
-                return (
-                  widget1.x < (widget2.x + widget2.w) &&
-                  (widget1.x + widget1.w) > widget2.x &&
-                  widget1.y < (widget2.y + widget2.h) &&
-                  (widget1.y + widget1.h) > widget2.y
-                );
-              })
-            );
-
-            if (!hasOverlaps) {
-              localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
-            } else {
-              console.warn('Layout not saved due to overlaps');
-            }
+            localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
           }
-        }, 100);
+        }, 250);
       };
 
       g.on('change', saveLayout);
       g.on('resizestop dragstop', saveLayout);
-    } else {
-      applyLayout(mobileLayout, gridElement);
     }
 
     return g;
