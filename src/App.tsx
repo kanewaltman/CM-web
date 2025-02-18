@@ -65,23 +65,95 @@ function App() {
   const applyLayout = (layout: GridStackWidget[], gridElement: Element) => {
     if (!gridRef.current) return;
     
+    // Step 1: Temporarily disable movement and remove constraints
     gridRef.current.batchUpdate();
     try {
-      // First pass: Apply the layout while respecting minimum sizes
-      layout.forEach((node: GridStackWidget) => {
+      // First disable all movement
+      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+        const element = item as HTMLElement;
+        element.setAttribute('gs-no-move', 'true');
+        element.removeAttribute('gs-min-w');
+        element.removeAttribute('gs-min-h');
+        element.removeAttribute('gs-max-w');
+        element.removeAttribute('gs-max-h');
+      });
+    } finally {
+      gridRef.current.commit();
+    }
+
+    // Step 2: Apply minimum sizes
+    gridRef.current.batchUpdate();
+    try {
+      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+        const element = item as HTMLElement;
+        const widgetId = element.getAttribute('gs-id');
+        const defaultWidget = defaultLayout.find(w => w.id === widgetId);
+        if (defaultWidget) {
+          element.setAttribute('gs-min-w', String(defaultWidget.minW ?? 2));
+          element.setAttribute('gs-min-h', String(defaultWidget.minH ?? 2));
+        }
+      });
+    } finally {
+      gridRef.current.commit();
+    }
+
+    // Step 3: Apply positions in sequence
+    gridRef.current.batchUpdate();
+    try {
+      // Sort layout by position priority
+      const sortedLayout = [...layout].sort((a, b) => {
+        const aY = a.y ?? 0;
+        const bY = b.y ?? 0;
+        if (aY !== bY) return aY - bY;
+        
+        const aX = a.x ?? 0;
+        const bX = b.x ?? 0;
+        if (aX !== bX) return aX - bX;
+        
+        // If positions are the same, place larger widgets first
+        const aSize = (a.w ?? 0) * (a.h ?? 0);
+        const bSize = (b.w ?? 0) * (b.h ?? 0);
+        return bSize - aSize;
+      });
+
+      // First pass: Position all widgets
+      sortedLayout.forEach((node: GridStackWidget) => {
         if (node.id) {
           const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-          if (item) {
-            const defaultWidget = defaultLayout.find(w => w.id === node.id);
-            gridRef.current?.update(item as HTMLElement, {
-              x: node.x,
-              y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: defaultWidget?.minW ?? 2,
-              minH: defaultWidget?.minH ?? 2,
-              autoPosition: false
-            });
+          if (item && gridRef.current) {
+            const currentNode = gridRef.current.engine.nodes.find(n => n.el === item);
+            if (currentNode && (currentNode.x !== node.x || currentNode.y !== node.y)) {
+              gridRef.current.update(item as HTMLElement, {
+                x: node.x,
+                y: node.y,
+                w: node.w,
+                h: node.h,
+                autoPosition: false
+              });
+            }
+          }
+        }
+      });
+
+      // Re-enable movement
+      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+        const element = item as HTMLElement;
+        element.removeAttribute('gs-no-move');
+      });
+
+      // Second pass: Verify positions
+      sortedLayout.forEach((node: GridStackWidget) => {
+        if (node.id) {
+          const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+          if (item && gridRef.current) {
+            const currentNode = gridRef.current.engine.nodes.find(n => n.el === item);
+            if (currentNode && (currentNode.x !== node.x || currentNode.y !== node.y)) {
+              gridRef.current.update(item as HTMLElement, {
+                x: node.x,
+                y: node.y,
+                autoPosition: false
+              });
+            }
           }
         }
       });
@@ -113,11 +185,26 @@ function App() {
         autoHide: true
       },
       staticGrid: mobile,
-      disableOneColumnMode: true,
     };
 
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
+
+    // Ensure proper initialization
+    g.batchUpdate();
+    try {
+      // First remove all constraints
+      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+        const element = item as HTMLElement;
+        element.removeAttribute('gs-min-w');
+        element.removeAttribute('gs-min-h');
+        element.removeAttribute('gs-max-w');
+        element.removeAttribute('gs-max-h');
+      });
+      g.commit();
+    } finally {
+      g.commit();
+    }
 
     if (!mobile) {
       // Try to load saved layout first
@@ -140,7 +227,7 @@ function App() {
               });
 
               // Then apply the layout
-              layoutData.forEach(node => {
+              layoutData.forEach((node: LayoutWidget) => {
                 if (node.id) {
                   const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
                   if (item) {
@@ -244,9 +331,25 @@ function App() {
     try {
       const layout = JSON.parse(layoutStr) as LayoutWidget[];
       if (isValidLayout(layout)) {
+        // Step 1: Temporarily disable movement and remove constraints
         grid.batchUpdate();
         try {
-          // First ensure all widgets have correct min sizes
+          // First disable all movement
+          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+            const element = item as HTMLElement;
+            element.setAttribute('gs-no-move', 'true');
+            element.removeAttribute('gs-min-w');
+            element.removeAttribute('gs-min-h');
+            element.removeAttribute('gs-max-w');
+            element.removeAttribute('gs-max-h');
+          });
+        } finally {
+          grid.commit();
+        }
+
+        // Step 2: Apply minimum sizes
+        grid.batchUpdate();
+        try {
           gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
             const element = item as HTMLElement;
             const widgetId = element.getAttribute('gs-id');
@@ -256,9 +359,34 @@ function App() {
               element.setAttribute('gs-min-h', String(layoutWidget.minH));
             }
           });
+        } finally {
+          grid.commit();
+        }
 
-          // Then apply the layout
-          layout.forEach((node: LayoutWidget) => {
+        // Step 3: Apply positions in sequence
+        grid.batchUpdate();
+        try {
+          // Sort layout by position priority:
+          // 1. Lower y positions first (top to bottom)
+          // 2. For same y, lower x positions first (left to right)
+          // 3. For overlapping items, larger items first
+          const sortedLayout = [...layout].sort((a, b) => {
+            const aY = a.y ?? 0;
+            const bY = b.y ?? 0;
+            if (aY !== bY) return aY - bY;
+            
+            const aX = a.x ?? 0;
+            const bX = b.x ?? 0;
+            if (aX !== bX) return aX - bX;
+            
+            // If positions are the same, place larger widgets first
+            const aSize = (a.w ?? 0) * (a.h ?? 0);
+            const bSize = (b.w ?? 0) * (b.h ?? 0);
+            return bSize - aSize;
+          });
+
+          // First pass: Position all widgets at their target locations
+          sortedLayout.forEach((node: LayoutWidget) => {
             if (node.id) {
               const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
               if (item) {
@@ -272,9 +400,33 @@ function App() {
               }
             }
           });
+
+          // Re-enable movement
+          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+            const element = item as HTMLElement;
+            element.removeAttribute('gs-no-move');
+          });
+
+          // Second pass: Verify positions and adjust if needed
+          sortedLayout.forEach((node: LayoutWidget) => {
+            if (node.id) {
+              const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+              if (item && gridRef.current) {
+                const currentNode = gridRef.current.engine.nodes.find(n => n.el === item);
+                if (currentNode && (currentNode.x !== node.x || currentNode.y !== node.y)) {
+                  gridRef.current.update(item as HTMLElement, {
+                    x: node.x,
+                    y: node.y,
+                    autoPosition: false
+                  });
+                }
+              }
+            }
+          });
         } finally {
           grid.commit();
         }
+
         // Save the pasted layout
         localStorage.setItem('desktop-layout', layoutStr);
       }
