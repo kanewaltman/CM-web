@@ -2,6 +2,218 @@
 
 This document details how CM-Web manages its dynamic layout system using GridStack, covering initialization, configuration, state management, and advanced features.
 
+## Layout System Overview
+
+The layout system is built on GridStack v11.3.0 and provides:
+- Drag-and-drop widget management
+- Responsive grid layouts
+- Widget resizing capabilities
+- Layout persistence
+- Mobile/desktop layout switching
+- Copy/paste layout functionality
+
+### Layout Types
+
+We maintain three types of layouts:
+1. **Default Layout**: The base layout configuration used as a fallback
+2. **Saved Layout**: User-customized layout stored in localStorage
+3. **Mobile Layout**: Single-column layout for mobile devices
+
+## Implementation Details
+
+### Widget Structure
+Each widget must have:
+- A unique `gs-id` attribute for identification
+- Position attributes (`gs-x`, `gs-y`)
+- Size attributes (`gs-w`, `gs-h`)
+- Minimum size constraints (`gs-min-w`, `gs-min-h`)
+
+```html
+<div class="grid-stack-item" 
+  gs-id="chart"
+  gs-x="0" 
+  gs-y="0" 
+  gs-w="6" 
+  gs-h="4"
+  gs-min-w="2"
+  gs-min-h="2">
+  <WidgetContainer>
+    <!-- Widget content -->
+  </WidgetContainer>
+</div>
+```
+
+### Layout Configuration
+
+```typescript
+interface LayoutWidget {
+  id: string;      // Unique widget identifier
+  x: number;       // X position (column)
+  y: number;       // Y position (row)
+  w: number;       // Width in columns
+  h: number;       // Height in rows
+  minW: number;    // Minimum width
+  minH: number;    // Minimum height
+}
+
+const defaultLayout: LayoutWidget[] = [
+  { id: 'chart', x: 0, y: 0, w: 6, h: 6, minW: 2, minH: 2 },
+  // ... other widgets
+];
+```
+
+### Initialization Process
+
+The grid initialization follows a specific sequence to ensure consistent layout across environments:
+
+1. **Clean Start**
+```typescript
+// Remove existing gs-* attributes except gs-id
+element.attributes
+  .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
+  .forEach(attr => element.removeAttribute(attr.name));
+```
+
+2. **Layout Application**
+```typescript
+// Apply layout in order
+layoutToApply.forEach(node => {
+  const element = document.querySelector(`[gs-id="${node.id}"]`);
+  if (element) {
+    // Set minimum constraints
+    element.setAttribute('gs-min-w', String(defaultNode.minW));
+    element.setAttribute('gs-min-h', String(defaultNode.minH));
+    
+    // Force position and size
+    element.setAttribute('gs-x', String(node.x));
+    element.setAttribute('gs-y', String(node.y));
+    element.setAttribute('gs-w', String(node.w));
+    element.setAttribute('gs-h', String(node.h));
+    
+    // Update grid engine
+    grid.update(element, {
+      x: node.x,
+      y: node.y,
+      w: node.w,
+      h: node.h,
+      autoPosition: false
+    });
+  }
+});
+```
+
+3. **Layout Enforcement**
+```typescript
+// Force relayout after DOM update
+requestAnimationFrame(() => {
+  grid.batchUpdate();
+  try {
+    // Verify and force correct positions
+    layoutToApply.forEach(node => {
+      const element = document.querySelector(`[gs-id="${node.id}"]`);
+      if (element) {
+        const currentNode = grid.engine.nodes.find(n => n.el === element);
+        if (currentNode?.x !== node.x || currentNode?.y !== node.y) {
+          grid.update(element, { x: node.x, y: node.y });
+        }
+      }
+    });
+    grid.compact();
+  } finally {
+    grid.commit();
+  }
+});
+```
+
+### Layout Persistence
+
+Layouts are saved to localStorage with debouncing to prevent excessive writes:
+
+```typescript
+const saveLayout = debounce(() => {
+  const items = grid.getGridItems();
+  const serializedLayout = items
+    .map(item => ({
+      id: item.gridstackNode.id,
+      x: item.gridstackNode.x,
+      y: item.gridstackNode.y,
+      w: item.gridstackNode.w,
+      h: item.gridstackNode.h,
+      minW: item.gridstackNode.minW,
+      minH: item.gridstackNode.minH
+    }))
+    .filter(Boolean);
+
+  if (isValidLayout(serializedLayout)) {
+    localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+  }
+}, 250);
+```
+
+### Layout Validation
+
+All layouts must pass validation before being applied:
+
+```typescript
+const isValidLayout = (layout: GridStackWidget[]) => {
+  if (!Array.isArray(layout) || layout.length !== defaultLayout.length) {
+    return false;
+  }
+  
+  return defaultLayout.every(defaultWidget => {
+    const savedWidget = layout.find(w => w.id === defaultWidget.id);
+    return savedWidget && 
+           savedWidget.w >= defaultWidget.minW && 
+           savedWidget.h >= defaultWidget.minH;
+  });
+};
+```
+
+## Best Practices
+
+1. **Layout Application**
+   - Always use `batchUpdate()/commit()` pairs for bulk operations
+   - Set both HTML attributes and update grid engine
+   - Use `requestAnimationFrame` for layout enforcement
+   - Apply layouts in a consistent order
+
+2. **Layout Persistence**
+   - Validate layouts before saving or applying
+   - Use debouncing for save operations
+   - Always maintain minimum size constraints
+   - Store layouts in a consistent format
+
+3. **Mobile Support**
+   - Use single-column layout for mobile
+   - Maintain widget order in mobile view
+   - Adjust widget sizes appropriately
+   - Handle orientation changes gracefully
+
+4. **Performance**
+   - Batch layout updates
+   - Debounce save operations
+   - Use `requestAnimationFrame` for DOM updates
+   - Minimize layout recalculations
+
+## Common Issues
+
+1. **Widget Collapse**
+   - Ensure minimum sizes are set before position updates
+   - Apply both HTML attributes and grid updates
+   - Verify layout validity before application
+
+2. **Position Inconsistency**
+   - Use multi-phase layout application
+   - Force position updates when needed
+   - Verify positions after layout changes
+   - Use `compact()` to ensure proper layout
+
+3. **Layout Restoration**
+   - Clean existing attributes before applying layout
+   - Apply layout in consistent order
+   - Force relayout after initialization
+   - Verify layout validity before saving
+
 ## GridStack Configuration
 
 ### Basic Setup
