@@ -211,22 +211,60 @@ function App() {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
           const items = g.getGridItems();
-          const serializedLayout = items.map(item => {
+          
+          // Sort items by position before saving to ensure consistent order
+          const sortedItems = [...items].sort((a, b) => {
+            const aNode = a.gridstackNode;
+            const bNode = b.gridstackNode;
+            if (!aNode || !bNode) return 0;
+            
+            const aY = aNode.y ?? 0;
+            const bY = bNode.y ?? 0;
+            if (aY !== bY) return aY - bY;
+            
+            const aX = aNode.x ?? 0;
+            const bX = bNode.x ?? 0;
+            return aX - bX;
+          });
+
+          // Create layout with sorted positions
+          const serializedLayout = sortedItems.map(item => {
             const node = item.gridstackNode;
             if (!node || !node.id) return null;
+
+            // Get the original widget config for min sizes
+            const defaultWidget = defaultLayout.find(w => w.id === node.id);
+            
             return {
               id: node.id,
               x: node.x ?? 0,
               y: node.y ?? 0,
-              w: node.w ?? 2,
-              h: node.h ?? 2,
-              minW: node.minW ?? 2,
-              minH: node.minH ?? 2
+              w: Math.max(node.w ?? 2, defaultWidget?.minW ?? 2),
+              h: Math.max(node.h ?? 2, defaultWidget?.minH ?? 2),
+              minW: defaultWidget?.minW ?? 2,
+              minH: defaultWidget?.minH ?? 2
             } as LayoutWidget;
           }).filter((item): item is LayoutWidget => item !== null);
           
           if (isValidLayout(serializedLayout)) {
-            localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+            // Before saving, verify no overlaps
+            const hasOverlaps = serializedLayout.some((widget1, i) => 
+              serializedLayout.some((widget2, j) => {
+                if (i === j) return false;
+                return (
+                  widget1.x < (widget2.x + widget2.w) &&
+                  (widget1.x + widget1.w) > widget2.x &&
+                  widget1.y < (widget2.y + widget2.h) &&
+                  (widget1.y + widget1.h) > widget2.y
+                );
+              })
+            );
+
+            if (!hasOverlaps) {
+              localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+            } else {
+              console.warn('Layout not saved due to overlaps');
+            }
           }
         }, 100);
       };
