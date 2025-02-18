@@ -50,7 +50,7 @@ function App() {
     const options: GridStackOptions = {
       float: false,
       cellHeight: mobile ? '100px' : 'auto',
-      margin: 8,
+      margin: 4,
       column: mobile ? 1 : 12,
       animate: true,
       draggable: {
