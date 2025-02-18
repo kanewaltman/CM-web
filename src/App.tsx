@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { GridStack, GridStackWidget, GridStackOptions, GridStackNode, GridStackElement } from 'gridstack';
+import { GridStack, GridStackWidget, GridStackOptions, GridStackNode, GridStackElement, CompactOptions } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
@@ -203,6 +203,18 @@ function App() {
       layoutToApply = mobileLayout;
     }
 
+    // Sort layout by vertical position to ensure correct stacking
+    const sortedLayout = [...layoutToApply].sort((a, b) => {
+      if (a.y !== b.y) return a.y - b.y;
+      return a.x - b.x;
+    });
+
+    // Create a map of original y-positions
+    const originalYPositions = new Map<string, number>();
+    sortedLayout.forEach(node => {
+      originalYPositions.set(node.id, node.y);
+    });
+
     // Initialize all widgets with correct attributes
     g.batchUpdate();
     try {
@@ -215,7 +227,7 @@ function App() {
       });
 
       // Apply layout in sequence
-      layoutToApply.forEach(node => {
+      sortedLayout.forEach(node => {
         const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
         if (element) {
           // Set minimum constraints first
@@ -242,6 +254,54 @@ function App() {
           });
         }
       });
+
+      // Add custom compaction handler to preserve vertical order
+      g.engine.nodes.forEach(node => {
+        if (node.el && node.id) {
+          const originalY = originalYPositions.get(node.id);
+          if (originalY !== undefined) {
+            Object.defineProperty(node, '_origY', {
+              value: originalY,
+              writable: false,
+              configurable: true
+            });
+          }
+        }
+      });
+
+      // Override the default compaction behavior
+      const originalCompact = g.engine.compact;
+      g.engine.compact = function(layout?: CompactOptions, doSort?: boolean) {
+        // Sort nodes by their original Y position before compacting
+        this.nodes.sort((a, b) => {
+          const aOrigY = (a as any)._origY ?? a.y;
+          const bOrigY = (b as any)._origY ?? b.y;
+          if (aOrigY !== bOrigY) return aOrigY - bOrigY;
+          return (a.x ?? 0) - (b.x ?? 0);
+        });
+        
+        // Call original compact
+        originalCompact.apply(this, [layout, doSort]);
+        
+        // Ensure nodes maintain their relative vertical order
+        const nodes = this.nodes.slice();
+        nodes.sort((a, b) => {
+          const aOrigY = (a as any)._origY ?? a.y;
+          const bOrigY = (b as any)._origY ?? b.y;
+          return aOrigY - bOrigY;
+        });
+        
+        let currentY = 0;
+        nodes.forEach(node => {
+          if (node.y !== currentY) {
+            node.y = currentY;
+            node.autoPosition = false;
+          }
+          currentY = node.y + (node.h ?? 0);
+        });
+
+        return this;
+      };
     } finally {
       g.commit();
     }
