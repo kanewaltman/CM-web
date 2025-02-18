@@ -13,8 +13,8 @@ export function WidgetContainer({ children, title, headerControls }: WidgetConta
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div ref={containerRef} className="grid-stack-item-content h-full w-full box-border overflow-hidden">
-      <div className="h-full w-full flex flex-col box-border">
+    <div ref={containerRef} className="grid-stack-item-content">
+      <div className="h-full flex flex-col">
         {/* Header */}
         <div className="widget-header flex items-center justify-between px-4 py-2 select-none">
           <div className="flex items-center space-x-2">
@@ -36,7 +36,7 @@ export function WidgetContainer({ children, title, headerControls }: WidgetConta
         </div>
 
         {/* Content wrapper */}
-        <div className="flex-1 min-h-0 w-full box-border px-2 pb-2 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-auto">
           {children}
         </div>
       </div>
