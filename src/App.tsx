@@ -162,7 +162,7 @@ function App() {
     }
 
     const options: GridStackOptions = {
-      float: false, // Enable real-time compaction
+      float: false, // Default compaction behavior
       cellHeight: mobile ? '100px' : 'auto',
       margin: 4,
       column: mobile ? 1 : 12,
@@ -175,15 +175,11 @@ function App() {
         autoHide: true
       },
       minRow: 1, // Allow widgets at y:0
-      staticGrid: false, // Allow movement
+      staticGrid: true, // Start static to ensure layout
     };
 
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
-
-    // Temporarily disable grid and compaction
-    g.setStatic(true);
-    g.opts.float = true; // Temporarily disable compaction during initialization
 
     // Get the layout to apply
     let layoutToApply = defaultLayout;
@@ -203,12 +199,6 @@ function App() {
       layoutToApply = mobileLayout;
     }
 
-    // Sort layout by vertical position to ensure correct stacking
-    const sortedLayout = [...layoutToApply].sort((a, b) => {
-      if (a.y !== b.y) return a.y - b.y;
-      return a.x - b.x;
-    });
-
     // Initialize all widgets with correct attributes
     g.batchUpdate();
     try {
@@ -220,8 +210,8 @@ function App() {
           .forEach(attr => element.removeAttribute(attr.name));
       });
 
-      // Apply layout in sequence
-      sortedLayout.forEach(node => {
+      // Apply layout in exact order without sorting
+      layoutToApply.forEach(node => {
         const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
         if (element) {
           // Set minimum constraints first
@@ -248,16 +238,34 @@ function App() {
           });
         }
       });
+
+      // Force a second pass to ensure positions
+      layoutToApply.forEach(node => {
+        const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
+        if (element) {
+          const gridNode = g.engine.nodes.find(n => n.id === node.id);
+          if (gridNode) {
+            gridNode.x = node.x;
+            gridNode.y = node.y;
+            gridNode.autoPosition = false;
+          }
+        }
+      });
     } finally {
       g.commit();
     }
 
-    // Re-enable grid features and compaction after a short delay
+    // Re-enable grid features after positions are locked in
     setTimeout(() => {
       g.batchUpdate();
       try {
+        // Restore default GridStack behavior
         g.setStatic(false);
-        g.opts.float = false; // Re-enable real-time compaction for user interactions
+        g.opts.float = false;
+        
+        // Re-initialize draggable/resizable on all widgets
+        g.enableMove(true);
+        g.enableResize(true);
       } finally {
         g.commit();
       }
