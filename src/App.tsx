@@ -156,17 +156,20 @@ function App() {
     const gridElement = document.querySelector('.grid-stack');
     if (!gridElement) return null;
 
+    // Add initial opacity style to grid element
+    gridElement.classList.add('grid-initializing');
+
     // Clean up existing instance but preserve the items
     if (gridRef.current) {
       gridRef.current.destroy(false);
     }
 
     const options: GridStackOptions = {
-      float: false, // Default compaction behavior
+      float: false,
       cellHeight: mobile ? '100px' : 'auto',
       margin: 4,
       column: mobile ? 1 : 12,
-      animate: true,
+      animate: false, // Disable GridStack's animation during initialization
       draggable: {
         handle: '.widget-header',
       },
@@ -174,8 +177,8 @@ function App() {
         handles: 'e, se, s, sw, w',
         autoHide: true
       },
-      minRow: 1, // Allow widgets at y:0
-      staticGrid: true, // Start static to ensure layout
+      minRow: 1,
+      staticGrid: true,
     };
 
     const g = GridStack.init(options, gridElement as GridStackElement);
@@ -256,20 +259,24 @@ function App() {
     }
 
     // Re-enable grid features after positions are locked in
-    setTimeout(() => {
-      g.batchUpdate();
-      try {
-        // Restore default GridStack behavior
-        g.setStatic(false);
-        g.opts.float = false;
-        
-        // Re-initialize draggable/resizable on all widgets
-        g.enableMove(true);
-        g.enableResize(true);
-      } finally {
-        g.commit();
-      }
-    }, 100);
+    requestAnimationFrame(() => {
+      // Remove initializing class to trigger fade in
+      gridElement.classList.remove('grid-initializing');
+      
+      // Re-enable animations and interactive features
+      setTimeout(() => {
+        g.batchUpdate();
+        try {
+          g.setStatic(false);
+          g.opts.float = false;
+          g.opts.animate = true; // Re-enable animations after initialization
+          g.enableMove(true);
+          g.enableResize(true);
+        } finally {
+          g.commit();
+        }
+      }, 300); // Match this with the CSS transition duration
+    });
 
     // Set up layout saving with debounce
     if (!mobile) {
@@ -494,6 +501,19 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <style>{`
+        .grid-initializing {
+          opacity: 0;
+          transition: none;
+        }
+        .grid-stack {
+          opacity: 1;
+          transition: opacity 300ms ease-in-out;
+        }
+        .grid-stack-item {
+          transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
+        }
+      `}</style>
       <TopBar />
       <main className="h-[calc(100vh-64px)] mt-16 overflow-y-auto scrollbar-main">
         <div className="max-w-[1920px] mx-auto px-4">
