@@ -63,102 +63,92 @@ function App() {
   };
 
   const applyLayout = (layout: GridStackWidget[], gridElement: Element) => {
-    if (!gridRef.current) return;
+    const grid = gridRef.current;
+    if (!grid) return;
     
-    // Step 1: Temporarily disable movement and remove constraints
-    gridRef.current.batchUpdate();
+    // Step 1: Sort layout by vertical position first, then horizontal
+    const sortedLayout = [...layout].sort((a, b) => {
+      const aY = a.y ?? 0;
+      const bY = b.y ?? 0;
+      if (aY !== bY) return aY - bY;
+      return (a.x ?? 0) - (b.x ?? 0);
+    });
+
+    // Step 2: Disable all movement and compaction temporarily
+    grid.batchUpdate();
     try {
-      // First disable all movement
+      // First remove all gs-* attributes except gs-id
       gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
         const element = item as HTMLElement;
+        Array.from(element.attributes)
+          .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
+          .forEach(attr => element.removeAttribute(attr.name));
+        
+        // Temporarily disable movement
         element.setAttribute('gs-no-move', 'true');
-        element.removeAttribute('gs-min-w');
-        element.removeAttribute('gs-min-h');
-        element.removeAttribute('gs-max-w');
-        element.removeAttribute('gs-max-h');
-      });
-    } finally {
-      gridRef.current.commit();
-    }
-
-    // Step 2: Apply minimum sizes
-    gridRef.current.batchUpdate();
-    try {
-      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-        const element = item as HTMLElement;
-        const widgetId = element.getAttribute('gs-id');
-        const defaultWidget = defaultLayout.find(w => w.id === widgetId);
-        if (defaultWidget) {
-          element.setAttribute('gs-min-w', String(defaultWidget.minW ?? 2));
-          element.setAttribute('gs-min-h', String(defaultWidget.minH ?? 2));
-        }
-      });
-    } finally {
-      gridRef.current.commit();
-    }
-
-    // Step 3: Apply positions in sequence
-    gridRef.current.batchUpdate();
-    try {
-      // Sort layout by position priority
-      const sortedLayout = [...layout].sort((a, b) => {
-        const aY = a.y ?? 0;
-        const bY = b.y ?? 0;
-        if (aY !== bY) return aY - bY;
-        
-        const aX = a.x ?? 0;
-        const bX = b.x ?? 0;
-        if (aX !== bX) return aX - bX;
-        
-        // If positions are the same, place larger widgets first
-        const aSize = (a.w ?? 0) * (a.h ?? 0);
-        const bSize = (b.w ?? 0) * (b.h ?? 0);
-        return bSize - aSize;
       });
 
-      // First pass: Position all widgets
-      sortedLayout.forEach((node: GridStackWidget) => {
+      // Apply layout in sequence
+      sortedLayout.forEach(node => {
         if (node.id) {
-          const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-          if (item && gridRef.current) {
-            const currentNode = gridRef.current.engine.nodes.find(n => n.el === item);
-            if (currentNode && (currentNode.x !== node.x || currentNode.y !== node.y)) {
-              gridRef.current.update(item as HTMLElement, {
-                x: node.x,
-                y: node.y,
-                w: node.w,
-                h: node.h,
-                autoPosition: false
-              });
+          const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
+          if (element) {
+            // Set minimum constraints first
+            const defaultNode = defaultLayout.find(d => d.id === node.id);
+            if (defaultNode) {
+              element.setAttribute('gs-min-w', String(defaultNode.minW ?? 2));
+              element.setAttribute('gs-min-h', String(defaultNode.minH ?? 2));
             }
+            
+            // Force position and size
+            element.setAttribute('gs-x', String(node.x));
+            element.setAttribute('gs-y', String(node.y));
+            element.setAttribute('gs-w', String(node.w));
+            element.setAttribute('gs-h', String(node.h));
+            
+            // Update grid engine
+            grid.update(element, {
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              autoPosition: false
+            });
           }
         }
       });
 
-      // Re-enable movement
+      // Re-enable movement and verify positions
       gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
         const element = item as HTMLElement;
         element.removeAttribute('gs-no-move');
       });
 
-      // Second pass: Verify positions
-      sortedLayout.forEach((node: GridStackWidget) => {
+      // Final position verification
+      let needsCompaction = false;
+      sortedLayout.forEach(node => {
         if (node.id) {
-          const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-          if (item && gridRef.current) {
-            const currentNode = gridRef.current.engine.nodes.find(n => n.el === item);
+          const element = gridElement.querySelector(`[gs-id="${node.id}"]`);
+          if (element) {
+            const currentNode = grid.engine.nodes.find(n => n.el === element);
             if (currentNode && (currentNode.x !== node.x || currentNode.y !== node.y)) {
-              gridRef.current.update(item as HTMLElement, {
+              grid.update(element as HTMLElement, {
                 x: node.x,
                 y: node.y,
                 autoPosition: false
               });
+              needsCompaction = true;
             }
           }
         }
       });
+
+      // Only compact if absolutely necessary
+      if (needsCompaction) {
+        grid.compact();
+      }
     } finally {
-      gridRef.current.commit();
+      grid.commit();
     }
   };
 
@@ -172,7 +162,7 @@ function App() {
     }
 
     const options: GridStackOptions = {
-      float: false,
+      float: true, // Enable float to prevent unwanted compaction
       cellHeight: mobile ? '100px' : 'auto',
       margin: 4,
       column: mobile ? 1 : 12,
@@ -184,13 +174,17 @@ function App() {
         handles: 'e, se, s, sw, w',
         autoHide: true
       },
-      staticGrid: mobile,
+      minRow: 1, // Allow widgets at y:0
+      staticGrid: false, // Allow movement
     };
 
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
-    // Get the layout to apply first
+    // Temporarily disable grid
+    g.setStatic(true);
+
+    // Get the layout to apply
     let layoutToApply = defaultLayout;
     if (!mobile) {
       const savedLayout = localStorage.getItem('desktop-layout');
@@ -211,7 +205,7 @@ function App() {
     // Initialize all widgets with correct attributes
     g.batchUpdate();
     try {
-      // First remove all gs-* attributes to start fresh
+      // First remove all gs-* attributes except gs-id
       gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
         const element = item as HTMLElement;
         Array.from(element.attributes)
@@ -219,25 +213,25 @@ function App() {
           .forEach(attr => element.removeAttribute(attr.name));
       });
 
-      // Then apply the layout in order
-      layoutToApply.forEach((node, index) => {
+      // Apply layout in sequence
+      layoutToApply.forEach(node => {
         const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
         if (element) {
-          // Set minimum constraints
+          // Set minimum constraints first
           const defaultNode = defaultLayout.find(d => d.id === node.id);
           if (defaultNode) {
             element.setAttribute('gs-min-w', String(defaultNode.minW ?? 2));
             element.setAttribute('gs-min-h', String(defaultNode.minH ?? 2));
           }
           
-          // Force position and size
+          // Force exact position and size
           element.setAttribute('gs-x', String(node.x));
           element.setAttribute('gs-y', String(node.y));
           element.setAttribute('gs-w', String(node.w));
           element.setAttribute('gs-h', String(node.h));
           element.setAttribute('gs-auto-position', 'false');
           
-          // Update the grid engine directly
+          // Update grid engine with exact position
           g.update(element, {
             x: node.x,
             y: node.y,
@@ -251,50 +245,10 @@ function App() {
       g.commit();
     }
 
-    // Force a relayout
-    requestAnimationFrame(() => {
-      g.batchUpdate();
-      try {
-        // Ensure widgets are in correct positions
-        layoutToApply.forEach(node => {
-          const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
-          if (element) {
-            const currentNode = g.engine.nodes.find(n => n.el === element);
-            if (currentNode) {
-              // Force position update if not matching
-              if (currentNode.x !== node.x || currentNode.y !== node.y) {
-                g.update(element, {
-                  x: node.x,
-                  y: node.y,
-                  w: node.w,
-                  h: node.h,
-                  autoPosition: false
-                });
-              }
-            }
-          }
-        });
-        
-        // Force compact to ensure proper layout
-        g.compact();
-        
-        // Additional step to ensure positions
-        g.engine.nodes.forEach(node => {
-          if (node.el) {
-            const layout = layoutToApply.find(l => l.id === node.id);
-            if (layout) {
-              g.update(node.el, {
-                x: layout.x,
-                y: layout.y,
-                autoPosition: false
-              });
-            }
-          }
-        });
-      } finally {
-        g.commit();
-      }
-    });
+    // Re-enable grid features after a short delay
+    setTimeout(() => {
+      g.setStatic(false);
+    }, 100);
 
     // Set up layout saving with debounce
     if (!mobile) {
