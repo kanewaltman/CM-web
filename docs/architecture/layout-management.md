@@ -971,3 +971,202 @@ const restoreLayout = () => {
    - Handle missing or invalid sizes
    - Provide fallback sizes
    - Log size-related errors 
+
+### Animation Management
+
+The layout system implements a sophisticated animation strategy that balances smooth user interactions with stable layout initialization:
+
+1. **Initialization Phase**
+   ```typescript
+   // Initial grid options
+   const options: GridStackOptions = {
+     animate: true,  // Keep animations enabled by default
+     staticGrid: true,
+     // ... other options
+   };
+
+   // Temporarily disable animations during layout application
+   g.setAnimation(false);
+
+   // Apply layout
+   g.batchUpdate();
+   try {
+     // Layout application code...
+   } finally {
+     g.commit();
+   }
+
+   // Re-enable animations and interactive features
+   requestAnimationFrame(() => {
+     gridElement.classList.remove('grid-initializing');
+     setTimeout(() => {
+       g.batchUpdate();
+       try {
+         g.setStatic(false);
+         g.setAnimation(true);
+         g.enableMove(true);
+         g.enableResize(true);
+       } finally {
+         g.commit();
+       }
+     }, 300);
+   });
+   ```
+
+2. **CSS Transitions**
+   ```css
+   .grid-initializing {
+     opacity: 0;
+     transition: none;
+   }
+   .grid-stack {
+     opacity: 1;
+     transition: opacity 300ms ease-in-out;
+   }
+   .grid-stack-item {
+     transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
+   }
+   /* Ensure GridStack's own animations work properly */
+   .grid-stack-item.ui-draggable-dragging,
+   .grid-stack-item.ui-resizable-resizing {
+     transition: none !important;
+   }
+   ```
+
+### Animation Strategy
+
+The animation system follows these key principles:
+
+1. **Initial Load**
+   - Grid starts invisible (`opacity: 0`)
+   - Animations are temporarily disabled
+   - Layout is applied without visual shuffling
+   - Grid fades in smoothly once positioned
+
+2. **Interactive Mode**
+   - Full GridStack animations enabled
+   - Smooth transitions for drag and resize
+   - Real-time widget movement and compaction
+   - Natural widget swapping behavior
+
+3. **Performance Optimization**
+   - CSS transitions for smooth opacity changes
+   - Disabled transitions during drag/resize
+   - Use of `requestAnimationFrame` for timing
+   - Batch updates for layout changes
+
+### Best Practices
+
+1. **Animation Control**
+   - Keep GridStack animations enabled by default
+   - Only disable during initial layout application
+   - Use `setAnimation()` method for control
+   - Re-enable after layout is stable
+
+2. **Visual Smoothness**
+   - Implement fade-in transitions
+   - Coordinate timing with layout application
+   - Handle drag/resize states appropriately
+   - Maintain consistent animation durations
+
+3. **Performance**
+   - Use CSS transitions where appropriate
+   - Disable transitions during active operations
+   - Batch related updates together
+   - Leverage hardware acceleration
+
+### Common Issues Solved
+
+1. **Layout Initialization**
+   - Problem: Visible widget shuffling on load
+   - Solution: Hidden grid during initialization
+
+2. **Animation Conflicts**
+   - Problem: CSS transitions interfering with GridStack
+   - Solution: Selective transition disabling
+
+3. **Smooth Interactions**
+   - Problem: Jerky widget movement
+   - Solution: Proper animation timing and control
+
+### Implementation Example
+
+```typescript
+function initializeGrid(mobile: boolean) {
+  const gridElement = document.querySelector('.grid-stack');
+  if (!gridElement) return null;
+
+  // Start with invisible grid
+  gridElement.classList.add('grid-initializing');
+
+  const options: GridStackOptions = {
+    animate: true,  // Keep animations enabled by default
+    staticGrid: true,
+    // ... other options
+  };
+
+  const grid = GridStack.init(options);
+
+  // Disable animations temporarily
+  grid.setAnimation(false);
+
+  // Apply layout
+  grid.batchUpdate();
+  try {
+    // Apply layout code...
+  } finally {
+    grid.commit();
+  }
+
+  // Re-enable with smooth transition
+  requestAnimationFrame(() => {
+    gridElement.classList.remove('grid-initializing');
+    setTimeout(() => {
+      grid.batchUpdate();
+      try {
+        grid.setStatic(false);
+        grid.setAnimation(true);
+        grid.enableMove(true);
+        grid.enableResize(true);
+      } finally {
+        grid.commit();
+      }
+    }, 300);
+  });
+
+  return grid;
+}
+```
+
+### CSS Configuration
+
+```css
+/* Base grid styles */
+.grid-stack {
+  opacity: 1;
+  transition: opacity 300ms ease-in-out;
+}
+
+/* Initial loading state */
+.grid-initializing {
+  opacity: 0;
+  transition: none;
+}
+
+/* Widget transitions */
+.grid-stack-item {
+  transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
+}
+
+/* Disable transitions during drag/resize */
+.grid-stack-item.ui-draggable-dragging,
+.grid-stack-item.ui-resizable-resizing {
+  transition: none !important;
+}
+```
+
+This animation strategy ensures:
+- Smooth initial layout loading
+- No visible widget shuffling
+- Proper real-time animations during user interactions
+- Optimal performance during drag and resize operations 
