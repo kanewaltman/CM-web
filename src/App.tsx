@@ -13,11 +13,11 @@ import { WidgetContainer } from './components/WidgetContainer';
 
 // Default desktop layout configuration
 const defaultLayout = [
-  { x: 0, y: 0, w: 8, h: 6, id: 'chart', noResize: false, noMove: false }, // TradingViewChart
-  { x: 8, y: 0, w: 4, h: 6, id: 'orderbook', noResize: false, noMove: false }, // OrderBook
-  { x: 0, y: 6, w: 4, h: 4, id: 'tradeform', noResize: false, noMove: false }, // TradeForm
-  { x: 4, y: 6, w: 4, h: 4, id: 'market', noResize: false, noMove: false }, // MarketOverview
-  { x: 8, y: 6, w: 4, h: 4, id: 'trades', noResize: false, noMove: false }, // RecentTrades
+  { x: 0, y: 0, w: 6, h: 6, id: 'chart', minW: 2, minH: 2 },
+  { x: 6, y: 0, w: 3, h: 6, id: 'orderbook', minW: 2, minH: 2 },
+  { x: 9, y: 0, w: 3, h: 4, id: 'tradeform', minW: 2, minH: 2 },
+  { x: 9, y: 4, w: 3, h: 4, id: 'market', minW: 2, minH: 2 },
+  { x: 0, y: 6, w: 9, h: 2, id: 'trades', minW: 2, minH: 2 }
 ];
 
 // Mobile layout configuration (single column)
@@ -32,11 +32,63 @@ const mobileLayout = [
 // Breakpoint for mobile view
 const MOBILE_BREAKPOINT = 768;
 
+interface LayoutWidget {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW: number;
+  minH: number;
+}
+
 function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const resizeFrameRef = useRef<number>();
   const gridRef = useRef<GridStack | null>(null);
+
+  const isValidLayout = (layout: GridStackWidget[]) => {
+    if (!Array.isArray(layout) || layout.length !== defaultLayout.length) {
+      return false;
+    }
+    
+    // Only verify that all required widgets are present and have valid minimum sizes
+    return defaultLayout.every(defaultWidget => {
+      const savedWidget = layout.find(w => w.id === defaultWidget.id);
+      return savedWidget && 
+             (savedWidget.w ?? 0) >= (defaultWidget.minW ?? 2) && 
+             (savedWidget.h ?? 0) >= (defaultWidget.minH ?? 2);
+    });
+  };
+
+  const applyLayout = (layout: GridStackWidget[], gridElement: Element) => {
+    if (!gridRef.current) return;
+    
+    gridRef.current.batchUpdate();
+    try {
+      // First pass: Apply the layout while respecting minimum sizes
+      layout.forEach((node: GridStackWidget) => {
+        if (node.id) {
+          const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+          if (item) {
+            const defaultWidget = defaultLayout.find(w => w.id === node.id);
+            gridRef.current?.update(item as HTMLElement, {
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              minW: defaultWidget?.minW ?? 2,
+              minH: defaultWidget?.minH ?? 2,
+              autoPosition: false
+            });
+          }
+        }
+      });
+    } finally {
+      gridRef.current.commit();
+    }
+  };
 
   const initializeGrid = useCallback((mobile: boolean) => {
     const gridElement = document.querySelector('.grid-stack');
@@ -61,78 +113,11 @@ function App() {
         autoHide: true
       },
       staticGrid: mobile,
-      disableOneColumnMode: true, // Prevent automatic column reduction
+      disableOneColumnMode: true,
     };
 
     const g = GridStack.init(options, gridElement as GridStackElement);
-    
-    // Set minimum widget size constraints
-    g.opts.minW = 2;
     gridRef.current = g;
-
-    // Function to safely apply layout
-    const applyLayout = (layout: GridStackWidget[]) => {
-      g.batchUpdate();
-      try {
-        // First, ensure all widgets have their minimum sizes set
-        gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-          const element = item as HTMLElement;
-          const widgetId = element.getAttribute('gs-id');
-          const defaultWidget = defaultLayout.find(w => w.id === widgetId);
-          if (defaultWidget) {
-            element.setAttribute('gs-min-w', String(Math.min(2, defaultWidget.w)));
-            element.setAttribute('gs-min-h', String(Math.min(2, defaultWidget.h)));
-          }
-        });
-
-        // Apply the layout with size constraints
-        layout.forEach((node: GridStackWidget) => {
-          if (node.id) {
-            const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-            if (item) {
-              const defaultWidget = defaultLayout.find(w => w.id === node.id);
-              g.update(item as HTMLElement, {
-                x: node.x,
-                y: node.y,
-                w: Math.max(node.w || 0, defaultWidget?.w || 2), // Ensure minimum width
-                h: Math.max(node.h || 0, defaultWidget?.h || 2), // Ensure minimum height
-                autoPosition: false
-              });
-            }
-          }
-        });
-
-        // Ensure proper sizing after layout is applied
-        setTimeout(() => {
-          if (!gridRef.current) return;
-          
-          gridRef.current.batchUpdate();
-          try {
-            layout.forEach((node: GridStackWidget) => {
-              if (node.id && gridRef.current) {
-                const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-                if (item) {
-                  const defaultWidget = defaultLayout.find(w => w.id === node.id);
-                  if (defaultWidget) {
-                    gridRef.current.update(item as HTMLElement, {
-                      w: Math.max(node.w || 0, defaultWidget.w),
-                      h: Math.max(node.h || 0, defaultWidget.h)
-                    });
-                  }
-                }
-              }
-            });
-          } finally {
-            if (gridRef.current) {
-              gridRef.current.commit();
-            }
-          }
-        }, 0);
-
-      } finally {
-        g.commit();
-      }
-    };
 
     if (!mobile) {
       // Try to load saved layout first
@@ -140,47 +125,71 @@ function App() {
       if (savedLayout) {
         try {
           const layoutData = JSON.parse(savedLayout);
-          if (Array.isArray(layoutData) && layoutData.length === defaultLayout.length) {
-            // Verify all required widgets are present and have valid sizes
-            const hasAllWidgets = defaultLayout.every(defaultWidget => {
-              const savedWidget = layoutData.find(w => w.id === defaultWidget.id);
-              return savedWidget && 
-                     (savedWidget.w ?? 0) >= Math.min(2, defaultWidget.w) && 
-                     (savedWidget.h ?? 0) >= Math.min(2, defaultWidget.h);
-            });
-            if (hasAllWidgets) {
-              applyLayout(layoutData);
-            } else {
-              applyLayout(defaultLayout);
+          if (isValidLayout(layoutData)) {
+            g.batchUpdate();
+            try {
+              // First ensure all widgets have correct min sizes
+              gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+                const element = item as HTMLElement;
+                const widgetId = element.getAttribute('gs-id');
+                const layoutWidget = layoutData.find((w: LayoutWidget) => w.id === widgetId);
+                if (layoutWidget) {
+                  element.setAttribute('gs-min-w', String(layoutWidget.minW));
+                  element.setAttribute('gs-min-h', String(layoutWidget.minH));
+                }
+              });
+
+              // Then apply the layout
+              layoutData.forEach(node => {
+                if (node.id) {
+                  const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+                  if (item) {
+                    g.update(item as HTMLElement, {
+                      x: node.x,
+                      y: node.y,
+                      w: node.w,
+                      h: node.h,
+                      autoPosition: false
+                    });
+                  }
+                }
+              });
+            } finally {
+              g.commit();
             }
           } else {
-            applyLayout(defaultLayout);
+            applyLayout(defaultLayout, gridElement);
           }
         } catch (error) {
           console.error('Failed to load saved layout:', error);
-          applyLayout(defaultLayout);
+          applyLayout(defaultLayout, gridElement);
         }
       } else {
-        applyLayout(defaultLayout);
+        applyLayout(defaultLayout, gridElement);
       }
 
-      // Set up layout saving with size validation
+      // Set up layout saving
       let saveTimeout: NodeJS.Timeout;
       const saveLayout = () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
-          const serializedLayout = g.save(false);
-          if (Array.isArray(serializedLayout) && serializedLayout.length === defaultLayout.length) {
-            // Verify all widgets have valid sizes before saving
-            const hasValidSizes = defaultLayout.every(defaultWidget => {
-              const savedWidget = serializedLayout.find(w => w.id === defaultWidget.id);
-              return savedWidget && 
-                     (savedWidget.w ?? 0) >= Math.min(2, defaultWidget.w) && 
-                     (savedWidget.h ?? 0) >= Math.min(2, defaultWidget.h);
-            });
-            if (hasValidSizes) {
-              localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
-            }
+          const items = g.getGridItems();
+          const serializedLayout = items.map(item => {
+            const node = item.gridstackNode;
+            if (!node || !node.id) return null;
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: node.w ?? 2,
+              h: node.h ?? 2,
+              minW: node.minW ?? 2,
+              minH: node.minH ?? 2
+            } as LayoutWidget;
+          }).filter((item): item is LayoutWidget => item !== null);
+          
+          if (isValidLayout(serializedLayout)) {
+            localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
           }
         }, 100);
       };
@@ -188,7 +197,7 @@ function App() {
       g.on('change', saveLayout);
       g.on('resizestop dragstop', saveLayout);
     } else {
-      applyLayout(mobileLayout);
+      applyLayout(mobileLayout, gridElement);
     }
 
     return g;
@@ -209,22 +218,65 @@ function App() {
 
   const handleCopyLayout = useCallback(() => {
     if (!grid || isMobile) return '';
-    // Only save positions, not content
-    const layout = grid.save(false);
+    // Save only the core widget data we need
+    const items = grid.getGridItems();
+    const layout = items.map(item => {
+      const node = item.gridstackNode;
+      if (!node || !node.id) return null;
+      return {
+        id: node.id,
+        x: node.x ?? 0,
+        y: node.y ?? 0,
+        w: node.w ?? 2,
+        h: node.h ?? 2,
+        minW: node.minW ?? 2,
+        minH: node.minH ?? 2
+      } as LayoutWidget;
+    }).filter((item): item is LayoutWidget => item !== null);
     return JSON.stringify(layout);
   }, [grid, isMobile]);
 
   const handlePasteLayout = useCallback((layoutStr: string) => {
     if (!grid || isMobile) return;
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+    
     try {
-      const layout = JSON.parse(layoutStr);
-      grid.batchUpdate();
-      try {
-        // Only update positions, don't recreate widgets
-        grid.load(layout, false);
-        grid.compact();
-      } finally {
-        grid.commit();
+      const layout = JSON.parse(layoutStr) as LayoutWidget[];
+      if (isValidLayout(layout)) {
+        grid.batchUpdate();
+        try {
+          // First ensure all widgets have correct min sizes
+          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+            const element = item as HTMLElement;
+            const widgetId = element.getAttribute('gs-id');
+            const layoutWidget = layout.find((w: LayoutWidget) => w.id === widgetId);
+            if (layoutWidget) {
+              element.setAttribute('gs-min-w', String(layoutWidget.minW));
+              element.setAttribute('gs-min-h', String(layoutWidget.minH));
+            }
+          });
+
+          // Then apply the layout
+          layout.forEach((node: LayoutWidget) => {
+            if (node.id) {
+              const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
+              if (item) {
+                grid.update(item as HTMLElement, {
+                  x: node.x,
+                  y: node.y,
+                  w: node.w,
+                  h: node.h,
+                  autoPosition: false
+                });
+              }
+            }
+          });
+        } finally {
+          grid.commit();
+        }
+        // Save the pasted layout
+        localStorage.setItem('desktop-layout', layoutStr);
       }
     } catch (error) {
       console.error('Failed to paste layout:', error);
