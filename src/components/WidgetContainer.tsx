@@ -13,8 +13,32 @@ export function loadLayoutSafely(grid: GridStack, layout: GridStackNode[]) {
 
   grid.batchUpdate();
   try {
-    grid.removeAll();
-    scaledLayout.forEach(widget => grid.addWidget(widget));
+    // Instead of removing all widgets, update their positions
+    const items = grid.getGridItems();
+    const itemsById = new Map();
+    
+    // Create a map of current items by their IDs
+    items.forEach((item) => {
+      if (item.gridstackNode?.id) {
+        itemsById.set(item.gridstackNode.id, item);
+      }
+    });
+
+    // Update positions with scaled sizes
+    scaledLayout.forEach(widget => {
+      if (widget.id) {
+        const item = itemsById.get(widget.id);
+        if (item) {
+          grid.update(item, {
+            x: widget.x,
+            y: widget.y,
+            w: widget.w,
+            h: widget.h,
+            autoPosition: false
+          });
+        }
+      }
+    });
   } finally {
     grid.commit();
   }
@@ -23,14 +47,42 @@ export function loadLayoutSafely(grid: GridStack, layout: GridStackNode[]) {
   setTimeout(() => {
     grid.batchUpdate();
     try {
+      const items = grid.getGridItems();
+      const itemsById = new Map();
+      items.forEach((item) => {
+        if (item.gridstackNode?.id) {
+          itemsById.set(item.gridstackNode.id, item);
+        }
+      });
+
       layout.forEach(widget => {
-        const el = grid.engine.nodes.find((n: GridStackNode) => n.id === widget.id);
-        if (el?.el && widget.w !== undefined && widget.h !== undefined) {
-          grid.update(el.el, { w: widget.w, h: widget.h });
+        if (widget.id) {
+          const item = itemsById.get(widget.id);
+          if (item && widget.w !== undefined && widget.h !== undefined) {
+            grid.update(item, {
+              x: widget.x,
+              y: widget.y,
+              w: widget.w,
+              h: widget.h,
+              autoPosition: false
+            });
+          }
         }
       });
     } finally {
       grid.commit();
     }
   }, 50); // Small delay to allow initial layout to settle
+}
+
+interface WidgetContainerProps {
+  children: React.ReactNode;
+}
+
+export function WidgetContainer({ children }: WidgetContainerProps) {
+  return (
+    <div className="grid-stack-item-content">
+      {children}
+    </div>
+  );
 } 

@@ -9,6 +9,7 @@ import { TradeForm } from './components/TradeForm';
 import { MarketOverview } from './components/MarketOverview';
 import { RecentTrades } from './components/RecentTrades';
 import { Toaster } from './components/ui/toaster';
+import { loadLayoutSafely } from './components/WidgetContainer';
 
 // Default desktop layout configuration
 const defaultLayout = [
@@ -229,29 +230,25 @@ function App() {
   }, [grid, isMobile]);
 
   const handleResetLayout = useCallback(() => {
-    if (grid && !isMobile) {
-      try {
-        grid.batchUpdate();
-        const items = grid.getGridItems();
-        items.forEach((item, index) => {
-          const defaultConfig = defaultLayout[index];
-          if (defaultConfig && item.gridstackNode) {
-            grid.update(item, {
-              x: defaultConfig.x,
-              y: defaultConfig.y,
-              w: defaultConfig.w,
-              h: defaultConfig.h
-            });
-          }
-        });
-        grid.compact();
-        grid.commit();
-        saveCurrentLayout();
-      } catch (error) {
-        console.error('Failed to reset layout:', error);
-      }
+    if (!grid || isMobile) {
+      console.warn('Grid not initialized or in mobile mode');
+      return;
     }
-  }, [grid, isMobile, saveCurrentLayout]);
+
+    try {
+      // Use loadLayoutSafely to reset to default layout
+      loadLayoutSafely(grid, defaultLayout);
+      
+      // Save the reset layout to localStorage after a brief delay to ensure final positions
+      setTimeout(() => {
+        const resetLayout = grid.save(true) as GridStackWidget[];
+        localStorage.setItem('desktop-layout', JSON.stringify(resetLayout));
+        setSavedDesktopLayout(resetLayout);
+      }, 100);
+    } catch (error) {
+      console.error('Failed to reset layout:', error);
+    }
+  }, [grid, isMobile, setSavedDesktopLayout]);
 
   const handleCopyLayout = useCallback(() => {
     if (grid && !isMobile) {
