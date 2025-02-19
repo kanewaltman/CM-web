@@ -25,7 +25,7 @@ This section provides a comprehensive overview of the CM-Web application archite
 ## Technical Stack
 
 - **Frontend Framework**: React with TypeScript
-- **Layout Engine**: GridStack v10.1.1 - Core layout management system
+- **Layout Engine**: GridStack v11.3.0 - Core layout management system
 - **UI Components**: Radix UI
 - **Styling**: CSS Modules / Custom CSS
 - **Build Tool**: Vite
