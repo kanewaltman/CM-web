@@ -374,13 +374,155 @@ function App() {
   const handleResetLayout = useCallback(() => {
     if (!grid || isMobile) return;
     
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+
+    // Store original grid settings
+    const prevAnimate = grid.opts.animate;
+    const prevFloat = grid.opts.float ?? false;
+    const prevStatic = grid.opts.staticGrid ?? false;
+    
+    // Disable animations and enable float to prevent collapsing
+    grid.setAnimation(false);
+    grid.setStatic(true);
+    grid.float(true);
+    
     grid.batchUpdate();
     try {
-      // Only update positions, don't recreate widgets
-      grid.load(defaultLayout, false);
-      grid.compact();
+      // Get current widget IDs
+      const currentWidgets = grid.getGridItems();
+      const defaultLayoutIds = defaultLayout.map(widget => widget.id);
+      
+      // First remove widgets that aren't in the default layout
+      currentWidgets.forEach(item => {
+        const id = item.gridstackNode?.id;
+        if (id && !defaultLayoutIds.includes(id)) {
+          console.log('Removing widget not in default layout:', id);
+          // Remove widget from grid
+          grid.removeWidget(item, false);
+          // Also remove the DOM element
+          const element = gridElement.querySelector(`[gs-id="${id}"]`);
+          if (element) {
+            element.remove();
+          }
+        }
+      });
+
+      // Create a map of existing widgets for quick lookup
+      const existingWidgets = new Map(
+        grid.getGridItems().map(item => [item.gridstackNode?.id, item])
+      );
+
+      // Process each widget in the default layout
+      for (const node of defaultLayout) {
+        const existingWidget = existingWidgets.get(node.id);
+        
+        if (existingWidget) {
+          // Update existing widget position without triggering collapse
+          console.log('Resetting position for widget:', node.id, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h
+          });
+          
+          grid.update(existingWidget, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            autoPosition: false,
+            noMove: true
+          });
+        } else {
+          // Add new widget if it doesn't exist
+          console.log('Adding missing default widget:', node.id);
+          const widgetType = widgetTypes[node.id];
+          
+          if (!widgetComponents[widgetType]) {
+            console.warn('Unknown widget type:', widgetType);
+            continue;
+          }
+
+          // Create new widget element
+          const widgetElement = document.createElement('div');
+          widgetElement.className = 'grid-stack-item';
+          widgetElement.setAttribute('gs-id', node.id);
+          widgetElement.setAttribute('gs-min-w', '2');
+          widgetElement.setAttribute('gs-min-h', '2');
+          widgetElement.setAttribute('gs-x', String(node.x));
+          widgetElement.setAttribute('gs-y', String(node.y));
+          widgetElement.setAttribute('gs-w', String(node.w));
+          widgetElement.setAttribute('gs-h', String(node.h));
+          widgetElement.setAttribute('gs-no-move', 'true');
+
+          const contentElement = document.createElement('div');
+          contentElement.className = 'grid-stack-item-content';
+          widgetElement.appendChild(contentElement);
+
+          const root = ReactDOM.createRoot(contentElement);
+          const WidgetComponent = widgetComponents[widgetType];
+          const widgetTitle = widgetTitles[widgetType];
+          
+          root.render(
+            <WidgetContainer title={widgetTitle}>
+              <WidgetComponent />
+            </WidgetContainer>
+          );
+
+          // Add widget with exact position
+          grid.addWidget({
+            id: node.id,
+            el: widgetElement,
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            minW: 2,
+            minH: 2,
+            autoPosition: false,
+            noMove: true
+          } as ExtendedGridStackWidget);
+        }
+      }
+      
+      // Force final position updates without collapsing
+      defaultLayout.forEach(node => {
+        const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
+        if (element) {
+          element.setAttribute('gs-x', String(node.x));
+          element.setAttribute('gs-y', String(node.y));
+          element.setAttribute('gs-w', String(node.w));
+          element.setAttribute('gs-h', String(node.h));
+          
+          grid.update(element, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            autoPosition: false,
+            noMove: true
+          });
+        }
+      });
+
+      // Save the default layout
+      localStorage.setItem('desktop-layout', JSON.stringify(defaultLayout));
     } finally {
       grid.commit();
+      
+      // Restore original grid settings
+      requestAnimationFrame(() => {
+        grid.setAnimation(prevAnimate);
+        grid.setStatic(prevStatic);
+        grid.float(prevFloat);
+        
+        // Re-enable widget movement
+        grid.getGridItems().forEach(item => {
+          grid.movable(item, true);
+          grid.resizable(item, true);
+        });
+      });
     }
   }, [grid, isMobile]);
 
