@@ -1,24 +1,16 @@
 import { ChevronDown, Maximize2, MoreHorizontal } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { useRef, useState } from 'react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+import { useRef } from 'react';
 
 interface WidgetContainerProps {
   children: React.ReactNode;
   title: string;
   headerControls?: React.ReactNode;
-  onRemove?: () => void;
 }
 
-export function WidgetContainer({ children, title, headerControls, onRemove }: WidgetContainerProps) {
+export function WidgetContainer({ children, title, headerControls }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <div ref={containerRef} className="grid-stack-item-content">
@@ -36,20 +28,9 @@ export function WidgetContainer({ children, title, headerControls, onRemove }: W
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <Maximize2 className="h-4 w-4" />
               </Button>
-              <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {onRemove && (
-                    <DropdownMenuItem onClick={onRemove}>
-                      Remove Widget
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
