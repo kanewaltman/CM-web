@@ -29,7 +29,7 @@
   --color-widget-bg: 0 0% 88%;        /* Widget background */
   --color-widget-header: 0 0% 100%;   /* Widget header */
   --color-widget-content: 0 0% 100%;   /* Widget content area */
-  --color-widget-inset: 0 0% 96% / 0.0;     /* Widget inset areas (scrollable) */
+  --color-widget-inset: 0 0% 100% / 100;     /* Widget inset areas (scrollable) */
   --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
 
   background-color: hsl(var(--color-bg-base));

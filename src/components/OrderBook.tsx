@@ -32,7 +32,7 @@ export function OrderBook() {
 
   return (
     <div className={cn(
-      "h-full overflow-auto scrollbar-thin rounded-lg p-3",
+      "h-full overflow-auto scrollbar-thin p-3",
       "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
     )}>
       <div className="grid grid-cols-3 gap-2 text-sm text-muted-foreground mb-2">

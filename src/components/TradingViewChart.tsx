@@ -103,7 +103,7 @@ export function TradingViewChart() {
 
   return (
     <div className={cn(
-      "h-full overflow-auto scrollbar-thin rounded-lg p-3",
+      "h-full overflow-auto scrollbar-thin p-3",
       "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
     )}>
       <div ref={chartContainerRef} className="w-full h-full" />
