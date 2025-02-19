@@ -451,8 +451,6 @@ function App() {
 
     // Store original grid settings
     const prevAnimate = grid.opts.animate;
-    const prevFloat = grid.opts.float ?? false;
-    const prevStatic = grid.opts.staticGrid ?? false;
     
     // Disable animations and enable float to prevent collapsing
     grid.setAnimation(false);
@@ -585,15 +583,18 @@ function App() {
       
       // Restore original grid settings
       requestAnimationFrame(() => {
+        // First restore animation and static settings
         grid.setAnimation(prevAnimate);
-        grid.setStatic(prevStatic);
-        grid.float(prevFloat);
+        grid.setStatic(false);
         
         // Re-enable widget movement
         grid.getGridItems().forEach(item => {
           grid.movable(item, true);
           grid.resizable(item, true);
         });
+
+        // Finally, restore float setting to enable collapsing
+        grid.float(false);
       });
     }
   }, [grid, isMobile]);
@@ -626,6 +627,16 @@ function App() {
 
     const gridElement = document.querySelector('.grid-stack');
     if (!gridElement) return;
+
+    const grid = gridRef.current;
+    
+    // Store original grid settings
+    const prevAnimate = grid.opts.animate;
+    
+    // Disable animations and enable float to prevent collapsing
+    grid.setAnimation(false);
+    grid.setStatic(true);
+    grid.float(true);
 
     // Get drop coordinates relative to grid
     const x = event._gridX ?? Math.floor((event.clientX - gridElement.getBoundingClientRect().left) / (gridElement.getBoundingClientRect().width / 12));
@@ -660,11 +671,10 @@ function App() {
       </WidgetContainer>
     );
 
-    // Add widget to grid with draggable and resizable enabled
-    gridRef.current.batchUpdate();
+    grid.batchUpdate();
     try {
       // Add widget directly using addWidget
-      gridRef.current.addWidget({
+      grid.addWidget({
         el: widgetElement,
         x: x,
         y: y,
@@ -678,36 +688,43 @@ function App() {
         noMove: false
       } as ExtendedGridStackWidget);
 
-      // Make sure grid is not in static mode
-      gridRef.current.setStatic(false);
+      // Save updated layout
+      const items = grid.getGridItems();
+      const serializedLayout = items
+        .map(item => {
+          const node = item.gridstackNode;
+          if (!node || !node.id) return null;
+          return {
+            id: node.id,
+            x: node.x ?? 0,
+            y: node.y ?? 0,
+            w: node.w ?? 2,
+            h: node.h ?? 2,
+            minW: 2,
+            minH: 2
+          };
+        })
+        .filter((item): item is LayoutWidget => item !== null);
 
-      // Explicitly enable resize and move for the new widget
-      gridRef.current.movable(widgetElement, true);
-      gridRef.current.resizable(widgetElement, true);
+      if (isValidLayout(serializedLayout)) {
+        localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+      }
     } finally {
-      gridRef.current.commit();
-    }
+      grid.commit();
+      
+      // Restore original grid settings
+      requestAnimationFrame(() => {
+        // First restore animation and static settings
+        grid.setAnimation(prevAnimate);
+        grid.setStatic(false);
+        
+        // Re-enable widget movement
+        grid.movable(widgetElement, true);
+        grid.resizable(widgetElement, true);
 
-    // Save updated layout
-    const items = gridRef.current.getGridItems();
-    const serializedLayout = items
-      .map(item => {
-        const node = item.gridstackNode;
-        if (!node || !node.id) return null;
-        return {
-          id: node.id,
-          x: node.x ?? 0,
-          y: node.y ?? 0,
-          w: node.w ?? 2,
-          h: node.h ?? 2,
-          minW: 2,
-          minH: 2
-        };
-      })
-      .filter((item): item is LayoutWidget => item !== null);
-
-    if (isValidLayout(serializedLayout)) {
-      localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+        // Finally, restore float setting to enable collapsing
+        grid.float(false);
+      });
     }
   }, [gridRef]);
 
@@ -746,8 +763,6 @@ function App() {
 
       // Store original grid settings
       const prevAnimate = grid.opts.animate;
-      const prevFloat = grid.opts.float ?? false;
-      const prevStatic = grid.opts.staticGrid ?? false;
       
       // Disable animations and enable float to prevent collapsing
       grid.setAnimation(false);
@@ -896,15 +911,18 @@ function App() {
         
         // Restore original grid settings
         requestAnimationFrame(() => {
+          // First restore animation and static settings
           grid.setAnimation(prevAnimate);
-          grid.setStatic(prevStatic);
-          grid.float(prevFloat);
+          grid.setStatic(false);
           
           // Re-enable widget movement
           grid.getGridItems().forEach(item => {
             grid.movable(item, true);
             grid.resizable(item, true);
           });
+
+          // Finally, restore float setting to enable collapsing
+          grid.float(false);
         });
       }
     } catch (error) {
@@ -1069,7 +1087,7 @@ function App() {
         setTimeout(() => {
           gridRef.current?.removeWidget(previewElement as HTMLElement, false);
           previewElement.remove(); // Ensure the element is fully removed from DOM
-          gridRef.current?.compact(); // Ensure grid is properly compacted after removal
+          gridRef.current?.compact(); // Re-enable compaction
         }, 200); // Match this with the CSS transition duration
       }
     };
@@ -1106,39 +1124,78 @@ function App() {
       const widgetType = dragEvent.dataTransfer?.getData('widget/type') || '';
       console.log('Drop event - widget type:', widgetType);
       
-      // Cleanup preview
-      cleanupPreview();
-      
       if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) {
         console.log('Drop validation failed:', { 
           widgetType, 
           hasGrid: !!gridRef.current, 
           hasComponent: !!widgetComponents[widgetType] 
         });
+        cleanupPreview();
         return;
       }
+
+      const grid = gridRef.current;
       
-      // Create widget element with unique ID
-      const widgetElement = document.createElement('div');
-      widgetElement.className = 'grid-stack-item';
-      const baseWidgetId = widgetIds[widgetType];
-      const widgetId = `${baseWidgetId}-${Date.now()}`;
-      console.log('Creating widget with ID:', widgetId);
+      // Store original grid settings with safe defaults
+      const prevAnimate = grid.opts.animate;
+      const prevStatic = grid.opts.staticGrid ?? false;
+      const prevFloat = grid.opts.float ?? false;
       
-      widgetElement.setAttribute('gs-id', widgetId);
-      widgetElement.setAttribute('gs-min-w', '2');
-      widgetElement.setAttribute('gs-min-h', '2');
+      // Capture current layout before changes
+      const currentLayout = grid.getGridItems().map(item => {
+        const node = item.gridstackNode;
+        return {
+          el: item,
+          x: node?.x ?? 0,
+          y: node?.y ?? 0,
+          w: node?.w ?? 2,
+          h: node?.h ?? 2
+        };
+      });
       
-      // Create content wrapper
-      const contentElement = document.createElement('div');
-      contentElement.className = 'grid-stack-item-content';
-      widgetElement.appendChild(contentElement);
-      
-      // Add widget to grid first
-      gridRef.current.batchUpdate();
+      // Disable animations and set grid to static
+      grid.batchUpdate();
       try {
-        console.log('Adding widget at position:', { x: finalX, y: finalY });
-        gridRef.current.addWidget({
+        grid.setAnimation(false);
+        grid.setStatic(true);
+        grid.float(true); // Enable float temporarily
+        
+        // First, restore all existing widgets to their exact positions
+        currentLayout.forEach(node => {
+          if (node.el) {
+            grid.update(node.el, {
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              autoPosition: false,
+              noMove: true
+            });
+          }
+        });
+        
+        // Create widget element with unique ID
+        const widgetElement = document.createElement('div');
+        widgetElement.className = 'grid-stack-item';
+        const baseWidgetId = widgetIds[widgetType];
+        const widgetId = `${baseWidgetId}-${Date.now()}`;
+        
+        widgetElement.setAttribute('gs-id', widgetId);
+        widgetElement.setAttribute('gs-min-w', '2');
+        widgetElement.setAttribute('gs-min-h', '2');
+        widgetElement.setAttribute('gs-x', String(finalX));
+        widgetElement.setAttribute('gs-y', String(finalY));
+        widgetElement.setAttribute('gs-w', '3');
+        widgetElement.setAttribute('gs-h', '4');
+        widgetElement.setAttribute('gs-no-move', 'true');
+        
+        // Create content wrapper
+        const contentElement = document.createElement('div');
+        contentElement.className = 'grid-stack-item-content';
+        widgetElement.appendChild(contentElement);
+        
+        // Add widget with exact position
+        grid.addWidget({
           el: widgetElement,
           x: finalX,
           y: finalY,
@@ -1148,11 +1205,10 @@ function App() {
           minH: 2,
           id: widgetId,
           autoPosition: false,
-          noResize: false,
-          noMove: false
+          noMove: true
         } as ExtendedGridStackWidget);
         
-        // Then render React component
+        // Render React component
         const root = ReactDOM.createRoot(contentElement);
         const WidgetComponent = widgetComponents[widgetType];
         const widgetTitle = widgetTitles[widgetType];
@@ -1163,13 +1219,16 @@ function App() {
           </WidgetContainer>
         );
         
-        // Make sure grid is not in static mode
-        gridRef.current.setStatic(false);
-        gridRef.current.movable(widgetElement, true);
-        gridRef.current.resizable(widgetElement, true);
+        // Remove preview without triggering compaction
+        const previewElement = document.querySelector('.widget-drag-preview');
+        if (previewElement) {
+          previewElement.classList.add('removing');
+          grid.removeWidget(previewElement as HTMLElement, false);
+          previewElement.remove();
+        }
         
         // Save layout
-        const items = gridRef.current.getGridItems();
+        const items = grid.getGridItems();
         const serializedLayout = items
           .map(item => {
             const node = item.gridstackNode;
@@ -1189,10 +1248,33 @@ function App() {
         if (isValidLayout(serializedLayout)) {
           localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
         }
-      } catch (error) {
-        console.error('Error adding widget:', error);
       } finally {
-        gridRef.current.commit();
+        grid.commit();
+        
+        // Restore grid settings in stages
+        requestAnimationFrame(() => {
+          grid.batchUpdate();
+          try {
+            // First restore animation
+            grid.setAnimation(prevAnimate);
+            
+            // Re-enable widget movement for all widgets
+            const items = grid.getGridItems();
+            items.forEach(item => {
+              // Remove no-move attribute directly from the element
+              item.removeAttribute('gs-no-move');
+              // Enable movement and resizing through GridStack
+              grid.movable(item, true);
+              grid.resizable(item, true);
+            });
+            
+            // Finally restore static and float settings
+            grid.setStatic(prevStatic);
+            grid.float(prevFloat);
+          } finally {
+            grid.commit();
+          }
+        });
       }
     }) as unknown as EventListener;
 
