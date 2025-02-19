@@ -339,24 +339,40 @@
   left: -6px;
 }
 
-/* Improve drag and resize visual feedback */
-.grid-stack > .grid-stack-item.ui-draggable-dragging,
-.grid-stack > .grid-stack-item.ui-resizable-resizing {
+/* Widget drag and drop styles */
+.grid-stack > .grid-stack-item.ui-draggable-dragging {
   opacity: 0.8;
+  cursor: grabbing !important;
   z-index: 100;
   transition: transform 0.1s ease-in-out;
   will-change: transform;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.grid-stack > .grid-stack-item.ui-draggable-dragging {
-  cursor: grabbing !important;
+.grid-stack > .grid-stack-item.ui-draggable-dragging .grid-stack-item-content {
+  transform: scale(1.02);
+  transition: transform 0.1s ease-in-out;
 }
 
-/* Updated placeholder styling for v11.3.0 */
 .grid-stack .grid-stack-placeholder > .placeholder-content {
   background: rgba(128, 128, 128, 0.1) !important;
-  border: 1px dashed rgba(128, 128, 128, 0.3) !important;
+  border: 2px dashed rgba(128, 128, 128, 0.3) !important;
   border-radius: var(--radius-xl);
   transition: all 0.1s ease-in-out;
   pointer-events: none;
+}
+
+/* Improve widget movement animation */
+.grid-stack > .grid-stack-item {
+  transition: all 0.2s ease-in-out;
+  will-change: transform;
+}
+
+.grid-stack > .grid-stack-item:not(.ui-draggable-dragging):not(.ui-resizable-resizing) {
+  transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out, left 0.2s ease-in-out, top 0.2s ease-in-out;
+}
+
+/* Ensure smooth animations during grid changes */
+.grid-stack:not(.grid-stack-one-column-mode) > .grid-stack-item {
+  transform-origin: center center;
 }

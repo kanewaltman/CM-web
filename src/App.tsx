@@ -442,7 +442,8 @@ function App() {
       // Then initialize it with GridStack
       const widget = gridRef.current.makeWidget(widgetElement);
 
-      // Update its position and size
+      // Update its position and size with animation
+      gridRef.current.setAnimation(true);
       gridRef.current.update(widgetElement, {
         x,
         y,
@@ -470,7 +471,7 @@ function App() {
             // Re-enable resize and move
             gridRef.current.movable(widgetElement, true);
             gridRef.current.resizable(widgetElement, true);
-            // Force update
+            // Force update with animation
             gridRef.current.update(widgetElement, {
               noResize: false,
               noMove: false
@@ -607,14 +608,93 @@ function App() {
     const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
+
+      // Create or update preview element
+      let previewElement = document.querySelector('.widget-drag-preview');
+      if (!previewElement) {
+        previewElement = document.createElement('div');
+        previewElement.className = 'widget-drag-preview grid-stack-item';
+        previewElement.setAttribute('gs-w', '3');
+        previewElement.setAttribute('gs-h', '4');
+        previewElement.setAttribute('gs-no-resize', 'true');
+        previewElement.setAttribute('gs-no-move', 'true');
+        
+        const content = document.createElement('div');
+        content.className = 'grid-stack-item-content';
+        previewElement.appendChild(content);
+        
+        // Add the preview to the grid
+        gridElement.appendChild(previewElement);
+        
+        // Initialize it as a grid item with specific coordinates
+        if (gridRef.current) {
+          const rect = gridElement.getBoundingClientRect();
+          const x = Math.floor((e.clientX - rect.left) / (rect.width / 12));
+          const y = Math.floor((e.clientY - rect.top) / 150);
+          
+          gridRef.current.addWidget({
+            el: previewElement as GridStackElement,
+            x: x,
+            y: y,
+            w: 3,
+            h: 4,
+            autoPosition: false,
+            noResize: true,
+            noMove: true
+          } as ExtendedGridStackWidget);
+        }
+      } else {
+        // Update position through GridStack
+        if (gridRef.current) {
+          const rect = gridElement.getBoundingClientRect();
+          const x = Math.floor((e.clientX - rect.left) / (rect.width / 12));
+          const y = Math.floor((e.clientY - rect.top) / 150);
+          
+          gridRef.current.update(previewElement as HTMLElement, {
+            x: x,
+            y: y
+          });
+        }
+      }
+    };
+
+    const cleanupPreview = () => {
+      const previewElement = document.querySelector('.widget-drag-preview');
+      if (previewElement && gridRef.current) {
+        gridRef.current.removeWidget(previewElement as HTMLElement, false);
+        previewElement.remove(); // Ensure the element is fully removed from DOM
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      // Only remove if we're actually leaving the grid
+      const rect = gridElement.getBoundingClientRect();
+      const x = e.clientX;
+      const y = e.clientY;
+      
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        cleanupPreview();
+      }
+    };
+
+    const handleDragEnd = () => {
+      cleanupPreview();
     };
 
     gridElement.addEventListener('dragover', handleDragOver as unknown as EventListener);
-    gridElement.addEventListener('drop', handleWidgetDrop as unknown as EventListener);
+    gridElement.addEventListener('dragleave', handleDragLeave as unknown as EventListener);
+    gridElement.addEventListener('dragend', handleDragEnd);
+    gridElement.addEventListener('drop', (e) => {
+      cleanupPreview();
+      handleWidgetDrop(e as unknown as React.DragEvent<HTMLElement>);
+    });
 
     return () => {
       gridElement.removeEventListener('dragover', handleDragOver as unknown as EventListener);
+      gridElement.removeEventListener('dragleave', handleDragLeave as unknown as EventListener);
+      gridElement.removeEventListener('dragend', handleDragEnd);
       gridElement.removeEventListener('drop', handleWidgetDrop as unknown as EventListener);
+      cleanupPreview();
     };
   }, [handleWidgetDrop]);
 
@@ -631,6 +711,15 @@ function App() {
         }
         .grid-stack-item {
           transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
+        }
+        .widget-drag-preview {
+          opacity: 0.7;
+          pointer-events: none;
+        }
+        .widget-drag-preview .grid-stack-item-content {
+          background: hsl(var(--color-widget-bg));
+          border: 2px dashed rgba(128, 128, 128, 0.3);
+          border-radius: var(--radius-xl);
         }
         /* Ensure GridStack's own animations work properly */
         .grid-stack-item.ui-draggable-dragging,
