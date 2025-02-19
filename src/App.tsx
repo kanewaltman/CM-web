@@ -535,10 +535,15 @@ function App() {
       const newLayoutIds = layout.map(widget => widget.id);
       console.log('New layout widget IDs:', newLayoutIds);
 
-      // Temporarily disable animations and compaction
+      // Store original grid settings
       const prevAnimate = grid.opts.animate;
+      const prevFloat = grid.opts.float ?? false;
+      const prevStatic = grid.opts.staticGrid ?? false;
+      
+      // Disable animations and enable float to prevent collapsing
       grid.setAnimation(false);
-      grid.setStatic(true); // Prevent any movement during updates
+      grid.setStatic(true);
+      grid.float(true);
       
       grid.batchUpdate();
       try {
@@ -547,7 +552,7 @@ function App() {
           const id = item.gridstackNode?.id;
           if (id && !newLayoutIds.includes(id)) {
             console.log('Removing widget not in new layout:', id);
-            grid.removeWidget(item);
+            grid.removeWidget(item, false); // false to prevent collapsing
           }
         });
 
@@ -562,7 +567,7 @@ function App() {
             const existingWidget = existingWidgets.get(node.id);
             
             if (existingWidget) {
-              // Update existing widget position
+              // Update existing widget position without triggering collapse
               console.log('Updating position for widget:', node.id, {
                 x: node.x,
                 y: node.y,
@@ -575,7 +580,8 @@ function App() {
                 y: node.y,
                 w: node.w,
                 h: node.h,
-                autoPosition: false
+                autoPosition: false,
+                noMove: true // Prevent movement during update
               });
             } else {
               // Add new widget
@@ -586,7 +592,7 @@ function App() {
               
               if (!widgetComponents[widgetType]) {
                 console.warn('Unknown widget type:', widgetType);
-                continue; // Skip this widget but continue with others
+                continue;
               }
 
               // Create new widget element
@@ -599,13 +605,12 @@ function App() {
               widgetElement.setAttribute('gs-y', String(node.y));
               widgetElement.setAttribute('gs-w', String(node.w));
               widgetElement.setAttribute('gs-h', String(node.h));
+              widgetElement.setAttribute('gs-no-move', 'true');
 
-              // Create content wrapper
               const contentElement = document.createElement('div');
               contentElement.className = 'grid-stack-item-content';
               widgetElement.appendChild(contentElement);
 
-              // Add widget content using createRoot before adding to grid
               const root = ReactDOM.createRoot(contentElement);
               const WidgetComponent = widgetComponents[widgetType];
               const widgetTitle = widgetTitles[widgetType];
@@ -616,7 +621,7 @@ function App() {
                 </WidgetContainer>
               );
 
-              // Add to grid after content is ready
+              // Add widget with exact position
               const addedWidget = grid.addWidget({
                 id: node.id,
                 el: widgetElement,
@@ -626,53 +631,37 @@ function App() {
                 h: node.h,
                 minW: 2,
                 minH: 2,
-                autoPosition: false
+                autoPosition: false,
+                noMove: true // Prevent movement during addition
               } as ExtendedGridStackWidget);
 
               console.log('Widget added:', addedWidget);
-
-              // Ensure widget is properly initialized
-              grid.movable(widgetElement, true);
-              grid.resizable(widgetElement, true);
-
-              // Verify widget was added
-              const addedElement = gridElement.querySelector(`[gs-id="${node.id}"]`);
-              console.log('Widget element in DOM:', !!addedElement, addedElement);
-
-              if (!addedElement) {
-                console.error('Failed to add widget to DOM:', node.id);
-                // Try to add the widget again with auto position
-                grid.addWidget({
-                  ...node,
-                  el: widgetElement,
-                  autoPosition: true
-                } as ExtendedGridStackWidget);
-              }
             }
           } catch (error) {
             console.error('Error processing widget:', node.id, error);
-            continue; // Continue with next widget even if this one fails
+            continue;
           }
         }
         
-        // Re-enable grid features and update layout
-        grid.setStatic(false);
-        
-        // Force position updates
+        // Force final position updates without collapsing
         layout.forEach(node => {
           const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
           if (element) {
+            element.setAttribute('gs-x', String(node.x));
+            element.setAttribute('gs-y', String(node.y));
+            element.setAttribute('gs-w', String(node.w));
+            element.setAttribute('gs-h', String(node.h));
+            
             grid.update(element, {
               x: node.x,
               y: node.y,
               w: node.w,
               h: node.h,
-              autoPosition: false
+              autoPosition: false,
+              noMove: true
             });
           }
         });
-
-        grid.compact();
         
         // Log final state
         const finalWidgets = grid.getGridItems();
@@ -687,14 +676,20 @@ function App() {
 
         // Save the pasted layout
         localStorage.setItem('desktop-layout', layoutStr);
-      } catch (error) {
-        console.error('Error during layout update:', error);
       } finally {
         grid.commit();
-        // Restore grid settings
+        
+        // Restore original grid settings
         requestAnimationFrame(() => {
           grid.setAnimation(prevAnimate);
-          grid.setStatic(false);
+          grid.setStatic(prevStatic);
+          grid.float(prevFloat);
+          
+          // Re-enable widget movement
+          grid.getGridItems().forEach(item => {
+            grid.movable(item, true);
+            grid.resizable(item, true);
+          });
         });
       }
     } catch (error) {
