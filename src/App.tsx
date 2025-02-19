@@ -82,12 +82,22 @@ function App() {
     'trade-form': 'Trade'
   };
 
-  const isValidLayout = (layout: GridStackWidget[]) => {
-    if (!Array.isArray(layout)) return false;
+  const isValidLayout = (layout: LayoutWidget[]) => {
+    if (!Array.isArray(layout)) {
+      return false;
+    }
     
-    // For dynamic layouts, just verify minimum sizes
+    // Verify each widget in the layout has valid properties and minimum sizes
     return layout.every(widget => {
-      return (widget.w ?? 0) >= 2 && (widget.h ?? 0) >= 2;
+      return (
+        widget.id &&
+        typeof widget.x === 'number' &&
+        typeof widget.y === 'number' &&
+        typeof widget.w === 'number' &&
+        typeof widget.h === 'number' &&
+        widget.w >= (widget.minW ?? 2) &&
+        widget.h >= (widget.minH ?? 2)
+      );
     });
   };
 
@@ -484,58 +494,70 @@ function App() {
   }, [gridRef]);
 
   const handlePasteLayout = useCallback((layoutStr: string) => {
-    if (!grid || isMobile) return;
+    if (!grid || isMobile) {
+      console.warn('Cannot paste layout:', { hasGrid: !!grid, isMobile });
+      return;
+    }
     const gridElement = document.querySelector('.grid-stack');
-    if (!gridElement) return;
+    if (!gridElement) {
+      console.warn('Grid element not found');
+      return;
+    }
     
     try {
+      console.log('Attempting to parse layout:', layoutStr);
       const layout = JSON.parse(layoutStr) as LayoutWidget[];
-      if (isValidLayout(layout)) {
-        // Remove all existing widgets
-        grid.removeAll();
+      console.log('Parsed layout:', layout);
 
-        // Create and add widgets based on layout
-        layout.forEach((node: LayoutWidget) => {
-          const widgetType = node.id.split('-')[0];
-          if (!widgetComponents[widgetType]) return;
+      if (!isValidLayout(layout)) {
+        console.warn('Invalid layout structure:', layout);
+        return;
+      }
 
-          // Create widget element with the exact same structure as default widgets
-          const widgetElement = document.createElement('div');
-          widgetElement.className = 'grid-stack-item';
-          widgetElement.setAttribute('gs-id', node.id);
-          widgetElement.setAttribute('gs-min-w', '2');
-          widgetElement.setAttribute('gs-min-h', '2');
+      // Log current state before changes
+      const currentWidgets = grid.getGridItems();
+      console.log('Current widgets:', currentWidgets.map(item => ({
+        id: item.gridstackNode?.id,
+        type: item.gridstackNode?.id?.split('-')[0]
+      })));
 
-          // Add widget to grid
-          grid.addWidget({
-            id: node.id,
-            el: widgetElement,
-            x: node.x,
-            y: node.y,
-            w: node.w,
-            h: node.h,
-            minW: 2,
-            minH: 2,
-            autoPosition: false
-          } as ExtendedGridStackWidget);
-
-          // Add widget content using createRoot
-          const root = ReactDOM.createRoot(widgetElement);
-          const WidgetComponent = widgetComponents[widgetType];
-          const widgetTitle = widgetTitles[widgetType];
-          
-          root.render(
-            <WidgetContainer title={widgetTitle}>
-              <WidgetComponent />
-            </WidgetContainer>
-          );
-        });
+      // Temporarily disable animations
+      const prevAnimate = grid.opts.animate;
+      grid.setAnimation(false);
+      
+      grid.batchUpdate();
+      try {
+        // Use grid.load() to update positions, but don't recreate widgets
+        grid.load(layout, false);
+        grid.compact();
+        
+        // Log final state
+        const finalWidgets = grid.getGridItems();
+        console.log('Final widgets after paste:', finalWidgets.map(item => ({
+          id: item.gridstackNode?.id,
+          type: item.gridstackNode?.id?.split('-')[0],
+          x: item.gridstackNode?.x,
+          y: item.gridstackNode?.y,
+          w: item.gridstackNode?.w,
+          h: item.gridstackNode?.h
+        })));
 
         // Save the pasted layout
         localStorage.setItem('desktop-layout', layoutStr);
+      } catch (error) {
+        console.error('Error during layout update:', error);
+      } finally {
+        grid.commit();
+        // Restore animation setting
+        requestAnimationFrame(() => {
+          grid.setAnimation(prevAnimate);
+        });
       }
     } catch (error) {
       console.error('Failed to paste layout:', error);
+      if (error instanceof SyntaxError) {
+        console.warn('Invalid JSON string:', layoutStr);
+      }
     }
   }, [grid, isMobile]);
 
