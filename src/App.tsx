@@ -175,22 +175,33 @@ function App() {
   const handleRemoveWidget = useCallback((widgetId: string) => {
     if (!gridRef.current) return;
     
-    const element = document.querySelector(`[gs-id="${widgetId}"]`);
-    if (element) {
-      // First remove from GridStack (true to detach DOM element)
-      gridRef.current.removeWidget(element as HTMLElement, true);
-      
-      // Update active widgets state
-      setActiveWidgets(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(widgetId);
-        return newSet;
-      });
-
-      // Clean up any remaining DOM elements with this gs-id
-      document.querySelectorAll(`[gs-id="${widgetId}"]`).forEach(el => {
-        el.remove();
-      });
+    try {
+      const element = document.querySelector(`[gs-id="${widgetId}"]`);
+      if (element) {
+        // First disable animations and interactions to prevent race conditions
+        gridRef.current.batchUpdate();
+        
+        try {
+          // Remove the widget from GridStack
+          gridRef.current.removeWidget(element as HTMLElement, false);
+          
+          // Clean up any remaining DOM elements with this gs-id
+          document.querySelectorAll(`[gs-id="${widgetId}"]`).forEach(el => {
+            el.remove();
+          });
+          
+          // Update active widgets state
+          setActiveWidgets(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(widgetId);
+            return newSet;
+          });
+        } finally {
+          gridRef.current.commit();
+        }
+      }
+    } catch (error) {
+      console.error('Error removing widget:', error);
     }
   }, []);
 
