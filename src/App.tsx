@@ -552,7 +552,13 @@ function App() {
           const id = item.gridstackNode?.id;
           if (id && !newLayoutIds.includes(id)) {
             console.log('Removing widget not in new layout:', id);
-            grid.removeWidget(item, false); // false to prevent collapsing
+            // Remove widget from grid
+            grid.removeWidget(item, false);
+            // Also remove the DOM element
+            const element = gridElement.querySelector(`[gs-id="${id}"]`);
+            if (element) {
+              element.remove();
+            }
           }
         });
 
