@@ -96,7 +96,7 @@ function App() {
       return false;
     }
     
-    // Verify each widget in the layout has valid properties and minimum sizes
+    // Verify each widget has valid properties and minimum sizes
     return layout.every(widget => {
       return (
         widget.id &&
@@ -226,7 +226,7 @@ function App() {
         autoHide: false
       },
       minRow: 1,
-      staticGrid: false,
+      staticGrid: true, // Start with static grid to prevent collapse
       disableResize: false,
       disableDrag: false
     };
@@ -234,8 +234,12 @@ function App() {
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
-    // Temporarily disable animations during layout application
+    // Store original grid settings
+    const prevAnimate = g.opts.animate;
+    
+    // Disable animations and temporarily enable float to prevent collapsing
     g.setAnimation(false);
+    g.float(true);
 
     // Get the layout to apply
     let layoutToApply = defaultLayout;
@@ -264,18 +268,18 @@ function App() {
         Array.from(element.attributes)
           .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
           .forEach(attr => element.removeAttribute(attr.name));
+        
+        // Temporarily disable movement
+        element.setAttribute('gs-no-move', 'true');
       });
 
       // Apply layout in exact order without sorting
       layoutToApply.forEach(node => {
         const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
         if (element) {
-          // Set minimum constraints first
-          const defaultNode = defaultLayout.find(d => d.id === node.id);
-          if (defaultNode) {
-            element.setAttribute('gs-min-w', String(defaultNode.minW ?? 2));
-            element.setAttribute('gs-min-h', String(defaultNode.minH ?? 2));
-          }
+          // Set minimum constraints
+          element.setAttribute('gs-min-w', String(node.minW ?? 2));
+          element.setAttribute('gs-min-h', String(node.minH ?? 2));
           
           // Force exact position and size
           element.setAttribute('gs-x', String(node.x));
@@ -283,6 +287,7 @@ function App() {
           element.setAttribute('gs-w', String(node.w));
           element.setAttribute('gs-h', String(node.h));
           element.setAttribute('gs-auto-position', 'false');
+          element.setAttribute('gs-no-move', 'true');
           
           // Update grid engine with exact position
           g.update(element, {
@@ -290,21 +295,78 @@ function App() {
             y: node.y,
             w: node.w,
             h: node.h,
-            autoPosition: false
+            autoPosition: false,
+            noMove: true
           });
+        } else {
+          // Create new widget if it doesn't exist
+          const baseWidgetId = node.id.split('-')[0];
+          const widgetType = widgetTypes[baseWidgetId];
+          
+          if (!widgetComponents[widgetType]) {
+            console.warn('Unknown widget type:', widgetType);
+            return;
+          }
+
+          // Create new widget element
+          const widgetElement = document.createElement('div');
+          widgetElement.className = 'grid-stack-item';
+          widgetElement.setAttribute('gs-id', node.id);
+          widgetElement.setAttribute('gs-min-w', String(node.minW ?? 2));
+          widgetElement.setAttribute('gs-min-h', String(node.minH ?? 2));
+          widgetElement.setAttribute('gs-x', String(node.x));
+          widgetElement.setAttribute('gs-y', String(node.y));
+          widgetElement.setAttribute('gs-w', String(node.w));
+          widgetElement.setAttribute('gs-h', String(node.h));
+          widgetElement.setAttribute('gs-no-move', 'true');
+
+          const contentElement = document.createElement('div');
+          contentElement.className = 'grid-stack-item-content';
+          widgetElement.appendChild(contentElement);
+
+          const root = ReactDOM.createRoot(contentElement);
+          const WidgetComponent = widgetComponents[widgetType];
+          const widgetTitle = widgetTitles[widgetType];
+          
+          root.render(
+            <WidgetContainer title={widgetTitle}>
+              <WidgetComponent />
+            </WidgetContainer>
+          );
+
+          // Add widget with exact position
+          g.addWidget({
+            id: node.id,
+            el: widgetElement,
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            minW: node.minW ?? 2,
+            minH: node.minH ?? 2,
+            autoPosition: false,
+            noMove: true
+          } as ExtendedGridStackWidget);
         }
       });
 
-      // Force a second pass to ensure positions
+      // Force final position updates without collapsing
       layoutToApply.forEach(node => {
         const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
         if (element) {
-          const gridNode = g.engine.nodes.find(n => n.id === node.id);
-          if (gridNode) {
-            gridNode.x = node.x;
-            gridNode.y = node.y;
-            gridNode.autoPosition = false;
-          }
+          element.setAttribute('gs-x', String(node.x));
+          element.setAttribute('gs-y', String(node.y));
+          element.setAttribute('gs-w', String(node.w));
+          element.setAttribute('gs-h', String(node.h));
+          
+          g.update(element, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            autoPosition: false,
+            noMove: true
+          });
         }
       });
     } finally {
@@ -320,11 +382,20 @@ function App() {
       setTimeout(() => {
         g.batchUpdate();
         try {
+          // First restore animation and static settings
+          g.setAnimation(prevAnimate);
           g.setStatic(false);
-          g.opts.float = false;
-          g.setAnimation(true); // Re-enable animations
-          g.enableMove(true);
-          g.enableResize(true);
+          
+          // Re-enable widget movement
+          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+            const element = item as HTMLElement;
+            element.removeAttribute('gs-no-move');
+            g.movable(element, true);
+            g.resizable(element, true);
+          });
+
+          // Finally, restore float setting to enable collapsing
+          g.float(false);
         } finally {
           g.commit();
         }
@@ -343,17 +414,18 @@ function App() {
               const node = item.gridstackNode;
               if (!node || !node.id) return null;
 
-              const defaultWidget = defaultLayout.find(w => w.id === node.id);
-              if (!defaultWidget) return null;
+              // Get base widget ID to find default constraints
+              const baseWidgetId = node.id.split('-')[0];
+              const defaultWidget = defaultLayout.find(w => w.id === baseWidgetId);
 
               return {
                 id: node.id,
                 x: node.x ?? 0,
                 y: node.y ?? 0,
-                w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
-                h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
-                minW: defaultWidget.minW ?? 2,
-                minH: defaultWidget.minH ?? 2
+                w: Math.max(node.w ?? 2, defaultWidget?.minW ?? 2),
+                h: Math.max(node.h ?? 2, defaultWidget?.minH ?? 2),
+                minW: defaultWidget?.minW ?? 2,
+                minH: defaultWidget?.minH ?? 2
               };
             })
             .filter((item): item is LayoutWidget => item !== null);
@@ -559,14 +631,9 @@ function App() {
     const x = event._gridX ?? Math.floor((event.clientX - gridElement.getBoundingClientRect().left) / (gridElement.getBoundingClientRect().width / 12));
     const y = event._gridY ?? Math.floor((event.clientY - gridElement.getBoundingClientRect().top) / 150);
 
-    // Use predefined widget ID
-    const widgetId = widgetIds[widgetType];
-
-    // Check if widget already exists
-    if (gridElement.querySelector(`[gs-id="${widgetId}"]`)) {
-      console.warn(`Widget with ID ${widgetId} already exists.`);
-      return;
-    }
+    // Generate a unique widget ID with timestamp
+    const baseWidgetId = widgetIds[widgetType];
+    const widgetId = `${baseWidgetId}-${Date.now()}`;
 
     // Create new widget element with proper GridStack classes
     const widgetElement = document.createElement('div');
@@ -1051,10 +1118,11 @@ function App() {
         return;
       }
       
-      // Create widget element
+      // Create widget element with unique ID
       const widgetElement = document.createElement('div');
       widgetElement.className = 'grid-stack-item';
-      const widgetId = widgetIds[widgetType];
+      const baseWidgetId = widgetIds[widgetType];
+      const widgetId = `${baseWidgetId}-${Date.now()}`;
       console.log('Creating widget with ID:', widgetId);
       
       widgetElement.setAttribute('gs-id', widgetId);
