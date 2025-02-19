@@ -36,26 +36,43 @@ We maintain three types of layouts:
 ## Implementation Details
 
 ### Widget Structure
-Each widget must have:
-- A unique `gs-id` attribute for identification
-- Position attributes (`gs-x`, `gs-y`)
-- Size attributes (`gs-w`, `gs-h`)
-- Minimum size constraints (`gs-min-w`, `gs-min-h`)
 
-```html
-<div class="grid-stack-item" 
-  gs-id="chart"
-  gs-x="0" 
-  gs-y="0" 
-  gs-w="6" 
-  gs-h="4"
-  gs-min-w="2"
-  gs-min-h="2">
-  <WidgetContainer>
-    <!-- Widget content -->
-  </WidgetContainer>
-</div>
-```
+Each widget in the grid consists of three layers:
+
+1. **GridStack Item Layer** (managed by App.tsx)
+   - Contains grid position and size attributes
+   - Handles drag and resize interactions
+   ```html
+   <div class="grid-stack-item" 
+     gs-id="chart"
+     gs-x="0" 
+     gs-y="0" 
+     gs-w="6" 
+     gs-h="4"
+     gs-min-w="2"
+     gs-min-h="2">
+   ```
+
+2. **WidgetContainer Layer** (presentational)
+   - Provides consistent widget UI structure
+   - Exposes drag handle via header
+   - Wraps widget content
+   ```html
+   <WidgetContainer title="Widget Title">
+     <!-- Widget content -->
+   </WidgetContainer>
+   ```
+
+3. **Widget Content Layer** (functionality)
+   - Contains widget-specific logic and UI
+   - Manages its own internal state
+   - Focuses on specific widget functionality
+
+The integration of these layers is managed centrally in App.tsx, which:
+- Defines the grid structure and widget positions
+- Handles layout persistence and restoration
+- Manages responsive behavior
+- Coordinates widget interactions
 
 ### Layout Configuration
 

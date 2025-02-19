@@ -17,22 +17,51 @@ GridStack provides our application with:
 
 ### Widget Container
 
-The `WidgetContainer` component serves as the primary integration point with GridStack. Each widget in our application is wrapped in this container, which:
-- Provides consistent styling and behavior
-- Handles resize events
-- Manages widget state
-- Implements header controls
-- Ensures proper touch device support
+The `WidgetContainer` component is a pure presentational component that provides:
+- Consistent widget styling and structure
+- Standard header with title and controls
+- Content area for widget-specific components
+- Drag handle through `.widget-header` class
+
+The component intentionally does not handle:
+- Layout management
+- Resize events
+- Widget state
+- Position tracking
+
+These concerns are instead managed centrally in the main App component.
 
 ### Layout Management
 
-Our GridStack implementation includes:
-- Dynamic grid initialization with TypeScript support
-- Layout state persistence with automatic saving
-- Responsive breakpoints with mobile/desktop layouts
-- Widget position tracking with collision detection
+Our GridStack implementation in `App.tsx` includes:
+- Centralized grid initialization and configuration
+- Layout state persistence with localStorage
+- Responsive breakpoint handling
+- Widget position tracking and collision detection
 - Save/restore functionality with JSON serialization
-- Optimized widget swapping behavior
+- Mobile/desktop layout switching
+
+### Component Architecture
+
+The system follows a clear separation of concerns:
+
+1. **App.tsx (Controller)**
+   - GridStack initialization and configuration
+   - Layout state management
+   - Event handling (resize, drag, change)
+   - Layout persistence
+   - Mobile/desktop mode switching
+
+2. **WidgetContainer (Presentation)**
+   - Consistent widget UI structure
+   - Header with title and controls
+   - Content wrapper
+   - Drag handle via `.widget-header`
+
+3. **Individual Widgets**
+   - Widget-specific content and logic
+   - Rendered within WidgetContainer
+   - No direct interaction with GridStack
 
 ## Configuration
 
