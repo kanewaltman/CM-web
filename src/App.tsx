@@ -185,10 +185,10 @@ function App() {
 
     const options: GridStackOptions = {
       float: false,
-      cellHeight: mobile ? '100px' : 'auto',
+      cellHeight: mobile ? '100px' : '60px',
       margin: 4,
       column: mobile ? 1 : 12,
-      animate: true, // Keep animations enabled by default
+      animate: true,
       draggable: {
         handle: '.widget-header',
       },
@@ -373,6 +373,77 @@ function App() {
     return JSON.stringify(layout);
   }, [grid, isMobile]);
 
+  const handleWidgetDrop = useCallback((event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const widgetType = event.dataTransfer?.getData('widget/type');
+    
+    if (!widgetType || !grid || !widgetComponents[widgetType]) return;
+
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+
+    // Get drop coordinates relative to grid
+    const rect = gridElement.getBoundingClientRect();
+    const x = Math.floor((event.clientX - rect.left) / (rect.width / 12));
+    const y = Math.floor((event.clientY - rect.top) / 150);
+
+    // Create widget ID
+    const widgetId = `${widgetType}-${Date.now()}`;
+
+    // Create new widget element with the exact same structure as default widgets
+    const widgetElement = document.createElement('div');
+    widgetElement.className = 'grid-stack-item';
+    widgetElement.setAttribute('gs-id', widgetId);
+    widgetElement.setAttribute('gs-min-w', '2');
+    widgetElement.setAttribute('gs-min-h', '2');
+
+    // Add widget to grid first
+    grid.addWidget({
+      id: widgetId,
+      el: widgetElement,
+      x,
+      y,
+      w: 3,
+      h: 4,
+      minW: 2,
+      minH: 2,
+      autoPosition: true
+    } as ExtendedGridStackWidget);
+
+    // Add widget content using createRoot
+    const root = ReactDOM.createRoot(widgetElement);
+    const WidgetComponent = widgetComponents[widgetType];
+    const widgetTitle = widgetTitles[widgetType];
+    
+    root.render(
+      <WidgetContainer title={widgetTitle}>
+        <WidgetComponent />
+      </WidgetContainer>
+    );
+
+    // Save updated layout
+    const items = grid.getGridItems();
+    const serializedLayout = items
+      .map(item => {
+        const node = item.gridstackNode;
+        if (!node || !node.id) return null;
+        return {
+          id: node.id,
+          x: node.x ?? 0,
+          y: node.y ?? 0,
+          w: node.w ?? 2,
+          h: node.h ?? 2,
+          minW: 2,
+          minH: 2
+        };
+      })
+      .filter((item): item is LayoutWidget => item !== null);
+
+    if (isValidLayout(serializedLayout)) {
+      localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+    }
+  }, [grid]);
+
   const handlePasteLayout = useCallback((layoutStr: string) => {
     if (!grid || isMobile) return;
     const gridElement = document.querySelector('.grid-stack');
@@ -389,14 +460,12 @@ function App() {
           const widgetType = node.id.split('-')[0];
           if (!widgetComponents[widgetType]) return;
 
-          // Create widget element
+          // Create widget element with the exact same structure as default widgets
           const widgetElement = document.createElement('div');
           widgetElement.className = 'grid-stack-item';
           widgetElement.setAttribute('gs-id', node.id);
-
-          // Create a container for React content
-          const contentElement = document.createElement('div');
-          widgetElement.appendChild(contentElement);
+          widgetElement.setAttribute('gs-min-w', '2');
+          widgetElement.setAttribute('gs-min-h', '2');
 
           // Add widget to grid
           grid.addWidget({
@@ -412,7 +481,7 @@ function App() {
           } as ExtendedGridStackWidget);
 
           // Add widget content using createRoot
-          const root = ReactDOM.createRoot(contentElement);
+          const root = ReactDOM.createRoot(widgetElement);
           const WidgetComponent = widgetComponents[widgetType];
           const widgetTitle = widgetTitles[widgetType];
           
@@ -448,79 +517,6 @@ function App() {
       }
     });
   }, [isMobile, initializeGrid]);
-
-  const handleWidgetDrop = useCallback((event: React.DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    const widgetType = event.dataTransfer?.getData('widget/type');
-    
-    if (!widgetType || !grid || !widgetComponents[widgetType]) return;
-
-    const gridElement = document.querySelector('.grid-stack');
-    if (!gridElement) return;
-
-    // Get drop coordinates relative to grid
-    const rect = gridElement.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) / (rect.width / 12));
-    const y = Math.floor((event.clientY - rect.top) / 150);
-
-    // Create widget ID
-    const widgetId = `${widgetType}-${Date.now()}`;
-
-    // Create new widget element
-    const widgetElement = document.createElement('div');
-    widgetElement.className = 'grid-stack-item';
-    widgetElement.setAttribute('gs-id', widgetId);
-    
-    // Create a container for React content
-    const contentElement = document.createElement('div');
-    widgetElement.appendChild(contentElement);
-
-    // Add to grid with default size
-    grid.addWidget({
-      id: widgetId,
-      el: widgetElement,
-      x,
-      y,
-      w: 3,
-      h: 4,
-      minW: 2,
-      minH: 2,
-      autoPosition: true
-    } as ExtendedGridStackWidget);
-
-    // Add widget content using createRoot
-    const root = ReactDOM.createRoot(contentElement);
-    const WidgetComponent = widgetComponents[widgetType];
-    const widgetTitle = widgetTitles[widgetType];
-    
-    root.render(
-      <WidgetContainer title={widgetTitle}>
-        <WidgetComponent />
-      </WidgetContainer>
-    );
-
-    // Save updated layout
-    const items = grid.getGridItems();
-    const serializedLayout = items
-      .map(item => {
-        const node = item.gridstackNode;
-        if (!node || !node.id) return null;
-        return {
-          id: node.id,
-          x: node.x ?? 0,
-          y: node.y ?? 0,
-          w: node.w ?? 2,
-          h: node.h ?? 2,
-          minW: 2,
-          minH: 2
-        };
-      })
-      .filter((item): item is LayoutWidget => item !== null);
-
-    if (isValidLayout(serializedLayout)) {
-      localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
-    }
-  }, [grid]);
 
   useEffect(() => {
     const newGrid = initializeGrid(isMobile);

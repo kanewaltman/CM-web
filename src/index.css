@@ -159,6 +159,19 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--radius-xl);
+  height: calc(100% - 8px) !important; /* Ensure content fills height minus padding */
+}
+
+.grid-stack-item > .grid-stack-item-content {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: auto;
+  z-index: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .light .grid-stack-item-content {
