@@ -1,24 +1,34 @@
-import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard } from 'lucide-react';
+import { LayoutGrid, RotateCcw, Copy, Clipboard } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { WidgetPicker } from './WidgetPicker';
+import { GridStack } from 'gridstack';
 
 interface ControlBarProps {
   onResetLayout: () => void;
   onCopyLayout: () => string;
   onPasteLayout: (layout: string) => void;
+  grid: GridStack | null;
+  activeWidgets: Set<string>;
 }
 
-export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: ControlBarProps) {
+const availableWidgets = [
+  { id: 'chart', title: 'Chart', minW: 2, minH: 2, w: 6, h: 6 },
+  { id: 'orderbook', title: 'Order Book', minW: 2, minH: 2, w: 3, h: 6 },
+  { id: 'tradeform', title: 'Trade Form', minW: 2, minH: 2, w: 3, h: 4 },
+  { id: 'market', title: 'Market Overview', minW: 2, minH: 2, w: 3, h: 4 },
+  { id: 'trades', title: 'Recent Trades', minW: 2, minH: 2, w: 9, h: 2 },
+];
+
+export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout, grid, activeWidgets }: ControlBarProps) {
   const { theme } = useTheme();
   const colors = getThemeValues(theme);
   const [isOpen, setIsOpen] = useState(false);
@@ -75,34 +85,42 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
       "w-full py-2",
       "bg-[hsl(var(--color-bg-base))]"
     )}>
-      {/* Left Section - Account Selector and Balance */}
       <div className="flex items-center justify-between max-w-[1920px] mx-auto px-4">
         <div className="flex items-center space-x-6">
-          <button 
-            className={cn(
-              "flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors",
-              "bg-[hsl(var(--color-widget-inset))]",
-              "border border-[hsl(var(--color-border-default)]",
-              "shadow-[0px_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0px_1px_0px_rgba(0,0,0,0.1)]",
-              colors.text
-            )}
-          >
-            <div className="w-7 h-7 rounded-full bg-orange-500/[0.16] flex items-center justify-center text-base">
-              🐂
-            </div>
-            <span className="font-bold">Main</span>
-            <ChevronDown className="h-4 w-4 opacity-50" />
-          </button>
-          
           <div className="-space-y-0.5">
-            <div className={cn("text-sm", colors.textMuted)}>Balance</div>
-            <div className="text-lg font-bold leading-tight">55,444.15 EUR</div>
+            <div className="text-lg font-bold leading-tight">Layout Editor</div>
           </div>
         </div>
 
-        {/* Right Section - Grid Controls */}
         <div className="flex items-center space-x-2">
-          <DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal={false}>
+          <div className="flex items-center space-x-1 border rounded-lg p-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleCopyLayout}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handlePasteLayout}
+            >
+              <Clipboard className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onResetLayout}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -113,23 +131,15 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                 )}
               >
                 <LayoutGrid className="h-4 w-4 mr-2 opacity-50" />
-                <span>Edit</span>
+                <span>Add Widget</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8}>
-              <DropdownMenuItem onClick={handleCopyLayout}>
-                <Copy className="h-4 w-4 mr-2 opacity-50" />
-                <span>Copy Layout</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handlePasteLayout}>
-                <Clipboard className="h-4 w-4 mr-2 opacity-50" />
-                <span>Paste Layout</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onResetLayout}>
-                <RotateCcw className="h-4 w-4 mr-2 opacity-50" />
-                <span>Reset Layout</span>
-              </DropdownMenuItem>
+              <WidgetPicker 
+                widgets={availableWidgets}
+                activeWidgets={activeWidgets}
+                grid={grid}
+              />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
