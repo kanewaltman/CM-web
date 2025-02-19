@@ -102,10 +102,19 @@ const defaultLayout: LayoutWidget[] = [
 
 ### Initialization Strategy
 
-The key to reliable layout handling is a two-phase initialization:
+The key to reliable layout handling is a multi-phase initialization that ensures proper widget positioning:
 
 ```typescript
-// Phase 1: Static Layout Preservation
+// Phase 1: Layout Preparation and Sorting
+// Sort layout by vertical position first, then horizontal to ensure consistent widget placement
+const sortedLayout = [...layout].sort((a, b) => {
+  const aY = a.y ?? 0;
+  const bY = b.y ?? 0;
+  if (aY !== bY) return aY - bY;
+  return (a.x ?? 0) - (b.x ?? 0);
+});
+
+// Phase 2: Static Layout Application
 const options: GridStackOptions = {
   float: false,      // Default compaction behavior
   staticGrid: true,  // Start static to ensure layout
@@ -115,18 +124,33 @@ const options: GridStackOptions = {
 // Initialize grid with static behavior
 const g = GridStack.init(options, gridElement);
 
-// Apply exact layout positions
+// Apply sorted layout positions
 g.batchUpdate();
 try {
-  layoutToApply.forEach(node => {
+  // First remove existing grid attributes
+  gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+    const element = item as HTMLElement;
+    Array.from(element.attributes)
+      .filter(attr => attr.name.startsWith('gs-') && attr.name !== 'gs-id')
+      .forEach(attr => element.removeAttribute(attr.name));
+    
+    // Temporarily disable movement
+    element.setAttribute('gs-no-move', 'true');
+  });
+
+  // Apply layout in sequence
+  sortedLayout.forEach(node => {
     const element = gridElement.querySelector(`[gs-id="${node.id}"]`);
     if (element) {
-      // Force exact position and size
+      // Set minimum constraints first
+      element.setAttribute('gs-min-w', String(node.minW ?? 2));
+      element.setAttribute('gs-min-h', String(node.minH ?? 2));
+      
+      // Force position and size
       element.setAttribute('gs-x', String(node.x));
       element.setAttribute('gs-y', String(node.y));
       element.setAttribute('gs-w', String(node.w));
       element.setAttribute('gs-h', String(node.h));
-      element.setAttribute('gs-auto-position', 'false');
       
       // Update grid engine
       g.update(element, {
@@ -142,26 +166,54 @@ try {
   g.commit();
 }
 
-// Phase 2: Enable Interactive Features
-setTimeout(() => {
-  g.batchUpdate();
-  try {
-    // Restore default GridStack behavior
-    g.setStatic(false);
-    g.opts.float = false;
-    
-    // Re-enable widget interactions
-    g.enableMove(true);
-    g.enableResize(true);
-  } finally {
-    g.commit();
+// Phase 3: Position Verification and Movement Re-enablement
+gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+  const element = item as HTMLElement;
+  element.removeAttribute('gs-no-move');
+});
+
+// Verify final positions and compact if necessary
+let needsCompaction = false;
+sortedLayout.forEach(node => {
+  if (node.id) {
+    const element = gridElement.querySelector(`[gs-id="${node.id}"]`);
+    if (element) {
+      const currentNode = g.engine.nodes.find(n => n.el === element);
+      if (currentNode && (currentNode.x !== node.x || currentNode.y !== node.y)) {
+        g.update(element as HTMLElement, {
+          x: node.x,
+          y: node.y,
+          autoPosition: false
+        });
+        needsCompaction = true;
+      }
+    }
   }
-}, 100);
+});
+
+// Only compact if positions need adjustment
+if (needsCompaction) {
+  g.compact();
+}
 ```
 
 #### Key Configuration Points
 
-1. **Initial Grid Options**
+1. **Layout Sorting**
+   ```typescript
+   {
+     // Sort by vertical position first, then horizontal
+     // This ensures consistent widget placement and prevents layout jumps
+     const sortedLayout = [...layout].sort((a, b) => {
+       const aY = a.y ?? 0;
+       const bY = b.y ?? 0;
+       if (aY !== bY) return aY - bY;
+       return (a.x ?? 0) - (b.x ?? 0);
+     });
+   }
+   ```
+
+2. **Grid Options**
    ```typescript
    {
      float: false,     // Default compaction behavior
@@ -173,16 +225,11 @@ setTimeout(() => {
    }
    ```
 
-2. **Layout Application**
+3. **Layout Application**
    - Remove existing grid attributes
-   - Apply layout without sorting
+   - Apply sorted layout sequentially
    - Force exact positions through both attributes and engine updates
-   - Double-pass position verification
-
-3. **Interactive Behavior Restoration**
-   - Re-enable grid features after layout is stable
-   - Restore default compaction behavior
-   - Re-initialize drag and resize capabilities
+   - Verify final positions and compact only if necessary
 
 ### Layout Persistence
 
