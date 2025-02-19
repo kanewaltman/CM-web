@@ -862,7 +862,7 @@ function App() {
                 minW: 2,
                 minH: 2,
                 autoPosition: false,
-                noMove: true // Prevent movement during addition
+                noMove: false // Set noMove to false to allow movement
               } as ExtendedGridStackWidget);
 
               console.log('Widget added:', addedWidget);
@@ -1187,7 +1187,6 @@ function App() {
         widgetElement.setAttribute('gs-y', String(finalY));
         widgetElement.setAttribute('gs-w', '3');
         widgetElement.setAttribute('gs-h', '4');
-        widgetElement.setAttribute('gs-no-move', 'true');
         
         // Create content wrapper
         const contentElement = document.createElement('div');
@@ -1205,7 +1204,7 @@ function App() {
           minH: 2,
           id: widgetId,
           autoPosition: false,
-          noMove: true
+          noMove: false // Set noMove to false to allow movement
         } as ExtendedGridStackWidget);
         
         // Render React component
@@ -1261,8 +1260,6 @@ function App() {
             // Re-enable widget movement for all widgets
             const items = grid.getGridItems();
             items.forEach(item => {
-              // Remove no-move attribute directly from the element
-              item.removeAttribute('gs-no-move');
               // Enable movement and resizing through GridStack
               grid.movable(item, true);
               grid.resizable(item, true);
