@@ -1,148 +1,113 @@
 # GridStack Integration
 
-GridStack v11.3.0 is the core layout engine powering CM-Web's dynamic widget system. This document outlines how GridStack is integrated into our application architecture.
+CM-Web uses GridStack v11.3.0 as its core layout engine. This document outlines both our current implementation and additional available features.
 
-## Overview
+## Current Implementation
 
-GridStack provides our application with:
-- Drag-and-drop widget management
-- Responsive grid layouts
-- Widget resizing capabilities
-- Layout persistence
+### Overview
+
+Our GridStack implementation provides:
+- Drag-and-drop widget management with header handles
+- Responsive grid layouts (desktop and mobile)
+- Widget resizing with auto-hiding handles
+- Layout persistence in localStorage
 - Touch device support
-- Mobile-first responsive design
 - Predictable widget swapping behavior
 
-## Integration Points
+### Core Configuration
 
-### Widget Container
-
-The `WidgetContainer` component is a pure presentational component that provides:
-- Consistent widget styling and structure
-- Standard header with title and controls
-- Content area for widget-specific components
-- Drag handle through `.widget-header` class
-
-The component intentionally does not handle:
-- Layout management
-- Resize events
-- Widget state
-- Position tracking
-
-These concerns are instead managed centrally in the main App component.
-
-### Layout Management
-
-Our GridStack implementation in `App.tsx` includes:
-- Centralized grid initialization and configuration
-- Layout state persistence with localStorage
-- Responsive breakpoint handling
-- Widget position tracking and collision detection
-- Save/restore functionality with JSON serialization
-- Mobile/desktop layout switching
-
-### Component Architecture
-
-The system follows a clear separation of concerns:
-
-1. **App.tsx (Controller)**
-   - GridStack initialization and configuration
-   - Layout state management
-   - Event handling (resize, drag, change)
-   - Layout persistence
-   - Mobile/desktop mode switching
-
-2. **WidgetContainer (Presentation)**
-   - Consistent widget UI structure
-   - Header with title and controls
-   - Content wrapper
-   - Drag handle via `.widget-header`
-
-3. **Individual Widgets**
-   - Widget-specific content and logic
-   - Rendered within WidgetContainer
-   - No direct interaction with GridStack
-
-## Configuration
-
-Current GridStack configuration includes:
 ```typescript
-const gridstackOptions: GridStackOptions = {
-  float: false, // Disabled to improve widget swapping behavior
+const options: GridStackOptions = {
+  float: false,
+  cellHeight: mobile ? '100px' : 'auto',
+  margin: 4,
+  column: mobile ? 1 : 12,
   animate: true,
-  column: 12,
-  margin: 8,
-  cellHeight: 'auto',
-  disableOneColumnMode: false,
-  staticGrid: false,
-  // v11.3.0 specific options
-  removable: false,
-  acceptWidgets: false,
-  dragInOptions: { 
-    revert: 'invalid', 
-    scroll: false, 
-    appendTo: 'body', 
-    helper: 'clone' 
-  },
   draggable: {
     handle: '.widget-header',
-    scroll: false,
-    appendTo: 'body'
   },
   resizable: {
     handles: 'e, se, s, sw, w',
     autoHide: true
-  }
+  },
+  minRow: 1,
+  staticGrid: true,
 };
 ```
 
-### Key Configuration Choices
+### Layout Management
 
-1. **Float Disabled (`float: false`)**
-   - Improves predictability of widget swapping
-   - Prevents widgets from automatically floating up to fill gaps
-   - Maintains grid structure during drag operations
+Our implementation uses a static widget structure defined in `App.tsx`:
 
-2. **Drag Configuration**
-   - Header-only dragging for better UX
-   - Scroll disabled during drag for smoother operation
-   - Append to body for proper z-indexing
-
-3. **Resize Configuration**
-   - Multiple handle positions for flexible resizing
-   - Auto-hiding handles for cleaner UI
-   - Maintains aspect ratios where appropriate
-
-## Best Practices
-
-1. **Widget Creation**
-   - Always use the `WidgetContainer` component
-   - Implement proper cleanup on widget removal
-   - Handle resize events efficiently
-   - Use widget IDs for consistent tracking
-
-2. **Performance**
-   - Use `batchUpdate()` and `commit()` for bulk operations
-   - Implement proper memoization for widget content
-   - Use `will-change: transform` for smooth animations
-   - Leverage touch-action: none for mobile support
-
-3. **State Management**
-   - Use `loadLayoutSafely()` for reliable layout restoration
-   - Persist layout changes using `grid.save()`
-   - Handle widget state restoration with IDs
-   - Manage widget configuration with TypeScript types
-   - Use mobile-specific layouts when needed
-
-## Common Patterns
-
-### Adding New Widgets
 ```typescript
-// Example of adding a new widget with v11.3.0
+const defaultLayout = [
+  { x: 0, y: 0, w: 6, h: 6, id: 'chart', minW: 2, minH: 2 },
+  { x: 6, y: 0, w: 3, h: 6, id: 'orderbook', minW: 2, minH: 2 },
+  // ... other widgets
+];
+
+const mobileLayout = [
+  { x: 0, y: 0, w: 1, h: 6, id: 'chart', minW: 2, minH: 2 },
+  // ... other widgets
+];
+```
+
+### Layout Persistence
+
+We implement layout saving with custom serialization:
+
+```typescript
+// Save layout
+const items = grid.getGridItems();
+const serializedLayout = items
+  .map(item => {
+    const node = item.gridstackNode;
+    if (!node || !node.id) return null;
+    return {
+      id: node.id,
+      x: node.x ?? 0,
+      y: node.y ?? 0,
+      w: node.w ?? 2,
+      h: node.h ?? 2,
+      minW: node.minW ?? 2,
+      minH: node.minH ?? 2
+    };
+  })
+  .filter(Boolean);
+
+// Load layout
+if (isValidLayout(serializedLayout)) {
+  localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+}
+```
+
+### Widget Structure
+
+Each widget follows this structure:
+```html
+<div class="grid-stack-item" 
+  gs-id="widget-id"
+  gs-x="0" 
+  gs-y="0" 
+  gs-w="6" 
+  gs-h="4">
+  <WidgetContainer title="Widget Title">
+    <WidgetComponent />
+  </WidgetContainer>
+</div>
+```
+
+## Additional Available Features
+
+GridStack v11.3.0 offers several features that, while not currently used in our implementation, are available for future enhancement:
+
+### Dynamic Widget Management
+```typescript
+// Add widgets dynamically
 grid.addWidget({
   w: 3,
   h: 2,
-  id: 'unique-widget-id',
+  id: 'new-widget',
   content: {
     type: 'chart',
     title: 'New Widget',
@@ -151,17 +116,32 @@ grid.addWidget({
 });
 ```
 
-### Saving Layouts
+### Enhanced Drag Options
 ```typescript
-// Example of saving the current layout with v11.3.0
-const serializedLayout = grid.save(true); // true to include content
-localStorage.setItem('gridLayout', JSON.stringify(serializedLayout));
+const enhancedOptions: GridStackOptions = {
+  dragInOptions: { 
+    revert: 'invalid', 
+    scroll: false, 
+    appendTo: 'body', 
+    helper: 'clone' 
+  },
+  removable: false,
+  acceptWidgets: false
+};
 ```
 
-### Mobile Responsiveness
+### Alternative Layout Serialization
 ```typescript
-// Example of mobile-specific configuration
-const mobileOptions: GridStackOptions = {
+// Save with content
+const serializedLayout = grid.save(true);
+
+// Load with content
+grid.load(serializedLayout);
+```
+
+### Extended Mobile Configuration
+```typescript
+const extendedMobileOptions: GridStackOptions = {
   column: 1,
   cellHeight: '100px',
   minRow: 24,
@@ -170,114 +150,26 @@ const mobileOptions: GridStackOptions = {
 };
 ```
 
-### Event Handling
-```typescript
-// v11.3.0 event handling
-grid.on('change', (event, items) => {
-  const currentLayout = grid.save(true);
-  // Handle layout changes
-});
+## Best Practices
 
-grid.on('dragstop resizestop', (event, element) => {
-  // Handle drag/resize completion
-});
-```
+1. **Layout Operations**
+   - Use `batchUpdate()/commit()` for bulk changes
+   - Validate layouts before applying
+   - Maintain minimum size constraints
+   - Handle mobile/desktop transitions smoothly
+
+2. **Performance**
+   - Implement proper cleanup on widget removal
+   - Use memoization for expensive calculations
+   - Handle resize events efficiently
+   - Leverage CSS transitions for smooth animations
+
+3. **State Management**
+   - Validate layouts before saving
+   - Handle missing or invalid layouts gracefully
+   - Maintain widget state independently
+   - Use TypeScript types for type safety
 
 ## Related Documentation
-- [Widget Container Component](../components/ui/widget-container.md)
-- [Layout Management](../architecture/layout-management.md)
-- [State Persistence](../architecture/state-management.md)
-
-## Layout Management
-
-### Widget Structure
-Each widget in the grid should have:
-- A unique `gs-id` attribute (not `data-gs-id`)
-- Position attributes (`gs-x`, `gs-y`, `gs-w`, `gs-h`)
-- A `grid-stack-item` class
-- A `grid-stack-item-content` class on the inner content container
-
-```html
-<div class="grid-stack-item" 
-  gs-id="chart"
-  gs-x="0" 
-  gs-y="0" 
-  gs-w="8" 
-  gs-h="6">
-  <WidgetContainer>
-    <!-- Widget content -->
-  </WidgetContainer>
-</div>
-```
-
-### Layout Operations
-
-#### Saving Layouts
-```typescript
-// Save only positions, not content
-const layout = grid.save(false);
-localStorage.setItem('desktop-layout', JSON.stringify(layout));
-```
-
-#### Loading/Restoring Layouts
-```typescript
-// Load without recreating widgets (preserves content)
-grid.batchUpdate();
-try {
-  grid.load(layoutData, false); // false = don't add/remove widgets
-  grid.compact();
-} finally {
-  grid.commit();
-}
-```
-
-### Best Practices
-
-1. **Preserve Widget Content**
-   - Use `load(layout, false)` to update positions without recreating widgets
-   - Never use `removeAll()` when applying layouts
-   - Wrap layout operations in `batchUpdate()/commit()` pairs
-
-2. **Layout Management**
-   - Save layouts without content using `save(false)`
-   - Always call `compact()` after loading layouts
-   - Use `batchUpdate()` for atomic operations
-
-3. **Widget Identification**
-   - Use `gs-id` attributes (not `data-gs-id`)
-   - Keep IDs consistent between saved layouts and DOM elements
-   - Ensure unique IDs across all widgets
-
-4. **Event Handling**
-```typescript
-// Debounced layout saving
-let saveTimeout: NodeJS.Timeout;
-const saveLayout = () => {
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
-    const serializedLayout = grid.save(false);
-    localStorage.setItem('layout-key', JSON.stringify(serializedLayout));
-  }, 100);
-};
-
-grid.on('change', saveLayout);
-grid.on('resizestop dragstop', saveLayout);
-```
-
-### Common Issues
-
-1. **Disappearing Widget Content**
-   - Cause: Recreating widgets instead of updating positions
-   - Solution: Use `load(layout, false)` to preserve widgets
-
-2. **Layout Reset Issues**
-   - Cause: Using `removeAll()` before loading layouts
-   - Solution: Update positions with `load(layout, false)`
-
-3. **Inconsistent Layouts**
-   - Cause: Missing `compact()` after updates
-   - Solution: Always call `compact()` after loading layouts
-
-4. **Performance Issues**
-   - Cause: Individual updates without batching
-   - Solution: Use `batchUpdate()/commit()` for multiple changes 
+- [Widget Container](../components/ui/widget-container.md)
+- [Layout Management](layout-management.md)

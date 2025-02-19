@@ -4,13 +4,20 @@ This document details how CM-Web manages its dynamic layout system using GridSta
 
 ## Layout System Overview
 
-The layout system is built on GridStack v11.3.0 and provides:
+The layout system is built on GridStack v11.3.0 (version can be verified in `package.json`) and provides:
 - Drag-and-drop widget management
 - Responsive grid layouts
 - Widget resizing capabilities
 - Layout persistence
 - Mobile/desktop layout switching
 - Copy/paste layout functionality
+
+### Dependency Verification
+
+When working with this layout system, always verify:
+1. The GridStack version in `package.json` matches the version specified in this documentation
+2. Any version updates should be reflected in both the implementation and this documentation
+3. Breaking changes in GridStack versions may require updates to the implementation details described below
 
 ### Critical Layout Behaviors
 
@@ -905,8 +912,7 @@ const applyLayout = (layout: GridStackWidget[]) => {
             w: Math.max(node.w || 0, defaultWidget.w),
             h: Math.max(node.h || 0, defaultWidget.h)
           });
-        }
-      });
+        });
       grid.commit();
     }, 0);
   } finally {
