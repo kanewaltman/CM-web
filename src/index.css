@@ -302,12 +302,13 @@
 
 /* Updated GridStack resize handles for v11.3.0 */
 .grid-stack > .grid-stack-item > .ui-resizable-handle {
-  opacity: 1 !important;
+  opacity: 0;
   transition: opacity 0.2s ease-in-out;
   z-index: 2;
-  background-color: hsl(var(--color-border-default));
-  border-radius: 2px;
-  pointer-events: all !important;
+}
+
+.grid-stack > .grid-stack-item:hover > .ui-resizable-handle {
+  opacity: 1;
 }
 
 .grid-stack > .grid-stack-item > .ui-resizable-se,
@@ -316,40 +317,6 @@
 .grid-stack > .grid-stack-item > .ui-resizable-nw {
   width: 12px;
   height: 12px;
-  background-color: hsl(var(--color-border-default));
-  pointer-events: all !important;
-}
-
-.grid-stack > .grid-stack-item > .ui-resizable-e,
-.grid-stack > .grid-stack-item > .ui-resizable-w {
-  width: 4px;
-  height: 100%;
-  background-color: hsl(var(--color-border-default));
-  pointer-events: all !important;
-}
-
-.grid-stack > .grid-stack-item > .ui-resizable-n,
-.grid-stack > .grid-stack-item > .ui-resizable-s {
-  height: 4px;
-  width: 100%;
-  background-color: hsl(var(--color-border-default));
-  pointer-events: all !important;
-}
-
-.grid-stack > .grid-stack-item > .ui-resizable-e {
-  right: -2px;
-}
-
-.grid-stack > .grid-stack-item > .ui-resizable-w {
-  left: -2px;
-}
-
-.grid-stack > .grid-stack-item > .ui-resizable-n {
-  top: -2px;
-}
-
-.grid-stack > .grid-stack-item > .ui-resizable-s {
-  bottom: -2px;
 }
 
 .grid-stack > .grid-stack-item > .ui-resizable-se {
