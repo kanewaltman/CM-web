@@ -57,6 +57,15 @@ const widgetIds: Record<string, string> = {
   'trade-form': 'tradeform'
 };
 
+// Reverse mapping for widget types
+const widgetTypes: Record<string, string> = {
+  'market': 'market-overview',
+  'orderbook': 'order-book',
+  'trades': 'recent-trades',
+  'chart': 'trading-view-chart',
+  'tradeform': 'trade-form'
+};
+
 function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
@@ -516,19 +525,153 @@ function App() {
 
       // Log current state before changes
       const currentWidgets = grid.getGridItems();
+      const currentIds = currentWidgets.map(item => item.gridstackNode?.id).filter(Boolean) as string[];
       console.log('Current widgets:', currentWidgets.map(item => ({
         id: item.gridstackNode?.id,
         type: item.gridstackNode?.id?.split('-')[0]
       })));
 
-      // Temporarily disable animations
+      // Get IDs from new layout
+      const newLayoutIds = layout.map(widget => widget.id);
+      console.log('New layout widget IDs:', newLayoutIds);
+
+      // Temporarily disable animations and compaction
       const prevAnimate = grid.opts.animate;
       grid.setAnimation(false);
+      grid.setStatic(true); // Prevent any movement during updates
       
       grid.batchUpdate();
       try {
-        // Use grid.load() to update positions, but don't recreate widgets
-        grid.load(layout, false);
+        // First remove widgets that aren't in the new layout
+        currentWidgets.forEach(item => {
+          const id = item.gridstackNode?.id;
+          if (id && !newLayoutIds.includes(id)) {
+            console.log('Removing widget not in new layout:', id);
+            grid.removeWidget(item);
+          }
+        });
+
+        // Create a map of existing widgets for quick lookup
+        const existingWidgets = new Map(
+          grid.getGridItems().map(item => [item.gridstackNode?.id, item])
+        );
+
+        // Process each widget in the new layout
+        for (const node of layout) {
+          try {
+            const existingWidget = existingWidgets.get(node.id);
+            
+            if (existingWidget) {
+              // Update existing widget position
+              console.log('Updating position for widget:', node.id, {
+                x: node.x,
+                y: node.y,
+                w: node.w,
+                h: node.h
+              });
+              
+              grid.update(existingWidget, {
+                x: node.x,
+                y: node.y,
+                w: node.w,
+                h: node.h,
+                autoPosition: false
+              });
+            } else {
+              // Add new widget
+              console.log('Adding new widget:', node.id);
+              const baseWidgetId = node.id.replace(/[_-]\d+$/, '');
+              const widgetType = widgetTypes[baseWidgetId];
+              console.log('Base widget ID:', baseWidgetId, 'Widget type:', widgetType);
+              
+              if (!widgetComponents[widgetType]) {
+                console.warn('Unknown widget type:', widgetType);
+                continue; // Skip this widget but continue with others
+              }
+
+              // Create new widget element
+              const widgetElement = document.createElement('div');
+              widgetElement.className = 'grid-stack-item';
+              widgetElement.setAttribute('gs-id', node.id);
+              widgetElement.setAttribute('gs-min-w', '2');
+              widgetElement.setAttribute('gs-min-h', '2');
+              widgetElement.setAttribute('gs-x', String(node.x));
+              widgetElement.setAttribute('gs-y', String(node.y));
+              widgetElement.setAttribute('gs-w', String(node.w));
+              widgetElement.setAttribute('gs-h', String(node.h));
+
+              // Create content wrapper
+              const contentElement = document.createElement('div');
+              contentElement.className = 'grid-stack-item-content';
+              widgetElement.appendChild(contentElement);
+
+              // Add widget content using createRoot before adding to grid
+              const root = ReactDOM.createRoot(contentElement);
+              const WidgetComponent = widgetComponents[widgetType];
+              const widgetTitle = widgetTitles[widgetType];
+              
+              root.render(
+                <WidgetContainer title={widgetTitle}>
+                  <WidgetComponent />
+                </WidgetContainer>
+              );
+
+              // Add to grid after content is ready
+              const addedWidget = grid.addWidget({
+                id: node.id,
+                el: widgetElement,
+                x: node.x,
+                y: node.y,
+                w: node.w,
+                h: node.h,
+                minW: 2,
+                minH: 2,
+                autoPosition: false
+              } as ExtendedGridStackWidget);
+
+              console.log('Widget added:', addedWidget);
+
+              // Ensure widget is properly initialized
+              grid.movable(widgetElement, true);
+              grid.resizable(widgetElement, true);
+
+              // Verify widget was added
+              const addedElement = gridElement.querySelector(`[gs-id="${node.id}"]`);
+              console.log('Widget element in DOM:', !!addedElement, addedElement);
+
+              if (!addedElement) {
+                console.error('Failed to add widget to DOM:', node.id);
+                // Try to add the widget again with auto position
+                grid.addWidget({
+                  ...node,
+                  el: widgetElement,
+                  autoPosition: true
+                } as ExtendedGridStackWidget);
+              }
+            }
+          } catch (error) {
+            console.error('Error processing widget:', node.id, error);
+            continue; // Continue with next widget even if this one fails
+          }
+        }
+        
+        // Re-enable grid features and update layout
+        grid.setStatic(false);
+        
+        // Force position updates
+        layout.forEach(node => {
+          const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
+          if (element) {
+            grid.update(element, {
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              autoPosition: false
+            });
+          }
+        });
+
         grid.compact();
         
         // Log final state
@@ -548,9 +691,10 @@ function App() {
         console.error('Error during layout update:', error);
       } finally {
         grid.commit();
-        // Restore animation setting
+        // Restore grid settings
         requestAnimationFrame(() => {
           grid.setAnimation(prevAnimate);
+          grid.setStatic(false);
         });
       }
     } catch (error) {
