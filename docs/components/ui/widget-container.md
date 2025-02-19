@@ -1,6 +1,6 @@
 # Widget Container
 
-The `WidgetContainer` component is a presentational component that provides a consistent UI structure for all widgets in the dashboard. It works in conjunction with GridStack v11.3.0 but does not directly manage layout or state.
+The `WidgetContainer` component is a presentational component that provides a consistent UI structure for all widgets in the dashboard. It works in conjunction with GridStack and provides a standardized header and content layout.
 
 ## Implementation
 
@@ -8,14 +8,14 @@ The `WidgetContainer` component is a presentational component that provides a co
 interface WidgetContainerProps {
   title: string;
   children: React.ReactNode;
-  headerControls?: React.ReactNode;
+  headerControls?: React.ReactNode;  // Optional controls in header
 }
 ```
 
 ## Component Role
 
 The `WidgetContainer` is a pure presentational component that:
-1. Provides a consistent header with title and optional controls
+1. Provides a consistent header with title, system controls, and optional custom controls
 2. Wraps widget content in a standardized container
 3. Exposes a `.widget-header` class for GridStack's drag functionality
 4. Maintains consistent base layout structure
@@ -26,15 +26,49 @@ It intentionally does not handle:
 - Widget state (managed by individual widgets)
 - Position tracking (managed by GridStack)
 
+## Header Structure
+
+The header includes:
+1. Left section:
+   - Title
+   - Dropdown indicator (ChevronDown)
+2. Right section:
+   - Optional custom controls (via headerControls prop)
+   - System controls:
+     - Maximize button
+     - More options button
+
+```tsx
+<div className="widget-header flex items-center justify-between px-4 py-2 select-none">
+  <div className="flex items-center space-x-2">
+    <h2 className="text-base font-semibold">{title}</h2>
+    <ChevronDown className="h-4 w-4 opacity-50" />
+  </div>
+  
+  <div className="flex items-center space-x-1">
+    {headerControls}
+    <div className="flex items-center space-x-1">
+      <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Maximize2 className="h-4 w-4" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-8 w-8">
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+    </div>
+  </div>
+</div>
+```
+
 ## Styling Architecture
 
 The widget styling is implemented in three layers:
 
 1. **Base Container Layer** (WidgetContainer.tsx)
    ```typescript
-   // Base structural styling
-   <div className="flex-1 min-h-0 overflow-auto">
-     {children}
+   <div ref={containerRef} className="grid-stack-item-content">
+     <div className="h-full flex flex-col">
+       {/* Header and content sections */}
+     </div>
    </div>
    ```
 
@@ -62,7 +96,10 @@ The `WidgetContainer` should ONLY be used at the GridStack layout level (in `App
 ```tsx
 // In App.tsx
 <div className="grid-stack-item" gs-id="market">
-  <WidgetContainer title="Market Overview">
+  <WidgetContainer 
+    title="Market Overview"
+    headerControls={<CustomControls />}  // Optional
+  >
     <MarketOverview />
   </WidgetContainer>
 </div>
@@ -88,38 +125,6 @@ export function MarketOverview() {
   );
 }
 ```
-
-## Structure
-
-### Component Hierarchy
-```html
-<div class="grid-stack-item" gs-id="unique-widget-id">
-  <WidgetContainer title="Widget Title">
-    {/* Widget Content Component */}
-  </WidgetContainer>
-</div>
-```
-
-### Key Features
-
-1. **Header Structure**
-   - Title display
-   - Optional header controls
-   - Drag handle functionality via `.widget-header` class
-
-2. **Content Wrapper**
-   - Consistent padding and spacing
-   - Overflow handling
-   - Standard styling
-
-3. **Styling**
-   - Content area uses these base classes:
-   ```typescript
-   className={cn(
-     "h-full overflow-auto scrollbar-thin rounded-lg p-3",
-     "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
-   )}
-   ```
 
 ## Best Practices
 
@@ -156,23 +161,6 @@ export function MarketOverview() {
     <ChartComponent />
   </WidgetContainer>
 </div>
-```
-
-### Custom Header Controls
-```typescript
-// In App.tsx
-<WidgetContainer
-  title="Custom Controls"
-  headerControls={
-    <div className="flex items-center space-x-2">
-      <RefreshButton />
-      <SettingsButton />
-      <ExportButton />
-    </div>
-  }
->
-  <WidgetContent />
-</WidgetContainer>
 ```
 
 ## Related Documentation
