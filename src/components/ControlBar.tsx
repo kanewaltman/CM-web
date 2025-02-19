@@ -127,17 +127,23 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5 text-sm text-muted-foreground">Available Widgets</div>
-              {['Market Overview', 'Order Book', 'Recent Trades', 'Trading View Chart'].map((widget) => (
+              {[
+                { title: 'Market Overview', type: 'market-overview' },
+                { title: 'Order Book', type: 'order-book' },
+                { title: 'Recent Trades', type: 'recent-trades' },
+                { title: 'Trading View Chart', type: 'trading-view-chart' },
+                { title: 'Trade Form', type: 'trade-form' }
+              ].map((widget) => (
                 <div
-                  key={widget}
+                  key={widget.type}
                   draggable
                   onDragStart={(e) => {
-                    e.dataTransfer.setData('widget/type', widget.toLowerCase().replace(/\s+/g, '-'));
+                    e.dataTransfer.setData('widget/type', widget.type);
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
                   className="relative flex select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 cursor-grab active:cursor-grabbing"
                 >
-                  <span className="ml-2">{widget}</span>
+                  <span className="ml-2">{widget.title}</span>
                 </div>
               ))}
               <DropdownMenuSeparator />

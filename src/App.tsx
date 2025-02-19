@@ -50,11 +50,11 @@ interface ExtendedGridStackWidget extends GridStackWidget {
 
 // Predefined IDs for each widget type
 const widgetIds: Record<string, string> = {
-  'market-overview': 'market-overview',
-  'order-book': 'order-book',
-  'recent-trades': 'recent-trades',
-  'trading-view-chart': 'trading-view-chart',
-  'trade-form': 'trade-form'
+  'market-overview': 'market',
+  'order-book': 'orderbook',
+  'recent-trades': 'trades',
+  'trading-view-chart': 'chart',
+  'trade-form': 'tradeform'
 };
 
 function App() {
@@ -385,7 +385,7 @@ function App() {
     return JSON.stringify(layout);
   }, [grid, isMobile]);
 
-  const handleWidgetDrop = useCallback((event: React.DragEvent<HTMLElement>) => {
+  const handleWidgetDrop = useCallback((event: React.DragEvent<HTMLElement> & { _gridX?: number; _gridY?: number }) => {
     event.preventDefault();
     const widgetType = event.dataTransfer?.getData('widget/type');
     
@@ -395,9 +395,8 @@ function App() {
     if (!gridElement) return;
 
     // Get drop coordinates relative to grid
-    const rect = gridElement.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) / (rect.width / 12));
-    const y = Math.floor((event.clientY - rect.top) / 150);
+    const x = event._gridX ?? Math.floor((event.clientX - gridElement.getBoundingClientRect().left) / (gridElement.getBoundingClientRect().width / 12));
+    const y = event._gridY ?? Math.floor((event.clientY - gridElement.getBoundingClientRect().top) / 150);
 
     // Use predefined widget ID
     const widgetId = widgetIds[widgetType];
@@ -436,25 +435,20 @@ function App() {
     // Add widget to grid with draggable and resizable enabled
     gridRef.current.batchUpdate();
     try {
-      // First add the element to the DOM
-      gridElement.appendChild(widgetElement);
-
-      // Then initialize it with GridStack
-      const widget = gridRef.current.makeWidget(widgetElement);
-
-      // Update its position and size with animation
-      gridRef.current.setAnimation(true);
-      gridRef.current.update(widgetElement, {
-        x,
-        y,
+      // Add widget directly using addWidget
+      gridRef.current.addWidget({
+        el: widgetElement,
+        x: x,
+        y: y,
         w: 3,
         h: 4,
         minW: 2,
         minH: 2,
-        autoPosition: true,
+        id: widgetId,
+        autoPosition: false,
         noResize: false,
         noMove: false
-      });
+      } as ExtendedGridStackWidget);
 
       // Make sure grid is not in static mode
       gridRef.current.setStatic(false);
@@ -462,25 +456,6 @@ function App() {
       // Explicitly enable resize and move for the new widget
       gridRef.current.movable(widgetElement, true);
       gridRef.current.resizable(widgetElement, true);
-
-      // Force a refresh of the widget to ensure handles are properly initialized
-      setTimeout(() => {
-        if (gridRef.current) {
-          gridRef.current.batchUpdate();
-          try {
-            // Re-enable resize and move
-            gridRef.current.movable(widgetElement, true);
-            gridRef.current.resizable(widgetElement, true);
-            // Force update with animation
-            gridRef.current.update(widgetElement, {
-              noResize: false,
-              noMove: false
-            });
-          } finally {
-            gridRef.current.commit();
-          }
-        }
-      }, 50);
     } finally {
       gridRef.current.commit();
     }
@@ -604,10 +579,18 @@ function App() {
     const gridElement = document.querySelector('.grid-stack');
     if (!gridElement) return;
 
+    let previewX = 0;
+    let previewY = 0;
+
     // Add drop event handlers
     const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
+
+      // Calculate grid position
+      const rect = gridElement.getBoundingClientRect();
+      previewX = Math.floor((e.clientX - rect.left) / (rect.width / 12));
+      previewY = Math.floor((e.clientY - rect.top) / 150);
 
       // Create or update preview element
       let previewElement = document.querySelector('.widget-drag-preview');
@@ -628,14 +611,10 @@ function App() {
         
         // Initialize it as a grid item with specific coordinates
         if (gridRef.current) {
-          const rect = gridElement.getBoundingClientRect();
-          const x = Math.floor((e.clientX - rect.left) / (rect.width / 12));
-          const y = Math.floor((e.clientY - rect.top) / 150);
-          
           gridRef.current.addWidget({
             el: previewElement as GridStackElement,
-            x: x,
-            y: y,
+            x: previewX,
+            y: previewY,
             w: 3,
             h: 4,
             autoPosition: false,
@@ -646,13 +625,9 @@ function App() {
       } else {
         // Update position through GridStack
         if (gridRef.current) {
-          const rect = gridElement.getBoundingClientRect();
-          const x = Math.floor((e.clientX - rect.left) / (rect.width / 12));
-          const y = Math.floor((e.clientY - rect.top) / 150);
-          
           gridRef.current.update(previewElement as HTMLElement, {
-            x: x,
-            y: y
+            x: previewX,
+            y: previewY
           });
         }
       }
@@ -663,6 +638,7 @@ function App() {
       if (previewElement && gridRef.current) {
         gridRef.current.removeWidget(previewElement as HTMLElement, false);
         previewElement.remove(); // Ensure the element is fully removed from DOM
+        gridRef.current.compact(); // Ensure grid is properly compacted after removal
       }
     };
 
@@ -681,22 +657,118 @@ function App() {
       cleanupPreview();
     };
 
+    const handleDrop = ((e: Event) => {
+      const dragEvent = e as DragEvent;
+      dragEvent.preventDefault();
+      const finalX = previewX;
+      const finalY = previewY;
+      
+      // Get widget type before cleanup
+      const widgetType = dragEvent.dataTransfer?.getData('widget/type') || '';
+      console.log('Drop event - widget type:', widgetType);
+      
+      // Cleanup preview
+      cleanupPreview();
+      
+      if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) {
+        console.log('Drop validation failed:', { 
+          widgetType, 
+          hasGrid: !!gridRef.current, 
+          hasComponent: !!widgetComponents[widgetType] 
+        });
+        return;
+      }
+      
+      // Create widget element
+      const widgetElement = document.createElement('div');
+      widgetElement.className = 'grid-stack-item';
+      const widgetId = widgetIds[widgetType];
+      console.log('Creating widget with ID:', widgetId);
+      
+      widgetElement.setAttribute('gs-id', widgetId);
+      widgetElement.setAttribute('gs-min-w', '2');
+      widgetElement.setAttribute('gs-min-h', '2');
+      
+      // Create content wrapper
+      const contentElement = document.createElement('div');
+      contentElement.className = 'grid-stack-item-content';
+      widgetElement.appendChild(contentElement);
+      
+      // Add widget to grid first
+      gridRef.current.batchUpdate();
+      try {
+        console.log('Adding widget at position:', { x: finalX, y: finalY });
+        gridRef.current.addWidget({
+          el: widgetElement,
+          x: finalX,
+          y: finalY,
+          w: 3,
+          h: 4,
+          minW: 2,
+          minH: 2,
+          id: widgetId,
+          autoPosition: false,
+          noResize: false,
+          noMove: false
+        } as ExtendedGridStackWidget);
+        
+        // Then render React component
+        const root = ReactDOM.createRoot(contentElement);
+        const WidgetComponent = widgetComponents[widgetType];
+        const widgetTitle = widgetTitles[widgetType];
+        
+        root.render(
+          <WidgetContainer title={widgetTitle}>
+            <WidgetComponent />
+          </WidgetContainer>
+        );
+        
+        // Make sure grid is not in static mode
+        gridRef.current.setStatic(false);
+        gridRef.current.movable(widgetElement, true);
+        gridRef.current.resizable(widgetElement, true);
+        
+        // Save layout
+        const items = gridRef.current.getGridItems();
+        const serializedLayout = items
+          .map(item => {
+            const node = item.gridstackNode;
+            if (!node || !node.id) return null;
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: node.w ?? 2,
+              h: node.h ?? 2,
+              minW: 2,
+              minH: 2
+            };
+          })
+          .filter((item): item is LayoutWidget => item !== null);
+
+        if (isValidLayout(serializedLayout)) {
+          localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+        }
+      } catch (error) {
+        console.error('Error adding widget:', error);
+      } finally {
+        gridRef.current.commit();
+      }
+    }) as unknown as EventListener;
+
     gridElement.addEventListener('dragover', handleDragOver as unknown as EventListener);
     gridElement.addEventListener('dragleave', handleDragLeave as unknown as EventListener);
     gridElement.addEventListener('dragend', handleDragEnd);
-    gridElement.addEventListener('drop', (e) => {
-      cleanupPreview();
-      handleWidgetDrop(e as unknown as React.DragEvent<HTMLElement>);
-    });
+    gridElement.addEventListener('drop', handleDrop);
 
     return () => {
       gridElement.removeEventListener('dragover', handleDragOver as unknown as EventListener);
       gridElement.removeEventListener('dragleave', handleDragLeave as unknown as EventListener);
       gridElement.removeEventListener('dragend', handleDragEnd);
-      gridElement.removeEventListener('drop', handleWidgetDrop as unknown as EventListener);
+      gridElement.removeEventListener('drop', handleDrop);
       cleanupPreview();
     };
-  }, [handleWidgetDrop]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
