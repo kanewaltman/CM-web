@@ -136,10 +136,15 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
               ].map((widget) => (
                 <div
                   key={widget.type}
-                  draggable
-                  onDragStart={(e) => {
+                  draggable="true"
+                  onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+                    console.log('Starting drag with widget type:', widget.type);
+                    e.dataTransfer.setData('text/plain', widget.type);
                     e.dataTransfer.setData('widget/type', widget.type);
                     e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+                    console.log('Drag ended for widget type:', widget.type);
                   }}
                   className="relative flex select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 cursor-grab active:cursor-grabbing"
                 >

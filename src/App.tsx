@@ -1117,21 +1117,40 @@ function App() {
       cleanupPreview();
     };
 
+    const handleDragStart = (e: DragEvent, widgetType: string) => {
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('widget/type', widgetType);
+        e.dataTransfer.effectAllowed = 'move';
+      }
+    };
+
     const handleDrop = ((e: Event) => {
       const dragEvent = e as DragEvent;
       dragEvent.preventDefault();
       const finalX = previewX;
       const finalY = previewY;
       
-      // Get widget type before cleanup
-      const widgetType = dragEvent.dataTransfer?.getData('widget/type') || '';
-      console.log('Drop event - widget type:', widgetType);
+      // Try both data formats
+      const widgetType = dragEvent.dataTransfer?.getData('widget/type') || 
+                        dragEvent.dataTransfer?.getData('text/plain') || '';
+                        
+      console.log('Drop event details:', {
+        availableTypes: dragEvent.dataTransfer?.types,
+        widgetType,
+        position: { x: finalX, y: finalY }
+      });
       
       if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) {
         console.log('Drop validation failed:', { 
-          widgetType, 
+          widgetType,
+          dataTransfer: {
+            types: Array.from(dragEvent.dataTransfer?.types || []),
+            widgetType: dragEvent.dataTransfer?.getData('widget/type'),
+            textPlain: dragEvent.dataTransfer?.getData('text/plain')
+          },
           hasGrid: !!gridRef.current, 
-          hasComponent: !!widgetComponents[widgetType] 
+          hasComponent: !!widgetComponents[widgetType],
+          availableComponents: Object.keys(widgetComponents)
         });
         cleanupPreview();
         return;
