@@ -848,6 +848,49 @@ function App() {
     }
   }, [grid, isMobile]);
 
+  const handleRemoveWidget = useCallback((widgetId: string) => {
+    if (!grid) return;
+    
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+
+    // Find the widget element with proper typing for both GridStack and DOM operations
+    const widgetElement = gridElement.querySelector(`[gs-id="${widgetId}"]`) as HTMLElement;
+    if (!widgetElement) return;
+
+    grid.batchUpdate();
+    try {
+      // Remove widget from grid
+      grid.removeWidget(widgetElement as GridStackElement, false);
+      // Also remove the DOM element
+      widgetElement.remove();
+
+      // Save updated layout
+      const items = grid.getGridItems();
+      const serializedLayout = items
+        .map(item => {
+          const node = item.gridstackNode;
+          if (!node || !node.id) return null;
+          return {
+            id: node.id,
+            x: node.x ?? 0,
+            y: node.y ?? 0,
+            w: node.w ?? 2,
+            h: node.h ?? 2,
+            minW: 2,
+            minH: 2
+          };
+        })
+        .filter((item): item is LayoutWidget => item !== null);
+
+      if (isValidLayout(serializedLayout)) {
+        localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+      }
+    } finally {
+      grid.commit();
+    }
+  }, [grid]);
+
   // Handle resize with debouncing
   const handleResize = useCallback(() => {
     if (resizeFrameRef.current) {
@@ -895,6 +938,13 @@ function App() {
     const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
+
+      // Check if we're over the dropdown menu
+      const dropdownMenu = document.querySelector('[role="menu"]');
+      if (dropdownMenu && dropdownMenu.contains(e.target as Node)) {
+        cleanupPreview();
+        return;
+      }
 
       // Calculate grid position
       const rect = gridElement.getBoundingClientRect();
@@ -945,13 +995,26 @@ function App() {
     const cleanupPreview = () => {
       const previewElement = document.querySelector('.widget-drag-preview');
       if (previewElement && gridRef.current) {
-        gridRef.current.removeWidget(previewElement as HTMLElement, false);
-        previewElement.remove(); // Ensure the element is fully removed from DOM
-        gridRef.current.compact(); // Ensure grid is properly compacted after removal
+        // Add removing class to trigger transition
+        previewElement.classList.add('removing');
+        
+        // Wait for transition to complete before removing
+        setTimeout(() => {
+          gridRef.current?.removeWidget(previewElement as HTMLElement, false);
+          previewElement.remove(); // Ensure the element is fully removed from DOM
+          gridRef.current?.compact(); // Ensure grid is properly compacted after removal
+        }, 200); // Match this with the CSS transition duration
       }
     };
 
     const handleDragLeave = (e: DragEvent) => {
+      // Check if we're entering the dropdown menu
+      const dropdownMenu = document.querySelector('[role="menu"]');
+      if (dropdownMenu && dropdownMenu.contains(e.relatedTarget as Node)) {
+        cleanupPreview();
+        return;
+      }
+
       // Only remove if we're actually leaving the grid
       const rect = gridElement.getBoundingClientRect();
       const x = e.clientX;
@@ -1096,11 +1159,17 @@ function App() {
         .widget-drag-preview {
           opacity: 0.7;
           pointer-events: none;
+          transition: opacity 200ms ease-in-out, transform 200ms ease-in-out;
+        }
+        .widget-drag-preview.removing {
+          opacity: 0;
+          transform: scale(0.95);
         }
         .widget-drag-preview .grid-stack-item-content {
           background: hsl(var(--color-widget-bg));
           border: 2px dashed rgba(128, 128, 128, 0.3);
           border-radius: var(--radius-xl);
+          transition: all 200ms ease-in-out;
         }
         /* Ensure GridStack's own animations work properly */
         .grid-stack-item.ui-draggable-dragging,
@@ -1125,7 +1194,7 @@ function App() {
               gs-h="6"
               gs-min-w="2"
               gs-min-h="2">
-              <WidgetContainer title="BTC/USDT">
+              <WidgetContainer title="BTC/USDT" onRemove={() => handleRemoveWidget('chart')}>
                 <TradingViewChart />
               </WidgetContainer>
             </div>
@@ -1137,7 +1206,7 @@ function App() {
               gs-h="6"
               gs-min-w="2"
               gs-min-h="2">
-              <WidgetContainer title="Order Book">
+              <WidgetContainer title="Order Book" onRemove={() => handleRemoveWidget('orderbook')}>
                 <OrderBook />
               </WidgetContainer>
             </div>
@@ -1149,7 +1218,7 @@ function App() {
               gs-h="4"
               gs-min-w="2"
               gs-min-h="2">
-              <WidgetContainer title="Trade">
+              <WidgetContainer title="Trade" onRemove={() => handleRemoveWidget('tradeform')}>
                 <TradeForm />
               </WidgetContainer>
             </div>
@@ -1161,7 +1230,7 @@ function App() {
               gs-h="4"
               gs-min-w="2"
               gs-min-h="2">
-              <WidgetContainer title="Market Overview">
+              <WidgetContainer title="Market Overview" onRemove={() => handleRemoveWidget('market')}>
                 <MarketOverview />
               </WidgetContainer>
             </div>
@@ -1173,7 +1242,7 @@ function App() {
               gs-h="2"
               gs-min-w="2"
               gs-min-h="2">
-              <WidgetContainer title="Recent Trades">
+              <WidgetContainer title="Recent Trades" onRemove={() => handleRemoveWidget('trades')}>
                 <RecentTrades />
               </WidgetContainer>
             </div>
