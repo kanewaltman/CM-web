@@ -61,7 +61,7 @@ The header includes:
 
 ## Styling Architecture
 
-The widget styling is implemented in three layers:
+The widget styling is implemented in two main layers:
 
 1. **Base Container Layer** (WidgetContainer.tsx)
    ```typescript
@@ -72,19 +72,14 @@ The widget styling is implemented in three layers:
    </div>
    ```
 
-2. **Widget Content Layer** (Individual Widgets)
+2. **Content Wrapper Layer** (WidgetContainer.tsx)
    ```typescript
-   // Applied by individual widget components
-   className={cn(
-     "h-full overflow-auto scrollbar-thin rounded-lg p-3",
-     "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
-   )}
+   <div className="flex-1 min-h-0 overflow-auto">
+     {children}
+   </div>
    ```
 
-3. **Global Styles Layer** (index.css)
-   - Defines theme variables for widget styling
-   - Implements scrollbar customization
-   - Provides dark/light mode support
+The content wrapper uses `flex-1` and `min-h-0` to ensure proper scrolling behavior within the flex container, while `overflow-auto` enables scrolling for content that exceeds the container bounds.
 
 ## Usage Guidelines
 
@@ -107,7 +102,10 @@ The `WidgetContainer` should ONLY be used at the GridStack layout level (in `App
 // In MarketOverview.tsx
 export function MarketOverview() {
   return (
-    <div className="widget-content">
+    <div className={cn(
+      "h-full overflow-auto scrollbar-thin p-3",
+      "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+    )}>
       {/* Widget content here */}
     </div>
   );
@@ -130,39 +128,16 @@ export function MarketOverview() {
 
 1. **Widget Component Structure**
    - Keep widget components focused on their content
-   - Use consistent content styling
+   - Use consistent content styling with the provided classes
    - Handle internal state and logic independently
    - Don't include container-level concerns
 
 2. **Layout Integration**
    - All WidgetContainer instances should be managed in App.tsx
    - Widget components should focus on their specific functionality
-   - Use the provided content area classes for consistent styling
+   - Use the widget-inset class and proper border styling
 
 3. **Performance**
    - Keep the WidgetContainer lightweight
    - Handle complex logic in parent or child components
    - Use appropriate memoization in widget content components
-
-## Usage Example
-
-```typescript
-// In App.tsx
-<div className="grid-stack-item" gs-id="chart">
-  <WidgetContainer
-    title="Market Overview"
-    headerControls={
-      <div className="flex items-center space-x-2">
-        <RefreshButton />
-        <SettingsButton />
-      </div>
-    }
-  >
-    <ChartComponent />
-  </WidgetContainer>
-</div>
-```
-
-## Related Documentation
-- [GridStack Integration](../../architecture/gridstack-integration.md)
-- [Layout Management](../../architecture/layout-management.md) 

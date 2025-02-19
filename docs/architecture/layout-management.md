@@ -233,38 +233,16 @@ if (needsCompaction) {
 
 ### Layout Persistence
 
-Layout saving is implemented with debouncing to prevent excessive storage operations:
+Layout persistence is implemented through localStorage with validation:
 
 ```typescript
-const saveLayout = debounce(() => {
-  const serializedLayout = grid.getGridItems()
-    .map(item => ({
-      id: item.gridstackNode.id,
-      x: item.gridstackNode.x,
-      y: item.gridstackNode.y,
-      w: item.gridstackNode.w,
-      h: item.gridstackNode.h,
-      minW: item.gridstackNode.minW,
-      minH: item.gridstackNode.minH
-    }))
-    .filter(Boolean);
-
-  if (isValidLayout(serializedLayout)) {
-    localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
-  }
-}, 250);
-```
-
-### Layout Validation
-
-Layouts must pass validation before being applied:
-
-```typescript
+// Layout validation ensures integrity of saved layouts
 const isValidLayout = (layout: GridStackWidget[]) => {
   if (!Array.isArray(layout) || layout.length !== defaultLayout.length) {
     return false;
   }
   
+  // Verify all required widgets are present with valid minimum sizes
   return defaultLayout.every(defaultWidget => {
     const savedWidget = layout.find(w => w.id === defaultWidget.id);
     return savedWidget && 
@@ -272,234 +250,42 @@ const isValidLayout = (layout: GridStackWidget[]) => {
            (savedWidget.h ?? 0) >= (defaultWidget.minH ?? 2);
   });
 };
-```
 
-### Best Practices
-
-1. **Layout Initialization**
-   - Start with static grid to prevent unwanted movement
-   - Apply exact positions without sorting
-   - Use both DOM attributes and engine updates
-   - Enable interactive features only after layout is stable
-
-2. **Position Preservation**
-   - Never sort layouts during initialization
-   - Maintain exact coordinates
-   - Prevent automatic compaction during setup
-   - Double-verify positions
-
-3. **Interactive Behavior**
-   - Enable compaction after initialization
-   - Allow natural widget swapping
-   - Maintain smooth animations
-   - Preserve user-specified positions
-
-4. **Layout Persistence**
-   - Validate layouts before saving
-   - Use debounced save operations
-   - Maintain minimum size constraints
-   - Preserve all widget attributes
-
-### Common Issues Solved
-
-1. **Vertical Position Swapping**
-   - Problem: Widgets would swap vertical positions on refresh
-   - Solution: Static initialization and exact position forcing
-
-2. **Unwanted Compaction**
-   - Problem: Automatic left-right compaction changing layouts
-   - Solution: Two-phase initialization with initial static grid
-
-3. **Interactive Behavior**
-   - Problem: Lost widget interaction after position preservation
-   - Solution: Proper restoration of GridStack features
-
-4. **Layout Stability**
-   - Problem: Inconsistent layout restoration
-   - Solution: Comprehensive position forcing and verification
-
-### Mobile Considerations
-
-1. **Single Column Mode**
-   ```typescript
-   const mobileLayout = [
-     { x: 0, y: 0, w: 1, h: 6, id: 'chart' },
-     { x: 0, y: 6, w: 1, h: 6, id: 'orderbook' },
-     // ... other widgets
-   ];
-   ```
-
-2. **Mobile Options**
-   ```typescript
-   const mobileOptions = {
-     column: 1,
-     cellHeight: '100px',
-     margin: 4
-   };
-   ```
-
-## Best Practices
-
-1. **Layout Application**
-   - Always use `batchUpdate()/commit()` pairs for bulk operations
-   - Set both HTML attributes and update grid engine
-   - Use `requestAnimationFrame` for layout enforcement
-   - Apply layouts in a consistent order
-
-2. **Layout Persistence**
-   - Validate layouts before saving or applying
-   - Use debouncing for save operations
-   - Always maintain minimum size constraints
-   - Store layouts in a consistent format
-
-3. **Mobile Support**
-   - Use single-column layout for mobile
-   - Maintain widget order in mobile view
-   - Adjust widget sizes appropriately
-   - Handle orientation changes gracefully
-
-4. **Performance**
-   - Batch layout updates
-   - Debounce save operations
-   - Use `requestAnimationFrame` for DOM updates
-   - Minimize layout recalculations
-
-## Common Issues
-
-1. **Widget Collapse**
-   - Ensure minimum sizes are set before position updates
-   - Apply both HTML attributes and grid updates
-   - Verify layout validity before application
-
-2. **Position Inconsistency**
-   - Use multi-phase layout application
-   - Force position updates when needed
-   - Verify positions after layout changes
-   - Use `compact()` to ensure proper layout
-
-3. **Layout Restoration**
-   - Clean existing attributes before applying layout
-   - Apply layout in consistent order
-   - Force relayout after initialization
-   - Verify layout validity before saving
-
-## GridStack Configuration
-
-### Basic Setup
-```typescript
-import { GridStack } from 'gridstack';
-import 'gridstack/dist/gridstack.min.css';
-
-// Initialize with default options
-const grid = GridStack.init({
-  float: false,         // disabled to prevent unwanted widget floating
-  animate: true,        // smooth transitions
-  column: 12,          // 12-column grid
-  margin: 8,           // gap between widgets
-  cellHeight: 'auto',  // dynamic height based on content
-  draggable: {         // dragging configuration
-    handle: '.widget-header'
-  },
-  resizable: {         // resizing configuration
-    handles: 'e,se,s,sw,w',
-    autoHide: true
-  }
-});
-```
-
-### Responsive Configuration
-```typescript
-const breakpoints = {
-  desktop: 1200,
-  tablet: 768,
-  mobile: 480
-};
-
-const responsiveOptions = {
-  desktop: {
-    column: 12,
-    cellHeight: 60
-  },
-  tablet: {
-    column: 8,
-    cellHeight: 50
-  },
-  mobile: {
-    column: 4,
-    cellHeight: 40
-  }
-};
-
-// Apply responsive options
-grid.setStatic(true);  // prevent transitions during resize
-grid.column(responsiveOptions[breakpoint].column);
-grid.cellHeight(responsiveOptions[breakpoint].cellHeight);
-grid.setStatic(false);
-```
-
-## Layout State Management
-
-### Saving Layouts
-```typescript
-interface LayoutState {
-  widgets: GridStackNode[];
-  options: GridStackOptions;
-  breakpoint: string;
-}
-
-function saveLayout(): LayoutState {
-  return {
-    widgets: grid.save(),
-    options: grid.getOptions(),
-    breakpoint: currentBreakpoint
-  };
-}
-
-// Persist to storage
-localStorage.setItem('gridLayout', JSON.stringify(saveLayout()));
-```
-
-### Optimized Layout Loading
-```typescript
-// Use the optimized loading strategy for more reliable layout restoration
-function loadLayoutSafely(grid: GridStack, layout: GridStackNode[]) {
-  // Phase 1: Load with scaled-down sizes (80% of final size)
-  const scaledLayout = layout.map(widget => ({
-    ...widget,
-    w: Math.max(1, Math.floor((widget.w ?? 1) * 0.8)),
-    h: Math.max(1, Math.floor((widget.h ?? 1) * 0.8))
-  }));
-
-  grid.batchUpdate();
-  try {
-    grid.removeAll();
-    scaledLayout.forEach(widget => grid.addWidget(widget));
-  } finally {
-    grid.commit();
-  }
-
-  // Phase 2: Restore to original sizes
-  setTimeout(() => {
-    grid.batchUpdate();
+// Layout loading with fallback to defaults
+let layoutToApply = defaultLayout;
+if (!mobile) {
+  const savedLayout = localStorage.getItem('desktop-layout');
+  if (savedLayout) {
     try {
-      layout.forEach(widget => {
-        const el = grid.engine.nodes.find(n => n.id === widget.id);
-        if (el?.el && widget.w !== undefined && widget.h !== undefined) {
-          grid.update(el.el, { w: widget.w, h: widget.h });
-        }
-      });
-    } finally {
-      grid.commit();
+      const parsedLayout = JSON.parse(savedLayout);
+      if (isValidLayout(parsedLayout)) {
+        layoutToApply = parsedLayout;
+      }
+    } catch (error) {
+      console.error('Failed to parse saved layout:', error);
     }
-  }, 50);
+  }
+} else {
+  layoutToApply = mobileLayout;
 }
 ```
 
-This two-phase loading strategy significantly improves layout restoration reliability by:
-1. Initially loading widgets at 80% of their final size
-2. Allowing GridStack's layout engine more flexibility in initial placement
-3. Smoothly transitioning to the final layout after initial positioning
-4. Using batch updates for performance and visual smoothness
+Key aspects of the persistence implementation:
+
+1. **Storage Strategy**
+   - Desktop layouts are stored in localStorage under 'desktop-layout'
+   - Mobile layouts are not persisted (always use default mobile layout)
+   - Invalid or corrupted layouts fall back to defaults
+
+2. **Layout Validation**
+   - Ensures all required widgets are present
+   - Validates minimum size constraints
+   - Maintains layout integrity across sessions
+
+3. **Error Handling**
+   - Graceful fallback to default layout on parse errors
+   - Validation prevents invalid layouts from being applied
+   - Console errors for debugging persistence issues
 
 ### Layout Copy/Paste
 ```typescript
@@ -977,12 +763,12 @@ const isValidLayout = (layout: GridStackWidget[]) => {
     return false;
   }
   
-  // Verify all required widgets are present with valid sizes
+  // Verify all required widgets are present with valid minimum sizes
   return defaultLayout.every(defaultWidget => {
     const savedWidget = layout.find(w => w.id === defaultWidget.id);
     return savedWidget && 
-           (savedWidget.w ?? 0) >= Math.min(2, defaultWidget.w) && 
-           (savedWidget.h ?? 0) >= Math.min(2, defaultWidget.h);
+           (savedWidget.w ?? 0) >= (defaultWidget.minW ?? 2) && 
+           (savedWidget.h ?? 0) >= (defaultWidget.minH ?? 2);
   });
 };
 ```
