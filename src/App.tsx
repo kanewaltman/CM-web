@@ -48,11 +48,21 @@ interface ExtendedGridStackWidget extends GridStackWidget {
   el?: HTMLElement;
 }
 
+// Predefined IDs for each widget type
+const widgetIds: Record<string, string> = {
+  'market-overview': 'market-overview',
+  'order-book': 'order-book',
+  'recent-trades': 'recent-trades',
+  'trading-view-chart': 'trading-view-chart',
+  'trade-form': 'trade-form'
+};
+
 function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const resizeFrameRef = useRef<number>();
   const gridRef = useRef<GridStack | null>(null);
+  let widgetCounter = 0; // Initialize a counter for widget IDs
 
   // Add widget mapping
   const widgetComponents: Record<string, React.FC> = {
@@ -194,10 +204,12 @@ function App() {
       },
       resizable: {
         handles: 'e, se, s, sw, w',
-        autoHide: true
+        autoHide: false
       },
       minRow: 1,
-      staticGrid: true,
+      staticGrid: false,
+      disableResize: false,
+      disableDrag: false
     };
 
     const g = GridStack.init(options, gridElement as GridStackElement);
@@ -377,7 +389,7 @@ function App() {
     event.preventDefault();
     const widgetType = event.dataTransfer?.getData('widget/type');
     
-    if (!widgetType || !grid || !widgetComponents[widgetType]) return;
+    if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) return;
 
     const gridElement = document.querySelector('.grid-stack');
     if (!gridElement) return;
@@ -387,31 +399,31 @@ function App() {
     const x = Math.floor((event.clientX - rect.left) / (rect.width / 12));
     const y = Math.floor((event.clientY - rect.top) / 150);
 
-    // Create widget ID
-    const widgetId = `${widgetType}-${Date.now()}`;
+    // Use predefined widget ID
+    const widgetId = widgetIds[widgetType];
 
-    // Create new widget element with the exact same structure as default widgets
+    // Check if widget already exists
+    if (gridElement.querySelector(`[gs-id="${widgetId}"]`)) {
+      console.warn(`Widget with ID ${widgetId} already exists.`);
+      return;
+    }
+
+    // Create new widget element with proper GridStack classes
     const widgetElement = document.createElement('div');
     widgetElement.className = 'grid-stack-item';
     widgetElement.setAttribute('gs-id', widgetId);
     widgetElement.setAttribute('gs-min-w', '2');
     widgetElement.setAttribute('gs-min-h', '2');
+    widgetElement.setAttribute('gs-no-resize', 'false');
+    widgetElement.setAttribute('gs-no-move', 'false');
 
-    // Add widget to grid first
-    grid.addWidget({
-      id: widgetId,
-      el: widgetElement,
-      x,
-      y,
-      w: 3,
-      h: 4,
-      minW: 2,
-      minH: 2,
-      autoPosition: true
-    } as ExtendedGridStackWidget);
+    // Create the content wrapper
+    const contentElement = document.createElement('div');
+    contentElement.className = 'grid-stack-item-content';
+    widgetElement.appendChild(contentElement);
 
     // Add widget content using createRoot
-    const root = ReactDOM.createRoot(widgetElement);
+    const root = ReactDOM.createRoot(contentElement);
     const WidgetComponent = widgetComponents[widgetType];
     const widgetTitle = widgetTitles[widgetType];
     
@@ -421,8 +433,59 @@ function App() {
       </WidgetContainer>
     );
 
+    // Add widget to grid with draggable and resizable enabled
+    gridRef.current.batchUpdate();
+    try {
+      // First add the element to the DOM
+      gridElement.appendChild(widgetElement);
+
+      // Then initialize it with GridStack
+      const widget = gridRef.current.makeWidget(widgetElement);
+
+      // Update its position and size
+      gridRef.current.update(widgetElement, {
+        x,
+        y,
+        w: 3,
+        h: 4,
+        minW: 2,
+        minH: 2,
+        autoPosition: true,
+        noResize: false,
+        noMove: false
+      });
+
+      // Make sure grid is not in static mode
+      gridRef.current.setStatic(false);
+
+      // Explicitly enable resize and move for the new widget
+      gridRef.current.movable(widgetElement, true);
+      gridRef.current.resizable(widgetElement, true);
+
+      // Force a refresh of the widget to ensure handles are properly initialized
+      setTimeout(() => {
+        if (gridRef.current) {
+          gridRef.current.batchUpdate();
+          try {
+            // Re-enable resize and move
+            gridRef.current.movable(widgetElement, true);
+            gridRef.current.resizable(widgetElement, true);
+            // Force update
+            gridRef.current.update(widgetElement, {
+              noResize: false,
+              noMove: false
+            });
+          } finally {
+            gridRef.current.commit();
+          }
+        }
+      }, 50);
+    } finally {
+      gridRef.current.commit();
+    }
+
     // Save updated layout
-    const items = grid.getGridItems();
+    const items = gridRef.current.getGridItems();
     const serializedLayout = items
       .map(item => {
         const node = item.gridstackNode;
@@ -442,7 +505,7 @@ function App() {
     if (isValidLayout(serializedLayout)) {
       localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
     }
-  }, [grid]);
+  }, [gridRef]);
 
   const handlePasteLayout = useCallback((layoutStr: string) => {
     if (!grid || isMobile) return;
