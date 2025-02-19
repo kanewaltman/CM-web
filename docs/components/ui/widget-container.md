@@ -18,13 +18,39 @@ The `WidgetContainer` is a pure presentational component that:
 1. Provides a consistent header with title and optional controls
 2. Wraps widget content in a standardized container
 3. Exposes a `.widget-header` class for GridStack's drag functionality
-4. Maintains consistent styling across all widgets
+4. Maintains consistent base layout structure
 
 It intentionally does not handle:
 - Layout management (handled by App.tsx)
 - Resize events (managed by GridStack)
 - Widget state (managed by individual widgets)
 - Position tracking (managed by GridStack)
+
+## Styling Architecture
+
+The widget styling is implemented in three layers:
+
+1. **Base Container Layer** (WidgetContainer.tsx)
+   ```typescript
+   // Base structural styling
+   <div className="flex-1 min-h-0 overflow-auto">
+     {children}
+   </div>
+   ```
+
+2. **Widget Content Layer** (Individual Widgets)
+   ```typescript
+   // Applied by individual widget components
+   className={cn(
+     "h-full overflow-auto scrollbar-thin rounded-lg p-3",
+     "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+   )}
+   ```
+
+3. **Global Styles Layer** (index.css)
+   - Defines theme variables for widget styling
+   - Implements scrollbar customization
+   - Provides dark/light mode support
 
 ## Usage Guidelines
 
