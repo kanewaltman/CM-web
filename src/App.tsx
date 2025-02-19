@@ -226,7 +226,7 @@ function App() {
         autoHide: false
       },
       minRow: 1,
-      staticGrid: true, // Start with static grid to prevent collapse
+      staticGrid: false, // Start with non-static grid
       disableResize: false,
       disableDrag: false
     };
@@ -234,12 +234,15 @@ function App() {
     const g = GridStack.init(options, gridElement as GridStackElement);
     gridRef.current = g;
 
+    // Enable movement and resize for all widgets
+    g.enableMove(true);
+    g.enableResize(true);
+
     // Store original grid settings
     const prevAnimate = g.opts.animate;
     
-    // Disable animations and temporarily enable float to prevent collapsing
+    // Disable animations temporarily
     g.setAnimation(false);
-    g.float(true);
 
     // Get the layout to apply
     let layoutToApply = defaultLayout;
@@ -1141,38 +1144,11 @@ function App() {
       const prevStatic = grid.opts.staticGrid ?? false;
       const prevFloat = grid.opts.float ?? false;
       
-      // Capture current layout before changes
-      const currentLayout = grid.getGridItems().map(item => {
-        const node = item.gridstackNode;
-        return {
-          el: item,
-          x: node?.x ?? 0,
-          y: node?.y ?? 0,
-          w: node?.w ?? 2,
-          h: node?.h ?? 2
-        };
-      });
-      
-      // Disable animations and set grid to static
       grid.batchUpdate();
       try {
+        // Temporarily disable animations and enable float
         grid.setAnimation(false);
-        grid.setStatic(true);
-        grid.float(true); // Enable float temporarily
-        
-        // First, restore all existing widgets to their exact positions
-        currentLayout.forEach(node => {
-          if (node.el) {
-            grid.update(node.el, {
-              x: node.x,
-              y: node.y,
-              w: node.w,
-              h: node.h,
-              autoPosition: false,
-              noMove: true
-            });
-          }
-        });
+        grid.float(true);
         
         // Create widget element with unique ID
         const widgetElement = document.createElement('div');
@@ -1203,8 +1179,7 @@ function App() {
           minW: 2,
           minH: 2,
           id: widgetId,
-          autoPosition: false,
-          noMove: false // Set noMove to false to allow movement
+          autoPosition: false
         } as ExtendedGridStackWidget);
         
         // Render React component
@@ -1250,23 +1225,27 @@ function App() {
       } finally {
         grid.commit();
         
-        // Restore grid settings in stages
+        // Re-enable all features after widget is added
         requestAnimationFrame(() => {
           grid.batchUpdate();
           try {
             // First restore animation
             grid.setAnimation(prevAnimate);
             
-            // Re-enable widget movement for all widgets
+            // Enable movement and resizing for ALL widgets
+            grid.enableMove(true);
+            grid.enableResize(true);
+            
             const items = grid.getGridItems();
             items.forEach(item => {
-              // Enable movement and resizing through GridStack
+              // Remove any movement restrictions
+              item.removeAttribute('gs-no-move');
+              item.removeAttribute('gs-no-resize');
               grid.movable(item, true);
               grid.resizable(item, true);
             });
             
-            // Finally restore static and float settings
-            grid.setStatic(prevStatic);
+            // Restore grid settings
             grid.float(prevFloat);
           } finally {
             grid.commit();
