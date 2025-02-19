@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { GridStack, GridStackWidget, GridStackOptions, GridStackNode, GridStackElement, CompactOptions } from 'gridstack';
+import { GridStack, GridStackWidget, GridStackOptions, GridStackNode, GridStackElement } from 'gridstack';
+import * as ReactDOM from 'react-dom/client';
 import 'gridstack/dist/gridstack.min.css';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
@@ -42,23 +43,41 @@ interface LayoutWidget {
   minH: number;
 }
 
+// Extend GridStackWidget type to include el property
+interface ExtendedGridStackWidget extends GridStackWidget {
+  el?: HTMLElement;
+}
+
 function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const resizeFrameRef = useRef<number>();
   const gridRef = useRef<GridStack | null>(null);
 
+  // Add widget mapping
+  const widgetComponents: Record<string, React.FC> = {
+    'market-overview': MarketOverview,
+    'order-book': OrderBook,
+    'recent-trades': RecentTrades,
+    'trading-view-chart': TradingViewChart,
+    'trade-form': TradeForm
+  };
+
+  // Add widget titles mapping
+  const widgetTitles: Record<string, string> = {
+    'market-overview': 'Market Overview',
+    'order-book': 'Order Book',
+    'recent-trades': 'Recent Trades',
+    'trading-view-chart': 'BTC/USDT',
+    'trade-form': 'Trade'
+  };
+
   const isValidLayout = (layout: GridStackWidget[]) => {
-    if (!Array.isArray(layout) || layout.length !== defaultLayout.length) {
-      return false;
-    }
+    if (!Array.isArray(layout)) return false;
     
-    // Only verify that all required widgets are present and have valid minimum sizes
-    return defaultLayout.every(defaultWidget => {
-      const savedWidget = layout.find(w => w.id === defaultWidget.id);
-      return savedWidget && 
-             (savedWidget.w ?? 0) >= (defaultWidget.minW ?? 2) && 
-             (savedWidget.h ?? 0) >= (defaultWidget.minH ?? 2);
+    // For dynamic layouts, just verify minimum sizes
+    return layout.every(widget => {
+      return (widget.w ?? 0) >= 2 && (widget.h ?? 0) >= 2;
     });
   };
 
@@ -362,101 +381,47 @@ function App() {
     try {
       const layout = JSON.parse(layoutStr) as LayoutWidget[];
       if (isValidLayout(layout)) {
-        // Step 1: Temporarily disable movement and remove constraints
-        grid.batchUpdate();
-        try {
-          // First disable all movement
-          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-            const element = item as HTMLElement;
-            element.setAttribute('gs-no-move', 'true');
-            element.removeAttribute('gs-min-w');
-            element.removeAttribute('gs-min-h');
-            element.removeAttribute('gs-max-w');
-            element.removeAttribute('gs-max-h');
-          });
-        } finally {
-          grid.commit();
-        }
+        // Remove all existing widgets
+        grid.removeAll();
 
-        // Step 2: Apply minimum sizes
-        grid.batchUpdate();
-        try {
-          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-            const element = item as HTMLElement;
-            const widgetId = element.getAttribute('gs-id');
-            const layoutWidget = layout.find((w: LayoutWidget) => w.id === widgetId);
-            if (layoutWidget) {
-              element.setAttribute('gs-min-w', String(layoutWidget.minW));
-              element.setAttribute('gs-min-h', String(layoutWidget.minH));
-            }
-          });
-        } finally {
-          grid.commit();
-        }
+        // Create and add widgets based on layout
+        layout.forEach((node: LayoutWidget) => {
+          const widgetType = node.id.split('-')[0];
+          if (!widgetComponents[widgetType]) return;
 
-        // Step 3: Apply positions in sequence
-        grid.batchUpdate();
-        try {
-          // Sort layout by position priority:
-          // 1. Lower y positions first (top to bottom)
-          // 2. For same y, lower x positions first (left to right)
-          // 3. For overlapping items, larger items first
-          const sortedLayout = [...layout].sort((a, b) => {
-            const aY = a.y ?? 0;
-            const bY = b.y ?? 0;
-            if (aY !== bY) return aY - bY;
-            
-            const aX = a.x ?? 0;
-            const bX = b.x ?? 0;
-            if (aX !== bX) return aX - bX;
-            
-            // If positions are the same, place larger widgets first
-            const aSize = (a.w ?? 0) * (a.h ?? 0);
-            const bSize = (b.w ?? 0) * (b.h ?? 0);
-            return bSize - aSize;
-          });
+          // Create widget element
+          const widgetElement = document.createElement('div');
+          widgetElement.className = 'grid-stack-item';
+          widgetElement.setAttribute('gs-id', node.id);
 
-          // First pass: Position all widgets at their target locations
-          sortedLayout.forEach((node: LayoutWidget) => {
-            if (node.id) {
-              const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-              if (item) {
-                grid.update(item as HTMLElement, {
-                  x: node.x,
-                  y: node.y,
-                  w: node.w,
-                  h: node.h,
-                  autoPosition: false
-                });
-              }
-            }
-          });
+          // Create a container for React content
+          const contentElement = document.createElement('div');
+          widgetElement.appendChild(contentElement);
 
-          // Re-enable movement
-          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-            const element = item as HTMLElement;
-            element.removeAttribute('gs-no-move');
-          });
+          // Add widget to grid
+          grid.addWidget({
+            id: node.id,
+            el: widgetElement,
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            minW: 2,
+            minH: 2,
+            autoPosition: false
+          } as ExtendedGridStackWidget);
 
-          // Second pass: Verify positions and adjust if needed
-          sortedLayout.forEach((node: LayoutWidget) => {
-            if (node.id) {
-              const item = gridElement.querySelector(`[gs-id="${node.id}"]`);
-              if (item && gridRef.current) {
-                const currentNode = gridRef.current.engine.nodes.find(n => n.el === item);
-                if (currentNode && (currentNode.x !== node.x || currentNode.y !== node.y)) {
-                  gridRef.current.update(item as HTMLElement, {
-                    x: node.x,
-                    y: node.y,
-                    autoPosition: false
-                  });
-                }
-              }
-            }
-          });
-        } finally {
-          grid.commit();
-        }
+          // Add widget content using createRoot
+          const root = ReactDOM.createRoot(contentElement);
+          const WidgetComponent = widgetComponents[widgetType];
+          const widgetTitle = widgetTitles[widgetType];
+          
+          root.render(
+            <WidgetContainer title={widgetTitle}>
+              <WidgetComponent />
+            </WidgetContainer>
+          );
+        });
 
         // Save the pasted layout
         localStorage.setItem('desktop-layout', layoutStr);
@@ -484,6 +449,79 @@ function App() {
     });
   }, [isMobile, initializeGrid]);
 
+  const handleWidgetDrop = useCallback((event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const widgetType = event.dataTransfer?.getData('widget/type');
+    
+    if (!widgetType || !grid || !widgetComponents[widgetType]) return;
+
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+
+    // Get drop coordinates relative to grid
+    const rect = gridElement.getBoundingClientRect();
+    const x = Math.floor((event.clientX - rect.left) / (rect.width / 12));
+    const y = Math.floor((event.clientY - rect.top) / 150);
+
+    // Create widget ID
+    const widgetId = `${widgetType}-${Date.now()}`;
+
+    // Create new widget element
+    const widgetElement = document.createElement('div');
+    widgetElement.className = 'grid-stack-item';
+    widgetElement.setAttribute('gs-id', widgetId);
+    
+    // Create a container for React content
+    const contentElement = document.createElement('div');
+    widgetElement.appendChild(contentElement);
+
+    // Add to grid with default size
+    grid.addWidget({
+      id: widgetId,
+      el: widgetElement,
+      x,
+      y,
+      w: 3,
+      h: 4,
+      minW: 2,
+      minH: 2,
+      autoPosition: true
+    } as ExtendedGridStackWidget);
+
+    // Add widget content using createRoot
+    const root = ReactDOM.createRoot(contentElement);
+    const WidgetComponent = widgetComponents[widgetType];
+    const widgetTitle = widgetTitles[widgetType];
+    
+    root.render(
+      <WidgetContainer title={widgetTitle}>
+        <WidgetComponent />
+      </WidgetContainer>
+    );
+
+    // Save updated layout
+    const items = grid.getGridItems();
+    const serializedLayout = items
+      .map(item => {
+        const node = item.gridstackNode;
+        if (!node || !node.id) return null;
+        return {
+          id: node.id,
+          x: node.x ?? 0,
+          y: node.y ?? 0,
+          w: node.w ?? 2,
+          h: node.h ?? 2,
+          minW: 2,
+          minH: 2
+        };
+      })
+      .filter((item): item is LayoutWidget => item !== null);
+
+    if (isValidLayout(serializedLayout)) {
+      localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+    }
+  }, [grid]);
+
   useEffect(() => {
     const newGrid = initializeGrid(isMobile);
     if (newGrid) {
@@ -501,6 +539,25 @@ function App() {
       }
     };
   }, [initializeGrid, isMobile, handleResize]);
+
+  useEffect(() => {
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+
+    // Add drop event handlers
+    const handleDragOver = (e: React.DragEvent<HTMLElement>) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    };
+
+    gridElement.addEventListener('dragover', handleDragOver as unknown as EventListener);
+    gridElement.addEventListener('drop', handleWidgetDrop as unknown as EventListener);
+
+    return () => {
+      gridElement.removeEventListener('dragover', handleDragOver as unknown as EventListener);
+      gridElement.removeEventListener('drop', handleWidgetDrop as unknown as EventListener);
+    };
+  }, [handleWidgetDrop]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">

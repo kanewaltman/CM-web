@@ -126,6 +126,21 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                 <span>Paste Layout</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">Available Widgets</div>
+              {['Market Overview', 'Order Book', 'Recent Trades', 'Trading View Chart'].map((widget) => (
+                <div
+                  key={widget}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('widget/type', widget.toLowerCase().replace(/\s+/g, '-'));
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className="relative flex select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 cursor-grab active:cursor-grabbing"
+                >
+                  <span className="ml-2">{widget}</span>
+                </div>
+              ))}
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onResetLayout}>
                 <RotateCcw className="h-4 w-4 mr-2 opacity-50" />
                 <span>Reset Layout</span>
