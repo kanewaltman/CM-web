@@ -91,7 +91,74 @@ function App() {
     'trade-form': 'Trade'
   };
 
-  // Create widget creation utility function with access to component mappings
+  const handleRemoveWidget = useCallback((widgetId: string) => {
+    if (!grid) return;
+    
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+
+    // Find the widget element with proper typing for both GridStack and DOM operations
+    const widgetElement = gridElement.querySelector(`[gs-id="${widgetId}"]`) as HTMLElement;
+    if (!widgetElement) return;
+
+    // Store original grid settings
+    const prevAnimate = grid.opts.animate;
+    
+    // Temporarily disable animations and enable float for smooth removal
+    grid.setAnimation(false);
+    grid.float(true);
+    
+    grid.batchUpdate();
+    try {
+      // Remove widget from grid
+      grid.removeWidget(widgetElement as GridStackElement, false);
+      // Also remove the DOM element
+      widgetElement.remove();
+
+      // Save updated layout
+      const items = grid.getGridItems();
+      const serializedLayout = items
+        .map(item => {
+          const node = item.gridstackNode;
+          if (!node?.id) return null;
+          return {
+            id: node.id,
+            x: node.x ?? 0,
+            y: node.y ?? 0,
+            w: node.w ?? 2,
+            h: node.h ?? 2,
+            minW: 2,
+            minH: 2
+          };
+        })
+        .filter((item): item is LayoutWidget => item !== null);
+
+      if (isValidLayout(serializedLayout)) {
+        localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+      }
+    } finally {
+      grid.commit();
+      
+      // Re-enable animations and compact with a slight delay for smooth transition
+      requestAnimationFrame(() => {
+        grid.setAnimation(prevAnimate);
+        
+        // Compact the grid to fill gaps
+        grid.compact();
+        
+        // Keep float enabled for consistent behavior
+        grid.float(true);
+      });
+    }
+  }, [grid]);
+
+  const handleRemoveWidgetRef = useRef(handleRemoveWidget);
+
+  // Keep the ref up to date
+  useEffect(() => {
+    handleRemoveWidgetRef.current = handleRemoveWidget;
+  }, [handleRemoveWidget]);
+
   const createWidget = (params: {
     widgetType: string,
     widgetId: string,
@@ -126,7 +193,7 @@ function App() {
     const widgetTitle = widgetTitles[widgetType];
     
     root.render(
-      <WidgetContainer title={widgetTitle} onRemove={() => handleRemoveWidget(widgetId)}>
+      <WidgetContainer title={widgetTitle} onRemove={() => handleRemoveWidgetRef.current(widgetId)}>
         <WidgetComponent />
       </WidgetContainer>
     );
@@ -260,6 +327,45 @@ function App() {
     // Clear existing content
     gridElement.innerHTML = '';
 
+    // Add scroll behavior styles
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      .grid-stack-item.ui-draggable-dragging {
+        transition: transform 100ms ease-out;
+      }
+      .grid-stack {
+        scroll-behavior: smooth;
+        min-height: calc(100vh - 180px) !important;
+        height: auto !important;
+        overflow: visible !important;
+      }
+      .grid-stack.grid-stack-animate .grid-stack-item.ui-draggable-dragging {
+        transition: transform 100ms ease-out, left 100ms ease-out, top 100ms ease-out;
+      }
+      body {
+        min-height: 100vh;
+        overflow-y: auto;
+      }
+      #root {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .main-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        min-height: 100%;
+      }
+      .grid-container {
+        flex: 1;
+        height: auto;
+        min-height: 100%;
+      }
+    `;
+    document.head.appendChild(styleElement);
+
     const g = GridStack.init({
       float: true, // Enable float by default for consistent collapsing
       cellHeight: mobile ? '100px' : '60px',
@@ -268,12 +374,15 @@ function App() {
       animate: true,
       draggable: {
         handle: '.widget-header',
+        scroll: true,
+        appendTo: 'body' // Change to body for better drag scrolling
       },
       resizable: {
         handles: 'e, se, s, sw, w',
         autoHide: true
       },
       minRow: 1,
+      maxRow: 26, // Allow more rows but still prevent infinite scrolling
       staticGrid: true, // Start with static grid
     }, gridElement as GridStackElement);
 
@@ -283,12 +392,99 @@ function App() {
     // Add event listeners for consistent float behavior during interactions
     g.on('dragstart resizestart', () => {
       g.float(true);
+      g.setAnimation(false);
     });
 
     g.on('dragstop resizestop', () => {
-      // Keep float enabled for consistent behavior
+      const prevAnimate = g.opts.animate;
+      
+      // Temporarily disable animations
+      g.setAnimation(false);
       g.float(true);
-      g.compact(); // Optional: compact after interaction
+      
+      // Batch update to ensure smooth transition
+      g.batchUpdate();
+      try {
+        // First compact to fill gaps
+        g.compact();
+        
+        // Save the layout after compaction
+        const items = g.getGridItems();
+        const serializedLayout = items
+          .map(item => {
+            const node = item.gridstackNode;
+            if (!node?.id) return null;
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: node.w ?? 2,
+              h: node.h ?? 2,
+              minW: 2,
+              minH: 2
+            };
+          })
+          .filter((item): item is LayoutWidget => item !== null);
+
+        if (isValidLayout(serializedLayout)) {
+          localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+        }
+      } finally {
+        g.commit();
+        
+        // Re-enable animations with a slight delay
+        requestAnimationFrame(() => {
+          g.setAnimation(prevAnimate);
+          g.float(true); // Keep float enabled for consistent behavior
+        });
+      }
+    });
+
+    // Enable widget swapping during drag
+    g.on('drag', (event: Event, node: GridStackNode) => {
+      const items = g.getGridItems();
+      const draggedEl = items.find(item => item.gridstackNode?.id === node.id);
+      if (!draggedEl || !node) return;
+
+      items.forEach(targetEl => {
+        const targetNode = targetEl.gridstackNode;
+        if (!targetNode || targetNode.id === node.id) return;
+
+        // Check if widgets are the same size
+        if (node.w === targetNode.w && node.h === targetNode.h) {
+          const dragRect = draggedEl.getBoundingClientRect();
+          const targetRect = targetEl.getBoundingClientRect();
+          
+          // Check if dragged element is overlapping significantly with target
+          const overlap = !(
+            dragRect.right < targetRect.left || 
+            dragRect.left > targetRect.right || 
+            dragRect.bottom < targetRect.top || 
+            dragRect.top > targetRect.bottom
+          );
+
+          if (overlap) {
+            g.batchUpdate();
+            try {
+              // Swap positions
+              const tempX = targetNode.x;
+              const tempY = targetNode.y;
+              
+              g.update(targetEl, { 
+                x: node.x,
+                y: node.y,
+              });
+              
+              g.update(draggedEl, {
+                x: tempX,
+                y: tempY,
+              });
+            } finally {
+              g.commit();
+            }
+          }
+        }
+      });
     });
 
     // Temporarily disable animations during layout application
@@ -397,9 +593,10 @@ function App() {
           const serializedLayout = items
             .map(item => {
               const node = item.gridstackNode;
-              if (!node || !node.id) return null;
-
-              const defaultWidget = defaultLayout.find(w => w.id === node.id.split('-')[0]);
+              if (!node || typeof node.id !== 'string') return null;
+              
+              const baseId = node.id.split('-')[0];
+              const defaultWidget = defaultLayout.find(w => w.id === baseId);
               if (!defaultWidget) return null;
 
               return {
@@ -423,6 +620,14 @@ function App() {
       g.on('change', saveLayout);
       g.on('resizestop dragstop', saveLayout);
     }
+
+    // Clean up style element on grid cleanup
+    const cleanup = () => {
+      if (styleElement.parentNode) {
+        styleElement.parentNode.removeChild(styleElement);
+      }
+    };
+    g.on('destroy', cleanup);
 
     return g;
   }, []);
@@ -569,7 +774,7 @@ function App() {
     const items = grid.getGridItems();
     const layout = items.map(item => {
       const node = item.gridstackNode;
-      if (!node || !node.id) return null;
+      if (!node || typeof node.id !== 'string') return null;
       return {
         id: node.id,
         x: node.x ?? 0,
@@ -638,7 +843,7 @@ function App() {
       const serializedLayout = items
         .map(item => {
           const node = item.gridstackNode;
-          if (!node || !node.id) return null;
+          if (!node || typeof node.id !== 'string') return null;
           return {
             id: node.id,
             x: node.x ?? 0,
@@ -858,49 +1063,6 @@ function App() {
     }
   }, [grid, isMobile]);
 
-  const handleRemoveWidget = useCallback((widgetId: string) => {
-    if (!grid) return;
-    
-    const gridElement = document.querySelector('.grid-stack');
-    if (!gridElement) return;
-
-    // Find the widget element with proper typing for both GridStack and DOM operations
-    const widgetElement = gridElement.querySelector(`[gs-id="${widgetId}"]`) as HTMLElement;
-    if (!widgetElement) return;
-
-    grid.batchUpdate();
-    try {
-      // Remove widget from grid
-      grid.removeWidget(widgetElement as GridStackElement, false);
-      // Also remove the DOM element
-      widgetElement.remove();
-
-      // Save updated layout
-      const items = grid.getGridItems();
-      const serializedLayout = items
-        .map(item => {
-          const node = item.gridstackNode;
-          if (!node || !node.id) return null;
-          return {
-            id: node.id,
-            x: node.x ?? 0,
-            y: node.y ?? 0,
-            w: node.w ?? 2,
-            h: node.h ?? 2,
-            minW: 2,
-            minH: 2
-          };
-        })
-        .filter((item): item is LayoutWidget => item !== null);
-
-      if (isValidLayout(serializedLayout)) {
-        localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
-      }
-    } finally {
-      grid.commit();
-    }
-  }, [grid]);
-
   // Handle resize with debouncing
   const handleResize = useCallback(() => {
     if (resizeFrameRef.current) {
@@ -1107,7 +1269,7 @@ function App() {
         const serializedLayout = items
           .map(item => {
             const node = item.gridstackNode;
-            if (!node || !node.id) return null;
+            if (!node || typeof node.id !== 'string') return null;
             const baseId = node.id.split('-')[0];
             const defaultWidget = defaultLayout.find(w => w.id === baseId);
             return {
@@ -1151,16 +1313,16 @@ function App() {
       }
     }) as unknown as EventListener;
 
-    gridElement.addEventListener('dragover', handleDragOver as EventListener);
-    gridElement.addEventListener('dragleave', handleDragLeave as EventListener);
+    gridElement.addEventListener('dragover', handleDragOver as unknown as EventListener);
+    gridElement.addEventListener('dragleave', handleDragLeave as unknown as EventListener);
     gridElement.addEventListener('dragend', handleDragEnd);
-    gridElement.addEventListener('drop', handleDrop as EventListener);
+    gridElement.addEventListener('drop', handleDrop as unknown as EventListener);
 
     return () => {
-      gridElement.removeEventListener('dragover', handleDragOver as EventListener);
-      gridElement.removeEventListener('dragleave', handleDragLeave as EventListener);
+      gridElement.removeEventListener('dragover', handleDragOver as unknown as EventListener);
+      gridElement.removeEventListener('dragleave', handleDragLeave as unknown as EventListener);
       gridElement.removeEventListener('dragend', handleDragEnd);
-      gridElement.removeEventListener('drop', handleDrop as EventListener);
+      gridElement.removeEventListener('drop', handleDrop as unknown as EventListener);
       cleanupPreview();
     };
   }, []);
@@ -1174,6 +1336,7 @@ function App() {
         }
         .grid-stack {
           opacity: 1;
+          width: 100% !important;
           transition: opacity 300ms ease-in-out;
         }
         .grid-stack-item {
@@ -1199,10 +1362,20 @@ function App() {
         .grid-stack-item.ui-resizable-resizing {
           transition: none !important;
         }
+        /* Ensure grid container fills available width */
+        .grid-container {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+        }
+        /* Ensure grid stack fills container width */
+        .grid-stack > .grid-stack-item {
+          max-width: 100%;
+        }
       `}</style>
       <TopBar />
-      <main className="h-[calc(100vh-64px)] mt-16 overflow-y-auto scrollbar-main">
-        <div className="max-w-[1920px] mx-auto px-4">
+      <main className="main-container mt-16">
+        <div className="grid-container w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
           <ControlBar 
             onResetLayout={handleResetLayout}
             onCopyLayout={handleCopyLayout}
