@@ -1037,18 +1037,35 @@ function App() {
       const dragEvent = e as DragEvent;
       dragEvent.preventDefault();
       
-      // Clean up preview first
-      cleanupPreview();
-      
       const widgetType = dragEvent.dataTransfer?.getData('widget/type') || '';
       if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) {
         return;
       }
 
       const grid = gridRef.current;
-      grid.batchUpdate();
       
+      // Store original grid settings with default values
+      const prevAnimate = grid.opts.animate ?? true;
+      const prevFloat = grid.opts.float ?? false;
+      const prevStatic = grid.opts.staticGrid ?? false;
+      
+      // Disable animations and enable float to prevent collapsing
+      grid.setAnimation(false);
+      grid.setStatic(true);
+      grid.float(true);
+      
+      grid.batchUpdate();
       try {
+        // Clean up preview first, but keep its position
+        const previewElement = document.querySelector('.widget-drag-preview');
+        const previewX = previewElement ? parseInt(previewElement.getAttribute('gs-x') || '0') : 0;
+        const previewY = previewElement ? parseInt(previewElement.getAttribute('gs-y') || '0') : 0;
+        
+        if (previewElement) {
+          grid.removeWidget(previewElement as HTMLElement, false);
+          previewElement.remove();
+        }
+
         const baseWidgetId = widgetIds[widgetType];
         const widgetId = `${baseWidgetId}-${Date.now()}`;
         
@@ -1059,6 +1076,7 @@ function App() {
           y: previewY
         });
 
+        // Add widget with exact position
         grid.addWidget({
           el: widgetElement,
           x: previewX,
@@ -1068,34 +1086,51 @@ function App() {
           minW: 2,
           minH: 2,
           id: widgetId,
-          autoPosition: false
+          autoPosition: false,
+          noMove: true // Prevent movement during addition
         } as ExtendedGridStackWidget);
 
-        // Rest of the handler remains the same...
+        // Save updated layout
+        const items = grid.getGridItems();
+        const serializedLayout = items
+          .map(item => {
+            const node = item.gridstackNode;
+            if (!node || !node.id) return null;
+            const baseId = node.id.split('-')[0];
+            const defaultWidget = defaultLayout.find(w => w.id === baseId);
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: node.w ?? 2,
+              h: node.h ?? 2,
+              minW: defaultWidget?.minW ?? 2,
+              minH: defaultWidget?.minH ?? 2
+            };
+          })
+          .filter((item): item is LayoutWidget => item !== null);
+
+        if (isValidLayout(serializedLayout)) {
+          localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+        }
       } finally {
         grid.commit();
         
-        // Re-enable all features after widget is added
+        // Restore grid settings with a slight delay to ensure smooth transition
         requestAnimationFrame(() => {
           grid.batchUpdate();
           try {
-            // First restore animation
+            // Re-enable all features
             grid.setAnimation(prevAnimate);
+            grid.setStatic(prevStatic);
             
-            // Enable movement and resizing for ALL widgets
-            grid.enableMove(true);
-            grid.enableResize(true);
-            
-            const items = grid.getGridItems();
-            items.forEach(item => {
-              // Remove any movement restrictions
-              item.removeAttribute('gs-no-move');
-              item.removeAttribute('gs-no-resize');
+            // Re-enable widget movement for all widgets
+            grid.getGridItems().forEach(item => {
               grid.movable(item, true);
               grid.resizable(item, true);
             });
             
-            // Restore grid settings
+            // Finally restore float setting
             grid.float(prevFloat);
           } finally {
             grid.commit();
