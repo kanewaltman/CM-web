@@ -250,13 +250,16 @@ function App() {
     // Clear any existing content
     gridElement.innerHTML = '';
 
-    // Create grid instance
+    // Create grid instance with movement enabled from start
     const g = GridStack.init({
       float: false,
       cellHeight: isMobile ? '100px' : '60px',
       margin: 4,
       column: isMobile ? 1 : 12,
       animate: true,
+      staticGrid: false, // Ensure grid is not static
+      disableResize: false,
+      disableDrag: false,
       draggable: {
         handle: '.widget-header',
       },
@@ -264,10 +267,7 @@ function App() {
         handles: 'e, se, s, sw, w',
         autoHide: false
       },
-      minRow: 1,
-      staticGrid: false, // Start with non-static grid
-      disableResize: false,
-      disableDrag: false
+      minRow: 1
     }, gridElement);
 
     gridRef.current = g;
@@ -299,12 +299,27 @@ function App() {
           minH: node.minH
         });
 
+        // Add widget with movement enabled
         g.addWidget({
           el: widgetElement,
           ...node,
           autoPosition: false,
-          noMove: true
+          noMove: false, // Ensure movement is enabled
+          noResize: false // Ensure resize is enabled
         } as ExtendedGridStackWidget);
+      });
+
+      // Explicitly enable movement and resize for all widgets
+      g.enableMove(true);
+      g.enableResize(true);
+      
+      // Remove any leftover movement restrictions
+      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+        const domElement = item as HTMLElement;
+        domElement.removeAttribute('gs-no-move');
+        domElement.removeAttribute('gs-no-resize');
+        g.movable(item as GridStackElement, true);
+        g.resizable(item as GridStackElement, true);
       });
     } finally {
       g.commit();
