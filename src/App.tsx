@@ -261,7 +261,7 @@ function App() {
     gridElement.innerHTML = '';
 
     const g = GridStack.init({
-      float: false,
+      float: true, // Enable float by default for consistent collapsing
       cellHeight: mobile ? '100px' : '60px',
       margin: 4,
       column: mobile ? 1 : 12,
@@ -279,6 +279,17 @@ function App() {
 
     // Store the grid reference
     gridRef.current = g;
+
+    // Add event listeners for consistent float behavior during interactions
+    g.on('dragstart resizestart', () => {
+      g.float(true);
+    });
+
+    g.on('dragstop resizestop', () => {
+      // Keep float enabled for consistent behavior
+      g.float(true);
+      g.compact(); // Optional: compact after interaction
+    });
 
     // Temporarily disable animations during layout application
     g.setAnimation(false);
@@ -1046,12 +1057,12 @@ function App() {
       
       // Store original grid settings with default values
       const prevAnimate = grid.opts.animate ?? true;
-      const prevFloat = grid.opts.float ?? false;
       const prevStatic = grid.opts.staticGrid ?? false;
       
-      // Disable animations and enable float to prevent collapsing
+      // Disable animations temporarily
       grid.setAnimation(false);
       grid.setStatic(true);
+      // Keep float enabled for consistent behavior
       grid.float(true);
       
       grid.batchUpdate();
@@ -1076,7 +1087,7 @@ function App() {
           y: previewY
         });
 
-        // Add widget with exact position
+        // Add widget with consistent settings
         grid.addWidget({
           el: widgetElement,
           x: previewX,
@@ -1087,7 +1098,8 @@ function App() {
           minH: 2,
           id: widgetId,
           autoPosition: false,
-          noMove: true // Prevent movement during addition
+          noMove: true, // Prevent movement during addition
+          float: true // Enable float for consistent behavior
         } as ExtendedGridStackWidget);
 
         // Save updated layout
@@ -1130,8 +1142,8 @@ function App() {
               grid.resizable(item, true);
             });
             
-            // Finally restore float setting
-            grid.float(prevFloat);
+            // Keep float enabled for consistent behavior
+            grid.float(true);
           } finally {
             grid.commit();
           }
