@@ -158,11 +158,11 @@
 
 .grid-stack-item-content {
   position: absolute;
-  inset: 4px 4px 4px 4px;
+  inset: 0px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
 }
 
 .grid-stack-item > .grid-stack-item-content {
@@ -189,8 +189,8 @@
   user-select: none;
   -webkit-user-select: none;
   cursor: move;
-  border-top-left-radius: var(--radius-xl);
-  border-top-right-radius: var(--radius-xl);
+  /* border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl); */
   background: hsl(var(--color-widget-header));
   z-index: 1;
 }
