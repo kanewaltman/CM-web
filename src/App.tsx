@@ -909,11 +909,16 @@ function App() {
         // Add removing class to trigger transition
         previewElement.classList.add('removing');
         
-        // Wait for transition to complete before removing
+        // Remove from grid immediately to prevent layout issues
+        gridRef.current.removeWidget(previewElement as HTMLElement, false);
+        
+        // Wait for transition to complete before removing from DOM
         setTimeout(() => {
-          gridRef.current?.removeWidget(previewElement as HTMLElement, false);
-          previewElement.remove(); // Ensure the element is fully removed from DOM
-          gridRef.current?.compact(); // Re-enable compaction
+          if (previewElement.parentNode) {
+            previewElement.remove();
+          }
+          // Ensure grid is properly updated
+          gridRef.current?.compact();
         }, 200); // Match this with the CSS transition duration
       }
     };
@@ -926,7 +931,7 @@ function App() {
         return;
       }
 
-      // Only remove if we're actually leaving the grid
+      // Only remove if we're actually leaving the grid area
       const rect = gridElement.getBoundingClientRect();
       const x = e.clientX;
       const y = e.clientY;
@@ -944,9 +949,11 @@ function App() {
       const dragEvent = e as DragEvent;
       dragEvent.preventDefault();
       
+      // Clean up preview first
+      cleanupPreview();
+      
       const widgetType = dragEvent.dataTransfer?.getData('widget/type') || '';
       if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) {
-        cleanupPreview();
         return;
       }
 
