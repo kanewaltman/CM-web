@@ -20,8 +20,8 @@ export function WidgetContainer({ children, title, headerControls, onRemove }: W
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div ref={containerRef} className="grid-stack-item-content h-full">
-      <div className="h-full flex flex-col">
+    <div ref={containerRef} className="grid-stack-item-content">
+      <div className="widget-inner-container">
         {/* Header */}
         <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
           <div className="flex items-center space-x-2">
@@ -53,7 +53,7 @@ export function WidgetContainer({ children, title, headerControls, onRemove }: W
         </div>
 
         {/* Content wrapper */}
-        <div className="flex-1 min-h-0 overflow-auto h-full">
+        <div className="flex-1 min-h-0 overflow-auto">
           {children}
         </div>
       </div>
