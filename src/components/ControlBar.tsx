@@ -139,9 +139,18 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                   draggable="true"
                   onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
                     console.log('Starting drag with widget type:', widget.type);
+                    // Set multiple formats to ensure compatibility
+                    e.dataTransfer.items.add(widget.type, 'text/plain');
+                    e.dataTransfer.items.add(widget.type, 'widget/type');
                     e.dataTransfer.setData('text/plain', widget.type);
-                    e.dataTransfer.setData('widget/type', widget.type);
+                    e.dataTransfer.setData('application/json', JSON.stringify({ type: widget.type }));
                     e.dataTransfer.effectAllowed = 'copy';
+                    
+                    // Log available data
+                    console.log('Data transfer set:', {
+                      type: widget.type,
+                      availableTypes: Array.from(e.dataTransfer.types)
+                    });
                   }}
                   onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
                     console.log('Drag ended for widget type:', widget.type);
