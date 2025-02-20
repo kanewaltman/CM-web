@@ -134,7 +134,7 @@ function App() {
     return widgetElement;
   };
 
-  const isValidLayout = (layout: LayoutWidget[]) => {
+  const isValidLayout = (layout: unknown): layout is LayoutWidget[] => {
     if (!Array.isArray(layout)) {
       return false;
     }
@@ -142,7 +142,9 @@ function App() {
     // Verify each widget has valid properties and minimum sizes
     return layout.every(widget => {
       return (
-        widget.id &&
+        typeof widget === 'object' &&
+        widget !== null &&
+        typeof widget.id === 'string' &&
         typeof widget.x === 'number' &&
         typeof widget.y === 'number' &&
         typeof widget.w === 'number' &&
@@ -243,51 +245,76 @@ function App() {
     }
   };
 
-  const initializeGrid = useCallback(() => {
+  const initializeGrid = useCallback((mobile: boolean) => {
     const gridElement = document.querySelector('.grid-stack');
     if (!gridElement) return null;
 
-    // Clear any existing content
+    // Add initial opacity style to grid element
+    gridElement.classList.add('grid-initializing');
+
+    // Clean up existing instance but preserve the items
+    if (gridRef.current) {
+      gridRef.current.destroy(false);
+    }
+
+    // Clear existing content
     gridElement.innerHTML = '';
 
-    // Create grid instance with movement enabled from start
     const g = GridStack.init({
       float: false,
-      cellHeight: isMobile ? '100px' : '60px',
+      cellHeight: mobile ? '100px' : '60px',
       margin: 4,
-      column: isMobile ? 1 : 12,
+      column: mobile ? 1 : 12,
       animate: true,
-      staticGrid: false, // Ensure grid is not static
-      disableResize: false,
-      disableDrag: false,
       draggable: {
         handle: '.widget-header',
       },
       resizable: {
         handles: 'e, se, s, sw, w',
-        autoHide: false
+        autoHide: true
       },
-      minRow: 1
-    }, gridElement);
+      minRow: 1,
+      staticGrid: true, // Start with static grid
+    }, gridElement as GridStackElement);
 
+    // Store the grid reference
     gridRef.current = g;
-    setGrid(g);
 
-    // Determine which layout to apply
+    // Temporarily disable animations during layout application
+    g.setAnimation(false);
+
+    // Get the layout to apply
     let layoutToApply = defaultLayout;
-    if (isMobile) {
+    if (!mobile) {
+      const savedLayout = localStorage.getItem('desktop-layout');
+      if (savedLayout) {
+        try {
+          const parsedLayout = JSON.parse(savedLayout);
+          if (isValidLayout(parsedLayout)) {
+            layoutToApply = parsedLayout;
+          }
+        } catch (error) {
+          console.error('Failed to parse saved layout:', error);
+        }
+      }
+    } else {
       layoutToApply = mobileLayout;
     }
 
-    // Initialize all widgets
+    // Apply layout in a batch update
     g.batchUpdate();
     try {
-      layoutToApply.forEach(node => {
-        const baseWidgetId = node.id.split('-')[0];
+      // Create and add all widgets from the layout
+      (layoutToApply as LayoutWidget[]).forEach((node: LayoutWidget) => {
+        const baseWidgetId = node.id.split('-')[0]; // Handle both default and dynamic IDs
         const widgetType = widgetTypes[baseWidgetId];
         
-        if (!widgetComponents[widgetType]) return;
+        if (!widgetComponents[widgetType]) {
+          console.warn('Unknown widget type:', widgetType);
+          return;
+        }
 
+        // Create widget element
         const widgetElement = createWidget({
           widgetType,
           widgetId: node.id,
@@ -299,34 +326,95 @@ function App() {
           minH: node.minH
         });
 
-        // Add widget with movement enabled
+        // Add widget to grid
         g.addWidget({
           el: widgetElement,
           ...node,
           autoPosition: false,
-          noMove: false, // Ensure movement is enabled
-          noResize: false // Ensure resize is enabled
+          noMove: true // Prevent movement during initialization
         } as ExtendedGridStackWidget);
       });
 
-      // Explicitly enable movement and resize for all widgets
-      g.enableMove(true);
-      g.enableResize(true);
-      
-      // Remove any leftover movement restrictions
-      gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
-        const domElement = item as HTMLElement;
-        domElement.removeAttribute('gs-no-move');
-        domElement.removeAttribute('gs-no-resize');
-        g.movable(item as GridStackElement, true);
-        g.resizable(item as GridStackElement, true);
+      // Verify final positions
+      layoutToApply.forEach(node => {
+        const element = gridElement.querySelector(`[gs-id="${node.id}"]`) as HTMLElement;
+        if (element) {
+          g.update(element, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            autoPosition: false
+          });
+        }
       });
     } finally {
       g.commit();
     }
 
+    // Re-enable grid features with smooth transition
+    requestAnimationFrame(() => {
+      gridElement.classList.remove('grid-initializing');
+      setTimeout(() => {
+        g.batchUpdate();
+        try {
+          // Re-enable all features
+          g.setStatic(false);
+          g.setAnimation(true);
+          
+          // Re-enable widget movement
+          gridElement.querySelectorAll('.grid-stack-item').forEach(item => {
+            const element = item as HTMLElement;
+            element.removeAttribute('gs-no-move');
+            element.removeAttribute('gs-no-resize');
+            g.movable(element, true);
+            g.resizable(element, true);
+          });
+        } finally {
+          g.commit();
+        }
+      }, 300);
+    });
+
+    // Set up layout saving with debounce
+    if (!mobile) {
+      let saveTimeout: NodeJS.Timeout;
+      const saveLayout = () => {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          const items = g.getGridItems();
+          const serializedLayout = items
+            .map(item => {
+              const node = item.gridstackNode;
+              if (!node || !node.id) return null;
+
+              const defaultWidget = defaultLayout.find(w => w.id === node.id.split('-')[0]);
+              if (!defaultWidget) return null;
+
+              return {
+                id: node.id,
+                x: node.x ?? 0,
+                y: node.y ?? 0,
+                w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
+                h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
+                minW: defaultWidget.minW ?? 2,
+                minH: defaultWidget.minH ?? 2
+              };
+            })
+            .filter((item): item is LayoutWidget => item !== null);
+
+          if (isValidLayout(serializedLayout)) {
+            localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+          }
+        }, 250);
+      };
+
+      g.on('change', saveLayout);
+      g.on('resizestop dragstop', saveLayout);
+    }
+
     return g;
-  }, [isMobile]);
+  }, []);
 
   const handleResetLayout = useCallback(() => {
     if (!grid || isMobile) return;
@@ -812,7 +900,7 @@ function App() {
       const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
       if (mobile !== isMobile) {
         setIsMobile(mobile);
-        const newGrid = initializeGrid();
+        const newGrid = initializeGrid(mobile);
         if (newGrid) {
           setGrid(newGrid);
         }
@@ -821,7 +909,7 @@ function App() {
   }, [isMobile, initializeGrid]);
 
   useEffect(() => {
-    const newGrid = initializeGrid();
+    const newGrid = initializeGrid(isMobile);
     if (newGrid) {
       setGrid(newGrid);
     }

@@ -147,10 +147,13 @@
 /* Add GridStack specific styles */
 .grid-stack {
   background: transparent !important;
+  opacity: 1;
+  transition: opacity 300ms ease-in-out;
 }
 
 .grid-stack-item {
   touch-action: none;
+  transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
 }
 
 .grid-stack-item-content {
@@ -379,4 +382,16 @@
   margin-bottom: -4px; /* Compensate for grid spacing */
   display: flex;
   flex-direction: column;
+}
+
+/* Grid initialization and transitions */
+.grid-initializing {
+  opacity: 0;
+  transition: none;
+}
+
+/* Disable transitions during drag/resize */
+.grid-stack-item.ui-draggable-dragging,
+.grid-stack-item.ui-resizable-resizing {
+  transition: none !important;
 }
