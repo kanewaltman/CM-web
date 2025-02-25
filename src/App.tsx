@@ -127,10 +127,6 @@ function App() {
     const gridElement = document.querySelector('.grid-stack');
     if (!gridElement) return;
 
-    // Find the widget element with proper typing for both GridStack and DOM operations
-    const widgetElement = gridElement.querySelector(`[gs-id="${widgetId}"]`) as HTMLElement;
-    if (!widgetElement) return;
-
     // Store original grid settings
     const prevAnimate = grid.opts.animate;
     
@@ -140,12 +136,16 @@ function App() {
     
     grid.batchUpdate();
     try {
+      // Find the widget element with proper typing for both GridStack and DOM operations
+      const widgetElement = gridElement.querySelector(`[gs-id="${widgetId}"]`) as HTMLElement;
+      if (!widgetElement) return;
+
       // Remove widget from grid
       grid.removeWidget(widgetElement as GridStackElement, false);
       // Also remove the DOM element
       widgetElement.remove();
 
-      // Save updated layout
+      // Save updated layout after removal
       const items = grid.getGridItems();
       const serializedLayout = items
         .map(item => {
@@ -157,14 +157,15 @@ function App() {
             y: node.y ?? 0,
             w: node.w ?? 2,
             h: node.h ?? 2,
-            minW: 2,
-            minH: 2
+            minW: node.minW ?? 2,
+            minH: node.minH ?? 2
           };
         })
         .filter((item): item is LayoutWidget => item !== null);
 
       if (isValidLayout(serializedLayout)) {
-        localStorage.setItem('desktop-layout', JSON.stringify(serializedLayout));
+        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+        console.log('✅ Saved layout after widget removal:', serializedLayout);
       }
     } finally {
       grid.commit();
