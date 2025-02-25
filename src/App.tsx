@@ -69,7 +69,7 @@ interface LayoutWidget {
   minH: number;
 }
 
-// Extend GridStackWidget type to include el property
+// Update ExtendedGridStackWidget interface to include el property
 interface ExtendedGridStackWidget extends GridStackWidget {
   el?: HTMLElement;
 }
@@ -91,6 +91,9 @@ const widgetTypes: Record<string, string> = {
   'chart': 'trading-view-chart',
   'tradeform': 'trade-form'
 };
+
+// Add constant for localStorage key
+const DASHBOARD_LAYOUT_KEY = 'dashboard-layout';
 
 function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
@@ -277,7 +280,7 @@ function App() {
             const node = item.gridstackNode;
             if (!node?.id) return null;
             return {
-              id: node.id,
+              id: node.id, // Keep the full ID including timestamp
               x: node.x ?? 0,
               y: node.y ?? 0,
               w: node.w ?? 2,
@@ -289,8 +292,8 @@ function App() {
           .filter((item): item is LayoutWidget => item !== null);
 
         if (isValidLayout(currentLayout)) {
-          localStorage.setItem('dashboard-layout', JSON.stringify(currentLayout));
-          console.log('✅ Saved dashboard layout');
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(currentLayout));
+          console.log('✅ Saved dashboard layout:', currentLayout);
         }
       } catch (error) {
         console.warn('Failed to save dashboard layout:', error);
@@ -324,7 +327,7 @@ function App() {
     // Initialize grid with options
     console.log('⚙️ Creating new grid instance');
     const g = GridStack.init({
-      float: false,
+      float: true,
       cellHeight: isMobile ? '100px' : 'auto',
       margin: 4,
       column: isMobile ? 1 : 12,
@@ -337,31 +340,31 @@ function App() {
         autoHide: true
       },
       minRow: 1,
-      staticGrid: false,
+      staticGrid: page !== 'dashboard', // Only allow editing on dashboard
     }, gridElement);
 
     // Get layout to apply based on page type
     let layoutToApply: LayoutWidget[];
     if (page === 'dashboard' && !isMobile) {
       // For dashboard, try to load saved layout
-      const savedLayout = localStorage.getItem('dashboard-layout');
+      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
       if (savedLayout) {
         try {
           const parsedLayout = JSON.parse(savedLayout);
           if (isValidLayout(parsedLayout)) {
             layoutToApply = parsedLayout;
-            console.log('✅ Using saved dashboard layout');
+            console.log('✅ Using saved dashboard layout:', parsedLayout);
           } else {
             console.warn('❌ Saved dashboard layout invalid, using default');
-            layoutToApply = dashboardLayout;
+            layoutToApply = defaultLayout;
           }
         } catch (error) {
           console.error('Failed to parse saved dashboard layout:', error);
-          layoutToApply = dashboardLayout;
+          layoutToApply = defaultLayout;
         }
       } else {
         console.log('📋 No saved dashboard layout, using default');
-        layoutToApply = dashboardLayout;
+        layoutToApply = defaultLayout;
       }
     } else if (isMobile) {
       console.log('📱 Using mobile layout');
@@ -377,7 +380,8 @@ function App() {
     try {
       // Create and add all widgets from the layout
       layoutToApply.forEach((node: LayoutWidget) => {
-        const baseWidgetId = node.id;
+        // Get the base widget type from the ID (handle both default and dynamic IDs)
+        const baseWidgetId = node.id.split('-')[0];
         const widgetType = widgetTypes[baseWidgetId];
         
         if (!widgetComponents[widgetType]) {
@@ -389,7 +393,7 @@ function App() {
           // Create widget element with consistent ID
           const widgetElement = createWidget({
             widgetType,
-            widgetId: baseWidgetId,
+            widgetId: node.id, // Use the full ID from the layout
             x: node.x,
             y: node.y,
             w: node.w,
@@ -401,7 +405,7 @@ function App() {
           // Add widget to grid with all properties
           g.addWidget({
             el: widgetElement,
-            id: baseWidgetId,
+            id: node.id, // Use the full ID from the layout
             x: node.x,
             y: node.y,
             w: node.w,
@@ -415,7 +419,7 @@ function App() {
             locked: page !== 'dashboard'
           } as ExtendedGridStackWidget);
         } catch (error) {
-          console.error('Failed to create widget:', baseWidgetId, error);
+          console.error('Failed to create widget:', node.id, error);
         }
       });
     } finally {
@@ -550,6 +554,217 @@ function App() {
       );
     });
   };
+
+  useEffect(() => {
+    const gridElement = document.querySelector('.grid-stack');
+    if (!gridElement) return;
+
+    let previewX = 0;
+    let previewY = 0;
+
+    // Add drop event handlers with proper types
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'copy';
+
+      // Check if we're over the dropdown menu
+      const dropdownMenu = document.querySelector('[role="menu"]');
+      if (dropdownMenu && dropdownMenu.contains(e.target as Node)) {
+        cleanupPreview();
+        return;
+      }
+
+      // Calculate grid position
+      const rect = gridElement.getBoundingClientRect();
+      previewX = Math.floor((e.clientX - rect.left) / (rect.width / 12));
+      previewY = Math.floor((e.clientY - rect.top) / 150);
+
+      // Create or update preview element
+      let previewElement = document.querySelector('.widget-drag-preview');
+      if (!previewElement) {
+        previewElement = document.createElement('div');
+        previewElement.className = 'widget-drag-preview grid-stack-item';
+        previewElement.setAttribute('gs-w', '3');
+        previewElement.setAttribute('gs-h', '4');
+        previewElement.setAttribute('gs-no-resize', 'true');
+        previewElement.setAttribute('gs-no-move', 'true');
+        
+        const content = document.createElement('div');
+        content.className = 'grid-stack-item-content';
+        previewElement.appendChild(content);
+        
+        // Add the preview to the grid
+        gridElement.appendChild(previewElement);
+        
+        // Initialize it as a grid item with specific coordinates
+        if (gridRef.current) {
+          gridRef.current.addWidget({
+            el: previewElement as HTMLElement,
+            x: previewX,
+            y: previewY,
+            w: 3,
+            h: 4,
+            autoPosition: false,
+            noResize: true,
+            noMove: true
+          } as ExtendedGridStackWidget);
+        }
+      } else {
+        // Update position through GridStack
+        if (gridRef.current) {
+          gridRef.current.update(previewElement as HTMLElement, {
+            x: previewX,
+            y: previewY
+          });
+        }
+      }
+    };
+
+    const cleanupPreview = () => {
+      const previewElement = document.querySelector('.widget-drag-preview');
+      if (previewElement && gridRef.current) {
+        // Add removing class to trigger transition
+        previewElement.classList.add('removing');
+        
+        // Remove from grid immediately to prevent layout issues
+        gridRef.current.removeWidget(previewElement as HTMLElement, false);
+        
+        // Wait for transition to complete before removing from DOM
+        setTimeout(() => {
+          if (previewElement.parentNode) {
+            previewElement.remove();
+          }
+          // Ensure grid is properly updated
+          gridRef.current?.compact();
+        }, 200); // Match this with the CSS transition duration
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      // Check if we're entering the dropdown menu
+      const dropdownMenu = document.querySelector('[role="menu"]');
+      if (dropdownMenu && dropdownMenu.contains(e.relatedTarget as Node)) {
+        cleanupPreview();
+        return;
+      }
+
+      // Only remove if we're actually leaving the grid area
+      const rect = gridElement.getBoundingClientRect();
+      const x = e.clientX;
+      const y = e.clientY;
+      
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        cleanupPreview();
+      }
+    };
+
+    const handleDragEnd = () => {
+      cleanupPreview();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      
+      const widgetType = e.dataTransfer?.getData('widget/type') || '';
+      if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) {
+        return;
+      }
+
+      const grid = gridRef.current;
+      
+      // Store original grid settings
+      const prevAnimate = grid.opts.animate;
+      
+      // Disable animations temporarily
+      grid.setAnimation(false);
+      grid.setStatic(true);
+      grid.float(true);
+      
+      grid.batchUpdate();
+      try {
+        // Clean up preview first, but keep its position
+        const previewElement = document.querySelector('.widget-drag-preview');
+        const previewX = previewElement ? parseInt(previewElement.getAttribute('gs-x') || '0') : 0;
+        const previewY = previewElement ? parseInt(previewElement.getAttribute('gs-y') || '0') : 0;
+        
+        if (previewElement) {
+          grid.removeWidget(previewElement as HTMLElement, false);
+          previewElement.remove();
+        }
+
+        const baseWidgetId = widgetIds[widgetType];
+        const widgetId = `${baseWidgetId}-${Date.now()}`;
+        
+        const widgetElement = createWidget({
+          widgetType,
+          widgetId,
+          x: previewX,
+          y: previewY
+        });
+
+        // Add widget with consistent settings
+        grid.addWidget({
+          el: widgetElement,
+          x: previewX,
+          y: previewY,
+          w: 3,
+          h: 4,
+          minW: 2,
+          minH: 2,
+          id: widgetId,
+          autoPosition: false,
+          noMove: false,
+          float: true
+        } as ExtendedGridStackWidget);
+
+        // Save updated layout
+        const items = grid.getGridItems();
+        const serializedLayout = items
+          .map(item => {
+            const node = item.gridstackNode;
+            if (!node || typeof node.id !== 'string') return null;
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: node.w ?? 2,
+              h: node.h ?? 2,
+              minW: node.minW ?? 2,
+              minH: node.minH ?? 2
+            };
+          })
+          .filter((item): item is LayoutWidget => item !== null);
+
+        if (isValidLayout(serializedLayout)) {
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+          console.log('✅ Saved layout after drop:', serializedLayout);
+        }
+      } finally {
+        grid.commit();
+        
+        // Restore grid settings with a slight delay
+        requestAnimationFrame(() => {
+          grid.setAnimation(prevAnimate);
+          grid.setStatic(false);
+          grid.float(true);
+        });
+      }
+    };
+
+    // Add event listeners with proper type casting
+    gridElement.addEventListener('dragover', handleDragOver as unknown as EventListener);
+    gridElement.addEventListener('dragleave', handleDragLeave as unknown as EventListener);
+    gridElement.addEventListener('dragend', handleDragEnd);
+    gridElement.addEventListener('drop', handleDrop as unknown as EventListener);
+
+    return () => {
+      gridElement.removeEventListener('dragover', handleDragOver as unknown as EventListener);
+      gridElement.removeEventListener('dragleave', handleDragLeave as unknown as EventListener);
+      gridElement.removeEventListener('dragend', handleDragEnd);
+      gridElement.removeEventListener('drop', handleDrop as unknown as EventListener);
+      cleanupPreview();
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
