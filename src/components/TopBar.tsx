@@ -7,19 +7,35 @@ import { CoinmetroLogo } from './icons/CoinmetroLogo';
 import { CoinmetroText } from './icons/CoinmetroText';
 import { useEffect, useState } from 'react';
 
-export function TopBar() {
+interface TopBarProps {
+  currentPage: 'dashboard' | 'spot' | 'margin' | 'stake';
+  onPageChange: (page: 'dashboard' | 'spot' | 'margin' | 'stake') => void;
+}
+
+export function TopBar({ currentPage, onPageChange }: TopBarProps) {
   const { theme, setTheme } = useTheme();
   const colors = getThemeValues(theme);
   const [isScrolled, setIsScrolled] = useState(false);
 
+  const handlePageClick = (page: 'dashboard' | 'spot' | 'margin' | 'stake') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    console.log('🔄 Navigation clicked:', { from: currentPage, to: page });
+    onPageChange(page);
+  };
+
   useEffect(() => {
+    console.log('📍 TopBar mounted with page:', currentPage);
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 0);
     };
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [currentPage]);
+
+  useEffect(() => {
+    console.log('📍 Current page updated:', currentPage);
+  }, [currentPage]);
 
   return (
     <div 
@@ -33,7 +49,11 @@ export function TopBar() {
         {/* Left Section - with 6px left padding */}
         <div className="flex items-center space-x-6 lg:space-x-8 pl-6">
           {/* Logo and Brand */}
-          <a className="flex items-center space-x-2 shrink-0" href="/">
+          <a 
+            className="flex items-center space-x-2 shrink-0" 
+            href="#"
+            onClick={handlePageClick('dashboard')}
+          >
             <CoinmetroLogo />
             <CoinmetroText className={colors.text} />
           </a>
@@ -43,30 +63,36 @@ export function TopBar() {
             <a 
               className={cn(
                 "px-3 py-2 rounded-lg text-sm font-bold",
-                "bg-[#FF4D15]/10 text-[#FF4D15] ", // Changed to use brand orange color
-                "hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
+                currentPage === 'spot' 
+                  ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
+                  : cn(colors.textMuted, colors.hover)
               )} 
-              href="/spot"
+              href="#"
+              onClick={handlePageClick('spot')}
             >
               Spot
             </a>
             <a 
               className={cn(
                 "px-3 py-2 rounded-lg text-sm font-bold",
-                colors.textMuted,
-                colors.hover
+                currentPage === 'margin'
+                  ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
+                  : cn(colors.textMuted, colors.hover)
               )} 
-              href="/margin"
+              href="#"
+              onClick={handlePageClick('margin')}
             >
               Margin
             </a>
             <a 
               className={cn(
                 "px-3 py-2 text-sm font-bold",
-                colors.textMuted,
-                colors.hover
+                currentPage === 'stake'
+                  ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
+                  : cn(colors.textMuted, colors.hover)
               )} 
-              href="/stake"
+              href="#"
+              onClick={handlePageClick('stake')}
             >
               Stake
             </a>

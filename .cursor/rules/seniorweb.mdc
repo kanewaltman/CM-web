@@ -1,0 +1,81 @@
+---
+description: 
+globs: 
+---
+## 📜 **Advanced LLM Implementation Ruleset for GridStack in Crypto Front-End Dashboard**
+
+### 🟢 **Core Directives**
+1. **Perfection-Driven Coding:**  
+   - Always aim for clean, scalable, and well-structured code.  
+   - Prioritize readability, maintainability, and efficiency.  
+   - Ensure cross-browser compatibility and responsiveness.
+
+2. **Contextual Understanding:**  
+   - Analyze the entire problem space before suggesting solutions.  
+   - Avoid assumptions without explicit user confirmation.  
+
+3. **Incremental Development:**  
+   - Deliver solutions in modular, testable segments.  
+   - Ensure each component works independently and integrates seamlessly.
+
+### 🔍 **Information Gathering Protocol**
+1. **Internal Assessment:**  
+   - Leverage existing knowledge for common patterns and best practices.  
+   - Apply industry standards for crypto dashboards, trading UIs, and GridStack integration.  
+
+2. **Web-Assisted Research:**  
+   - Search the web when internal context is insufficient.  
+   - Cross-verify sources to ensure accuracy and relevance.  
+   - Prioritize official documentation, GitHub repositories, and trusted developer communities.  
+
+3. **Clarification Loop:**  
+   - Request user input if project requirements are ambiguous.  
+   - Confirm expectations before implementing major structural changes.  
+
+### 🛠️ **Implementation Standards**
+1. **Code Quality:**  
+   - Use TypeScript or modern ES6+ JavaScript standards.  
+   - Ensure strict typing, proper linting, and error handling.  
+   - Write modular, reusable components.  
+
+2. **GridStack Integration:**  
+   - Follow official GridStack documentation for initialization, responsive layouts, and event handling.  
+   - Ensure widgets can be dynamically added, resized, and saved across sessions.  
+   - Maintain high performance when rendering large datasets.  
+
+3. **Security Best Practices:**  
+   - Sanitize user inputs to prevent XSS and injection attacks.  
+   - Use secure APIs for crypto data retrieval.  
+   - Implement CSP and other front-end security measures.  
+
+4. **Performance Optimization:**  
+   - Minimize reflows and repaints by optimizing DOM manipulations.  
+   - Use lazy loading for charts, data, and widgets.  
+   - Implement efficient state management with React, Vue, or another chosen framework.  
+
+### 🚀 **Execution Flow**
+1. **Initial Setup:**  
+   - Set up project structure with `vite`, `webpack`, or another modern build tool.  
+   - Install GridStack and relevant dependencies.  
+
+2. **Component Development:**  
+   - Build reusable UI components (widgets, charts, order books).  
+   - Ensure components interact seamlessly with GridStack's layout system.  
+
+3. **Data Integration:**  
+   - Connect crypto APIs (CoinGecko, Binance, etc.).  
+   - Ensure real-time updates with WebSockets where applicable.  
+
+4. **Testing & Debugging:**  
+   - Write unit tests for individual components.  
+   - Perform end-to-end tests for critical user flows.  
+   - Debug issues until functionality meets professional standards.  
+
+### 🔄 **Goal Achievement Protocol**
+1. **Continuous Progress:**  
+   - Continue implementation until the project achieves the user-defined standard of success.  
+   - Iterate based on feedback and evolving requirements.  
+
+2. **Final Validation:**  
+   - Conduct final user review for approval.  
+   - Provide complete documentation and deployment instructions.  
