@@ -233,16 +233,25 @@ function App() {
       
       // Get current widgets
       const currentWidgets = grid.getGridItems();
-      const currentWidgetsMap = new Map(
-        currentWidgets.map(item => [item.gridstackNode?.id, item])
-      );
+      const currentWidgetsMap = new Map();
+      
+      // Group widgets by their base ID (without timestamp)
+      currentWidgets.forEach(widget => {
+        const widgetId = widget.gridstackNode?.id;
+        if (widgetId) {
+          const baseId = widgetId.split('-')[0];
+          currentWidgetsMap.set(baseId, widget);
+        }
+      });
       
       // Track which widgets we've updated
       const updatedWidgets = new Set<string>();
       
       // First update existing widgets
       defaultLayout.forEach((node: LayoutWidget) => {
-        const existingWidget = currentWidgetsMap.get(node.id);
+        const baseId = node.id.split('-')[0];
+        const existingWidget = currentWidgetsMap.get(baseId);
+        
         if (existingWidget) {
           // Update position and size of existing widget
           grid.update(existingWidget, {
@@ -254,11 +263,10 @@ function App() {
             minH: node.minH,
             autoPosition: false
           });
-          updatedWidgets.add(node.id);
+          updatedWidgets.add(existingWidget.gridstackNode?.id || '');
         } else {
           // Create new widget if it doesn't exist
-          const baseWidgetId = node.id.split('-')[0];
-          const widgetType = widgetTypes[baseWidgetId];
+          const widgetType = widgetTypes[baseId];
           
           if (!widgetComponents[widgetType]) {
             console.warn('❌ Unknown widget type:', widgetType);
@@ -319,11 +327,14 @@ function App() {
         const node = item.gridstackNode;
         if (!node || !node.id) return null;
         
-        const defaultWidget = defaultLayout.find(w => w.id === node.id);
+        // Get the base widget type from the ID
+        const baseId = node.id.split('-')[0];
+        const defaultWidget = defaultLayout.find(w => w.id === baseId);
         if (!defaultWidget) return null;
 
         return {
-          id: node.id,
+          id: node.id, // Keep the full dynamic ID
+          baseId, // Add baseId for validation
           x: node.x ?? 0,
           y: node.y ?? 0,
           w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
@@ -332,7 +343,7 @@ function App() {
           minH: defaultWidget.minH ?? 2
         };
       })
-      .filter((item): item is LayoutWidget => item !== null);
+      .filter((item): item is (LayoutWidget & { baseId: string }) => item !== null);
 
     return JSON.stringify(serializedLayout);
   }, [grid]);
@@ -344,7 +355,7 @@ function App() {
     }
 
     try {
-      const layout = JSON.parse(layoutStr) as LayoutWidget[];
+      const layout = JSON.parse(layoutStr) as (LayoutWidget & { baseId: string })[];
       
       // Validate layout structure
       if (!Array.isArray(layout)) {
@@ -352,9 +363,10 @@ function App() {
       }
 
       // Ensure all widgets in the layout exist in defaultLayout
-      const validLayout = layout.every(widget => 
-        defaultLayout.some(defaultWidget => defaultWidget.id === widget.id)
-      );
+      const validLayout = layout.every(widget => {
+        const baseId = widget.baseId || widget.id.split('-')[0];
+        return defaultLayout.some(defaultWidget => defaultWidget.id === baseId);
+      });
 
       if (!validLayout) {
         throw new Error('Layout contains invalid widgets');
@@ -367,16 +379,29 @@ function App() {
         
         // Get current widgets
         const currentWidgets = grid.getGridItems();
-        const currentWidgetsMap = new Map(
-          currentWidgets.map(item => [item.gridstackNode?.id, item])
-        );
+        const currentWidgetsMap = new Map();
+        
+        // Group widgets by their base ID (without timestamp)
+        currentWidgets.forEach(widget => {
+          const widgetId = widget.gridstackNode?.id;
+          if (widgetId) {
+            const baseId = widgetId.split('-')[0];
+            if (!currentWidgetsMap.has(baseId)) {
+              currentWidgetsMap.set(baseId, []);
+            }
+            currentWidgetsMap.get(baseId).push(widget);
+          }
+        });
         
         // Track which widgets we've updated
         const updatedWidgets = new Set<string>();
         
         // First update existing widgets
-        layout.forEach((node: LayoutWidget) => {
-          const existingWidget = currentWidgetsMap.get(node.id);
+        layout.forEach((node: LayoutWidget & { baseId: string }) => {
+          const baseId = node.baseId || node.id.split('-')[0];
+          const existingWidgets = currentWidgetsMap.get(baseId) || [];
+          const existingWidget = existingWidgets.find((w: ExtendedGridStackWidget) => w.gridstackNode?.id === node.id) || existingWidgets[0];
+          
           if (existingWidget) {
             // Update position and size of existing widget
             grid.update(existingWidget, {
@@ -388,11 +413,16 @@ function App() {
               minH: node.minH,
               autoPosition: false
             });
-            updatedWidgets.add(node.id);
+            updatedWidgets.add(existingWidget.gridstackNode?.id || '');
+            
+            // Remove this widget from the map to track usage
+            const widgetIndex = existingWidgets.indexOf(existingWidget);
+            if (widgetIndex > -1) {
+              existingWidgets.splice(widgetIndex, 1);
+            }
           } else {
             // Create new widget if it doesn't exist
-            const baseWidgetId = node.id.split('-')[0];
-            const widgetType = widgetTypes[baseWidgetId];
+            const widgetType = widgetTypes[baseId];
             
             if (!widgetComponents[widgetType]) {
               console.warn('❌ Unknown widget type:', widgetType);
@@ -454,26 +484,10 @@ function App() {
     const newPath = page === 'dashboard' ? '/' : `/${page}`;
     window.history.pushState({}, '', newPath);
     
-    // Only save layout for dashboard page if grid exists and has items
+    // Save current layout if we're leaving dashboard
     if (currentPage === 'dashboard' && grid && grid.engine && grid.engine.nodes.length > 0) {
       try {
-        const currentItems = grid.getGridItems();
-        const currentLayout = currentItems
-          .map(item => {
-            const node = item.gridstackNode;
-            if (!node?.id) return null;
-            return {
-              id: node.id, // Keep the full ID including timestamp
-              x: node.x ?? 0,
-              y: node.y ?? 0,
-              w: node.w ?? 2,
-              h: node.h ?? 2,
-              minW: node.minW ?? 2,
-              minH: node.minH ?? 2
-            };
-          })
-          .filter((item): item is LayoutWidget => item !== null);
-
+        const currentLayout = grid.save(false);
         if (isValidLayout(currentLayout)) {
           localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(currentLayout));
           console.log('✅ Saved dashboard layout:', currentLayout);
@@ -483,20 +497,11 @@ function App() {
       }
     }
 
-    // Clean up existing grid before creating a new one
-    if (grid) {
-      try {
-        grid.destroy(false);
-        gridRef.current = null;
-        setGrid(null);
-      } catch (error) {
-        console.warn('Failed to destroy grid:', error);
-      }
-    }
-
     setCurrentPage(page);
+  }, [grid, currentPage]);
 
-    // Initialize or reinitialize grid with new layout
+  // Initialize grid when page changes
+  useEffect(() => {
     const gridElement = document.querySelector('.grid-stack') as HTMLElement;
     if (!gridElement) {
       console.error('❌ Grid element not found');
@@ -523,20 +528,46 @@ function App() {
         autoHide: true
       },
       minRow: 1,
-      staticGrid: page !== 'dashboard', // Only allow editing on dashboard
+      staticGrid: currentPage !== 'dashboard', // Only allow editing on dashboard
     }, gridElement);
+
+    // Add change event listener to save layout changes
+    g.on('change', (event: Event, items: GridStackNode[]) => {
+      if (currentPage === 'dashboard') {
+        const serializedLayout = items
+          .map(node => {
+            if (!node?.id) return null;
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: node.w ?? 2,
+              h: node.h ?? 2,
+              minW: node.minW ?? 2,
+              minH: node.minH ?? 2
+            };
+          })
+          .filter((item): item is LayoutWidget => item !== null);
+
+        if (isValidLayout(serializedLayout)) {
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+          console.log('✅ Saved layout after change:', serializedLayout);
+        }
+      }
+    });
 
     // Get layout to apply based on page type
     let layoutToApply: LayoutWidget[];
-    if (page === 'dashboard' && !isMobile) {
+    if (currentPage === 'dashboard' && !isMobile) {
       // For dashboard, try to load saved layout
       const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
       if (savedLayout) {
         try {
           const parsedLayout = JSON.parse(savedLayout);
           if (isValidLayout(parsedLayout)) {
+            // Ensure we preserve dynamic IDs from saved layout
             layoutToApply = parsedLayout;
-            console.log('✅ Using saved dashboard layout:', parsedLayout);
+            console.log('✅ Using saved dashboard layout:', layoutToApply);
           } else {
             console.warn('❌ Saved dashboard layout invalid, using default');
             layoutToApply = defaultLayout;
@@ -554,8 +585,8 @@ function App() {
       layoutToApply = mobileLayout;
     } else {
       // For other pages, always use their static layout
-      layoutToApply = getLayoutForPage(page);
-      console.log(`📋 Using static layout for ${page} page`);
+      layoutToApply = getLayoutForPage(currentPage);
+      console.log(`📋 Using static layout for ${currentPage} page`);
     }
 
     // Apply layout
@@ -597,9 +628,9 @@ function App() {
             minH: node.minH,
             autoPosition: false,
             // Only allow movement on dashboard page
-            noMove: page !== 'dashboard',
-            noResize: page !== 'dashboard',
-            locked: page !== 'dashboard'
+            noMove: currentPage !== 'dashboard',
+            noResize: currentPage !== 'dashboard',
+            locked: currentPage !== 'dashboard'
           } as ExtendedGridStackWidget);
         } catch (error) {
           console.error('Failed to create widget:', node.id, error);
@@ -607,18 +638,18 @@ function App() {
       });
     } finally {
       g.commit();
-      console.log('✅ Layout change completed for page:', page);
+      console.log('✅ Layout change completed for page:', currentPage);
     }
 
     gridRef.current = g;
     setGrid(g);
 
-    // Smoothly scroll to top of content
-    const mainContent = document.querySelector('main');
-    if (mainContent) {
-      mainContent.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }, [grid, isMobile, currentPage]);
+    return () => {
+      if (g) {
+        g.destroy(false);
+      }
+    };
+  }, [currentPage, isMobile]);
 
   // Initialize pageChangeRef
   useEffect(() => {
@@ -719,12 +750,17 @@ function App() {
 
   const isValidLayout = (layout: unknown): layout is LayoutWidget[] => {
     if (!Array.isArray(layout)) {
+      console.warn('Layout is not an array');
       return false;
     }
     
     // Verify each widget has valid properties and minimum sizes
     return layout.every(widget => {
-      return (
+      // Get base widget type from ID
+      const baseId = widget.id?.split('-')[0];
+      const isValidBaseType = baseId && Object.values(widgetIds).includes(baseId);
+      
+      const isValid = (
         typeof widget === 'object' &&
         widget !== null &&
         typeof widget.id === 'string' &&
@@ -733,8 +769,14 @@ function App() {
         typeof widget.w === 'number' &&
         typeof widget.h === 'number' &&
         widget.w >= (widget.minW ?? 2) &&
-        widget.h >= (widget.minH ?? 2)
+        widget.h >= (widget.minH ?? 2) &&
+        isValidBaseType
       );
+
+      if (!isValid) {
+        console.warn('Invalid widget in layout:', widget, { baseId, isValidBaseType });
+      }
+      return isValid;
     });
   };
 
