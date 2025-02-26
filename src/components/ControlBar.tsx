@@ -25,25 +25,42 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
   const { toast } = useToast();
 
   const handleCopyLayout = () => {
-    const layoutData = onCopyLayout();
-    navigator.clipboard.writeText(layoutData).then(() => {
-      toast({
-        title: "Layout copied",
-        description: "Layout configuration has been copied to clipboard",
+    try {
+      const layoutData = onCopyLayout();
+      if (!layoutData) {
+        throw new Error('No layout data available');
+      }
+      navigator.clipboard.writeText(layoutData).then(() => {
+        toast({
+          title: "Layout copied",
+          description: "Layout configuration has been copied to clipboard",
+        });
+      }).catch((err) => {
+        console.error('Failed to copy layout:', err);
+        toast({
+          title: "Failed to copy",
+          description: "Could not copy layout to clipboard",
+          variant: "destructive",
+        });
       });
-    }).catch((err) => {
-      console.error('Failed to copy layout:', err);
+    } catch (err) {
+      console.error('Failed to prepare layout for copy:', err);
       toast({
         title: "Failed to copy",
-        description: "Could not copy layout to clipboard",
+        description: "Could not prepare layout data",
         variant: "destructive",
       });
-    });
+    }
   };
 
   const handlePasteLayout = async () => {
     try {
       const text = await navigator.clipboard.readText();
+      // Validate that the text is valid JSON and has the expected structure
+      const parsedLayout = JSON.parse(text);
+      if (!Array.isArray(parsedLayout)) {
+        throw new Error('Invalid layout format');
+      }
       onPasteLayout(text);
       toast({
         title: "Layout pasted",
@@ -53,7 +70,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
       console.error('Failed to paste layout:', err);
       toast({
         title: "Failed to paste",
-        description: "Could not paste layout from clipboard",
+        description: "Invalid layout data in clipboard",
         variant: "destructive",
       });
     }

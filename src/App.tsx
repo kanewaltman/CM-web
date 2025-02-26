@@ -224,46 +224,228 @@ function App() {
   }, [isMobile, currentPage]);
 
   const handleResetLayout = useCallback(() => {
-    if (!grid || isMobile || !pageChangeRef.current) return;
-    const defaultLayoutForPage = getLayoutForPage(currentPage);
-    pageChangeRef.current(currentPage); // Re-initialize with default layout
-  }, [grid, isMobile, currentPage]);
+    if (!grid) return;
+    
+    grid.batchUpdate();
+    try {
+      // Store the default layout
+      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
+      
+      // Get current widgets
+      const currentWidgets = grid.getGridItems();
+      const currentWidgetsMap = new Map(
+        currentWidgets.map(item => [item.gridstackNode?.id, item])
+      );
+      
+      // Track which widgets we've updated
+      const updatedWidgets = new Set<string>();
+      
+      // First update existing widgets
+      defaultLayout.forEach((node: LayoutWidget) => {
+        const existingWidget = currentWidgetsMap.get(node.id);
+        if (existingWidget) {
+          // Update position and size of existing widget
+          grid.update(existingWidget, {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            minW: node.minW,
+            minH: node.minH,
+            autoPosition: false
+          });
+          updatedWidgets.add(node.id);
+        } else {
+          // Create new widget if it doesn't exist
+          const baseWidgetId = node.id.split('-')[0];
+          const widgetType = widgetTypes[baseWidgetId];
+          
+          if (!widgetComponents[widgetType]) {
+            console.warn('❌ Unknown widget type:', widgetType);
+            return;
+          }
+
+          try {
+            const widgetElement = createWidget({
+              widgetType,
+              widgetId: node.id,
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              minW: node.minW,
+              minH: node.minH
+            });
+
+            grid.addWidget({
+              el: widgetElement,
+              id: node.id,
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              minW: node.minW,
+              minH: node.minH,
+              autoPosition: false,
+              noMove: false,
+              noResize: false,
+              locked: false
+            } as ExtendedGridStackWidget);
+          } catch (error) {
+            console.error('Failed to create widget:', node.id, error);
+          }
+        }
+      });
+
+      // Remove any widgets that aren't in the default layout
+      currentWidgets.forEach(widget => {
+        const widgetId = widget.gridstackNode?.id;
+        if (widgetId && !updatedWidgets.has(widgetId)) {
+          grid.removeWidget(widget, false);
+        }
+      });
+    } finally {
+      grid.commit();
+      console.log('✅ Reset layout completed');
+    }
+  }, [grid]);
 
   const handleCopyLayout = useCallback(() => {
-    if (!grid || isMobile) return '';
-    // Save only the core widget data we need
+    if (!grid) return '';
+    
     const items = grid.getGridItems();
-    const layout = items.map(item => {
-      const node = item.gridstackNode;
-      if (!node || typeof node.id !== 'string') return null;
-      return {
-        id: node.id,
-        x: node.x ?? 0,
-        y: node.y ?? 0,
-        w: node.w ?? 2,
-        h: node.h ?? 2,
-        minW: node.minW ?? 2,
-        minH: node.minH ?? 2
-      } as LayoutWidget;
-    }).filter((item): item is LayoutWidget => item !== null);
-    return JSON.stringify(layout);
-  }, [grid, isMobile]);
+    const serializedLayout = items
+      .map(item => {
+        const node = item.gridstackNode;
+        if (!node || !node.id) return null;
+        
+        const defaultWidget = defaultLayout.find(w => w.id === node.id);
+        if (!defaultWidget) return null;
+
+        return {
+          id: node.id,
+          x: node.x ?? 0,
+          y: node.y ?? 0,
+          w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
+          h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
+          minW: defaultWidget.minW ?? 2,
+          minH: defaultWidget.minH ?? 2
+        };
+      })
+      .filter((item): item is LayoutWidget => item !== null);
+
+    return JSON.stringify(serializedLayout);
+  }, [grid]);
 
   const handlePasteLayout = useCallback((layoutStr: string) => {
-    if (!grid || isMobile || !pageChangeRef.current) {
-      console.warn('Cannot paste layout:', { hasGrid: !!grid, isMobile });
+    if (!grid) {
+      console.warn('Cannot paste layout: no grid instance');
       return;
     }
+
     try {
       const layout = JSON.parse(layoutStr) as LayoutWidget[];
-      if (isValidLayout(layout)) {
-        localStorage.setItem(`${currentPage}-layout`, layoutStr);
-        pageChangeRef.current(currentPage); // Re-initialize with pasted layout
+      
+      // Validate layout structure
+      if (!Array.isArray(layout)) {
+        throw new Error('Invalid layout format');
+      }
+
+      // Ensure all widgets in the layout exist in defaultLayout
+      const validLayout = layout.every(widget => 
+        defaultLayout.some(defaultWidget => defaultWidget.id === widget.id)
+      );
+
+      if (!validLayout) {
+        throw new Error('Layout contains invalid widgets');
+      }
+
+      grid.batchUpdate();
+      try {
+        // Store the new layout
+        localStorage.setItem(DASHBOARD_LAYOUT_KEY, layoutStr);
+        
+        // Get current widgets
+        const currentWidgets = grid.getGridItems();
+        const currentWidgetsMap = new Map(
+          currentWidgets.map(item => [item.gridstackNode?.id, item])
+        );
+        
+        // Track which widgets we've updated
+        const updatedWidgets = new Set<string>();
+        
+        // First update existing widgets
+        layout.forEach((node: LayoutWidget) => {
+          const existingWidget = currentWidgetsMap.get(node.id);
+          if (existingWidget) {
+            // Update position and size of existing widget
+            grid.update(existingWidget, {
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              minW: node.minW,
+              minH: node.minH,
+              autoPosition: false
+            });
+            updatedWidgets.add(node.id);
+          } else {
+            // Create new widget if it doesn't exist
+            const baseWidgetId = node.id.split('-')[0];
+            const widgetType = widgetTypes[baseWidgetId];
+            
+            if (!widgetComponents[widgetType]) {
+              console.warn('❌ Unknown widget type:', widgetType);
+              return;
+            }
+
+            try {
+              const widgetElement = createWidget({
+                widgetType,
+                widgetId: node.id,
+                x: node.x,
+                y: node.y,
+                w: node.w,
+                h: node.h,
+                minW: node.minW,
+                minH: node.minH
+              });
+
+              grid.addWidget({
+                el: widgetElement,
+                id: node.id,
+                x: node.x,
+                y: node.y,
+                w: node.w,
+                h: node.h,
+                minW: node.minW,
+                minH: node.minH,
+                autoPosition: false,
+                noMove: false,
+                noResize: false,
+                locked: false
+              } as ExtendedGridStackWidget);
+            } catch (error) {
+              console.error('Failed to create widget:', node.id, error);
+            }
+          }
+        });
+
+        // Remove any widgets that aren't in the pasted layout
+        currentWidgets.forEach(widget => {
+          const widgetId = widget.gridstackNode?.id;
+          if (widgetId && !updatedWidgets.has(widgetId)) {
+            grid.removeWidget(widget, false);
+          }
+        });
+      } finally {
+        grid.commit();
+        console.log('✅ Paste layout completed');
       }
     } catch (error) {
       console.error('Failed to paste layout:', error);
     }
-  }, [grid, isMobile, currentPage]);
+  }, [grid]);
 
   const handlePageChange = useCallback((page: 'dashboard' | 'spot' | 'margin' | 'stake') => {
     console.log('🔄 Page change requested:', { from: currentPage, to: page, hasGrid: !!grid, isMobile });
