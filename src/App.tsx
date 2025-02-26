@@ -537,8 +537,10 @@ function App() {
         const serializedLayout = items
           .map(node => {
             if (!node?.id) return null;
+            const baseId = node.id.split('-')[0];
             return {
               id: node.id,
+              baseId,
               x: node.x ?? 0,
               y: node.y ?? 0,
               w: node.w ?? 2,
@@ -547,11 +549,37 @@ function App() {
               minH: node.minH ?? 2
             };
           })
-          .filter((item): item is LayoutWidget => item !== null);
+          .filter((item): item is (LayoutWidget & { baseId: string }) => item !== null);
 
-        if (isValidLayout(serializedLayout)) {
-          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
-          console.log('✅ Saved layout after change:', serializedLayout);
+        // Get existing layout to merge with changes
+        const existingLayoutStr = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+        let finalLayout = serializedLayout;
+        
+        if (existingLayoutStr) {
+          try {
+            const existingLayout = JSON.parse(existingLayoutStr);
+            if (Array.isArray(existingLayout)) {
+              // Create a map of current widgets by ID
+              const currentWidgets = new Map(serializedLayout.map(w => [w.id, w]));
+              
+              // Include widgets from existing layout that aren't in the current layout
+              existingLayout.forEach((widget: LayoutWidget) => {
+                if (!currentWidgets.has(widget.id)) {
+                  finalLayout.push({
+                    ...widget,
+                    baseId: widget.id.split('-')[0]
+                  });
+                }
+              });
+            }
+          } catch (error) {
+            console.warn('Failed to parse existing layout:', error);
+          }
+        }
+
+        if (isValidLayout(finalLayout)) {
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(finalLayout));
+          console.log('✅ Saved layout after change:', finalLayout);
         }
       }
     });
@@ -565,7 +593,7 @@ function App() {
         try {
           const parsedLayout = JSON.parse(savedLayout);
           if (isValidLayout(parsedLayout)) {
-            // Ensure we preserve dynamic IDs from saved layout
+            // Use the saved layout directly, preserving all widgets
             layoutToApply = parsedLayout;
             console.log('✅ Using saved dashboard layout:', layoutToApply);
           } else {
@@ -577,8 +605,11 @@ function App() {
           layoutToApply = defaultLayout;
         }
       } else {
-        console.log('📋 No saved dashboard layout, using default');
+        // Only use default layout if no saved layout exists (first visit)
+        console.log('📋 First visit - using default layout');
         layoutToApply = defaultLayout;
+        // Save the default layout for future visits
+        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
       }
     } else if (isMobile) {
       console.log('📱 Using mobile layout');
@@ -604,7 +635,7 @@ function App() {
         }
 
         try {
-          // Create widget element with consistent ID
+          // Create widget element with the exact ID from the layout
           const widgetElement = createWidget({
             widgetType,
             widgetId: node.id, // Use the full ID from the layout
@@ -627,7 +658,6 @@ function App() {
             minW: node.minW,
             minH: node.minH,
             autoPosition: false,
-            // Only allow movement on dashboard page
             noMove: currentPage !== 'dashboard',
             noResize: currentPage !== 'dashboard',
             locked: currentPage !== 'dashboard'
@@ -754,11 +784,14 @@ function App() {
       return false;
     }
     
+    // Get all valid base widget IDs
+    const validBaseIds = Object.values(widgetIds);
+    
     // Verify each widget has valid properties and minimum sizes
     return layout.every(widget => {
-      // Get base widget type from ID
+      // Get base widget type from ID (handle both default and dynamic IDs)
       const baseId = widget.id?.split('-')[0];
-      const isValidBaseType = baseId && Object.values(widgetIds).includes(baseId);
+      const isValidBaseType = baseId && validBaseIds.includes(baseId);
       
       const isValid = (
         typeof widget === 'object' &&
