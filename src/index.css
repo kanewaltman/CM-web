@@ -445,3 +445,12 @@
 .grid-stack-item.ui-resizable-resizing {
   transition: none !important;
 }
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
