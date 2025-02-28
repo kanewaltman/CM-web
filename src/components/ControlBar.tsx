@@ -11,6 +11,7 @@ import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { WIDGET_REGISTRY } from '@/App';
 
 interface ControlBarProps {
   onResetLayout: () => void;
@@ -153,20 +154,14 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5 text-sm text-muted-foreground">Available Widgets</div>
-              {[
-                { title: 'Market Overview', type: 'market-overview' },
-                { title: 'Order Book', type: 'order-book' },
-                { title: 'Recent Trades', type: 'recent-trades' },
-                { title: 'Trading View Chart', type: 'trading-view-chart' },
-                { title: 'Trade Form', type: 'trade-form' }
-              ].map((widget) => (
+              {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][]).map(([type, config]) => (
                 <div
-                  key={widget.type}
+                  key={type}
                   draggable
-                  onDragStart={(e) => handleDragStart(e, widget.type)}
+                  onDragStart={(e) => handleDragStart(e, type)}
                   className="relative flex select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 cursor-grab active:cursor-grabbing"
                 >
-                  <span className="ml-2">{widget.title}</span>
+                  <span className="ml-2">{config.title}</span>
                 </div>
               ))}
               <DropdownMenuSeparator />

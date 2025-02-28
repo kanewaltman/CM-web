@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Convert a record's values into an array
+ */
+export function recordValues<T>(record: Record<string, T>): T[] {
+  return Object.values(record);
+}
+
 type ThemeColors = {
   background: string;
   text: string;

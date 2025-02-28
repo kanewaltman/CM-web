@@ -11,13 +11,88 @@ import { MarketOverview } from './components/MarketOverview';
 import { RecentTrades } from './components/RecentTrades';
 import { Toaster } from './components/ui/toaster';
 import { WidgetContainer } from './components/WidgetContainer';
+import { BalancesWidget } from './components/BalancesWidget';
+
+// Widget Registry - Single source of truth for widget configuration
+interface WidgetConfig {
+  id: string;
+  title: string;
+  component: React.FC<any>;
+  defaultSize: { w: number; h: number };
+}
+
+export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
+  'market-overview': {
+    id: 'market',
+    title: 'Market Overview',
+    component: MarketOverview,
+    defaultSize: { w: 12, h: 4 }
+  },
+  'order-book': {
+    id: 'orderbook',
+    title: 'Order Book',
+    component: OrderBook,
+    defaultSize: { w: 4, h: 6 }
+  },
+  'recent-trades': {
+    id: 'trades',
+    title: 'Recent Trades',
+    component: RecentTrades,
+    defaultSize: { w: 12, h: 2 }
+  },
+  'trading-view-chart': {
+    id: 'chart',
+    title: 'BTC/USDT',
+    component: TradingViewChart,
+    defaultSize: { w: 8, h: 6 }
+  },
+  'trade-form': {
+    id: 'tradeform',
+    title: 'Trade',
+    component: TradeForm,
+    defaultSize: { w: 3, h: 4 }
+  },
+  'balances': {
+    id: 'balances',
+    title: 'Balances',
+    component: BalancesWidget,
+    defaultSize: { w: 4, h: 4 }
+  }
+} as const;
+
+// Derive other mappings from registry
+const widgetIds: Record<string, string> = Object.fromEntries(
+  Object.entries(WIDGET_REGISTRY).map(([key, config]) => [key, config.id])
+);
+
+const widgetTypes: Record<string, string> = Object.fromEntries(
+  Object.entries(WIDGET_REGISTRY).map(([key, config]) => [config.id, key])
+);
+
+const widgetComponents: Record<string, React.FC> = Object.fromEntries(
+  Object.entries(WIDGET_REGISTRY).map(([key, config]) => [key, config.component])
+);
+
+const widgetTitles: Record<string, string> = Object.fromEntries(
+  Object.entries(WIDGET_REGISTRY).map(([key, config]) => [key, config.title])
+);
+
+// Default layout is now generated from registry
+const generateDefaultLayout = () => [
+  { id: 'market', x: 8, y: 0, w: 4, h: 4, minW: 2, minH: 2 },
+  { id: 'trades', x: 0, y: 4, w: 12, h: 2, minW: 2, minH: 2 },
+  { id: 'orderbook', x: 4, y: 0, w: 4, h: 4, minW: 2, minH: 2 },
+  { id: 'balances', x: 0, y: 0, w: 4, h: 4, minW: 2, minH: 2 }
+];
+
+const defaultLayout = generateDefaultLayout();
 
 // Default desktop layout configuration for different pages
 const dashboardLayout = [
-  { x: 0, y: 0, w: 12, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 4, w: 8, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 8, y: 4, w: 4, h: 6, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 0, y: 10, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 }
+  { x: 8, y: 0, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
+  { x: 0, y: 4, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 },
+  { x: 4, y: 0, w: 4, h: 4, id: 'orderbook', minW: 2, minH: 2 },
+  { x: 0, y: 0, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
 ];
 
 const spotLayout = [
@@ -25,7 +100,8 @@ const spotLayout = [
   { x: 6, y: 0, w: 3, h: 6, id: 'orderbook', minW: 2, minH: 2 },
   { x: 9, y: 0, w: 3, h: 4, id: 'tradeform', minW: 2, minH: 2 },
   { x: 9, y: 4, w: 3, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 9, h: 2, id: 'trades', minW: 2, minH: 2 }
+  { x: 0, y: 6, w: 9, h: 2, id: 'trades', minW: 2, minH: 2 },
+  { x: 0, y: 8, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
 ];
 
 const marginLayout = [
@@ -33,7 +109,8 @@ const marginLayout = [
   { x: 8, y: 0, w: 4, h: 6, id: 'orderbook', minW: 2, minH: 2 },
   { x: 0, y: 6, w: 4, h: 4, id: 'tradeform', minW: 2, minH: 2 },
   { x: 4, y: 6, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 8, y: 6, w: 4, h: 4, id: 'trades', minW: 2, minH: 2 }
+  { x: 8, y: 6, w: 4, h: 4, id: 'trades', minW: 2, minH: 2 },
+  { x: 0, y: 10, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
 ];
 
 const stakeLayout = [
@@ -41,11 +118,9 @@ const stakeLayout = [
   { x: 0, y: 6, w: 4, h: 4, id: 'orderbook', minW: 2, minH: 2 },
   { x: 4, y: 6, w: 4, h: 4, id: 'tradeform', minW: 2, minH: 2 },
   { x: 8, y: 6, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 10, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 }
+  { x: 0, y: 10, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 },
+  { x: 0, y: 12, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
 ];
-
-// Default layout is now dashboard layout
-const defaultLayout = dashboardLayout;
 
 // Mobile layout configuration (single column)
 const mobileLayout = [
@@ -53,7 +128,8 @@ const mobileLayout = [
   { x: 0, y: 6, w: 1, h: 6, id: 'orderbook', minW: 2, minH: 2 },
   { x: 0, y: 12, w: 1, h: 4, id: 'tradeform', minW: 2, minH: 2 },
   { x: 0, y: 16, w: 1, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 20, w: 1, h: 4, id: 'trades', minW: 2, minH: 2 }
+  { x: 0, y: 20, w: 1, h: 4, id: 'trades', minW: 2, minH: 2 },
+  { x: 0, y: 24, w: 1, h: 4, id: 'balances', minW: 2, minH: 2 }
 ];
 
 // Breakpoint for mobile view
@@ -74,24 +150,6 @@ interface ExtendedGridStackWidget extends GridStackWidget {
   el?: HTMLElement;
 }
 
-// Predefined IDs for each widget type
-const widgetIds: Record<string, string> = {
-  'market-overview': 'market',
-  'order-book': 'orderbook',
-  'recent-trades': 'trades',
-  'trading-view-chart': 'chart',
-  'trade-form': 'tradeform'
-};
-
-// Reverse mapping for widget types
-const widgetTypes: Record<string, string> = {
-  'market': 'market-overview',
-  'orderbook': 'order-book',
-  'trades': 'recent-trades',
-  'chart': 'trading-view-chart',
-  'tradeform': 'trade-form'
-};
-
 // Add constant for localStorage key
 const DASHBOARD_LAYOUT_KEY = 'dashboard-layout';
 
@@ -102,24 +160,6 @@ function App() {
   const resizeFrameRef = useRef<number>();
   const gridRef = useRef<GridStack | null>(null);
   let widgetCounter = 0; // Initialize a counter for widget IDs
-
-  // Add widget mapping
-  const widgetComponents: Record<string, React.FC> = {
-    'market-overview': MarketOverview,
-    'order-book': OrderBook,
-    'recent-trades': RecentTrades,
-    'trading-view-chart': TradingViewChart,
-    'trade-form': TradeForm
-  };
-
-  // Add widget titles mapping
-  const widgetTitles: Record<string, string> = {
-    'market-overview': 'Market Overview',
-    'order-book': 'Order Book',
-    'recent-trades': 'Recent Trades',
-    'trading-view-chart': 'BTC/USDT',
-    'trade-form': 'Trade'
-  };
 
   const handleRemoveWidget = useCallback((widgetId: string) => {
     if (!grid) return;
