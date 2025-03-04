@@ -204,10 +204,14 @@
 
 .widget-content {
   background: hsl(var(--color-widget-content));
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .widget-inset {
   background: hsl(var(--color-widget-inset)) !important;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Make header buttons clickable */

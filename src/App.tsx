@@ -572,6 +572,25 @@ function App() {
       staticGrid: currentPage !== 'dashboard', // Only allow editing on dashboard
     }, gridElement);
 
+    // Add mousedown handler to prevent dragging when text is selected
+    const handleMouseDown = (e: MouseEvent) => {
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) {
+        // Check if we're clicking on or within selected text
+        const target = e.target as HTMLElement;
+        const range = selection.getRangeAt(0);
+        const isSelectedText = range.intersectsNode(target);
+        
+        // If clicking on selected text or starting a drag from selected text
+        if (isSelectedText || target.closest('.widget-content')?.contains(range.commonAncestorContainer)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    gridElement.addEventListener('mousedown', handleMouseDown);
+
     // Add change event listener to save layout changes
     g.on('change', (event: Event, items: GridStackNode[]) => {
       if (currentPage === 'dashboard') {
@@ -718,6 +737,7 @@ function App() {
     return () => {
       if (g) {
         g.destroy(false);
+        gridElement.removeEventListener('mousedown', handleMouseDown);
       }
     };
   }, [currentPage, isMobile]);
