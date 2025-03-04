@@ -9,6 +9,7 @@ import {
 } from './ui/table';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
+import { getApiUrl } from '@/lib/api-config';
 
 interface PriceData {
   [key: string]: {
@@ -41,7 +42,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const response = await fetch('/api/exchange/prices');
+        const response = await fetch(getApiUrl('exchange/prices'));
         if (!response.ok) {
           throw new Error(`Prices request failed with status ${response.status}`);
         }
@@ -68,7 +69,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         console.log('Fetching demo token...');
         
         // First get a demo token
-        const tokenResponse = await fetch('/api/open/demo/temp');
+        const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
         const tokenData = await tokenResponse.json();
         console.log('Token response:', tokenData);
         
@@ -78,7 +79,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
 
         console.log('Fetching balances...');
         // Use the token to fetch balances
-        const balancesResponse = await fetch('/api/open/users/balances', {
+        const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
           headers: {
             'Authorization': `Bearer ${tokenData.token}`
           }
