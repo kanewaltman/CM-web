@@ -141,7 +141,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
 
   return (
     <div className={cn(
-      "h-full flex flex-col",
+      "h-full flex flex-col p-2",
       "border border-[hsl(var(--color-widget-inset-border))] widget-inset",
       className
     )}>
@@ -170,8 +170,8 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               <TableRow>
                 <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-bg))] z-20 whitespace-nowrap">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))] border-r border-[hsl(var(--border))]"></div>
-                    <div className="relative z-10 px-2 py-1">Asset</div>
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                    <div className="relative z-10 px-1 py-1">Asset</div>
                   </div>
                 </TableHead>
                 <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Balance</TableHead>
@@ -187,7 +187,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                   <TableRow key={balance.asset} className="group">
                     <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
                       <div className="relative">
-                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))] border-r border-[hsl(var(--border))]"></div>
+                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
                         <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="relative z-10 flex items-center gap-2">
                           <div 
