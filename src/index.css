@@ -224,6 +224,24 @@
   background: hsl(var(--color-widget-inset));
 }
 
+/* Main page scrollbar */
+body {
+  @apply bg-background text-foreground overflow-hidden;
+}
+
+.main-content {
+  @apply overflow-auto scrollbar-thin;
+  height: calc(100vh - 4rem); /* Account for TopBar height */
+  margin-top: 4rem; /* Match TopBar height */
+}
+
+.main-content-inner {
+  max-width: 1920px; /* Match TopBar max-width */
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 1.5rem; /* Match TopBar padding */
+}
+
 /* Custom Scrollbar Styling */
 @supports (scrollbar-width: thin) {
   /* Firefox */

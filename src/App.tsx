@@ -1065,20 +1065,14 @@ function App() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="min-h-screen bg-background">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
-      <main className="flex-1 overflow-auto pt-16">
-        <div className="grid-container w-full h-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
-          <ControlBar 
-            onResetLayout={handleResetLayout}
-            onCopyLayout={handleCopyLayout}
-            onPasteLayout={handlePasteLayout}
-          />
-          <div className="grid-stack mt-4">
-            {/* Grid items will be added programmatically */}
-          </div>
+      <div className="main-content">
+        <div className="main-content-inner">
+          <ControlBar onResetLayout={handleResetLayout} onCopyLayout={handleCopyLayout} onPasteLayout={handlePasteLayout} />
+          <div ref={gridRef} className="grid-stack" />
         </div>
-      </main>
+      </div>
       <Toaster />
     </div>
   );
