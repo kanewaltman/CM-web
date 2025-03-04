@@ -163,9 +163,16 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       ) : (
         <div className="relative w-full overflow-auto">
           <Table>
-            <TableHeader className="sticky top-0 bg-[hsl(var(--color-widget-inset))] z-10">
+            <TableHeader className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10">
               <TableRow>
-                <TableHead className="sticky left-0 bg-[hsl(var(--color-widget-inset))] z-20">Asset</TableHead>
+                <TableHead className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-20 p-0 text-left">
+                  <div className="relative w-full h-full">
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))] border-r border-[hsl(var(--border))]"></div>
+                    <div className="relative z-10 flex items-center p-4">
+                      <span className="text-left">Asset</span>
+                    </div>
+                  </div>
+                </TableHead>
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead className="text-right">Value (EUR)</TableHead>
                 <TableHead className="text-right">24h Change</TableHead>
@@ -176,20 +183,24 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               {balances.map((balance) => {
                 const assetConfig = ASSETS[balance.asset];
                 return (
-                  <TableRow key={balance.asset}>
-                    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-inset))] z-10">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
-                          style={{ backgroundColor: assetConfig.fallbackColor }}
-                        >
-                          <img
-                            src={assetConfig.icon}
-                            alt={balance.asset}
-                            className="w-full h-full object-cover"
-                          />
+                  <TableRow key={balance.asset} className="relative group">
+                    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10">
+                      <div className="relative w-full h-full">
+                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))] border-r border-[hsl(var(--border))]"></div>
+                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="relative z-10 flex items-center gap-2">
+                          <div 
+                            className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
+                            style={{ backgroundColor: assetConfig.fallbackColor }}
+                          >
+                            <img
+                              src={assetConfig.icon}
+                              alt={balance.asset}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <span>{balance.asset}</span>
                         </div>
-                        <span>{balance.asset}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono">
