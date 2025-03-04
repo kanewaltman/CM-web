@@ -140,7 +140,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
 
   return (
     <div className={cn(
-      "h-full overflow-auto scrollbar-thin p-3",
+      "h-full",
       "border border-[hsl(var(--color-widget-inset-border))] widget-inset",
       className
     )}>
@@ -149,80 +149,86 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           <div className="text-sm text-muted-foreground">Loading balances...</div>
         </div>
       ) : error ? (
-        <div className="text-red-500 p-4">
-          <div>{error}</div>
-          <div className="mt-2 text-sm text-muted-foreground">Raw Response:</div>
-          <pre className="mt-1 text-xs bg-gray-100 p-2 rounded overflow-auto">
-            {JSON.stringify(rawResponse, null, 2)}
-          </pre>
+        <div className="h-full overflow-auto scrollbar-thin p-4">
+          <div className="text-red-500">
+            <div>{error}</div>
+            <div className="mt-2 text-sm text-muted-foreground">Raw Response:</div>
+            <pre className="mt-1 text-xs bg-gray-100 p-2 rounded overflow-auto">
+              {JSON.stringify(rawResponse, null, 2)}
+            </pre>
+          </div>
         </div>
       ) : balances.length === 0 ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-sm text-muted-foreground">No balances found</div>
         </div>
       ) : (
-        <div className="relative w-full overflow-auto">
-          <Table>
-            <TableHeader className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10">
-              <TableRow>
-                <TableHead className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-20 p-0 text-left">
-                  <div className="relative w-full h-full">
-                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))] border-r border-[hsl(var(--border))]"></div>
-                    <div className="relative z-10 flex items-center p-4">
-                      <span className="text-left">Asset</span>
-                    </div>
-                  </div>
-                </TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-                <TableHead className="text-right">Value (EUR)</TableHead>
-                <TableHead className="text-right">24h Change</TableHead>
-                <TableHead className="text-right">Available %</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {balances.map((balance) => {
-                const assetConfig = ASSETS[balance.asset];
-                return (
-                  <TableRow key={balance.asset} className="relative group">
-                    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10">
+        <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 relative">
+            <div className="absolute inset-0 overflow-auto scrollbar-thin">
+              <Table>
+                <TableHeader className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10">
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-20 p-0 text-left">
                       <div className="relative w-full h-full">
                         <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))] border-r border-[hsl(var(--border))]"></div>
-                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="relative z-10 flex items-center gap-2">
-                          <div 
-                            className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
-                            style={{ backgroundColor: assetConfig.fallbackColor }}
-                          >
-                            <img
-                              src={assetConfig.icon}
-                              alt={balance.asset}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <span>{balance.asset}</span>
+                        <div className="relative z-10 flex items-center p-4">
+                          <span className="text-left">Asset</span>
                         </div>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {parseFloat(balance.balance).toFixed(assetConfig.decimalPlaces)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {balance.valueInEuro}
-                    </TableCell>
-                    <TableCell className={cn(
-                      "text-right font-mono",
-                      parseFloat(balance.change24h) >= 0 ? "text-green-500" : "text-red-500"
-                    )}>
-                      {balance.change24h}%
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {balance.availablePercentage}%
-                    </TableCell>
+                    </TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="text-right">Value (EUR)</TableHead>
+                    <TableHead className="text-right">24h Change</TableHead>
+                    <TableHead className="text-right">Available %</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {balances.map((balance) => {
+                    const assetConfig = ASSETS[balance.asset];
+                    return (
+                      <TableRow key={balance.asset} className="relative group">
+                        <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10">
+                          <div className="relative w-full h-full">
+                            <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))] border-r border-[hsl(var(--border))]"></div>
+                            <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className="relative z-10 flex items-center gap-2">
+                              <div 
+                                className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
+                                style={{ backgroundColor: assetConfig.fallbackColor }}
+                              >
+                                <img
+                                  src={assetConfig.icon}
+                                  alt={balance.asset}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <span>{balance.asset}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {parseFloat(balance.balance).toFixed(assetConfig.decimalPlaces)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {balance.valueInEuro}
+                        </TableCell>
+                        <TableCell className={cn(
+                          "text-right font-mono",
+                          parseFloat(balance.change24h) >= 0 ? "text-green-500" : "text-red-500"
+                        )}>
+                          {balance.change24h}%
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {balance.availablePercentage}%
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </div>
       )}
     </div>
