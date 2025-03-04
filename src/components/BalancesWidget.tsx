@@ -10,11 +10,19 @@ import {
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 
+interface PriceData {
+  [key: string]: {
+    price: number;
+    change24h: number;
+  };
+}
+
 interface BalanceData {
   asset: AssetTicker;
   balance: string;
-  available?: string;
-  reserved?: string;
+  valueInEuro: string;
+  change24h: string;
+  availablePercentage: string;
 }
 
 interface BalancesWidgetProps {
@@ -24,10 +32,35 @@ interface BalancesWidgetProps {
 
 export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compact = false }) => {
   const [balances, setBalances] = useState<BalanceData[]>([]);
+  const [prices, setPrices] = useState<PriceData>({});
   const [rawResponse, setRawResponse] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch price data
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const response = await fetch('/api/exchange/prices');
+        if (!response.ok) {
+          throw new Error(`Prices request failed with status ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Price data:', data);
+        setPrices(data);
+      } catch (err) {
+        console.error('Error fetching prices:', err);
+        // Don't set error state for price fetching as it's not critical
+      }
+    };
+
+    fetchPrices();
+    // Set up polling for price updates every 30 seconds
+    const interval = setInterval(fetchPrices, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch balances
   useEffect(() => {
     const fetchDemoBalances = async () => {
       try {
@@ -35,7 +68,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         console.log('Fetching demo token...');
         
         // First get a demo token
-        const tokenResponse = await fetch('https://api.coinmetro.com/open/demo/temp');
+        const tokenResponse = await fetch('/api/open/demo/temp');
         const tokenData = await tokenResponse.json();
         console.log('Token response:', tokenData);
         
@@ -45,7 +78,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
 
         console.log('Fetching balances...');
         // Use the token to fetch balances
-        const balancesResponse = await fetch('https://api.coinmetro.com/open/users/balances', {
+        const balancesResponse = await fetch('/api/open/users/balances', {
           headers: {
             'Authorization': `Bearer ${tokenData.token}`
           }
@@ -61,18 +94,26 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         // Store raw response for debugging
         setRawResponse(data);
 
-        // Convert object response to array format
+        // Convert object response to array format with real price data
         if (data && typeof data === 'object') {
           const balancesArray = Object.entries(data)
             .filter(([asset]) => asset !== 'TOTAL') // Exclude the TOTAL entry
-            .map(([asset, details]: [string, any]) => ({
-              asset: asset as AssetTicker,
-              // The balance is stored with the asset as the key
-              balance: details[asset]?.toString() || '0',
-              // We don't have available/reserved in demo data, so we'll set balance as available
-              available: details[asset]?.toString() || '0',
-              reserved: '0'
-            }))
+            .map(([asset, details]: [string, any]) => {
+              const balance = parseFloat(details[asset]?.toString() || '0');
+              // Use the EUR value directly from the balance data if available
+              const valueInEuro = details.EUR?.toString() || '0';
+              
+              // Get price data for the asset
+              const priceData = prices[`${asset}/EUR`] || { price: 0, change24h: 0 };
+              
+              return {
+                asset: asset as AssetTicker,
+                balance: balance.toString(),
+                valueInEuro: parseFloat(valueInEuro).toFixed(2),
+                change24h: priceData.change24h.toFixed(2),
+                availablePercentage: '100' // This would come from the API if available
+              };
+            })
             .filter(balance => 
               // Only show assets that are defined in our ASSETS configuration
               balance.asset in ASSETS && 
@@ -95,7 +136,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
     };
 
     fetchDemoBalances();
-  }, []); // Only fetch once on component mount
+  }, [prices]); // Re-fetch balances when prices update
 
   return (
     <div className={cn(
@@ -120,55 +161,58 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           <div className="text-sm text-muted-foreground">No balances found</div>
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Asset</TableHead>
-              <TableHead className="text-right">Balance</TableHead>
-              {!compact && (
-                <>
-                  <TableHead className="text-right">Available</TableHead>
-                  <TableHead className="text-right">Reserved</TableHead>
-                </>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {balances.map((balance) => {
-              const assetConfig = ASSETS[balance.asset];
-              return (
-                <TableRow key={balance.asset}>
-                  <TableCell className="flex items-center gap-2">
-                    <div 
-                      className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
-                      style={{ backgroundColor: assetConfig.fallbackColor }}
-                    >
-                      <img
-                        src={assetConfig.icon}
-                        alt={balance.asset}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span>{balance.asset}</span>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {parseFloat(balance.balance).toFixed(assetConfig.decimalPlaces)}
-                  </TableCell>
-                  {!compact && (
-                    <>
-                      <TableCell className="text-right font-mono">
-                        {parseFloat(balance.available || '0').toFixed(assetConfig.decimalPlaces)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {parseFloat(balance.reserved || '0').toFixed(assetConfig.decimalPlaces)}
-                      </TableCell>
-                    </>
-                  )}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        <div className="relative w-full overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 bg-[hsl(var(--color-widget-inset))] z-10">
+              <TableRow>
+                <TableHead className="sticky left-0 bg-[hsl(var(--color-widget-inset))] z-20">Asset</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+                <TableHead className="text-right">Value (EUR)</TableHead>
+                <TableHead className="text-right">24h Change</TableHead>
+                <TableHead className="text-right">Available %</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {balances.map((balance) => {
+                const assetConfig = ASSETS[balance.asset];
+                return (
+                  <TableRow key={balance.asset}>
+                    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-inset))] z-10">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
+                          style={{ backgroundColor: assetConfig.fallbackColor }}
+                        >
+                          <img
+                            src={assetConfig.icon}
+                            alt={balance.asset}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <span>{balance.asset}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {parseFloat(balance.balance).toFixed(assetConfig.decimalPlaces)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {balance.valueInEuro}
+                    </TableCell>
+                    <TableCell className={cn(
+                      "text-right font-mono",
+                      parseFloat(balance.change24h) >= 0 ? "text-green-500" : "text-red-500"
+                    )}>
+                      {balance.change24h}%
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {balance.availablePercentage}%
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );
