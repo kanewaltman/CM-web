@@ -22,7 +22,7 @@ export function MarketOverview() {
               <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-bg))] z-20 whitespace-nowrap">
                 <div className="relative">
                   <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
-                  <div className="relative z-10 px-1 py-1">Pair</div>
+                  <div className="relative z-10 px-0 py-1">Pair</div>
                 </div>
               </TableHead>
               <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Price</TableHead>
