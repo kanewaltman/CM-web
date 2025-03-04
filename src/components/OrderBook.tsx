@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, TableBody, TableCell, TableRow } from './ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { cn } from '@/lib/utils';
 
 interface OrderBookEntry {
@@ -32,29 +32,48 @@ export function OrderBook() {
 
   return (
     <div className={cn(
-      "h-full overflow-auto scrollbar-thin p-3",
+      "h-full flex flex-col p-2",
       "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
     )}>
-      <div className="grid grid-cols-3 gap-2 text-sm text-muted-foreground mb-2">
-        <div>Price (USDT)</div>
-        <div>Amount (BTC)</div>
-        <div>Total</div>
-      </div>
-      <div className="flex-1 overflow-auto scrollbar-thin">
+      <div className="flex-1 min-h-0">
         <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-bg))] z-20 whitespace-nowrap">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                  <div className="relative z-10 px-1 py-1">Price (USDT)</div>
+                </div>
+              </TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Amount (BTC)</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Total</TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {asks.map((ask, i) => (
-              <TableRow key={`ask-${i}`} className="hover:bg-red-500/5">
-                <TableCell className="text-red-500">{ask.price.toFixed(2)}</TableCell>
-                <TableCell>{ask.amount.toFixed(4)}</TableCell>
-                <TableCell>{ask.total.toLocaleString()}</TableCell>
+              <TableRow key={`ask-${i}`} className="group hover:bg-red-500/5">
+                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="relative z-10 text-red-500 font-mono">{ask.price.toFixed(2)}</div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right whitespace-nowrap font-mono">{ask.amount.toFixed(4)}</TableCell>
+                <TableCell className="text-right whitespace-nowrap font-mono">{ask.total.toLocaleString()}</TableCell>
               </TableRow>
             ))}
             {bids.map((bid, i) => (
-              <TableRow key={`bid-${i}`} className="hover:bg-green-500/5">
-                <TableCell className="text-green-500">{bid.price.toFixed(2)}</TableCell>
-                <TableCell>{bid.amount.toFixed(4)}</TableCell>
-                <TableCell>{bid.total.toLocaleString()}</TableCell>
+              <TableRow key={`bid-${i}`} className="group hover:bg-green-500/5">
+                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="relative z-10 text-green-500 font-mono">{bid.price.toFixed(2)}</div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right whitespace-nowrap font-mono">{bid.amount.toFixed(4)}</TableCell>
+                <TableCell className="text-right whitespace-nowrap font-mono">{bid.total.toLocaleString()}</TableCell>
               </TableRow>
             ))}
           </TableBody>

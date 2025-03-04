@@ -11,29 +11,45 @@ const trades = [
 export function RecentTrades() {
   return (
     <div className={cn(
-      "h-full overflow-auto scrollbar-thin p-3",
+      "h-full flex flex-col p-2",
       "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
     )}>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Time</TableHead>
-            <TableHead>Price</TableHead>
-            <TableHead>Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {trades.map((trade, i) => (
-            <TableRow key={i}>
-              <TableCell>{trade.time}</TableCell>
-              <TableCell className={trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}>
-                {trade.price}
-              </TableCell>
-              <TableCell>{trade.amount}</TableCell>
+      <div className="flex-1 min-h-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-bg))] z-20 whitespace-nowrap">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                  <div className="relative z-10 px-1 py-1">Time</div>
+                </div>
+              </TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Price</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Amount</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {trades.map((trade, i) => (
+              <TableRow key={i} className="group">
+                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="relative z-10">{trade.time}</div>
+                  </div>
+                </TableCell>
+                <TableCell className={cn(
+                  "text-right whitespace-nowrap font-mono",
+                  trade.side === 'buy' ? "text-green-500" : "text-red-500"
+                )}>
+                  {trade.price}
+                </TableCell>
+                <TableCell className="text-right whitespace-nowrap font-mono">{trade.amount}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
