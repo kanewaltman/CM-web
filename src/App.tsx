@@ -562,6 +562,7 @@ function App() {
       animate: true,
       draggable: {
         handle: '.widget-header',
+        cancel: '.widget-inset, .widget-content'
       },
       resizable: {
         handles: 'e, se, s, sw, w',
