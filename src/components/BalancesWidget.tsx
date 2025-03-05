@@ -265,7 +265,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               </TableCell>
               <TableCell className="text-right whitespace-nowrap">
                 <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                  {balance.valueInEuro}
+                  {parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </TableCell>
               <TableCell className={cn(
