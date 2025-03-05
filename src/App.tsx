@@ -581,8 +581,9 @@ function App() {
         const range = selection.getRangeAt(0);
         const isSelectedText = range.intersectsNode(target);
         
-        // If clicking on selected text, prevent dragging
-        if (isSelectedText) {
+        // Only prevent dragging if we're clicking on the widget header
+        // This allows normal text selection behavior everywhere else
+        if (isSelectedText && target.closest('.widget-header')) {
           e.preventDefault();
           e.stopPropagation();
         }
