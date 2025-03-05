@@ -12,11 +12,14 @@ import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 
 const formatBalance = (value: number, decimals: number) => {
-  // First format with full decimals to ensure we don't lose precision
-  const fullFormatted = value.toFixed(decimals);
+  // Convert to string without scientific notation and ensure we get all digits
+  const fullNumber = value.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 20 });
   
   // Split into whole and decimal parts
-  const [whole, decimal] = fullFormatted.split('.');
+  let [whole, decimal = ''] = fullNumber.split('.');
+  
+  // Pad decimal with zeros if needed to match decimals parameter
+  decimal = decimal.padEnd(decimals, '0');
   
   // Add thousand separators to whole part
   const wholeWithCommas = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
