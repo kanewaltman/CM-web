@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
+import { Button } from './ui/button';
 
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
@@ -268,7 +269,11 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                       className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
                       style={{ 
                         color: assetColor,
-                        backgroundColor: `${assetColor}14`
+                        backgroundColor: `${assetColor}14`,
+                        cursor: 'pointer',
+                        WebkitTouchCallout: 'none',
+                        WebkitUserSelect: 'text',
+                        userSelect: 'text'
                       }}
                       onMouseEnter={(e) => {
                         const target = e.currentTarget;
@@ -279,6 +284,11 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                         const target = e.currentTarget;
                         target.style.backgroundColor = `${assetColor}14`;
                         target.style.color = assetColor;
+                      }}
+                      onMouseDown={(e) => {
+                        if (e.detail > 1) {
+                          e.preventDefault();
+                        }
                       }}
                     >
                       {assetConfig.name}
@@ -309,6 +319,17 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 <button 
                   type="button"
                   className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
+                  style={{
+                    cursor: 'pointer',
+                    WebkitTouchCallout: 'none',
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text'
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.detail > 1) {
+                      e.preventDefault();
+                    }
+                  }}
                 >
                   {balance.availablePercentage}%
                 </button>
