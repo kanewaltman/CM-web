@@ -11,6 +11,33 @@ import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 
+const formatBalance = (value: number, decimals: number) => {
+  // First format with full decimals to ensure we don't lose precision
+  const fullFormatted = value.toFixed(decimals);
+  
+  // Split into whole and decimal parts
+  const [whole, decimal] = fullFormatted.split('.');
+  
+  // Add thousand separators to whole part
+  const wholeWithCommas = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  
+  if (!decimal) return wholeWithCommas;
+  
+  // Find last non-zero digit
+  const lastNonZeroIndex = decimal.split('').reverse().findIndex(char => char !== '0');
+  
+  if (lastNonZeroIndex === -1) {
+    // If all decimals are zeros, show just one zero
+    return `${wholeWithCommas}.0`;
+  }
+  
+  // Keep all digits up to and including the last non-zero digit, plus one more
+  const keepLength = decimal.length - lastNonZeroIndex + 1;
+  const trimmedDecimal = decimal.slice(0, keepLength);
+  
+  return `${wholeWithCommas}.${trimmedDecimal}`;
+};
+
 interface PriceData {
   [key: string]: {
     price: number;
@@ -212,8 +239,13 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap font-mono">
-                      {parseFloat(balance.balance).toFixed(assetConfig.decimalPlaces)}
+                    <TableCell className="text-right whitespace-nowrap">
+                      <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                        {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
+                      </span>
+                      <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground ml-1">
+                        {balance.asset}
+                      </span>
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap font-mono">
                       {balance.valueInEuro}
