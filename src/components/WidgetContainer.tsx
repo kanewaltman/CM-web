@@ -1,4 +1,4 @@
-import { ChevronDown, Maximize2, MoreHorizontal, Trash2 } from 'lucide-react';
+import { ChevronDown, Maximize2, MoreHorizontal, Trash2 } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 import { useRef } from 'react';

@@ -16,9 +16,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Only keep the essential alias for the fingerprint icon
+      'lucide-react/dist/esm/icons/fingerprint.js': path.resolve(__dirname, './src/components/icons/index.tsx'),
     },
   },
   optimizeDeps: {
+    include: ['react', 'react-dom'],
     exclude: ['lucide-react'],
   },
   server: {

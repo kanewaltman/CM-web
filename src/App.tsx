@@ -145,21 +145,36 @@ interface LayoutWidget {
   minH: number;
 }
 
-// Update ExtendedGridStackWidget interface to include el property
+// Update ExtendedGridStackWidget interface to include el and gridstackNode properties
 interface ExtendedGridStackWidget extends GridStackWidget {
   el?: HTMLElement;
+  gridstackNode?: GridStackNode;
 }
 
 // Add constant for localStorage key
 const DASHBOARD_LAYOUT_KEY = 'dashboard-layout';
 
 function App() {
+  console.log('App component is rendering');
+  
+  const [error, setError] = useState<string | null>(null);
+  const [adBlockerDetected, setAdBlockerDetected] = useState<boolean>(false);
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'spot' | 'margin' | 'stake'>('dashboard');
   const resizeFrameRef = useRef<number>();
   const gridRef = useRef<GridStack | null>(null);
+  const gridElementRef = useRef<HTMLDivElement>(null);
   let widgetCounter = 0; // Initialize a counter for widget IDs
+
+  // Check for ad blocker on mount
+  useEffect(() => {
+    const hasAdBlocker = document.documentElement.getAttribute('data-adblocker') === 'true';
+    if (hasAdBlocker) {
+      console.warn('Ad blocker detected in React component');
+      setAdBlockerDetected(true);
+    }
+  }, []);
 
   const handleRemoveWidget = useCallback((widgetId: string) => {
     if (!grid) return;
@@ -542,205 +557,218 @@ function App() {
 
   // Initialize grid when page changes
   useEffect(() => {
-    const gridElement = document.querySelector('.grid-stack') as HTMLElement;
-    if (!gridElement) {
-      console.error('❌ Grid element not found');
-      return;
-    }
-
-    // Clear any existing grid
-    console.log('🧹 Clearing existing grid');
-    gridElement.innerHTML = '';
-
-    // Initialize grid with options
-    console.log('⚙️ Creating new grid instance');
-    const g = GridStack.init({
-      float: true,
-      cellHeight: isMobile ? '100px' : 'auto',
-      margin: 4,
-      column: isMobile ? 1 : 12,
-      animate: true,
-      draggable: {
-        handle: '.widget-header',
-        cancel: '.widget-inset, .widget-content'
-      },
-      resizable: {
-        handles: 'e, se, s, sw, w',
-        autoHide: true
-      },
-      minRow: 1,
-      staticGrid: currentPage !== 'dashboard', // Only allow editing on dashboard
-    }, gridElement);
-
-    // Add mousedown handler to prevent dragging when text is selected
-    const handleMouseDown = (e: MouseEvent) => {
-      const selection = window.getSelection();
-      if (selection && selection.toString().length > 0) {
-        // Check if we're clicking on or within selected text
-        const target = e.target as HTMLElement;
-        const range = selection.getRangeAt(0);
-        const isSelectedText = range.intersectsNode(target);
-        
-        // If clicking on selected text, prevent dragging
-        if (isSelectedText) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-      }
-    };
-
-    gridElement.addEventListener('mousedown', handleMouseDown);
-
-    // Add change event listener to save layout changes
-    g.on('change', (event: Event, items: GridStackNode[]) => {
-      if (currentPage === 'dashboard') {
-        const serializedLayout = items
-          .map(node => {
-            if (!node?.id) return null;
-            const baseId = node.id.split('-')[0];
-            return {
-              id: node.id,
-              baseId,
-              x: node.x ?? 0,
-              y: node.y ?? 0,
-              w: node.w ?? 2,
-              h: node.h ?? 2,
-              minW: node.minW ?? 2,
-              minH: node.minH ?? 2
-            };
-          })
-          .filter((item): item is (LayoutWidget & { baseId: string }) => item !== null);
-
-        // Get existing layout to merge with changes
-        const existingLayoutStr = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-        let finalLayout = serializedLayout;
-        
-        if (existingLayoutStr) {
-          try {
-            const existingLayout = JSON.parse(existingLayoutStr);
-            if (Array.isArray(existingLayout)) {
-              // Create a map of current widgets by ID
-              const currentWidgets = new Map(serializedLayout.map(w => [w.id, w]));
-              
-              // Include widgets from existing layout that aren't in the current layout
-              existingLayout.forEach((widget: LayoutWidget) => {
-                if (!currentWidgets.has(widget.id)) {
-                  finalLayout.push({
-                    ...widget,
-                    baseId: widget.id.split('-')[0]
-                  });
-                }
-              });
-            }
-          } catch (error) {
-            console.warn('Failed to parse existing layout:', error);
-          }
-        }
-
-        if (isValidLayout(finalLayout)) {
-          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(finalLayout));
-          console.log('✅ Saved layout after change:', finalLayout);
-        }
-      }
-    });
-
-    // Get layout to apply based on page type
-    let layoutToApply: LayoutWidget[];
-    if (currentPage === 'dashboard' && !isMobile) {
-      // For dashboard, try to load saved layout
-      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-      if (savedLayout) {
-        try {
-          const parsedLayout = JSON.parse(savedLayout);
-          if (isValidLayout(parsedLayout)) {
-            // Use the saved layout directly, preserving all widgets
-            layoutToApply = parsedLayout;
-            console.log('✅ Using saved dashboard layout:', layoutToApply);
-          } else {
-            console.warn('❌ Saved dashboard layout invalid, using default');
-            layoutToApply = defaultLayout;
-          }
-        } catch (error) {
-          console.error('Failed to parse saved dashboard layout:', error);
-          layoutToApply = defaultLayout;
-        }
-      } else {
-        // Only use default layout if no saved layout exists (first visit)
-        console.log('📋 First visit - using default layout');
-        layoutToApply = defaultLayout;
-        // Save the default layout for future visits
-        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
-      }
-    } else if (isMobile) {
-      console.log('📱 Using mobile layout');
-      layoutToApply = mobileLayout;
-    } else {
-      // For other pages, always use their static layout
-      layoutToApply = getLayoutForPage(currentPage);
-      console.log(`📋 Using static layout for ${currentPage} page`);
-    }
-
-    // Apply layout
-    g.batchUpdate();
     try {
-      // Create and add all widgets from the layout
-      layoutToApply.forEach((node: LayoutWidget) => {
-        // Get the base widget type from the ID (handle both default and dynamic IDs)
-        const baseWidgetId = node.id.split('-')[0];
-        const widgetType = widgetTypes[baseWidgetId];
-        
-        if (!widgetComponents[widgetType]) {
-          console.warn('❌ Unknown widget type:', widgetType);
-          return;
+      if (!gridElementRef.current) {
+        console.error('❌ Grid element not found');
+        setError('Grid element not found. Please refresh the page.');
+        return;
+      }
+
+      // Clear any existing grid
+      console.log('🧹 Clearing existing grid');
+      gridElementRef.current.innerHTML = '';
+
+      // Initialize grid with options
+      console.log('⚙️ Creating new grid instance');
+      const g = GridStack.init({
+        float: true,
+        cellHeight: isMobile ? '100px' : 'auto',
+        margin: 4,
+        column: isMobile ? 1 : 12,
+        animate: true,
+        draggable: {
+          handle: '.widget-header',
+          cancel: '.widget-inset, .widget-content'
+        },
+        resizable: {
+          handles: 'e, se, s, sw, w',
+          autoHide: true
+        },
+        minRow: 1,
+        staticGrid: currentPage !== 'dashboard', // Only allow editing on dashboard
+      }, gridElementRef.current);
+
+      // Add mousedown handler to prevent dragging when text is selected
+      const handleMouseDown = (e: MouseEvent) => {
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) {
+          // Check if we're clicking on or within selected text
+          const target = e.target as HTMLElement;
+          const range = selection.getRangeAt(0);
+          const isSelectedText = range.intersectsNode(target);
+          
+          // If clicking on selected text, prevent dragging
+          if (isSelectedText) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
         }
+      };
 
-        try {
-          // Create widget element with the exact ID from the layout
-          const widgetElement = createWidget({
-            widgetType,
-            widgetId: node.id, // Use the full ID from the layout
-            x: node.x,
-            y: node.y,
-            w: node.w,
-            h: node.h,
-            minW: node.minW,
-            minH: node.minH
-          });
+      if (gridElementRef.current) {
+        gridElementRef.current.addEventListener('mousedown', handleMouseDown);
+      }
 
-          // Add widget to grid with all properties
-          g.addWidget({
-            el: widgetElement,
-            id: node.id, // Use the full ID from the layout
-            x: node.x,
-            y: node.y,
-            w: node.w,
-            h: node.h,
-            minW: node.minW,
-            minH: node.minH,
-            autoPosition: false,
-            noMove: currentPage !== 'dashboard',
-            noResize: currentPage !== 'dashboard',
-            locked: currentPage !== 'dashboard'
-          } as ExtendedGridStackWidget);
-        } catch (error) {
-          console.error('Failed to create widget:', node.id, error);
+      // Add change event listener to save layout changes
+      g.on('change', (event: Event, items: GridStackNode[]) => {
+        if (currentPage === 'dashboard') {
+          const serializedLayout = items
+            .map(node => {
+              if (!node?.id) return null;
+              const baseId = node.id.split('-')[0];
+              return {
+                id: node.id,
+                baseId,
+                x: node.x ?? 0,
+                y: node.y ?? 0,
+                w: node.w ?? 2,
+                h: node.h ?? 2,
+                minW: node.minW ?? 2,
+                minH: node.minH ?? 2
+              };
+            })
+            .filter((item): item is (LayoutWidget & { baseId: string }) => item !== null);
+
+          // Get existing layout to merge with changes
+          const existingLayoutStr = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          let finalLayout = serializedLayout;
+          
+          if (existingLayoutStr) {
+            try {
+              const existingLayout = JSON.parse(existingLayoutStr);
+              if (Array.isArray(existingLayout)) {
+                // Create a map of current widgets by ID
+                const currentWidgets = new Map(serializedLayout.map(w => [w.id, w]));
+                
+                // Include widgets from existing layout that aren't in the current layout
+                existingLayout.forEach((widget: LayoutWidget) => {
+                  if (!currentWidgets.has(widget.id)) {
+                    finalLayout.push({
+                      ...widget,
+                      baseId: widget.id.split('-')[0]
+                    });
+                  }
+                });
+              }
+            } catch (error) {
+              console.warn('Failed to parse existing layout:', error);
+            }
+          }
+
+          if (isValidLayout(finalLayout)) {
+            localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(finalLayout));
+            console.log('✅ Saved layout after change:', finalLayout);
+          }
         }
       });
-    } finally {
-      g.commit();
-      console.log('✅ Layout change completed for page:', currentPage);
-    }
 
-    gridRef.current = g;
-    setGrid(g);
-
-    return () => {
-      if (g) {
-        g.destroy(false);
-        gridElement.removeEventListener('mousedown', handleMouseDown);
+      // Get layout to apply based on page type
+      let layoutToApply: LayoutWidget[];
+      if (currentPage === 'dashboard' && !isMobile) {
+        // For dashboard, try to load saved layout
+        const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+        if (savedLayout) {
+          try {
+            const parsedLayout = JSON.parse(savedLayout);
+            if (isValidLayout(parsedLayout)) {
+              // Use the saved layout directly, preserving all widgets
+              layoutToApply = parsedLayout;
+              console.log('✅ Using saved dashboard layout:', layoutToApply);
+            } else {
+              console.warn('❌ Saved dashboard layout invalid, using default');
+              layoutToApply = defaultLayout;
+            }
+          } catch (error) {
+            console.error('Failed to parse saved dashboard layout:', error);
+            layoutToApply = defaultLayout;
+          }
+        } else {
+          // Only use default layout if no saved layout exists (first visit)
+          console.log('📋 First visit - using default layout');
+          layoutToApply = defaultLayout;
+          // Save the default layout for future visits
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
+        }
+      } else if (isMobile) {
+        console.log('📱 Using mobile layout');
+        layoutToApply = mobileLayout;
+      } else {
+        // For other pages, always use their static layout
+        layoutToApply = getLayoutForPage(currentPage);
+        console.log(`📋 Using static layout for ${currentPage} page`);
       }
-    };
-  }, [currentPage, isMobile]);
+
+      // Apply layout
+      g.batchUpdate();
+      try {
+        // Create and add all widgets from the layout
+        layoutToApply.forEach((node: LayoutWidget) => {
+          // Get the base widget type from the ID (handle both default and dynamic IDs)
+          const baseWidgetId = node.id.split('-')[0];
+          const widgetType = widgetTypes[baseWidgetId];
+          
+          if (!widgetComponents[widgetType]) {
+            console.warn('❌ Unknown widget type:', widgetType);
+            return;
+          }
+
+          try {
+            // Create widget element with the exact ID from the layout
+            const widgetElement = createWidget({
+              widgetType,
+              widgetId: node.id, // Use the full ID from the layout
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              minW: node.minW,
+              minH: node.minH
+            });
+
+            // Add widget to grid with all properties
+            g.addWidget({
+              el: widgetElement,
+              id: node.id, // Use the full ID from the layout
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              minW: node.minW,
+              minH: node.minH,
+              autoPosition: false,
+              noMove: currentPage !== 'dashboard',
+              noResize: currentPage !== 'dashboard',
+              locked: currentPage !== 'dashboard'
+            } as ExtendedGridStackWidget);
+          } catch (error) {
+            console.error('Failed to create widget:', node.id, error);
+          }
+        });
+      } finally {
+        g.commit();
+        console.log('✅ Layout change completed for page:', currentPage);
+      }
+
+      gridRef.current = g;
+      setGrid(g);
+
+      return () => {
+        console.log('🚮 Cleaning up grid instance');
+        if (g) {
+          g.destroy(false);
+          if (gridElementRef.current) {
+            gridElementRef.current.removeEventListener('mousedown', handleMouseDown);
+          }
+        }
+      };
+    } catch (err) {
+      console.error('Failed to initialize grid:', err);
+      const errorMessage = adBlockerDetected
+        ? 'Ad blocker detected, which may be blocking the dashboard functionality. Please disable your ad blocker and refresh the page.'
+        : 'Failed to initialize the dashboard. Please try refreshing the page.';
+      setError(errorMessage);
+    }
+  }, [currentPage, isMobile, adBlockerDetected]);
 
   // Initialize pageChangeRef
   useEffect(() => {
@@ -1085,13 +1113,31 @@ function App() {
     };
   }, []);
 
+  // Render error state if there's an error
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="bg-red-50 p-4 rounded-lg border border-red-200 max-w-md">
+          <h2 className="text-lg font-semibold text-red-800 mb-2">Error</h2>
+          <p className="text-red-700">{error}</p>
+          <button 
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
       <div className="main-content">
         <div className="main-content-inner">
           <ControlBar onResetLayout={handleResetLayout} onCopyLayout={handleCopyLayout} onPasteLayout={handlePasteLayout} />
-          <div ref={gridRef} className="grid-stack" />
+          <div ref={gridElementRef} className="grid-stack" />
         </div>
       </div>
       <Toaster />
