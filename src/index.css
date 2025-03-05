@@ -152,7 +152,7 @@
 }
 
 .grid-stack-item {
-  touch-action: none;
+  touch-action: pan-x pan-y;
   transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
 }
 
@@ -163,6 +163,7 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--radius-lg);
+  user-select: text; /* Allow text selection by default */
 }
 
 .grid-stack-item > .grid-stack-item-content {
@@ -170,6 +171,7 @@
   z-index: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  user-select: text; /* Ensure text selection works */
 }
 
 /* Override scrolling behavior for preview */
@@ -193,25 +195,20 @@
 
 /* Widget header styling */
 .widget-header {
-  user-select: none;
-  -webkit-user-select: none;
   cursor: move;
-  /* border-top-left-radius: var(--radius-xl);
-  border-top-right-radius: var(--radius-xl); */
+  user-select: none; /* Prevent text selection only on header */
   background: hsl(var(--color-widget-header));
   z-index: 1;
 }
 
 .widget-content {
   background: hsl(var(--color-widget-content));
-  user-select: none;
-  -webkit-user-select: none;
+  user-select: text;
 }
 
 .widget-inset {
   background: hsl(var(--color-widget-inset)) !important;
   user-select: text;
-  -webkit-user-select: text;
 }
 
 /* Make header buttons clickable */
@@ -226,6 +223,45 @@
 /* Add these table styles after the widget styles section */
 .table-container {
   background: hsl(var(--color-widget-inset));
+  user-select: text;
+}
+
+/* Ensure table cells allow text selection */
+.table-container table {
+  user-select: text;
+}
+
+.table-container td,
+.table-container th {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+/* Ensure table cell content is selectable */
+.table-container td *,
+.table-container th * {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+/* Prevent text selection on table headers if they're meant to be static */
+.table-container th {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Ensure table cell content is selectable even when parent has user-select: none */
+.table-container td * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
 }
 
 /* Main page scrollbar */

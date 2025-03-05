@@ -581,8 +581,8 @@ function App() {
         const range = selection.getRangeAt(0);
         const isSelectedText = range.intersectsNode(target);
         
-        // If clicking on selected text or starting a drag from selected text
-        if (isSelectedText || target.closest('.widget-content')?.contains(range.commonAncestorContainer)) {
+        // If clicking on selected text, prevent dragging
+        if (isSelectedText) {
           e.preventDefault();
           e.stopPropagation();
         }
