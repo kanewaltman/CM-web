@@ -37,7 +37,7 @@ export function OrderBook() {
       <div className="flex-1 min-h-0">
         <Table>
           <TableHeader>
-            <TableRow isHeader={true}>
+            <TableRow>
               <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
                 <div className="relative">
                   <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>

@@ -578,7 +578,7 @@ function App() {
         animate: true,
         draggable: {
           handle: '.widget-header',
-          cancel: '.widget-inset, .widget-content'
+          cancel: '.widget-inset, .widget-content, table, td, th, tr, .table, .table-cell, .table-header, .table-row'
         },
         resizable: {
           handles: 'e, se, s, sw, w',
