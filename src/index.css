@@ -539,3 +539,9 @@ body {
   border: none !important;
   box-shadow: none !important;
 }
+
+/* Override font-bold to be semibold (600) for buttons */
+button.font-bold, 
+.font-jakarta.font-bold {
+  font-weight: 600 !important;
+}
