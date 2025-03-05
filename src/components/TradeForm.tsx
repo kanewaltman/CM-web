@@ -10,8 +10,7 @@ export function TradeForm() {
 
   return (
     <div className={cn(
-      "h-full overflow-auto scrollbar-thin p-3",
-      "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+      "h-full flex flex-col p-2"
     )}>
       <Tabs defaultValue="limit" className="w-full h-full">
         <TabsList className="grid w-full grid-cols-3">

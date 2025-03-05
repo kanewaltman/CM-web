@@ -15,7 +15,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead data-slot="table-header" className={cn("bg-[hsl(var(--color-widget-bg))]", className)} {...props} />;
+  return <thead data-slot="table-header" className={cn("bg-[hsl(var(--color-widget-header))]", className)} {...props} />;
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
@@ -32,12 +32,13 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   );
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+function TableRow({ className, isHeader, ...props }: React.ComponentProps<"tr"> & { isHeader?: boolean }) {
   return (
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        isHeader ? "border-b" : "",
+        "transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
         className,
       )}
       {...props}
