@@ -200,7 +200,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <span>{balance.asset}</span>
+                          <div 
+                            className="font-jakarta font-medium text-sm rounded-md px-1"
+                            style={{ 
+                              color: assetConfig.fallbackColor,
+                              backgroundColor: `${assetConfig.fallbackColor}14` // 14 in hex = 8% opacity
+                            }}
+                          >
+                            {assetConfig.name}
+                          </div>
                         </div>
                       </div>
                     </TableCell>
