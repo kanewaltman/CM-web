@@ -1,4 +1,4 @@
-import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard } from 'lucide-react';
+import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard } from '../components/ui-icons';
 import { Button } from './ui/button';
 import {
   DropdownMenu,

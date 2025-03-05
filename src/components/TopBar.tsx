@@ -1,4 +1,4 @@
-import { Search, Moon, Sun, ChevronDown, Menu } from 'lucide-react';
+import { Search, Moon, Sun, ChevronDown, Menu } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useTheme } from 'next-themes';
