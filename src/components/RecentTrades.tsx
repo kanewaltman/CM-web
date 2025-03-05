@@ -11,29 +11,28 @@ const trades = [
 export function RecentTrades() {
   return (
     <div className={cn(
-      "h-full flex flex-col p-2",
-      "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+      "h-full flex flex-col p-2"
     )}>
       <div className="flex-1 min-h-0">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-bg))] z-20 whitespace-nowrap">
+            <TableRow isHeader={true}>
+              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 px-0 py-1">Time</div>
                 </div>
               </TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Price</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Amount</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Price</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {trades.map((trade, i) => (
-              <TableRow key={i} className="group">
-                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+              <TableRow key={i} className="group" isHeader={false}>
+                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                     <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     <div className="relative z-10">{trade.time}</div>
                   </div>

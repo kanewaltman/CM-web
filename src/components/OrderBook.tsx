@@ -32,29 +32,28 @@ export function OrderBook() {
 
   return (
     <div className={cn(
-      "h-full flex flex-col p-2",
-      "border border-[hsl(var(--color-widget-inset-border))] widget-inset"
+      "h-full flex flex-col p-2"
     )}>
       <div className="flex-1 min-h-0">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-bg))] z-20 whitespace-nowrap">
+            <TableRow isHeader={true}>
+              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 px-0 py-1">Price (USDT)</div>
                 </div>
               </TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Amount (BTC)</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Total</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Amount (BTC)</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {asks.map((ask, i) => (
-              <TableRow key={`ask-${i}`} className="group hover:bg-red-500/5">
-                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+              <TableRow key={`ask-${i}`} className="group hover:bg-red-500/5" isHeader={false}>
+                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                     <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     <div className="relative z-10 text-red-500 font-mono">{ask.price.toFixed(2)}</div>
                   </div>
@@ -64,10 +63,10 @@ export function OrderBook() {
               </TableRow>
             ))}
             {bids.map((bid, i) => (
-              <TableRow key={`bid-${i}`} className="group hover:bg-green-500/5">
-                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+              <TableRow key={`bid-${i}`} className="group hover:bg-green-500/5" isHeader={false}>
+                <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                     <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     <div className="relative z-10 text-green-500 font-mono">{bid.price.toFixed(2)}</div>
                   </div>

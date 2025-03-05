@@ -42,12 +42,12 @@ const formatBalance = (value: number, decimals: number) => {
 };
 
 const SkeletonRow: React.FC = () => (
-  <TableRow>
-    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+  <TableRow isHeader={false}>
+    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
       <div className="relative">
-        <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+        <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
         <div className="relative z-10 flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse" />
+          <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse" />
           <div className="w-20 h-5 rounded-md bg-white/5 animate-pulse" />
         </div>
       </div>
@@ -216,14 +216,14 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         {balancesWithPrices.map((balance) => {
           const assetConfig = ASSETS[balance.asset];
           return (
-            <TableRow key={balance.asset} className="group">
-              <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-bg))] z-10 whitespace-nowrap">
+            <TableRow key={balance.asset} className="group" isHeader={false}>
+              <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                   <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   <div className="relative z-10 flex items-center gap-2">
                     <div 
-                      className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
+                      className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
                       style={{ backgroundColor: assetConfig.fallbackColor }}
                     >
                       <img
@@ -234,7 +234,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     </div>
                     <button 
                       type="button"
-                      className="font-jakarta font-medium text-sm rounded-md px-1 transition-all duration-150"
+                      className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
                       style={{ 
                         color: assetConfig.fallbackColor,
                         backgroundColor: `${assetConfig.fallbackColor}14`
@@ -277,7 +277,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               <TableCell className="text-right whitespace-nowrap">
                 <button 
                   type="button"
-                  className="font-jakarta font-medium text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
+                  className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
                 >
                   {balance.availablePercentage}%
                 </button>
@@ -292,23 +292,22 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   return (
     <div className={cn(
       "h-full flex flex-col p-2",
-      "border border-[hsl(var(--color-widget-inset-border))] widget-inset",
       className
     )}>
       <div className="flex-1 min-h-0">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-bg))] z-20 whitespace-nowrap">
+            <TableRow isHeader={true}>
+              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-bg))]"></div>
+                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 px-0 py-1">Asset</div>
                 </div>
               </TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Balance</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Available</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Balance</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
+              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Available</TableHead>
             </TableRow>
           </TableHeader>
           {renderContent()}
