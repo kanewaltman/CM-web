@@ -207,7 +207,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Balance</TableHead>
                 <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
                 <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
-                <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Available %</TableHead>
+                <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-bg))] z-10 text-right whitespace-nowrap">Available</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -230,15 +230,26 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <div 
-                            className="font-jakarta font-medium text-sm rounded-md px-1"
+                          <button 
+                            type="button"
+                            className="font-jakarta font-medium text-sm rounded-md px-1 transition-all duration-150"
                             style={{ 
                               color: assetConfig.fallbackColor,
-                              backgroundColor: `${assetConfig.fallbackColor}14` // 14 in hex = 8% opacity
+                              backgroundColor: `${assetConfig.fallbackColor}14`
+                            }}
+                            onMouseEnter={(e) => {
+                              const target = e.currentTarget;
+                              target.style.backgroundColor = assetConfig.fallbackColor;
+                              target.style.color = 'hsl(var(--color-widget-bg))';
+                            }}
+                            onMouseLeave={(e) => {
+                              const target = e.currentTarget;
+                              target.style.backgroundColor = `${assetConfig.fallbackColor}14`;
+                              target.style.color = assetConfig.fallbackColor;
                             }}
                           >
                             {assetConfig.name}
-                          </div>
+                          </button>
                         </div>
                       </div>
                     </TableCell>
@@ -250,8 +261,10 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                         {balance.asset}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap font-mono">
-                      {balance.valueInEuro}
+                    <TableCell className="text-right whitespace-nowrap">
+                      <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                        {balance.valueInEuro}
+                      </span>
                     </TableCell>
                     <TableCell className={cn(
                       "text-right whitespace-nowrap font-mono",
@@ -259,8 +272,13 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     )}>
                       {balance.change24h}%
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap font-mono">
-                      {balance.availablePercentage}%
+                    <TableCell className="text-right whitespace-nowrap">
+                      <button 
+                        type="button"
+                        className="font-jakarta font-medium text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
+                      >
+                        {balance.availablePercentage}%
+                      </button>
                     </TableCell>
                   </TableRow>
                 );
