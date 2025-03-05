@@ -55,7 +55,14 @@ export interface AssetConfigBase<T extends string = string> {
   name: string;
   type: ASSET_TYPE;
   icon: string;
-  fallbackColor: string;
+  /**
+   * Theme-specific colors for light and dark modes.
+   * Light mode colors are optimized for accessibility on light backgrounds.
+   */
+  theme: {
+    light: string;
+    dark: string;
+  };
   decimalPlaces: number;
   multiplier: number;
   networks: ReadonlyArray<AssetNetwork>;

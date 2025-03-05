@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
+import { useTheme } from 'next-themes';
 
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
@@ -88,11 +89,40 @@ interface BalancesWidgetProps {
 }
 
 export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compact = false }) => {
+  const { theme, resolvedTheme } = useTheme();
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [balances, setBalances] = useState<BalanceData[]>([]);
   const [prices, setPrices] = useState<PriceData>({});
   const [error, setError] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Detect theme from document class list
+  useEffect(() => {
+    const updateTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      setCurrentTheme(isDark ? 'dark' : 'light');
+    };
+
+    // Initial theme detection
+    updateTheme();
+
+    // Watch for theme changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          updateTheme();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Memoize the fetch prices function to prevent recreating it on every render
   const fetchPrices = useCallback(async () => {
@@ -215,6 +245,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       <TableBody>
         {balancesWithPrices.map((balance) => {
           const assetConfig = ASSETS[balance.asset];
+          const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
           return (
             <TableRow key={balance.asset} className="group" isHeader={false}>
               <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
@@ -224,7 +255,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                   <div className="relative z-10 flex items-center gap-2">
                     <div 
                       className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
-                      style={{ backgroundColor: assetConfig.fallbackColor }}
+                      style={{ backgroundColor: assetColor }}
                     >
                       <img
                         src={assetConfig.icon}
@@ -236,18 +267,18 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                       type="button"
                       className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
                       style={{ 
-                        color: assetConfig.fallbackColor,
-                        backgroundColor: `${assetConfig.fallbackColor}14`
+                        color: assetColor,
+                        backgroundColor: `${assetColor}14`
                       }}
                       onMouseEnter={(e) => {
                         const target = e.currentTarget;
-                        target.style.backgroundColor = assetConfig.fallbackColor;
+                        target.style.backgroundColor = assetColor;
                         target.style.color = 'hsl(var(--color-widget-bg))';
                       }}
                       onMouseLeave={(e) => {
                         const target = e.currentTarget;
-                        target.style.backgroundColor = `${assetConfig.fallbackColor}14`;
-                        target.style.color = assetConfig.fallbackColor;
+                        target.style.backgroundColor = `${assetColor}14`;
+                        target.style.color = assetColor;
                       }}
                     >
                       {assetConfig.name}
