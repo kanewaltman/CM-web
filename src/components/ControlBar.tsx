@@ -137,7 +137,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
               <Button
                 variant="ghost"
                 className={cn(
-                  "h-12 px-4 text-base",
+                  "h-12 px-4 text-base", 
                   colors.text,
                   "hover:bg-transparent"
                 )}
@@ -146,7 +146,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                 <span>Edit</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-64">
+            <DropdownMenuContent align="end" sideOffset={8} className="w-72">
               <div className="flex space-x-2 p-2">
                 <Button variant="outline" className="flex-1 h-10" onClick={handleCopyLayout}>
                   <Copy className="h-4 w-4 mr-2 opacity-80" />
@@ -158,17 +158,25 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                 </Button>
               </div>
               <DropdownMenuSeparator />
-              <div className="px-2 py-2 text-sm font-medium">Available Widgets</div>
-              <div className="grid grid-cols-1 gap-2 p-2">
+              <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
+              <div className="px-1 py-1 pb-2">
                 {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][]).map(([type, config]) => (
                   <div
                     key={type}
                     draggable
                     onDragStart={(e) => handleDragStart(e, type)}
-                    className="relative flex select-none items-center rounded-md px-3 py-3 text-sm border shadow-sm
-                    hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing"
+                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing"
                   >
-                    <span>{config.title}</span>
+                    <div
+                      className="bg-background flex size-8 items-center justify-center rounded-md border"
+                      aria-hidden="true"
+                    >
+                      <LayoutGrid className="h-4 w-4 opacity-60" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">{config.title}</div>
+                      <div className="text-muted-foreground text-xs">Drag to add to dashboard</div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -178,7 +186,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                   <DialogTrigger asChild>
                     <Button variant="outline" className="w-full">
                       <Palette className="h-4 w-4 mr-2 opacity-80" />
-                      <span>Appearance</span>
+                      <span>Edit Appearance</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px]">
