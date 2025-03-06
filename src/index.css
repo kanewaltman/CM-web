@@ -29,6 +29,12 @@
   --grid-item-border-radius: 24px;
   --grid-margin: 8px;
 
+  /* Scrollbar customization */
+  --scrollbar-size: 5px;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb-radius: var(--radius-full);
+  
   /* Background Elevation Levels */
   --color-bg-base: 0 0% 96%;         /* Base background - #F5F5F5 */
   --color-bg-subtle: 0 0% 92%;        /* Subtle background - slightly darker */
@@ -146,6 +152,7 @@
 
   background-color: hsl(var(--color-bg-base));
   --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  --scrollbar-track-color: transparent;
 
   /* Theme Colors - Dark */
   --color-background-main: var(--color-bg-base);
@@ -335,7 +342,7 @@ body {
   .scrollbar-thin,
   .scrollbar-main {
     scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
   }
 }
 
@@ -348,13 +355,36 @@ body {
 
 .scrollbar-thin::-webkit-scrollbar-track,
 .scrollbar-main::-webkit-scrollbar-track {
-  background: var(--scrollbar-track-color);
+  background: transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb,
 .scrollbar-main::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb-color);
   border-radius: var(--scrollbar-thumb-radius);
+}
+
+/* Widget-specific scrollbar styling - minimal with no background */
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+/* Firefox styling for widget scrollbars */
+@supports (scrollbar-width: thin) {
+  .grid-stack-item > .grid-stack-item-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
 }
 
 /* Remove scrollbar buttons and corner */
