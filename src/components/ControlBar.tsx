@@ -226,11 +226,13 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
         <div className="flex items-center space-x-6">
           <button 
             className={cn(
-              "flex items-center space-x-2 px-4 py-3 rounded-lg transition-colors",
-              "bg-[hsl(var(--color-widget-inset))]",
+              "flex items-center space-x-2 px-4 py-3 transition-colors",
+              theme === 'dark' 
+                ? "bg-[hsl(var(--card))] text-white" 
+                : "bg-[hsl(var(--card))] text-gray-800",
               "border border-[hsl(var(--color-border-default)]",
               "shadow-[0px_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0px_1px_0px_rgba(0,0,0,0.1)]",
-              colors.text
+              "rounded-[calc(var(--grid-item-border-radius)/2)]"
             )}
           >
             <div className="w-8 h-8 rounded-full bg-orange-500/[0.16] flex items-center justify-center text-base">
@@ -369,7 +371,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                               <div className="bg-muted h-12 rounded-3xl"></div>
                               <div className="bg-muted h-12 rounded-3xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-2">24px radius, 16px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-2">24px radius, 8px spacing</div>
                           </div>
                           
                           <div 
@@ -394,7 +396,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                               <div className="bg-muted h-12 rounded-xl"></div>
                               <div className="bg-muted h-12 rounded-xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-2">16px radius, 8px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-2">16px radius, 4px spacing</div>
                           </div>
                         </div>
                       </div>
