@@ -42,11 +42,18 @@ interface ControlBarProps {
 }
 
 export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: ControlBarProps) {
-  const { theme, setTheme } = useTheme();
-  const colors = getThemeValues(theme);
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const colors = getThemeValues(resolvedTheme || theme);
   const [isOpen, setIsOpen] = useState(false);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [gridStyle, setGridStyle] = useState<GridStyle>('rounded');
+
+  // Handle theme initialization
+  useEffect(() => {
+    // Force a re-render when the theme/resolvedTheme changes
+    // This ensures correct styling when the app first loads
+    console.log('Theme changed:', { theme, resolvedTheme });
+  }, [theme, resolvedTheme]);
 
   // Separate function to just set CSS variables without toast or grid manipulation
   const setCSSVariables = (style: GridStyle) => {
@@ -229,7 +236,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
               "flex items-center space-x-2 px-4 py-3 transition-colors",
               theme === 'dark' 
                 ? "bg-[hsl(var(--card))] text-white" 
-                : "bg-[hsl(var(--card))] text-gray-800",
+                : "bg-[hsl(var(--card))] " + colors.text,
               "border border-[hsl(var(--color-border-default)]",
               "shadow-[0px_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0px_1px_0px_rgba(0,0,0,0.1)]",
               "rounded-[calc(var(--grid-item-border-radius)/2)]"
