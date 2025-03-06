@@ -124,6 +124,12 @@
   --ring: var(--color-focus-ring);
 
   --radius: var(--radius-md);
+
+  /* Scrollbar customization */
+  --scrollbar-size: 4px;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-radius: var(--radius-full);
 }
 
 .dark {
@@ -145,7 +151,7 @@
   --card: 0 0% 6%;
 
   background-color: hsl(var(--color-bg-base));
-  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.15);
 
   /* Theme Colors - Dark */
   --color-background-main: var(--color-bg-base);
@@ -556,4 +562,88 @@ body {
 button.font-bold, 
 .font-bold {
   font-weight: 600 !important;
+}
+
+/* Widget-specific scrollbar styling - ultra minimal, just the bar */
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-button,
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Firefox styling for widget scrollbars */
+@supports (scrollbar-width: thin) {
+  .grid-stack-item > .grid-stack-item-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
+}
+
+/* Widget content scrollable areas should also have minimal scrollbars */
+.widget-content::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.widget-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+.widget-content::-webkit-scrollbar-button,
+.widget-content::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Firefox styling for widget content scrollbars */
+@supports (scrollbar-width: thin) {
+  .widget-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
+}
+
+/* Widget inset areas should also have minimal scrollbars */
+.widget-inset::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.widget-inset::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-inset::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+.widget-inset::-webkit-scrollbar-button,
+.widget-inset::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Firefox styling for widget inset scrollbars */
+@supports (scrollbar-width: thin) {
+  .widget-inset {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
 }
