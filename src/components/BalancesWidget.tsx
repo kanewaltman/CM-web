@@ -12,6 +12,8 @@ import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
 import { Button } from './ui/button';
+import { TableSkeleton } from './TableSkeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
@@ -315,23 +317,82 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 {balance.change24h}%
               </TableCell>
               <TableCell className="text-right whitespace-nowrap">
-                <button 
-                  type="button"
-                  className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
-                  style={{
-                    cursor: 'pointer',
-                    WebkitTouchCallout: 'none',
-                    WebkitUserSelect: 'text',
-                    userSelect: 'text'
-                  }}
-                  onMouseDown={(e) => {
-                    if (e.detail > 1) {
-                      e.preventDefault();
-                    }
-                  }}
-                >
-                  {balance.availablePercentage}%
-                </button>
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button 
+                        type="button"
+                        className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
+                        style={{
+                          cursor: 'pointer',
+                          WebkitTouchCallout: 'none',
+                          WebkitUserSelect: 'text',
+                          userSelect: 'text'
+                        }}
+                        onMouseDown={(e) => {
+                          if (e.detail > 1) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        {balance.availablePercentage}%
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="py-2 px-3 w-56 bg-background text-foreground border border-border">
+                      <div className="space-y-2">
+                        <div className="text-[13px] font-medium text-left">Balances</div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <svg
+                            width="8"
+                            height="8"
+                            fill="currentColor"
+                            viewBox="0 0 8 8"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="shrink-0 text-green-500"
+                            aria-hidden="true"
+                          >
+                            <circle cx="4" cy="4" r="4"></circle>
+                          </svg>
+                          <span className="flex grow gap-2">
+                            Available <span className="ml-auto">100%</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <svg
+                            width="8"
+                            height="8"
+                            fill="currentColor"
+                            viewBox="0 0 8 8"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="shrink-0 text-muted-foreground/40"
+                            aria-hidden="true"
+                          >
+                            <circle cx="4" cy="4" r="4"></circle>
+                          </svg>
+                          <span className="flex grow gap-2 text-muted-foreground/70">
+                            Staked <span className="ml-auto">0%</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <svg
+                            width="8"
+                            height="8"
+                            fill="currentColor"
+                            viewBox="0 0 8 8"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="shrink-0 text-muted-foreground/40"
+                            aria-hidden="true"
+                          >
+                            <circle cx="4" cy="4" r="4"></circle>
+                          </svg>
+                          <span className="flex grow gap-2 text-muted-foreground/70">
+                            In Exchange <span className="ml-auto">0%</span>
+                          </span>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </TableCell>
             </TableRow>
           );
