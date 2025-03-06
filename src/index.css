@@ -15,7 +15,7 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light;
+  color-scheme: light dark;
 
   /* Border Radius */
   --radius-sm: 0.3rem;
@@ -24,106 +24,72 @@
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
   --radius-full: 9999px;
-  
-  /* Grid customization */
-  --grid-item-border-radius: 24px;
-  --grid-margin: 8px;
 
   /* Background Elevation Levels */
-  --color-bg-base: 0 0% 100%;         /* Base background - #FFFFFF*/
-  --color-bg-subtle: 0 0% 96%;        /* Subtle background - #F5F5F5 */
-  --color-bg-surface: 0 0% 100%;      /* Surface background - #FFFFFF */
-  --color-bg-inset: 0 0% 96%;         /* Inset background - #F5F5F5 */
-  --color-bg-elevated: 0 0% 100%;     /* Elevated background - #FFFFFF */
+  --color-bg-base: 0 0% 96%;          /* Main app background */
+  --color-bg-surface: 0 0% 98%;       /* First level elevation (cards) */
+  --color-bg-surface-alt: 0 0% 96%;   /* Alternative surface color */
+  --color-bg-elevated: 0 0% 100%;     /* Elevated components (popovers, dropdowns) */
+  --color-bg-inset: 0 0% 96%;         /* Inset areas (scrollable containers) */
+  --color-bg-subtle: 0 0% 96%;        /* Subtle backgrounds */
   
   /* Widget Specific */
-  --color-widget-bg: 0 0% 100%;       /* Widget background */
+  --color-widget-bg: 0 0% 88%;        /* Widget background */
   --color-widget-header: 0 0% 100%;   /* Widget header - #FFFFFF */
-  --color-widget-content: 0 0% 100%;  /* Widget content area */
-  --color-widget-inset: 210 40% 96.1%;     /* Widget inset areas (scrollable) */
+  --color-widget-content: 0 0% 100%;   /* Widget content area */
+  --color-widget-inset: 0 0% 100% / 100;     /* Widget inset areas (scrollable) */
   --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
-  
-  /* Background Derivatives */
-  --color-background-default: var(--color-bg-base);
-  --color-background-subtle: var(--color-bg-subtle);
-  --color-background-surface: var(--color-bg-surface);
-  --color-background-inset: var(--color-bg-inset);
+
+  background-color: hsl(var(--color-bg-base));
+
+  /* Scrollbar Custom Properties */
+  --scrollbar-size: 4px;
+  --scrollbar-thumb-radius: 4px;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+
+  /* Theme Colors - Light */
+  --color-background-main: var(--color-bg-base);
   --color-background-elevated: var(--color-bg-elevated);
+  --color-background-subtle: var(--color-bg-subtle);
   --color-background-overlay: var(--color-bg-elevated);
   
-  --color-foreground-default: 222.2 84% 4.9%;
-  --color-foreground-muted: 215.4 16.3% 46.9%;
+  --color-foreground-default: 215 25% 27%;
+  --color-foreground-muted: 215 25% 40%;
   --color-foreground-subtle: 0 0% 45%;
   
-  --color-border-default: 214.3 31.8% 91.4%;
+  --color-border-default: 0 0% 90%;
   --color-border-muted: 0 0% 85%;
   
-  --color-primary-default: 222.2 47.4% 11.2%;
-  --color-primary-foreground: 210 40% 98%;
+  --color-primary-default: 0 0% 9%;
+  --color-primary-foreground: 0 0% 98%;
   
-  --color-accent-default: 210 40% 96.1%;
-  --color-accent-foreground: 222.2 47.4% 11.2%;
+  --color-accent-default: 0 0% 96%;
+  --color-accent-foreground: 0 0% 9%;
   
   --color-success-default: 142 72% 29%;
   --color-success-foreground: 0 0% 98%;
   
-  --color-info-default: 199 89% 48%;
-  --color-info-foreground: 0 0% 98%;
-  
-  --color-warning-default: 25 95% 53%;
+  --color-warning-default: 38 92% 50%;
   --color-warning-foreground: 0 0% 98%;
   
-  --color-destructive-default: 0 84.2% 60.2%;
-  --color-destructive-foreground: 210 40% 98%;
-  
+  --color-destructive-default: 0 84% 60%;
+  --color-destructive-foreground: 0 0% 98%;
+
   /* Trading Colors */
-  --color-price-up: 142 72% 29%;
-  --color-price-down: 355 78% 50%;
-  --color-price-unchanged: 0 0% 45%;
-  
+  --color-buy: 145 80% 38%;
+  --color-sell: 0 84% 60%;
+
   /* Component Specific */
   --color-input-background: var(--color-bg-inset);
-  --color-input-border: 214.3 31.8% 91.4%;
-  --color-input-ring: 222.2 84% 4.9%;
+  --color-input-border: 0 0% 90%;
+  --color-input-ring: 215 25% 27%;
   
   /* Focus & Interactive States */
-  --color-focus-ring: 222.2 84% 4.9%;
+  --color-focus-ring: 215 25% 27%;
   --color-hover-overlay: 0 0% 0%;
-  
+
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  --background: var(--color-bg-base);
-  --foreground: var(--color-foreground-default);
-
-  --card: var(--color-bg-surface);
-  --card-foreground: var(--color-foreground-default);
-
-  --popover: var(--color-bg-elevated);
-  --popover-foreground: var(--color-foreground-default);
-
-  --primary: var(--color-primary-default);
-  --primary-foreground: var(--color-primary-foreground);
-
-  --secondary: var(--color-bg-subtle);
-  --secondary-foreground: var(--color-foreground-default);
-
-  --muted: var(--color-bg-subtle);
-  --muted-foreground: var(--color-foreground-muted);
-
-  --accent: var(--color-accent-default);
-  --accent-foreground: var(--color-accent-foreground);
-
-  --destructive: var(--color-destructive-default);
-  --destructive-foreground: var(--color-destructive-foreground);
-
-  --border: var(--color-border-default);
-  --input: var(--color-input-border);
-  --ring: var(--color-focus-ring);
-
-  --radius: var(--radius-md);
 }
 
 .dark {
@@ -188,7 +154,6 @@
   background: transparent !important;
   opacity: 1;
   transition: opacity 300ms ease-in-out;
-  margin: var(--grid-margin) !important;
 }
 
 .grid-stack-item {
@@ -202,7 +167,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--grid-item-border-radius);
+  border-radius: 24px;
   user-select: text; /* Allow text selection by default */
 }
 
@@ -375,6 +340,31 @@ body {
 }
 
 @layer base {
+  :root {
+    --background: var(--color-bg-base);
+    --foreground: var(--color-foreground-default);
+    --card: var(--color-bg-surface);
+    --card-foreground: var(--color-foreground-default);
+    --popover: var(--color-bg-elevated);
+    --popover-foreground: var(--color-foreground-default);
+    --primary: var(--color-primary-default);
+    --primary-foreground: var(--color-primary-foreground);
+    --secondary: var(--color-bg-subtle);
+    --secondary-foreground: var(--color-foreground-default);
+    --muted: var(--color-bg-subtle);
+    --muted-foreground: var(--color-foreground-muted);
+    --accent: var(--color-accent-default);
+    --accent-foreground: var(--color-accent-foreground);
+    --destructive: var(--color-destructive-default);
+    --destructive-foreground: var(--color-destructive-foreground);
+    --border: var(--color-border-default);
+    --input: var(--color-input-border);
+    --ring: var(--color-focus-ring);
+    --radius: var(--radius-md);
+  }
+}
+
+@layer base {
   * {
     @apply border-border;
   }
@@ -462,7 +452,7 @@ body {
 .widget-drag-preview .grid-stack-item-content {
   background: hsl(var(--color-widget-bg));
   border: 2px dashed rgba(128, 128, 128, 0.3);
-  border-radius: var(--grid-item-border-radius);
+  border-radius: 24px;
   transition: all 200ms ease-in-out;
   overflow: hidden !important;
 }
@@ -483,7 +473,7 @@ body {
 .grid-stack .grid-stack-placeholder > .placeholder-content {
   background: rgba(128, 128, 128, 0.1) !important;
   border: 2px dashed rgba(128, 128, 128, 0.3) !important;
-  border-radius: var(--grid-item-border-radius);
+  border-radius: 24px;
   transition: all 0.1s ease-in-out;
   pointer-events: none;
 }
@@ -552,6 +542,6 @@ body {
 
 /* Override font-bold to be semibold (600) for buttons */
 button.font-bold, 
-.font-bold {
+.font-jakarta.font-bold {
   font-weight: 600 !important;
 }

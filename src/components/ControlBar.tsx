@@ -1,4 +1,4 @@
-import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette } from '../components/ui-icons';
+import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard } from '../components/ui-icons';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -7,33 +7,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from './ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose,
-} from './ui/dialog';
 import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { WIDGET_REGISTRY } from '@/App';
-// Import GridStack directly
-import { GridStack } from 'gridstack';
-
-// Extend HTMLElement to include gridstack property
-declare global {
-  interface HTMLElement {
-    gridstack?: GridStack;
-  }
-}
-
-// Custom style types for grid layout
-type GridStyle = 'rounded' | 'dense';
 
 interface ControlBarProps {
   onResetLayout: () => void;
@@ -42,115 +20,9 @@ interface ControlBarProps {
 }
 
 export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: ControlBarProps) {
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
   const colors = getThemeValues(theme);
   const [isOpen, setIsOpen] = useState(false);
-  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
-  const [gridStyle, setGridStyle] = useState<GridStyle>('rounded');
-
-  // Separate function to just set CSS variables without toast or grid manipulation
-  const setCSSVariables = (style: GridStyle) => {
-    const root = document.documentElement;
-    const margin = style === 'rounded' ? 8 : 4;
-    const borderRadius = style === 'rounded' ? '24px' : '16px';
-    
-    // Set CSS variables
-    root.style.setProperty('--grid-item-border-radius', borderRadius);
-    root.style.setProperty('--grid-margin', margin + 'px');
-  };
-  
-  const applyGridStyle = (style: GridStyle, showToast = true) => {
-    // Set the CSS variables first
-    setCSSVariables(style);
-    
-    try {
-      // Get GridStack instance directly - try multiple methods
-      const gridElement = document.querySelector('.grid-stack') as HTMLElement;
-      
-      // Try to get grid instance from the element
-      let gridInstance = gridElement?.gridstack;
-      
-      // If not found via element property, try accessing through window
-      if (!gridInstance && (window as any).grid) {
-        gridInstance = (window as any).grid;
-      }
-      
-      if (gridInstance) {
-        // Apply margin directly
-        if (typeof gridInstance.margin === 'function') {
-          gridInstance.margin(style === 'rounded' ? 8 : 4);
-        }
-        
-        // Update all grid items to use the new border radius
-        document.querySelectorAll('.grid-stack-item-content').forEach(item => {
-          (item as HTMLElement).style.borderRadius = style === 'rounded' ? '24px' : '16px';
-        });
-        
-        // Force a layout update
-        if (typeof gridInstance.float === 'function') {
-          const wasFloating = gridInstance.getFloat();
-          gridInstance.float(!wasFloating);
-          gridInstance.float(wasFloating);
-        }
-        
-        // Compact and relayout grid
-        if (typeof gridInstance.compact === 'function') {
-          gridInstance.compact();
-        }
-      }
-      
-      // Save preference
-      localStorage.setItem('grid-style', style);
-      setGridStyle(style);
-      
-      // Only show toast when explicitly applying a style (not during initialization)
-      if (showToast) {
-        toast.success(`Applied ${style} grid style`);
-      }
-    } catch (error) {
-      console.error('Error applying grid style:', error);
-      // Still set the CSS variables and save preference
-      localStorage.setItem('grid-style', style);
-      setGridStyle(style);
-      
-      // Only show toast when explicitly applying a style (not during initialization)
-      if (showToast) {
-        toast.info(`Applied ${style} style (CSS only)`);
-      }
-    }
-  };
-
-  // Apply the styles immediately on component mount to prevent flashing
-  useEffect(() => {
-    const savedStyle = localStorage.getItem('grid-style') as GridStyle | null;
-    
-    // Set the CSS variables immediately to prevent layout shift
-    if (savedStyle === 'rounded' || savedStyle === 'dense') {
-      // Apply CSS variables immediately
-      setCSSVariables(savedStyle);
-      setGridStyle(savedStyle);
-    } else {
-      // Default to rounded
-      setCSSVariables('rounded');
-      setGridStyle('rounded');
-    }
-    
-    // Apply the full grid style (with grid manipulation) after a delay
-    // but without showing the toast notification
-    const timer = setTimeout(() => {
-      try {
-        if (savedStyle === 'rounded' || savedStyle === 'dense') {
-          applyGridStyle(savedStyle, false); // false = don't show toast
-        } else {
-          applyGridStyle('rounded', false); // false = don't show toast
-        }
-      } catch (error) {
-        console.error('Error applying grid style on load:', error);
-      }
-    }, 300);
-    
-    return () => clearTimeout(timer);
-  }, []);
 
   const handleCopyLayout = () => {
     try {
@@ -218,7 +90,7 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
 
   return (
     <div className={cn(
-      "w-full py-4",
+      "w-full py-2",
       "bg-[hsl(var(--color-bg-base))]"
     )}>
       {/* Left Section - Account Selector and Balance */}
@@ -226,14 +98,14 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
         <div className="flex items-center space-x-6">
           <button 
             className={cn(
-              "flex items-center space-x-2 px-4 py-3 rounded-lg transition-colors",
+              "flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors",
               "bg-[hsl(var(--color-widget-inset))]",
               "border border-[hsl(var(--color-border-default)]",
               "shadow-[0px_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0px_1px_0px_rgba(0,0,0,0.1)]",
               colors.text
             )}
           >
-            <div className="w-8 h-8 rounded-full bg-orange-500/[0.16] flex items-center justify-center text-base">
+            <div className="w-7 h-7 rounded-full bg-orange-500/[0.16] flex items-center justify-center text-base">
               🐂
             </div>
             <span className="font-bold">Main</span>
@@ -247,177 +119,47 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
         </div>
 
         {/* Right Section - Grid Controls */}
-        <div className="flex items-center space-x-3">
-          {/* Edit Dropdown Menu */}
+        <div className="flex items-center space-x-2">
           <DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 className={cn(
-                  "h-12 px-4 text-base", 
+                  "h-10 px-3",
                   colors.text,
                   "hover:bg-transparent"
                 )}
               >
-                <LayoutGrid className="h-5 w-5 mr-2 opacity-50" />
+                <LayoutGrid className="h-4 w-4 mr-2 opacity-50" />
                 <span>Edit</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-72">
-              <div className="flex space-x-2 p-2">
-                <Button variant="outline" className="flex-1 h-10" onClick={handleCopyLayout}>
-                  <Copy className="h-4 w-4 mr-2 opacity-80" />
-                  <span>Copy</span>
-                </Button>
-                <Button variant="outline" className="flex-1 h-10" onClick={handlePasteLayout}>
-                  <Clipboard className="h-4 w-4 mr-2 opacity-80" />
-                  <span>Paste</span>
-                </Button>
-              </div>
+            <DropdownMenuContent align="end" sideOffset={8}>
+              <DropdownMenuItem onClick={handleCopyLayout}>
+                <Copy className="h-4 w-4 mr-2 opacity-50" />
+                <span>Copy Layout</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePasteLayout}>
+                <Clipboard className="h-4 w-4 mr-2 opacity-50" />
+                <span>Paste Layout</span>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
-              <div className="px-1 py-1 pb-2">
-                {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][]).map(([type, config]) => (
-                  <div
-                    key={type}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, type)}
-                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing"
-                  >
-                    <div
-                      className="bg-background flex size-8 items-center justify-center rounded-md border"
-                      aria-hidden="true"
-                    >
-                      <LayoutGrid className="h-4 w-4 opacity-60" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">{config.title}</div>
-                      <div className="text-muted-foreground text-xs">Drag to add to dashboard</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">Available Widgets</div>
+              {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][]).map(([type, config]) => (
+                <div
+                  key={type}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, type)}
+                  className="relative flex select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 cursor-grab active:cursor-grabbing"
+                >
+                  <span className="ml-2">{config.title}</span>
+                </div>
+              ))}
               <DropdownMenuSeparator />
-              <div className="p-2">
-                <Dialog open={isAppearanceOpen} onOpenChange={setIsAppearanceOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full">
-                      <Palette className="h-4 w-4 mr-2 opacity-80" />
-                      <span>Edit Appearance</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Appearance Settings</DialogTitle>
-                      <DialogDescription>
-                        Customize the look and feel of your dashboard.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <div className="mb-4">
-                        <div className="mb-2 text-sm font-medium">Theme</div>
-                        <div className="flex space-x-2">
-                          <Button 
-                            variant={theme === 'light' ? 'default' : 'outline'} 
-                            className="flex-1"
-                            onClick={() => setTheme('light')}
-                          >
-                            <span className="mr-2">☀️</span>
-                            <span>Light</span>
-                          </Button>
-                          <Button 
-                            variant={theme === 'dark' ? 'default' : 'outline'} 
-                            className="flex-1"
-                            onClick={() => setTheme('dark')}
-                          >
-                            <span className="mr-2">🌙</span>
-                            <span>Dark</span>
-                          </Button>
-                          <Button 
-                            variant={theme === 'system' ? 'default' : 'outline'} 
-                            className="flex-1"
-                            onClick={() => setTheme('system')}
-                          >
-                            <span className="mr-2">💻</span>
-                            <span>System</span>
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="mb-4">
-                        <div className="mb-2 text-sm font-medium">Grid Style</div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div 
-                            className={cn(
-                              "border rounded-xl p-3 cursor-pointer transition-all",
-                              gridStyle === 'rounded' 
-                                ? "border-primary bg-accent/50 ring-1 ring-primary" 
-                                : "hover:border-primary/50 hover:bg-accent/20"
-                            )}
-                            onClick={() => applyGridStyle('rounded')}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-sm font-medium">Rounded</div>
-                              <div className={cn(
-                                "w-4 h-4 rounded-full",
-                                gridStyle === 'rounded' ? "bg-primary" : "border border-muted-foreground"
-                              )}>
-                                {gridStyle === 'rounded' && <div className="w-2 h-2 bg-white rounded-full m-auto mt-1" />}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 p-1">
-                              <div className="bg-muted h-12 rounded-3xl"></div>
-                              <div className="bg-muted h-12 rounded-3xl"></div>
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-2">24px radius, 16px spacing</div>
-                          </div>
-                          
-                          <div 
-                            className={cn(
-                              "border rounded-xl p-3 cursor-pointer transition-all",
-                              gridStyle === 'dense' 
-                                ? "border-primary bg-accent/50 ring-1 ring-primary" 
-                                : "hover:border-primary/50 hover:bg-accent/20"
-                            )}
-                            onClick={() => applyGridStyle('dense')}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-sm font-medium">Dense</div>
-                              <div className={cn(
-                                "w-4 h-4 rounded-full",
-                                gridStyle === 'dense' ? "bg-primary" : "border border-muted-foreground"
-                              )}>
-                                {gridStyle === 'dense' && <div className="w-2 h-2 bg-white rounded-full m-auto mt-1" />}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 p-1">
-                              <div className="bg-muted h-12 rounded-xl"></div>
-                              <div className="bg-muted h-12 rounded-xl"></div>
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-2">16px radius, 8px spacing</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-6">
-                        <div className="mb-2 text-sm font-medium">Layout</div>
-                        <Button variant="outline" className="w-full" onClick={() => {
-                          onResetLayout();
-                          setIsAppearanceOpen(false);
-                        }}>
-                          <RotateCcw className="h-4 w-4 mr-2 opacity-80" />
-                          <span>Reset Layout</span>
-                        </Button>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button>Done</Button>
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
+              <DropdownMenuItem onClick={onResetLayout}>
+                <RotateCcw className="h-4 w-4 mr-2 opacity-50" />
+                <span>Reset Layout</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
