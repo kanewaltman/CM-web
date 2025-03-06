@@ -154,6 +154,18 @@ interface ExtendedGridStackWidget extends GridStackWidget {
 // Add constant for localStorage key
 const DASHBOARD_LAYOUT_KEY = 'dashboard-layout';
 
+/**
+ * Renders and manages the dynamic dashboard layout.
+ *
+ * This React component initializes a grid layout using the GridStack library to support drag-and-drop widgets.
+ * It handles widget creation, removal, layout resets, copy/paste operations, and persists layout changes in local storage.
+ * The component also adapts to different screen sizes (switching between desktop and mobile layouts), manages page navigation
+ * via URL state updates, and detects ad blockers to display an appropriate error screen when necessary.
+ *
+ * @remark The grid margin is dynamically determined from the CSS variable "--grid-margin", defaulting to 8px.
+ *
+ * @returns The dashboard layout as a React element, or an error view if grid initialization fails.
+ */
 function App() {
   console.log('App component is rendering');
   
@@ -570,10 +582,14 @@ function App() {
 
       // Initialize grid with options
       console.log('⚙️ Creating new grid instance');
+      const computedStyle = getComputedStyle(document.documentElement);
+      // Read the margin from CSS variables - default to 8px which matches our rounded style
+      const margin = parseInt(computedStyle.getPropertyValue('--grid-margin') || '8', 10);
+      
       const g = GridStack.init({
         float: true,
         cellHeight: isMobile ? '100px' : 'auto',
-        margin: 4,
+        margin: margin,
         column: isMobile ? 1 : 12,
         animate: true,
         draggable: {
