@@ -9,7 +9,7 @@ import { OrderBook } from './components/OrderBook';
 import { TradeForm } from './components/TradeForm';
 import { MarketOverview } from './components/MarketOverview';
 import { RecentTrades } from './components/RecentTrades';
-import { Toaster } from './components/ui/toaster';
+import { Toaster } from './components/ui/sonner';
 import { WidgetContainer } from './components/WidgetContainer';
 import { BalancesWidget } from './components/BalancesWidget';
 
@@ -1140,7 +1140,11 @@ function App() {
           <div ref={gridElementRef} className="grid-stack" />
         </div>
       </div>
-      <Toaster />
+      <Toaster 
+        position="bottom-right"
+        expand={false}
+        visibleToasts={16}
+      />
     </div>
   );
 }

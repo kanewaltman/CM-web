@@ -256,7 +256,6 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                   <div className="relative z-10 flex items-center gap-2">
                     <div 
                       className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
-                      style={{ backgroundColor: assetColor }}
                     >
                       <img
                         src={assetConfig.icon}

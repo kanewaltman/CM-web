@@ -10,7 +10,7 @@ import {
 import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { WIDGET_REGISTRY } from '@/App';
 
 interface ControlBarProps {
@@ -23,7 +23,6 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
   const { theme } = useTheme();
   const colors = getThemeValues(theme);
   const [isOpen, setIsOpen] = useState(false);
-  const { toast } = useToast();
 
   const handleCopyLayout = () => {
     try {
@@ -32,24 +31,19 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
         throw new Error('No layout data available');
       }
       navigator.clipboard.writeText(layoutData).then(() => {
-        toast({
-          title: "Layout copied",
+        toast.success("Layout copied", {
           description: "Layout configuration has been copied to clipboard",
         });
       }).catch((err) => {
         console.error('Failed to copy layout:', err);
-        toast({
-          title: "Failed to copy",
+        toast.error("Failed to copy", {
           description: "Could not copy layout to clipboard",
-          variant: "destructive",
         });
       });
     } catch (err) {
       console.error('Failed to prepare layout for copy:', err);
-      toast({
-        title: "Failed to copy",
+      toast.error("Failed to copy", {
         description: "Could not prepare layout data",
-        variant: "destructive",
       });
     }
   };
@@ -63,16 +57,13 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
         throw new Error('Invalid layout format');
       }
       onPasteLayout(text);
-      toast({
-        title: "Layout pasted",
+      toast.success("Layout pasted", {
         description: "New layout has been applied",
       });
     } catch (err) {
       console.error('Failed to paste layout:', err);
-      toast({
-        title: "Failed to paste",
+      toast.error("Failed to paste", {
         description: "Invalid layout data in clipboard",
-        variant: "destructive",
       });
     }
   };
