@@ -229,7 +229,13 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
       "bg-[hsl(var(--color-bg-base))]"
     )}>
       {/* Left Section - Account Selector and Balance */}
-      <div className="flex items-center justify-between max-w-[1920px] mx-auto px-4">
+      <div 
+        className="flex items-center justify-between max-w-[1920px] mx-auto"
+        style={{ 
+          paddingLeft: `calc(${gridStyle === 'rounded' ? '8px' : '4px'} + var(--grid-margin))`, 
+          paddingRight: `calc(${gridStyle === 'rounded' ? '8px' : '4px'} + var(--grid-margin))` 
+        }}
+      >
         <div className="flex items-center space-x-6">
           <button 
             className={cn(
