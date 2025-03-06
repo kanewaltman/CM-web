@@ -1,4 +1,4 @@
-import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette } from '../components/ui-icons';
+import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette, Sun, Moon, Monitor } from '../components/ui-icons';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -322,101 +322,101 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Appearance Settings</DialogTitle>
+                    <DialogHeader className="pb-2">
+                      <DialogTitle className="text-xl">Appearance Settings</DialogTitle>
                       <DialogDescription>
                         Customize the look and feel of your dashboard.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4">
-                      <div className="mb-4">
-                        <div className="mb-2 text-sm font-medium">Theme</div>
-                        <div className="flex space-x-2">
+                    <div className="py-6 space-y-6">
+                      <div>
+                        <div className="mb-3 text-sm font-medium">Theme</div>
+                        <div className="flex space-x-3">
                           <Button 
                             variant={theme === 'light' ? 'default' : 'outline'} 
-                            className="flex-1"
+                            className="flex-1 h-11"
                             onClick={() => setTheme('light')}
                           >
-                            <span className="mr-2">☀️</span>
+                            <Sun className="h-4 w-4 mr-2" />
                             <span>Light</span>
                           </Button>
                           <Button 
                             variant={theme === 'dark' ? 'default' : 'outline'} 
-                            className="flex-1"
+                            className="flex-1 h-11"
                             onClick={() => setTheme('dark')}
                           >
-                            <span className="mr-2">🌙</span>
+                            <Moon className="h-4 w-4 mr-2" />
                             <span>Dark</span>
                           </Button>
                           <Button 
                             variant={theme === 'system' ? 'default' : 'outline'} 
-                            className="flex-1"
+                            className="flex-1 h-11"
                             onClick={() => setTheme('system')}
                           >
-                            <span className="mr-2">💻</span>
+                            <Monitor className="h-4 w-4 mr-2" />
                             <span>System</span>
                           </Button>
                         </div>
                       </div>
                       
-                      <div className="mb-4">
-                        <div className="mb-2 text-sm font-medium">Grid Style</div>
-                        <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="mb-3 text-sm font-medium">Grid Style</div>
+                        <div className="grid grid-cols-2 gap-4">
                           <div 
                             className={cn(
-                              "border rounded-xl p-3 cursor-pointer transition-all",
+                              "border rounded-xl p-4 cursor-pointer transition-all",
                               gridStyle === 'rounded' 
                                 ? "border-primary bg-accent/50 ring-1 ring-primary" 
                                 : "hover:border-primary/50 hover:bg-accent/20"
                             )}
                             onClick={() => applyGridStyle('rounded')}
                           >
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between mb-3">
                               <div className="text-sm font-medium">Rounded</div>
                               <div className={cn(
-                                "w-4 h-4 rounded-full",
+                                "w-5 h-5 rounded-full",
                                 gridStyle === 'rounded' ? "bg-primary" : "border border-muted-foreground"
                               )}>
-                                {gridStyle === 'rounded' && <div className="w-2 h-2 bg-white rounded-full m-auto mt-1" />}
+                                {gridStyle === 'rounded' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 p-1">
-                              <div className="bg-muted h-12 rounded-3xl"></div>
-                              <div className="bg-muted h-12 rounded-3xl"></div>
+                            <div className="grid grid-cols-2 gap-4 p-2">
+                              <div className="bg-primary/15 h-14 rounded-3xl"></div>
+                              <div className="bg-primary/15 h-14 rounded-3xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-2">24px radius, 8px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-3">24px radius, 8px spacing</div>
                           </div>
                           
                           <div 
                             className={cn(
-                              "border rounded-xl p-3 cursor-pointer transition-all",
+                              "border rounded-xl p-4 cursor-pointer transition-all",
                               gridStyle === 'dense' 
                                 ? "border-primary bg-accent/50 ring-1 ring-primary" 
                                 : "hover:border-primary/50 hover:bg-accent/20"
                             )}
                             onClick={() => applyGridStyle('dense')}
                           >
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between mb-3">
                               <div className="text-sm font-medium">Dense</div>
                               <div className={cn(
-                                "w-4 h-4 rounded-full",
+                                "w-5 h-5 rounded-full",
                                 gridStyle === 'dense' ? "bg-primary" : "border border-muted-foreground"
                               )}>
-                                {gridStyle === 'dense' && <div className="w-2 h-2 bg-white rounded-full m-auto mt-1" />}
+                                {gridStyle === 'dense' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 p-1">
-                              <div className="bg-muted h-12 rounded-xl"></div>
-                              <div className="bg-muted h-12 rounded-xl"></div>
+                            <div className="grid grid-cols-2 gap-2 p-2">
+                              <div className="bg-primary/15 h-14 rounded-xl"></div>
+                              <div className="bg-primary/15 h-14 rounded-xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-2">16px radius, 4px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-3">16px radius, 4px spacing</div>
                           </div>
                         </div>
                       </div>
                       
-                      <div className="mt-6">
-                        <div className="mb-2 text-sm font-medium">Layout</div>
-                        <Button variant="outline" className="w-full" onClick={() => {
+                      <div>
+                        <div className="mb-3 text-sm font-medium">Layout</div>
+                        <Button variant="outline" className="w-full h-11" onClick={() => {
                           onResetLayout();
                           setIsAppearanceOpen(false);
                         }}>
@@ -425,11 +425,6 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                         </Button>
                       </div>
                     </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button>Done</Button>
-                      </DialogClose>
-                    </DialogFooter>
                   </DialogContent>
                 </Dialog>
               </div>

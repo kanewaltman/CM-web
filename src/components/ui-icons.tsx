@@ -18,7 +18,8 @@ import {
   RotateCcw,
   Copy,
   Clipboard,
-  Palette
+  Palette,
+  Monitor
 } from 'lucide-react';
 
 // Export our safe version of the fingerprint icon
@@ -38,5 +39,6 @@ export {
   RotateCcw,
   Copy,
   Clipboard,
-  Palette
+  Palette,
+  Monitor
 }; 
