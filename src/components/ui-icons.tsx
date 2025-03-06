@@ -4,7 +4,7 @@
 // Import our custom implementation for blocked icons
 import SecurityIcon from './icons/Fingerprint';
 
-// Re-export from Lucide with our replacements
+// Import all icons we need from Lucide
 import {
   Search,
   Moon,
@@ -17,13 +17,14 @@ import {
   LayoutGrid,
   RotateCcw,
   Copy,
-  Clipboard
+  Clipboard,
+  Palette
 } from 'lucide-react';
 
 // Export our safe version of the fingerprint icon
 export const Fingerprint = SecurityIcon;
 
-// Re-export all other icons
+// Re-export all other icons explicitly
 export {
   Search,
   Moon,
@@ -36,5 +37,6 @@ export {
   LayoutGrid,
   RotateCcw,
   Copy,
-  Clipboard
+  Clipboard,
+  Palette
 }; 
