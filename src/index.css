@@ -30,17 +30,17 @@
   --grid-margin: 8px;
 
   /* Background Elevation Levels */
-  --color-bg-base: 0 0% 100%;         /* Base background - #FFFFFF*/
-  --color-bg-subtle: 0 0% 96%;        /* Subtle background - #F5F5F5 */
-  --color-bg-surface: 0 0% 100%;      /* Surface background - #FFFFFF */
-  --color-bg-inset: 0 0% 96%;         /* Inset background - #F5F5F5 */
-  --color-bg-elevated: 0 0% 100%;     /* Elevated background - #FFFFFF */
+  --color-bg-base: 0 0% 96%;         /* Base background - #F5F5F5 */
+  --color-bg-subtle: 0 0% 92%;        /* Subtle background - slightly darker */
+  --color-bg-surface: 0 0% 96%;      /* Surface background - #F5F5F5 */
+  --color-bg-inset: 0 0% 92%;         /* Inset background - slightly darker */
+  --color-bg-elevated: 0 0% 100%;     /* Elevated background - White #FFFFFF */
   
   /* Widget Specific */
-  --color-widget-bg: 0 0% 100%;       /* Widget background */
-  --color-widget-header: 0 0% 100%;   /* Widget header - #FFFFFF */
-  --color-widget-content: 0 0% 100%;  /* Widget content area */
-  --color-widget-inset: 210 40% 96.1%;     /* Widget inset areas (scrollable) */
+  --color-widget-bg: 0 0% 96%;       /* Widget background - #F5F5F5 */
+  --color-widget-header: 0 0% 100%;   /* Widget header - White */
+  --color-widget-content: 0 0% 100%;  /* Widget content area - White */
+  --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
   --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
   
   /* Background Derivatives */
@@ -98,7 +98,7 @@
   --background: var(--color-bg-base);
   --foreground: var(--color-foreground-default);
 
-  --card: var(--color-bg-surface);
+  --card: 0 0% 100%;  /* Keep cards white for contrast against the light gray background */
   --card-foreground: var(--color-foreground-default);
 
   --popover: var(--color-bg-elevated);
@@ -138,9 +138,11 @@
   /* Widget Specific - All flattened */
   --color-widget-bg: 0 0% 6%;         /* Widget background - #0F0F0F */
   --color-widget-header: 0 0% 6%;     /* Widget header - same as widget bg */
-  --color-widget-content: 0 0% 7% / 0.0;    /* Widget content area */
-  --color-widget-inset: 0 0% 6% / 0.0;      /* Widget inset areas */
-  --color-widget-inset-border: 100 0% 50% / 0.0;  /* Widget inset border color with 10% opacity */
+  --color-widget-content: 0 0% 6%;    /* Widget content area */
+  --color-widget-inset: 0 0% 10%;     /* Widget inset areas (scrollable) */
+  
+  /* Explicitly set card variable for consistent dark mode */
+  --card: 0 0% 6%;
 
   background-color: hsl(var(--color-bg-base));
   --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
