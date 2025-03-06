@@ -48,7 +48,8 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [gridStyle, setGridStyle] = useState<GridStyle>('rounded');
 
-  const applyGridStyle = (style: GridStyle) => {
+  // Separate function to just set CSS variables without toast or grid manipulation
+  const setCSSVariables = (style: GridStyle) => {
     const root = document.documentElement;
     const margin = style === 'rounded' ? 8 : 4;
     const borderRadius = style === 'rounded' ? '24px' : '16px';
@@ -56,6 +57,11 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
     // Set CSS variables
     root.style.setProperty('--grid-item-border-radius', borderRadius);
     root.style.setProperty('--grid-margin', margin + 'px');
+  };
+  
+  const applyGridStyle = (style: GridStyle, showToast = true) => {
+    // Set the CSS variables first
+    setCSSVariables(style);
     
     try {
       // Get GridStack instance directly - try multiple methods
@@ -72,12 +78,12 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
       if (gridInstance) {
         // Apply margin directly
         if (typeof gridInstance.margin === 'function') {
-          gridInstance.margin(margin);
+          gridInstance.margin(style === 'rounded' ? 8 : 4);
         }
         
         // Update all grid items to use the new border radius
         document.querySelectorAll('.grid-stack-item-content').forEach(item => {
-          (item as HTMLElement).style.borderRadius = borderRadius;
+          (item as HTMLElement).style.borderRadius = style === 'rounded' ? '24px' : '16px';
         });
         
         // Force a layout update
@@ -91,56 +97,59 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
         if (typeof gridInstance.compact === 'function') {
           gridInstance.compact();
         }
-        
-        // Save preference
-        localStorage.setItem('grid-style', style);
-        setGridStyle(style);
+      }
+      
+      // Save preference
+      localStorage.setItem('grid-style', style);
+      setGridStyle(style);
+      
+      // Only show toast when explicitly applying a style (not during initialization)
+      if (showToast) {
         toast.success(`Applied ${style} grid style`);
-      } else {
-        console.warn('GridStack instance not found');
-        // Still set the CSS variables and save preference
-        localStorage.setItem('grid-style', style);
-        setGridStyle(style);
-        toast.info(`Applied ${style} style (CSS only)`);
       }
     } catch (error) {
       console.error('Error applying grid style:', error);
       // Still set the CSS variables and save preference
       localStorage.setItem('grid-style', style);
       setGridStyle(style);
-      toast.info(`Applied ${style} style (CSS only)`);
+      
+      // Only show toast when explicitly applying a style (not during initialization)
+      if (showToast) {
+        toast.info(`Applied ${style} style (CSS only)`);
+      }
     }
   };
 
-  // Load saved grid style on mount
+  // Apply the styles immediately on component mount to prevent flashing
   useEffect(() => {
     const savedStyle = localStorage.getItem('grid-style') as GridStyle | null;
     
-    // Set default if not previously saved
+    // Set the CSS variables immediately to prevent layout shift
     if (savedStyle === 'rounded' || savedStyle === 'dense') {
+      // Apply CSS variables immediately
+      setCSSVariables(savedStyle);
       setGridStyle(savedStyle);
-      
-      // Apply saved style after a slightly longer delay to ensure grid is fully initialized
-      // This helps prevent the "Cannot read properties of undefined" error
-      const timer = setTimeout(() => {
-        try {
-          applyGridStyle(savedStyle);
-        } catch (error) {
-          console.error('Error applying grid style on load:', error);
-          // Fallback to just setting the CSS variables without modifying the grid
-          const root = document.documentElement;
-          const fallbackMargin = savedStyle === 'rounded' ? 8 : 4;
-          const fallbackBorderRadius = savedStyle === 'rounded' ? '24px' : '16px';
-          root.style.setProperty('--grid-item-border-radius', fallbackBorderRadius);
-          root.style.setProperty('--grid-margin', fallbackMargin + 'px');
-        }
-      }, 500); // Increased timeout to ensure grid is fully initialized
-      
-      return () => clearTimeout(timer);
     } else {
       // Default to rounded
+      setCSSVariables('rounded');
       setGridStyle('rounded');
     }
+    
+    // Apply the full grid style (with grid manipulation) after a delay
+    // but without showing the toast notification
+    const timer = setTimeout(() => {
+      try {
+        if (savedStyle === 'rounded' || savedStyle === 'dense') {
+          applyGridStyle(savedStyle, false); // false = don't show toast
+        } else {
+          applyGridStyle('rounded', false); // false = don't show toast
+        }
+      } catch (error) {
+        console.error('Error applying grid style on load:', error);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const handleCopyLayout = () => {

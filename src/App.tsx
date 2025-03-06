@@ -571,7 +571,8 @@ function App() {
       // Initialize grid with options
       console.log('⚙️ Creating new grid instance');
       const computedStyle = getComputedStyle(document.documentElement);
-      const margin = parseInt(computedStyle.getPropertyValue('--grid-margin') || '16', 10);
+      // Read the margin from CSS variables - default to 8px which matches our rounded style
+      const margin = parseInt(computedStyle.getPropertyValue('--grid-margin') || '8', 10);
       
       const g = GridStack.init({
         float: true,
