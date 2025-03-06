@@ -22,6 +22,18 @@ import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { WIDGET_REGISTRY } from '@/App';
+// Import GridStack directly
+import { GridStack } from 'gridstack';
+
+// Extend HTMLElement to include gridstack property
+declare global {
+  interface HTMLElement {
+    gridstack?: GridStack;
+  }
+}
+
+// Custom style types for grid layout
+type GridStyle = 'rounded' | 'dense';
 
 interface ControlBarProps {
   onResetLayout: () => void;
@@ -34,6 +46,102 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
   const colors = getThemeValues(theme);
   const [isOpen, setIsOpen] = useState(false);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+  const [gridStyle, setGridStyle] = useState<GridStyle>('rounded');
+
+  const applyGridStyle = (style: GridStyle) => {
+    const root = document.documentElement;
+    const margin = style === 'rounded' ? 8 : 4;
+    const borderRadius = style === 'rounded' ? '24px' : '16px';
+    
+    // Set CSS variables
+    root.style.setProperty('--grid-item-border-radius', borderRadius);
+    root.style.setProperty('--grid-margin', margin + 'px');
+    
+    try {
+      // Get GridStack instance directly - try multiple methods
+      const gridElement = document.querySelector('.grid-stack') as HTMLElement;
+      
+      // Try to get grid instance from the element
+      let gridInstance = gridElement?.gridstack;
+      
+      // If not found via element property, try accessing through window
+      if (!gridInstance && (window as any).grid) {
+        gridInstance = (window as any).grid;
+      }
+      
+      if (gridInstance) {
+        // Apply margin directly
+        if (typeof gridInstance.margin === 'function') {
+          gridInstance.margin(margin);
+        }
+        
+        // Update all grid items to use the new border radius
+        document.querySelectorAll('.grid-stack-item-content').forEach(item => {
+          (item as HTMLElement).style.borderRadius = borderRadius;
+        });
+        
+        // Force a layout update
+        if (typeof gridInstance.float === 'function') {
+          const wasFloating = gridInstance.getFloat();
+          gridInstance.float(!wasFloating);
+          gridInstance.float(wasFloating);
+        }
+        
+        // Compact and relayout grid
+        if (typeof gridInstance.compact === 'function') {
+          gridInstance.compact();
+        }
+        
+        // Save preference
+        localStorage.setItem('grid-style', style);
+        setGridStyle(style);
+        toast.success(`Applied ${style} grid style`);
+      } else {
+        console.warn('GridStack instance not found');
+        // Still set the CSS variables and save preference
+        localStorage.setItem('grid-style', style);
+        setGridStyle(style);
+        toast.info(`Applied ${style} style (CSS only)`);
+      }
+    } catch (error) {
+      console.error('Error applying grid style:', error);
+      // Still set the CSS variables and save preference
+      localStorage.setItem('grid-style', style);
+      setGridStyle(style);
+      toast.info(`Applied ${style} style (CSS only)`);
+    }
+  };
+
+  // Load saved grid style on mount
+  useEffect(() => {
+    const savedStyle = localStorage.getItem('grid-style') as GridStyle | null;
+    
+    // Set default if not previously saved
+    if (savedStyle === 'rounded' || savedStyle === 'dense') {
+      setGridStyle(savedStyle);
+      
+      // Apply saved style after a slightly longer delay to ensure grid is fully initialized
+      // This helps prevent the "Cannot read properties of undefined" error
+      const timer = setTimeout(() => {
+        try {
+          applyGridStyle(savedStyle);
+        } catch (error) {
+          console.error('Error applying grid style on load:', error);
+          // Fallback to just setting the CSS variables without modifying the grid
+          const root = document.documentElement;
+          const fallbackMargin = savedStyle === 'rounded' ? 8 : 4;
+          const fallbackBorderRadius = savedStyle === 'rounded' ? '24px' : '16px';
+          root.style.setProperty('--grid-item-border-radius', fallbackBorderRadius);
+          root.style.setProperty('--grid-margin', fallbackMargin + 'px');
+        }
+      }, 500); // Increased timeout to ensure grid is fully initialized
+      
+      return () => clearTimeout(timer);
+    } else {
+      // Default to rounded
+      setGridStyle('rounded');
+    }
+  }, []);
 
   const handleCopyLayout = () => {
     try {
@@ -224,6 +332,61 @@ export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: Contr
                             <span className="mr-2">💻</span>
                             <span>System</span>
                           </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="mb-4">
+                        <div className="mb-2 text-sm font-medium">Grid Style</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div 
+                            className={cn(
+                              "border rounded-xl p-3 cursor-pointer transition-all",
+                              gridStyle === 'rounded' 
+                                ? "border-primary bg-accent/50 ring-1 ring-primary" 
+                                : "hover:border-primary/50 hover:bg-accent/20"
+                            )}
+                            onClick={() => applyGridStyle('rounded')}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-medium">Rounded</div>
+                              <div className={cn(
+                                "w-4 h-4 rounded-full",
+                                gridStyle === 'rounded' ? "bg-primary" : "border border-muted-foreground"
+                              )}>
+                                {gridStyle === 'rounded' && <div className="w-2 h-2 bg-white rounded-full m-auto mt-1" />}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 p-1">
+                              <div className="bg-muted h-12 rounded-3xl"></div>
+                              <div className="bg-muted h-12 rounded-3xl"></div>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-2">24px radius, 16px spacing</div>
+                          </div>
+                          
+                          <div 
+                            className={cn(
+                              "border rounded-xl p-3 cursor-pointer transition-all",
+                              gridStyle === 'dense' 
+                                ? "border-primary bg-accent/50 ring-1 ring-primary" 
+                                : "hover:border-primary/50 hover:bg-accent/20"
+                            )}
+                            onClick={() => applyGridStyle('dense')}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-medium">Dense</div>
+                              <div className={cn(
+                                "w-4 h-4 rounded-full",
+                                gridStyle === 'dense' ? "bg-primary" : "border border-muted-foreground"
+                              )}>
+                                {gridStyle === 'dense' && <div className="w-2 h-2 bg-white rounded-full m-auto mt-1" />}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 p-1">
+                              <div className="bg-muted h-12 rounded-xl"></div>
+                              <div className="bg-muted h-12 rounded-xl"></div>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-2">16px radius, 8px spacing</div>
+                          </div>
                         </div>
                       </div>
                       
