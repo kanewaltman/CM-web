@@ -165,17 +165,9 @@ function App() {
   const resizeFrameRef = useRef<number>();
   const gridRef = useRef<GridStack | null>(null);
   const gridElementRef = useRef<HTMLDivElement>(null);
-  let widgetCounter = 0; // Initialize a counter for widget IDs
+  let widgetCounter = 0;
 
-  // Check for ad blocker on mount
-  useEffect(() => {
-    const hasAdBlocker = document.documentElement.getAttribute('data-adblocker') === 'true';
-    if (hasAdBlocker) {
-      console.warn('Ad blocker detected in React component');
-      setAdBlockerDetected(true);
-    }
-  }, []);
-
+  // Define handleRemoveWidget first
   const handleRemoveWidget = useCallback((widgetId: string) => {
     if (!grid) return;
     
@@ -238,12 +230,77 @@ function App() {
     }
   }, [grid]);
 
+  // Create ref after the function is defined
   const handleRemoveWidgetRef = useRef(handleRemoveWidget);
 
   // Keep the ref up to date
   useEffect(() => {
     handleRemoveWidgetRef.current = handleRemoveWidget;
   }, [handleRemoveWidget]);
+
+  // Now define createWidget which uses handleRemoveWidgetRef
+  const createWidget = useCallback((params: {
+    widgetType: string,
+    widgetId: string,
+    x: number,
+    y: number,
+    w?: number,
+    h?: number,
+    minW?: number,
+    minH?: number
+  }): HTMLElement => {
+    const { widgetType, widgetId, x, y, w = 3, h = 4, minW = 2, minH = 2 } = params;
+    console.log('Creating widget:', { widgetType, widgetId, x, y, w, h });
+    
+    // Create widget element
+    const widgetElement = document.createElement('div');
+    widgetElement.className = 'grid-stack-item';
+    widgetElement.setAttribute('gs-id', widgetId);
+    widgetElement.setAttribute('gs-x', String(x));
+    widgetElement.setAttribute('gs-y', String(y));
+    widgetElement.setAttribute('gs-w', String(w));
+    widgetElement.setAttribute('gs-h', String(h));
+    widgetElement.setAttribute('gs-min-w', String(minW));
+    widgetElement.setAttribute('gs-min-h', String(minH));
+
+    // Create content wrapper
+    const contentElement = document.createElement('div');
+    contentElement.className = 'grid-stack-item-content';
+    widgetElement.appendChild(contentElement);
+
+    // Create widget container div
+    const containerElement = document.createElement('div');
+    containerElement.className = 'widget-container';
+    contentElement.appendChild(containerElement);
+
+    // Render React component into container
+    const root = ReactDOM.createRoot(containerElement);
+    const WidgetComponent = widgetComponents[widgetType];
+    const widgetTitle = widgetTitles[widgetType];
+    
+    if (!WidgetComponent) {
+      console.error('Widget component not found:', widgetType);
+      throw new Error(`Widget component not found: ${widgetType}`);
+    }
+    
+    root.render(
+      <WidgetContainer title={widgetTitle} onRemove={() => handleRemoveWidgetRef.current(widgetId)}>
+        <WidgetComponent />
+      </WidgetContainer>
+    );
+
+    console.log('Widget element created:', widgetElement);
+    return widgetElement;
+  }, []);
+
+  // Check for ad blocker on mount
+  useEffect(() => {
+    const hasAdBlocker = document.documentElement.getAttribute('data-adblocker') === 'true';
+    if (hasAdBlocker) {
+      console.warn('Ad blocker detected in React component');
+      setAdBlockerDetected(true);
+    }
+  }, []);
 
   const pageChangeRef = useRef<(page: 'dashboard' | 'spot' | 'margin' | 'stake') => void>();
 
@@ -302,8 +359,8 @@ function App() {
       // Track which widgets we've updated
       const updatedWidgets = new Set<string>();
       
-      // First update existing widgets
-      defaultLayout.forEach((node: LayoutWidget) => {
+      // First update existing widgets and create missing ones
+      defaultLayout.forEach(node => {
         const baseId = node.id.split('-')[0];
         const existingWidget = currentWidgetsMap.get(baseId);
         
@@ -354,6 +411,8 @@ function App() {
               noResize: false,
               locked: false
             } as ExtendedGridStackWidget);
+            
+            updatedWidgets.add(node.id);
           } catch (error) {
             console.error('Failed to create widget:', node.id, error);
           }
@@ -367,11 +426,39 @@ function App() {
           grid.removeWidget(widget, false);
         }
       });
+
+      // Force a complete layout recalculation
+      grid.setStatic(true);
+      setTimeout(() => {
+        grid.setStatic(false);
+        // Force compaction after a brief delay to ensure all widgets are properly positioned
+        setTimeout(() => {
+          grid.batchUpdate();
+          try {
+            grid.compact();
+            // Verify final positions
+            defaultLayout.forEach(node => {
+              const baseId = node.id.split('-')[0];
+              const widget = currentWidgetsMap.get(baseId);
+              if (widget) {
+                grid.update(widget, {
+                  x: node.x,
+                  y: node.y,
+                  autoPosition: false
+                });
+              }
+            });
+          } finally {
+            grid.commit();
+          }
+        }, 50);
+      }, 0);
+
     } finally {
       grid.commit();
-      console.log('✅ Reset layout completed');
     }
-  }, [grid]);
+    console.log('✅ Reset layout completed');
+  }, [grid, createWidget]);
 
   const handleCopyLayout = useCallback(() => {
     if (!grid) return '';
@@ -816,60 +903,6 @@ function App() {
       }
     };
   }, [isMobile, currentPage, handleResize]);
-
-  const createWidget = (params: {
-    widgetType: string,
-    widgetId: string,
-    x: number,
-    y: number,
-    w?: number,
-    h?: number,
-    minW?: number,
-    minH?: number
-  }): HTMLElement => {
-    const { widgetType, widgetId, x, y, w = 3, h = 4, minW = 2, minH = 2 } = params;
-    console.log('Creating widget:', { widgetType, widgetId, x, y, w, h });
-    
-    // Create widget element
-    const widgetElement = document.createElement('div');
-    widgetElement.className = 'grid-stack-item';
-    widgetElement.setAttribute('gs-id', widgetId);
-    widgetElement.setAttribute('gs-x', String(x));
-    widgetElement.setAttribute('gs-y', String(y));
-    widgetElement.setAttribute('gs-w', String(w));
-    widgetElement.setAttribute('gs-h', String(h));
-    widgetElement.setAttribute('gs-min-w', String(minW));
-    widgetElement.setAttribute('gs-min-h', String(minH));
-
-    // Create content wrapper
-    const contentElement = document.createElement('div');
-    contentElement.className = 'grid-stack-item-content';
-    widgetElement.appendChild(contentElement);
-
-    // Create widget container div
-    const containerElement = document.createElement('div');
-    containerElement.className = 'widget-container';
-    contentElement.appendChild(containerElement);
-
-    // Render React component into container
-    const root = ReactDOM.createRoot(containerElement);
-    const WidgetComponent = widgetComponents[widgetType];
-    const widgetTitle = widgetTitles[widgetType];
-    
-    if (!WidgetComponent) {
-      console.error('Widget component not found:', widgetType);
-      throw new Error(`Widget component not found: ${widgetType}`);
-    }
-    
-    root.render(
-      <WidgetContainer title={widgetTitle} onRemove={() => handleRemoveWidgetRef.current(widgetId)}>
-        <WidgetComponent />
-      </WidgetContainer>
-    );
-
-    console.log('Widget element created:', widgetElement);
-    return widgetElement;
-  };
 
   const isValidLayout = (layout: unknown): layout is LayoutWidget[] => {
     if (!Array.isArray(layout)) {
