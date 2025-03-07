@@ -15,6 +15,7 @@ const config: StorybookConfig = {
     "@storybook/addon-styling",
     "@storybook/addon-viewport",
     "@storybook/addon-docs",
+    "storybook-dark-mode",
   ],
   framework: {
     name: "@storybook/react-vite",
@@ -29,12 +30,23 @@ const config: StorybookConfig = {
   viteFinal: async (config) => {
     return {
       ...config,
+      define: {
+        ...config.define,
+        'process.env': {},
+      },
       resolve: {
         ...config.resolve,
         alias: {
           ...config.resolve?.alias,
           '@': '/src',
         },
+      },
+      optimizeDeps: {
+        ...config.optimizeDeps,
+        include: [
+          ...(config.optimizeDeps?.include ?? []),
+          "storybook-dark-mode",
+        ],
       },
     };
   },
