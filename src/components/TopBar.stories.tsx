@@ -24,11 +24,25 @@ export const Default: Story = {
   args: {
     currentPage: 'dashboard',
   },
+  parameters: {
+    docs: {
+      description: {
+        story: 'The default TopBar state showing the dashboard page as active.',
+      },
+    },
+  },
 };
 
 export const SpotPage: Story = {
   args: {
     currentPage: 'spot',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'TopBar with the Spot trading page selected.',
+      },
+    },
   },
 };
 
@@ -36,10 +50,24 @@ export const MarginPage: Story = {
   args: {
     currentPage: 'margin',
   },
+  parameters: {
+    docs: {
+      description: {
+        story: 'TopBar with the Margin trading page selected.',
+      },
+    },
+  },
 };
 
 export const StakePage: Story = {
   args: {
     currentPage: 'stake',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'TopBar with the Staking page selected.',
+      },
+    },
   },
 }; 

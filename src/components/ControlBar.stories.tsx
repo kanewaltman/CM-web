@@ -69,6 +69,13 @@ export const Default: Story = {
     ...mockHandlers,
     initialGridStyle: 'rounded',
   },
+  parameters: {
+    docs: {
+      description: {
+        story: 'The default ControlBar with rounded grid style. Provides layout control and appearance customization options.',
+      },
+    },
+  },
 };
 
 export const WithGridStyleRounded: Story = {
@@ -77,6 +84,13 @@ export const WithGridStyleRounded: Story = {
     ...mockHandlers,
     initialGridStyle: 'rounded',
   },
+  parameters: {
+    docs: {
+      description: {
+        story: 'ControlBar with rounded grid style, providing a softer visual appearance for the layout.',
+      },
+    },
+  },
 };
 
 export const WithGridStyleDense: Story = {
@@ -84,6 +98,13 @@ export const WithGridStyleDense: Story = {
   args: {
     ...mockHandlers,
     initialGridStyle: 'dense',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'ControlBar with dense grid style, optimizing space usage in the layout.',
+      },
+    },
   },
 };
 
@@ -104,6 +125,13 @@ export const EditMenuOpen: Story = {
     
     // Wait to ensure the menu stays open
     await new Promise(resolve => setTimeout(resolve, 100));
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'ControlBar with the Edit menu pre-opened, showing available layout customization options.',
+      },
+    },
   },
 };
 
@@ -133,5 +161,12 @@ export const AppearanceDialogOpen: Story = {
     
     // Wait to ensure the dialog stays open
     await new Promise(resolve => setTimeout(resolve, 100));
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'ControlBar with the Appearance dialog pre-opened, showing theme and visual customization options.',
+      },
+    },
   },
 }; 

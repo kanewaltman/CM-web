@@ -22,6 +22,8 @@ const meta: Meta<typeof Button> = {
       options: ['default', 'sm', 'lg', 'icon'],
     },
   },
+  // Add component description at root level
+  description: 'A versatile button component with multiple variants and sizes. Use it for all interactive elements that trigger actions.',
 };
 
 export default meta;
@@ -33,6 +35,7 @@ export const Primary: Story = {
     variant: 'default',
     children: 'Button',
   },
+  description: 'The primary button style. Used for main actions and call-to-action elements.',
 };
 
 export const Secondary: Story = {
@@ -40,6 +43,7 @@ export const Secondary: Story = {
     variant: 'secondary',
     children: 'Secondary',
   },
+  description: 'A secondary button style. Used for alternative or less prominent actions.',
 };
 
 export const Destructive: Story = {
@@ -47,6 +51,7 @@ export const Destructive: Story = {
     variant: 'destructive',
     children: 'Destructive',
   },
+  description: 'A destructive button style. Used for dangerous or irreversible actions.',
 };
 
 export const Outline: Story = {
@@ -54,6 +59,7 @@ export const Outline: Story = {
     variant: 'outline',
     children: 'Outline',
   },
+  description: 'An outlined button style. Used for secondary actions with a subtle appearance.',
 };
 
 export const Ghost: Story = {
@@ -61,4 +67,5 @@ export const Ghost: Story = {
     variant: 'ghost',
     children: 'Ghost',
   },
+  description: 'A ghost button style. Used for subtle, text-like actions that don\'t need emphasis.',
 };

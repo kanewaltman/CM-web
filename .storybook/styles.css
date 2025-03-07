@@ -25,19 +25,6 @@
   height: auto;
 }
 
-/* Hide stories section in docs */
-.sbdocs-wrapper .sbdocs-stories,
-.sbdocs-content .sbdocs-stories,
-#storybook-docs .sbdocs-stories,
-.sbdocs-wrapper > .sbdocs-stories {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
 /* Control preview height in docs mode */
 .docs-story {
   min-height: auto !important;
