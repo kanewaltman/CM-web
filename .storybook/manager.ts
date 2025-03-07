@@ -1,9 +1,17 @@
 import { addons } from '@storybook/manager-api';
-import theme from './theme';
+import { darkTheme } from './theme';
 
 addons.setConfig({
-  theme,
+  theme: darkTheme,
   sidebar: {
     showRoots: false,
+  },
+  enableShortcuts: true,
+  toolbar: {
+    title: { hidden: false },
+    zoom: { hidden: false },
+    eject: { hidden: false },
+    copy: { hidden: false },
+    fullscreen: { hidden: false },
   },
 }); 

@@ -7,6 +7,59 @@
   color: hsl(var(--foreground));
 }
 
+/* Dark mode specific styles */
+[data-theme='dark'],
+.dark {
+  color-scheme: dark;
+  --background: 0 0% 10%;
+  --foreground: 0 0% 95%;
+}
+
+/* Light mode specific styles */
+[data-theme='light'],
+.light {
+  color-scheme: light;
+  --background: 0 0% 100%;
+  --foreground: 0 0% 10%;
+}
+
+/* Docs container dark mode */
+.docs-container.dark {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Dark mode specific overrides for docs */
+.docs-container.dark {
+  --docs-bg: hsl(var(--background));
+  --docs-text: hsl(var(--foreground));
+  --docs-border: rgba(255, 255, 255, 0.1);
+}
+
+.docs-container.dark .sbdocs.sbdocs-wrapper {
+  background-color: var(--docs-bg);
+  color: var(--docs-text);
+}
+
+.docs-container.dark .sbdocs.sbdocs-content {
+  background-color: var(--docs-bg);
+  color: var(--docs-text);
+}
+
+.docs-container.dark .docblock-source {
+  background-color: var(--docs-bg);
+  border-color: var(--docs-border);
+}
+
+.docs-container.dark .docblock-argstable-head {
+  background-color: var(--docs-bg);
+}
+
+.docs-container.dark .docblock-argstable-body {
+  background-color: var(--docs-bg);
+  color: var(--docs-text);
+}
+
 /* Main docs container setup */
 #storybook-docs {
   height: 100vh;

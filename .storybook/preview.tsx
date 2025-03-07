@@ -3,14 +3,9 @@ import { withThemeByClassName } from '@storybook/addon-themes';
 import { ThemeProvider } from 'next-themes';
 import React from 'react';
 import './styles.css';
-import {
-  Title,
-  Subtitle,
-  Description,
-  Primary,
-  Controls,
-} from '@storybook/blocks';
+import { DocsContainer, DocsPage } from '@storybook/blocks';
 import { initialize, mswLoader } from 'msw-storybook-addon';
+import { darkTheme } from './theme';
 
 // Initialize MSW
 initialize();
@@ -29,6 +24,14 @@ const preview: Preview = {
       grid: {
         disable: true
       }
+    },
+    darkMode: {
+      current: 'dark',
+      stylePreview: true,
+      darkClass: 'dark',
+      lightClass: 'light',
+      classTarget: 'html',
+      dark: { ...darkTheme }
     },
     layout: 'padded',
     viewport: {
@@ -58,15 +61,10 @@ const preview: Preview = {
       defaultViewport: 'desktop',
     },
     docs: {
-      page: () => (
-        <>
-          <Title />
-          <Subtitle />
-          <Description />
-          <Primary />
-          <Controls />
-        </>
-      ),
+      theme: darkTheme,
+      container: DocsContainer,
+      page: DocsPage,
+      story: { inline: true }
     },
   },
   loaders: [mswLoader],
@@ -76,10 +74,10 @@ const preview: Preview = {
         light: 'light',
         dark: 'dark',
       },
-      defaultTheme: 'light',
+      defaultTheme: 'dark',
     }),
     (Story, context) => {
-      const theme = context.globals.theme;
+      const theme = context.globals.theme || 'dark';
       return (
         <ThemeProvider 
           attribute="class" 
@@ -87,7 +85,7 @@ const preview: Preview = {
           enableSystem={false}
           forcedTheme={theme}
         >
-          <div className="w-full min-h-screen bg-background text-foreground">
+          <div className={`w-full min-h-screen bg-background text-foreground ${theme}`}>
             <div className="p-4">
               <Story />
             </div>
@@ -96,6 +94,9 @@ const preview: Preview = {
       );
     },
   ],
+  globals: {
+    theme: 'dark',
+  },
 };
 
 export default preview; 

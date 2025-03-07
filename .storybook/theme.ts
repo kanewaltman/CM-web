@@ -1,42 +1,75 @@
-import { create } from '@storybook/theming';
+import { create } from '@storybook/theming/create';
 
-export default create({
-  base: 'light',
-  
+const brandPrimary = '#FF4D15';
+const brandSecondary = '#627EEA';
+const darkBg = '#1a1a1a';
+const darkBgAlt = '#2f2f2f';
+const darkText = '#ffffff';
+const darkTextMuted = '#999999';
+const darkBorder = 'rgba(255,255,255,0.1)';
+
+export const darkTheme = create({
+  base: 'dark',
+
   // Brand
   brandTitle: 'CM Web',
   brandUrl: '/',
   brandTarget: '_self',
-  brandImage: '/assets/coinmetro-storybook-logo.svg',
 
   // Typography
-  fontBase: '"Plus Jakarta Sans", system-ui, -apple-system, sans-serif',
-  fontCode: 'monospace',
+  fontBase: 'system-ui, -apple-system, sans-serif',
+  fontCode: 'ui-monospace, monospace',
 
   // Colors
-  colorPrimary: '#FF4D15',
-  colorSecondary: '#627EEA',
+  colorPrimary: brandPrimary,
+  colorSecondary: brandSecondary,
 
   // UI
-  appBg: 'hsl(0 0% 96%)',
-  appContentBg: 'hsl(0 0% 96%)',
-  appPreviewBg: 'hsl(0 0% 96%)',
-  appBorderColor: 'hsl(214.3 31.8% 91.4%)',
-  appBorderRadius: 0.5,
+  appBg: darkBg,
+  appContentBg: darkBg,
+  appBorderColor: darkBorder,
+  appBorderRadius: 4,
 
   // Text colors
-  textColor: 'hsl(222.2 84% 4.9%)',
-  textInverseColor: 'hsl(210 40% 98%)',
+  textColor: darkText,
+  textInverseColor: darkBg,
+  textMutedColor: darkTextMuted,
 
-  // Toolbar
-  barTextColor: 'hsl(215.4 16.3% 46.9%)',
-  barSelectedColor: '#FF4D15',
-  barHoverColor: '#FF4D15',
-  barBg: 'hsl(0 0% 96%)',
+  // Toolbar default and active colors
+  barTextColor: darkTextMuted,
+  barSelectedColor: darkText,
+  barBg: darkBg,
+  barBorderColor: darkBorder,
+  barHoverColor: brandPrimary,
 
   // Form colors
-  inputBg: 'hsl(0 0% 100%)',
-  inputBorder: 'hsl(214.3 31.8% 91.4%)',
-  inputTextColor: 'hsl(222.2 84% 4.9%)',
-  inputBorderRadius: 0.5,
+  inputBg: darkBgAlt,
+  inputBorder: darkBorder,
+  inputTextColor: darkText,
+  inputBorderRadius: 4,
+
+  // Card colors
+  cardBg: darkBgAlt,
+  cardBorderColor: darkBorder,
+
+  // Base
+  base: 'dark',
+  
+  // Additional UI
+  buttonBg: darkBgAlt,
+  buttonBorder: darkBorder,
+  booleanBg: darkBgAlt,
+  booleanSelectedBg: '#383838',
+
+  // Addon actions theme
+  actionBg: darkBg,
+  actionBorder: darkBorder,
+  actionTextColor: darkText,
+  actionTextHoverColor: darkTextMuted,
+
+  // Addon controls theme
+  controlBg: darkBgAlt,
+  controlBorder: darkBorder,
+  controlTextColor: darkText,
+  controlTextHoverColor: darkTextMuted,
 }); 
