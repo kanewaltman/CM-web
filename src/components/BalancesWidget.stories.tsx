@@ -1,12 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { BalancesWidget } from './BalancesWidget';
 import { WidgetContainer } from './WidgetContainer';
+import { handlers } from '../mocks/handlers';
 
 const meta: Meta<typeof BalancesWidget> = {
   title: 'Widgets/BalancesWidget',
   component: BalancesWidget,
   parameters: {
     layout: 'padded',
+    msw: {
+      handlers: handlers
+    }
   },
   tags: ['autodocs'],
   argTypes: {

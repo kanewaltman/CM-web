@@ -10,6 +10,10 @@ import {
   Primary,
   Controls,
 } from '@storybook/blocks';
+import { initialize, mswLoader } from 'msw-storybook-addon';
+
+// Initialize MSW
+initialize();
 
 const preview: Preview = {
   parameters: {
@@ -65,6 +69,7 @@ const preview: Preview = {
       ),
     },
   },
+  loaders: [mswLoader],
   decorators: [
     withThemeByClassName({
       themes: {
