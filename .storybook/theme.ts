@@ -6,7 +6,7 @@ const brandSecondary = '#0052CC';
 
 // Dark theme colors
 const darkBg = '#1A1A1A';
-const darkBgAlt = '#2A2A2A';
+const darkBgAlt = '#0F0F0F';
 const darkText = '#FFFFFF';
 const darkTextMuted = '#A0A0A0';
 const darkBorder = '#404040';
