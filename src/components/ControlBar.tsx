@@ -257,15 +257,14 @@ export function ControlBar({
           <button 
             className={cn(
               "flex items-center space-x-2 px-4 py-3 transition-colors",
-              theme === 'dark' 
-                ? "bg-[hsl(var(--card))] text-white" 
-                : "bg-[hsl(var(--card))] " + colors.text,
-              "border border-[hsl(var(--color-border-default)]",
-              "shadow-[0px_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0px_1px_0px_rgba(0,0,0,0.1)]",
+              "bg-[hsl(var(--card))]",
+              "text-foreground",
+              "border border-[hsl(var(--border))]",
+              "shadow-sm",
               "rounded-[calc(var(--grid-item-border-radius)/2)]"
             )}
           >
-            <div className="w-8 h-8 rounded-full bg-orange-500/[0.16] flex items-center justify-center text-base">
+            <div className="w-8 h-8 rounded-full bg-[hsl(var(--primary))]/10 flex items-center justify-center text-base">
               🐂
             </div>
             <span className="font-bold">Main</span>
@@ -273,7 +272,7 @@ export function ControlBar({
           </button>
           
           <div className="-space-y-0.5">
-            <div className={cn("text-sm", colors.textMuted)}>Balance</div>
+            <div className="text-sm text-muted-foreground">Balance</div>
             <div className="text-lg font-bold leading-tight">55,444.15 EUR</div>
           </div>
         </div>
@@ -286,9 +285,9 @@ export function ControlBar({
               <Button
                 variant="ghost"
                 className={cn(
-                  "h-12 px-4 text-base", 
-                  colors.text,
-                  "hover:bg-transparent"
+                  "h-12 px-4 text-base",
+                  "text-foreground",
+                  "hover:bg-accent hover:text-accent-foreground"
                 )}
               >
                 <LayoutGrid className="h-5 w-5 mr-2 opacity-50" />

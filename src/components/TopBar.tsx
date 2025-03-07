@@ -55,17 +55,17 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
             onClick={handlePageClick('dashboard')}
           >
             <CoinmetroLogo />
-            <CoinmetroText className={colors.text} />
+            <CoinmetroText className="text-foreground" />
           </a>
           
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-1">
             <a 
               className={cn(
-                "px-3 py-2 rounded-lg text-sm font-bold",
+                "px-3 py-2 rounded-lg text-sm font-bold transition-colors",
                 currentPage === 'spot' 
                   ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
-                  : cn(colors.textMuted, colors.hover)
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )} 
               href="#"
               onClick={handlePageClick('spot')}
@@ -74,10 +74,10 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
             </a>
             <a 
               className={cn(
-                "px-3 py-2 rounded-lg text-sm font-bold",
+                "px-3 py-2 rounded-lg text-sm font-bold transition-colors",
                 currentPage === 'margin'
                   ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
-                  : cn(colors.textMuted, colors.hover)
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )} 
               href="#"
               onClick={handlePageClick('margin')}
@@ -86,10 +86,10 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
             </a>
             <a 
               className={cn(
-                "px-3 py-2 text-sm font-bold",
+                "px-3 py-2 text-sm font-bold transition-colors rounded-lg",
                 currentPage === 'stake'
                   ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
-                  : cn(colors.textMuted, colors.hover)
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )} 
               href="#"
               onClick={handlePageClick('stake')}
@@ -98,9 +98,8 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
             </a>
             <button 
               className={cn(
-                "flex items-center space-x-1 px-3 py-2 text-sm font-bold",
-                colors.textMuted,
-                colors.hover
+                "flex items-center space-x-1 px-3 py-2 text-sm font-bold transition-colors rounded-lg",
+                "text-muted-foreground hover:text-foreground hover:bg-accent"
               )}
             >
               <span>Explore</span>
@@ -109,7 +108,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
           </nav>
           
           {/* Mobile Menu Button */}
-          <Button variant="ghost" size="icon" className={cn("md:hidden", colors.text)}>
+          <Button variant="ghost" size="icon" className="md:hidden text-foreground">
             <Menu className="h-5 w-5" />
           </Button>
         </div>
@@ -160,28 +159,40 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
           </Button>
           <Button 
             variant="ghost" 
-            className="bg-[#00C26E]/10 text-[#00C26E] hover:bg-[#00C26E]/20 font-bold hidden sm:flex whitespace-nowrap"
+            className={cn(
+              "font-bold hidden sm:flex whitespace-nowrap transition-colors",
+              "bg-[#00C26E]/10 text-[#00C26E]",
+              "hover:bg-[#00C26E]/90 hover:text-white"
+            )}
           >
             Deposit
           </Button>
           <Button 
             variant="ghost" 
-            className="bg-[#627EEA]/10 text-[#627EEA] hover:bg-[#627EEA]/20 font-bold hidden sm:flex whitespace-nowrap"
+            className={cn(
+              "font-bold hidden sm:flex whitespace-nowrap transition-colors",
+              "bg-[#627EEA]/10 text-[#627EEA]",
+              "hover:bg-[#627EEA]/90 hover:text-white"
+            )}
           >
             Withdraw
           </Button>
           <Button 
             variant="ghost" 
-            className="bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/20 font-bold hidden md:flex whitespace-nowrap"
+            className={cn(
+              "font-bold hidden md:flex whitespace-nowrap transition-colors",
+              "bg-[#FF4D15]/10 text-[#FF4D15]",
+              "hover:bg-[#FF4D15]/90 hover:text-white"
+            )}
           >
             Level 6
           </Button>
           <Button 
             variant="ghost" 
             className={cn(
-              "w-[43px] h-[42px] rounded-full shrink-0 ",
-              "bg-[#FF4D15]/20 text-white bg-[#FF4D15]/10 text-[#FF4D15]", // Changed to use brand orange color
-              "hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
+              "w-[43px] h-[42px] rounded-full shrink-0 transition-colors",
+              "bg-[#FF4D15]/10 text-[#FF4D15]",
+              "hover:bg-[#FF4D15]/90 hover:text-white"
             )}
           >
             K
