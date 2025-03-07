@@ -3,6 +3,13 @@ import { withThemeByClassName } from '@storybook/addon-themes';
 import { ThemeProvider } from 'next-themes';
 import React from 'react';
 import './styles.css';
+import {
+  Title,
+  Subtitle,
+  Description,
+  Primary,
+  Controls,
+} from '@storybook/blocks';
 
 const preview: Preview = {
   parameters: {
@@ -45,6 +52,17 @@ const preview: Preview = {
         },
       },
       defaultViewport: 'desktop',
+    },
+    docs: {
+      page: () => (
+        <>
+          <Title />
+          <Subtitle />
+          <Description />
+          <Primary />
+          <Controls />
+        </>
+      ),
     },
   },
   decorators: [
