@@ -17,7 +17,7 @@ const config: CustomStorybookConfig = {
     "@storybook/addon-interactions",
     "@storybook/addon-a11y",
     "@storybook/addon-themes",
-    "@storybook/addon-styling",
+    "@storybook/addon-styling-webpack",
     "@storybook/addon-viewport",
     "@storybook/addon-docs",
     "storybook-dark-mode",
