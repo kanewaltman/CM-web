@@ -1,7 +1,7 @@
 import type { Preview } from '@storybook/react';
 import { withThemeByClassName } from '@storybook/addon-themes';
+import { ThemeProvider } from 'next-themes';
 import React from 'react';
-import '../src/index.css';
 import './styles.css';
 
 const preview: Preview = {
@@ -55,13 +55,23 @@ const preview: Preview = {
       },
       defaultTheme: 'light',
     }),
-    (Story) => (
-      <div className="w-full min-h-screen bg-background text-foreground">
-        <div className="p-4">
-          <Story />
-        </div>
-      </div>
-    ),
+    (Story, context) => {
+      const theme = context.globals.theme;
+      return (
+        <ThemeProvider 
+          attribute="class" 
+          defaultTheme={theme} 
+          enableSystem={false}
+          forcedTheme={theme}
+        >
+          <div className="w-full min-h-screen bg-background text-foreground">
+            <div className="p-4">
+              <Story />
+            </div>
+          </div>
+        </ThemeProvider>
+      );
+    },
   ],
 };
 
