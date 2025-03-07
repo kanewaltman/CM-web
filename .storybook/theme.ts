@@ -1,24 +1,25 @@
 import { create } from '@storybook/theming/create';
 
-const brandPrimary = '#FF4D15';
-const brandSecondary = '#627EEA';
-const darkBg = '#1a1a1a';
-const darkBgAlt = '#2f2f2f';
-const darkText = '#ffffff';
-const darkTextMuted = '#999999';
-const darkBorder = 'rgba(255,255,255,0.1)';
+// Brand colors
+const brandPrimary = '#0066FF';
+const brandSecondary = '#0052CC';
+
+// Dark theme colors
+const darkBg = '#1A1A1A';
+const darkBgAlt = '#2A2A2A';
+const darkText = '#FFFFFF';
+const darkTextMuted = '#A0A0A0';
+const darkBorder = '#404040';
 
 export const darkTheme = create({
+  // Base theme
   base: 'dark',
 
   // Brand
   brandTitle: 'CM Web',
-  brandUrl: '/',
+  brandUrl: 'https://cm-web.com',
   brandTarget: '_self',
-
-  // Typography
-  fontBase: 'system-ui, -apple-system, sans-serif',
-  fontCode: 'ui-monospace, monospace',
+  brandImage: undefined,
 
   // Colors
   colorPrimary: brandPrimary,
@@ -26,9 +27,9 @@ export const darkTheme = create({
 
   // UI
   appBg: darkBg,
-  appContentBg: darkBg,
+  appContentBg: darkBgAlt,
   appBorderColor: darkBorder,
-  appBorderRadius: 4,
+  appBorderRadius: 6,
 
   // Text colors
   textColor: darkText,
@@ -37,10 +38,8 @@ export const darkTheme = create({
 
   // Toolbar default and active colors
   barTextColor: darkTextMuted,
-  barSelectedColor: darkText,
+  barSelectedColor: brandPrimary,
   barBg: darkBg,
-  barBorderColor: darkBorder,
-  barHoverColor: brandPrimary,
 
   // Form colors
   inputBg: darkBgAlt,
@@ -48,13 +47,14 @@ export const darkTheme = create({
   inputTextColor: darkText,
   inputBorderRadius: 4,
 
-  // Card colors
+  // Typography
+  fontBase: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  fontCode: 'monospace',
+
+  // Cards and panels
   cardBg: darkBgAlt,
   cardBorderColor: darkBorder,
 
-  // Base
-  base: 'dark',
-  
   // Additional UI
   buttonBg: darkBgAlt,
   buttonBorder: darkBorder,

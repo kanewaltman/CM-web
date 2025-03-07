@@ -1,5 +1,4 @@
 import type { Preview } from '@storybook/react';
-import { withThemeByClassName } from '@storybook/addon-themes';
 import { ThemeProvider } from 'next-themes';
 import React from 'react';
 import './styles.css';
@@ -24,14 +23,6 @@ const preview: Preview = {
       grid: {
         disable: true
       }
-    },
-    darkMode: {
-      current: 'dark',
-      stylePreview: true,
-      darkClass: 'dark',
-      lightClass: 'light',
-      classTarget: 'html',
-      dark: { ...darkTheme }
     },
     layout: 'padded',
     viewport: {
@@ -69,23 +60,16 @@ const preview: Preview = {
   },
   loaders: [mswLoader],
   decorators: [
-    withThemeByClassName({
-      themes: {
-        light: 'light',
-        dark: 'dark',
-      },
-      defaultTheme: 'dark',
-    }),
     (Story, context) => {
-      const theme = context.globals.theme || 'dark';
+      const selectedTheme = context.globals.theme || 'dark';
       return (
         <ThemeProvider 
           attribute="class" 
-          defaultTheme={theme} 
+          defaultTheme={selectedTheme} 
           enableSystem={false}
-          forcedTheme={theme}
+          value={{ light: 'light', dark: 'dark' }}
         >
-          <div className={`w-full min-h-screen bg-background text-foreground ${theme}`}>
+          <div className={`w-full min-h-screen bg-background text-foreground ${selectedTheme}`}>
             <div className="p-4">
               <Story />
             </div>
@@ -94,8 +78,18 @@ const preview: Preview = {
       );
     },
   ],
-  globals: {
-    theme: 'dark',
+  globalTypes: {
+    theme: {
+      name: 'Theme',
+      description: 'Global theme for components',
+      defaultValue: 'dark',
+      toolbar: {
+        icon: 'circlehollow',
+        items: ['light', 'dark'],
+        title: 'Theme',
+        dynamicTitle: true,
+      },
+    },
   },
 };
 
