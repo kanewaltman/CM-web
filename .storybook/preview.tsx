@@ -19,12 +19,24 @@ const preview: Preview = {
       },
     },
     backgrounds: {
-      disable: true,
+      disable: false,
       grid: {
-        disable: true
-      }
+        disable: false,
+        cellSize: 20,
+        opacity: 0.2,
+        cellAmount: 5
+      },
+      default: 'transparent',
+      values: [
+        { name: 'transparent', value: 'transparent' },
+        { name: 'white', value: '#ffffff' },
+        { name: 'black', value: '#000000' }
+      ]
     },
     layout: 'padded',
+    toolbar: {
+      position: 'right',
+    },
     viewport: {
       viewports: {
         mobile: {
