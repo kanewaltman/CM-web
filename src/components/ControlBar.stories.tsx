@@ -93,18 +93,6 @@ export const EditMenuOpen: Story = {
     ...mockHandlers,
     defaultIsOpen: true,
   },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    
-    // Wait for the button to be available
-    const editButton = await canvas.findByRole('button', { name: /edit/i });
-    
-    // Click the button
-    await userEvent.click(editButton, { skipHover: true });
-    
-    // Wait to ensure the menu stays open
-    await new Promise(resolve => setTimeout(resolve, 100));
-  },
 };
 
 export const AppearanceDialogOpen: Story = {
@@ -112,26 +100,6 @@ export const AppearanceDialogOpen: Story = {
   args: {
     ...mockHandlers,
     defaultIsOpen: true,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    
-    // First find and click the Edit button
-    const editButton = await canvas.findByRole('button', { name: /edit/i });
-    await userEvent.click(editButton, { skipHover: true });
-    
-    // Wait for the dropdown menu to be visible and get its content
-    await waitFor(async () => {
-      const menu = document.querySelector('[role="menu"]');
-      if (!menu) throw new Error('Menu not found');
-      
-      // Use within to search inside the menu
-      const menuCanvas = within(menu);
-      const appearanceButton = await menuCanvas.findByText(/edit appearance/i);
-      await userEvent.click(appearanceButton, { skipHover: true });
-    }, { timeout: 2000 });
-    
-    // Wait to ensure the dialog stays open
-    await new Promise(resolve => setTimeout(resolve, 100));
+    defaultIsAppearanceOpen: true,
   },
 }; 
