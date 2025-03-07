@@ -5,4 +5,53 @@
 .storybook-preview-wrapper {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+}
+
+/* Main docs container setup */
+#storybook-docs {
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+/* Ensure docs container expands properly */
+.sbdocs-wrapper {
+  height: auto;
+}
+
+.sbdocs-content {
+  max-width: 1000px;
+  margin: 0 auto;
+  height: auto;
+}
+
+/* Control preview height in docs mode */
+.docs-story {
+  min-height: auto !important;
+  max-height: 400px;
+  overflow: auto;
+}
+
+/* Ensure the preview doesn't push content too far down */
+.sb-story {
+  min-height: auto !important;
+  max-height: 400px;
+  overflow: auto;
+}
+
+/* Add spacing between preview and docs content */
+.docs-story + * {
+  margin-top: 2rem;
+}
+
+/* Ensure content flows properly */
+.docs-wrapper {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Remove iframe constraints */
+#storybook-preview-iframe {
+  height: auto;
 } 
