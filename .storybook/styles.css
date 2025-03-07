@@ -7,6 +7,12 @@
   color: hsl(var(--foreground));
 }
 
+/* Override Storybook logo size */
+.css-32o4gv {
+  max-width: 300px !important;
+  max-height: 200px !important;
+}
+
 /* Dark mode specific styles */
 [data-theme='dark'],
 .dark {
