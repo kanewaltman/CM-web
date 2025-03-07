@@ -32,6 +32,7 @@ const config: CustomStorybookConfig = {
   core: {
     disableTelemetry: true,
   },
+  staticDirs: ['./static', '../public'],
   viteFinal: async (config) => {
     return {
       ...config,
