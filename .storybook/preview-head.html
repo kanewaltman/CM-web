@@ -1,0 +1,26 @@
+<style>
+  /* Set dark mode for initial loading state */
+  .sb-show-main {
+    background-color: #1A1A1A !important;
+  }
+
+  /* Ensure the loading state matches our dark theme */
+  #storybook-root:not(:has(*)) {
+    background: #1A1A1A;
+  }
+
+  /* Prevent white flash during story load */
+  .sb-show-main #storybook-root {
+    background: #1A1A1A;
+  }
+
+  /* Manager UI loading state */
+  .sidebar-container {
+    background-color: #1A1A1A !important;
+  }
+
+  /* Ensure text is visible during loading */
+  body {
+    color: #FFFFFF;
+  }
+</style> 

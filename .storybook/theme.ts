@@ -19,7 +19,7 @@ export const darkTheme = create({
   brandTitle: 'CM Web',
   brandUrl: 'https://cm-web.com',
   brandTarget: '_self',
-  brandImage: undefined,
+  brandImage: '/assets/coinmetro-storybook-logo.svg',
 
   // Colors
   colorPrimary: brandPrimary,
