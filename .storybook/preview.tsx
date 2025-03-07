@@ -65,7 +65,7 @@ const preview: Preview = {
           forcedTheme={theme}
         >
           <div className="w-full min-h-screen bg-background text-foreground">
-            <div className="p-4 h-full">
+            <div className="p-4">
               <Story />
             </div>
           </div>
