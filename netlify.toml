@@ -1,9 +1,10 @@
 [build]
-  command = "npm run build && npm run build-storybook"
+  command = "npm ci && npm run build && npm run build-storybook && npm run postbuild"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "18.20.6"
+  NPM_FLAGS = "--no-optional"
 
 [[redirects]]
   from = "/storybook/*"
