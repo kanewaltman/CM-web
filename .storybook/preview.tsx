@@ -80,6 +80,7 @@ const preview: Preview = {
           defaultTheme={selectedTheme} 
           enableSystem={false}
           value={{ light: 'light', dark: 'dark' }}
+          key={selectedTheme}
         >
           <div className={`w-full min-h-screen ${selectedTheme === 'dark' ? 'bg-zinc-900' : 'bg-white'} text-foreground ${selectedTheme}`}>
             <div className="p-4">
