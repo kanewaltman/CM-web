@@ -1,9 +1,14 @@
 [build]
-  command = "npm run build"
+  command = "npm run build && npm run build-storybook"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "18.20.6"
+
+[[redirects]]
+  from = "/storybook/*"
+  to = "/storybook/index.html"
+  status = 200
 
 [[redirects]]
   from = "/*"
