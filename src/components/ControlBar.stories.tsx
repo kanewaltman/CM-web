@@ -117,14 +117,11 @@ export const EditMenuOpen: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     
-    // Wait for the button to be available
+    // Wait for the button to be available and highlight the interaction
     const editButton = await canvas.findByRole('button', { name: /edit/i });
-    
-    // Click the button
-    await userEvent.click(editButton, { skipHover: true });
-    
-    // Wait to ensure the menu stays open
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await userEvent.hover(editButton);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await userEvent.unhover(editButton);
   },
   parameters: {
     docs: {
@@ -139,28 +136,35 @@ export const AppearanceDialogOpen: Story = {
   render: BaseStory,
   args: {
     ...mockHandlers,
-    defaultIsOpen: true,
+    defaultIsOpen: false,
+    defaultIsAppearanceOpen: false,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     
-    // First find and click the Edit button
-    const editButton = await canvas.findByRole('button', { name: /edit/i });
-    await userEvent.click(editButton, { skipHover: true });
+    // Wait a bit for initial render
+    await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Wait for the dropdown menu to be visible and get its content
+    // First find and click the Edit button to open the menu
+    const editButton = await canvas.findByRole('button', { name: /edit/i });
+    await userEvent.hover(editButton);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await userEvent.click(editButton);
+    
+    // Wait for the dropdown menu to appear and then find the button within it
     await waitFor(async () => {
       const menu = document.querySelector('[role="menu"]');
       if (!menu) throw new Error('Menu not found');
       
-      // Use within to search inside the menu
       const menuCanvas = within(menu);
-      const appearanceButton = await menuCanvas.findByText(/edit appearance/i);
-      await userEvent.click(appearanceButton, { skipHover: true });
-    }, { timeout: 2000 });
-    
-    // Wait to ensure the dialog stays open
-    await new Promise(resolve => setTimeout(resolve, 100));
+      const appearanceButton = await menuCanvas.findByRole('button', {
+        name: /edit appearance/i
+      });
+      
+      await userEvent.hover(appearanceButton);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await userEvent.click(appearanceButton);
+    }, { timeout: 3000 });
   },
   parameters: {
     docs: {
