@@ -5,7 +5,7 @@ export default create({
   
   // Brand
   brandTitle: 'CM Web',
-  brandUrl: 'https://coinmetro.com',
+  brandUrl: '/',
   brandTarget: '_self',
   brandImage: '/assets/coinmetro-storybook-logo.svg',
 
