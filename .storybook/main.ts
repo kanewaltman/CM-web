@@ -1,6 +1,11 @@
 import type { StorybookConfig } from "@storybook/react-vite";
+import theme from './theme';
 
-const config: StorybookConfig = {
+interface CustomStorybookConfig extends StorybookConfig {
+  theme?: any; // Using any since the theme type is not exported from @storybook/theming
+}
+
+const config: CustomStorybookConfig = {
   stories: [
     "../src/**/*.mdx",
     "../src/components/**/*.stories.@(js|jsx|mjs|ts|tsx)",
@@ -51,4 +56,8 @@ const config: StorybookConfig = {
     };
   },
 };
+
+// Apply custom theme
+config.theme = theme;
+
 export default config; 
