@@ -84,6 +84,57 @@ export const WithGridStyleRounded: Story = {
     ...mockHandlers,
     initialGridStyle: 'rounded',
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    
+    // Wait a bit for initial render
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // First find and click the Edit button to open the menu
+    const editButton = await canvas.findByRole('button', { name: /edit/i });
+    await userEvent.hover(editButton);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await userEvent.click(editButton);
+    
+    // Wait for the dropdown menu to appear and click Edit Appearance
+    await waitFor(async () => {
+      const menu = document.querySelector('[role="menu"]');
+      if (!menu) throw new Error('Menu not found');
+      
+      const menuCanvas = within(menu);
+      const appearanceButton = await menuCanvas.findByRole('button', {
+        name: /edit appearance/i
+      });
+      
+      await userEvent.hover(appearanceButton);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await userEvent.click(appearanceButton);
+    }, { timeout: 3000 });
+    
+    // Wait for dialog to appear and click the Rounded option
+    await waitFor(async () => {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) throw new Error('Dialog not found');
+      
+      const dialogCanvas = within(dialog);
+      // Look for the grid style section
+      const gridStyleSection = await dialogCanvas.findByText('Grid Style');
+      const gridStyleContainer = gridStyleSection.parentElement;
+      if (!gridStyleContainer) throw new Error('Grid style container not found');
+      
+      // Find the Rounded option within the grid style container
+      const roundedContainer = await within(gridStyleContainer).findByText(/24px radius/i);
+      const roundedButton = roundedContainer.closest('div[class*="cursor-pointer"]');
+      if (!roundedButton) throw new Error('Rounded button not found');
+      
+      await userEvent.hover(roundedButton);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await userEvent.click(roundedButton);
+      
+      // Close dialog using ESC key
+      await userEvent.keyboard('{Escape}');
+    }, { timeout: 3000 });
+  },
   parameters: {
     docs: {
       description: {
@@ -98,6 +149,57 @@ export const WithGridStyleDense: Story = {
   args: {
     ...mockHandlers,
     initialGridStyle: 'dense',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    
+    // Wait a bit for initial render
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // First find and click the Edit button to open the menu
+    const editButton = await canvas.findByRole('button', { name: /edit/i });
+    await userEvent.hover(editButton);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await userEvent.click(editButton);
+    
+    // Wait for the dropdown menu to appear and click Edit Appearance
+    await waitFor(async () => {
+      const menu = document.querySelector('[role="menu"]');
+      if (!menu) throw new Error('Menu not found');
+      
+      const menuCanvas = within(menu);
+      const appearanceButton = await menuCanvas.findByRole('button', {
+        name: /edit appearance/i
+      });
+      
+      await userEvent.hover(appearanceButton);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await userEvent.click(appearanceButton);
+    }, { timeout: 3000 });
+    
+    // Wait for dialog to appear and click the Dense option
+    await waitFor(async () => {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) throw new Error('Dialog not found');
+      
+      const dialogCanvas = within(dialog);
+      // Look for the grid style section
+      const gridStyleSection = await dialogCanvas.findByText('Grid Style');
+      const gridStyleContainer = gridStyleSection.parentElement;
+      if (!gridStyleContainer) throw new Error('Grid style container not found');
+      
+      // Find the Dense option within the grid style container
+      const denseContainer = await within(gridStyleContainer).findByText(/16px radius/i);
+      const denseButton = denseContainer.closest('div[class*="cursor-pointer"]');
+      if (!denseButton) throw new Error('Dense button not found');
+      
+      await userEvent.hover(denseButton);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await userEvent.click(denseButton);
+      
+      // Close dialog using ESC key
+      await userEvent.keyboard('{Escape}');
+    }, { timeout: 3000 });
   },
   parameters: {
     docs: {
