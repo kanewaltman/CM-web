@@ -26,11 +26,11 @@ const preview: Preview = {
         opacity: 0.2,
         cellAmount: 5
       },
-      default: 'transparent',
+      default: 'dark',
       values: [
-        { name: 'transparent', value: 'transparent' },
-        { name: 'white', value: '#ffffff' },
-        { name: 'black', value: '#000000' }
+        { name: 'dark', value: '#0A0A0A'  },
+        { name: 'light', value: '#F5F5F5' },
+        { name: 'transparent', value: 'transparent' }
       ]
     },
     layout: 'padded',
@@ -81,7 +81,7 @@ const preview: Preview = {
           enableSystem={false}
           value={{ light: 'light', dark: 'dark' }}
         >
-          <div className={`w-full min-h-screen bg-background text-foreground ${selectedTheme}`}>
+          <div className={`w-full min-h-screen ${selectedTheme === 'dark' ? 'bg-zinc-900' : 'bg-white'} text-foreground ${selectedTheme}`}>
             <div className="p-4">
               <Story />
             </div>
