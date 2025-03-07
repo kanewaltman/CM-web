@@ -39,14 +39,31 @@ interface ControlBarProps {
   onResetLayout: () => void;
   onCopyLayout: () => string;
   onPasteLayout: (layout: string) => void;
+  // Add optional props for controlling state
+  initialGridStyle?: GridStyle;
+  defaultIsOpen?: boolean;
+  defaultIsAppearanceOpen?: boolean;
 }
 
-export function ControlBar({ onResetLayout, onCopyLayout, onPasteLayout }: ControlBarProps) {
+export function ControlBar({ 
+  onResetLayout, 
+  onCopyLayout, 
+  onPasteLayout,
+  initialGridStyle = 'rounded',
+  defaultIsOpen = false,
+  defaultIsAppearanceOpen = false
+}: ControlBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const colors = getThemeValues(resolvedTheme || theme);
-  const [isOpen, setIsOpen] = useState(false);
-  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
-  const [gridStyle, setGridStyle] = useState<GridStyle>('rounded');
+  const [isOpen, setIsOpen] = useState(defaultIsOpen);
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(defaultIsAppearanceOpen);
+  const [gridStyle, setGridStyle] = useState<GridStyle>(initialGridStyle);
+
+  // Initialize grid style on mount
+  useEffect(() => {
+    setCSSVariables(initialGridStyle);
+    setGridStyle(initialGridStyle);
+  }, [initialGridStyle]);
 
   // Handle theme initialization
   useEffect(() => {
