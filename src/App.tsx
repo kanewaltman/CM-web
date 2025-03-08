@@ -662,7 +662,6 @@ function App() {
       const margin = parseInt(computedStyle.getPropertyValue('--grid-margin') || '8', 10);
       
       const g = GridStack.init({
-        float: true,
         cellHeight: isMobile ? '100px' : 'auto',
         margin: margin,
         column: isMobile ? 1 : 12,
@@ -677,7 +676,53 @@ function App() {
         },
         minRow: 1,
         staticGrid: currentPage !== 'dashboard', // Only allow editing on dashboard
+        alwaysShowResizeHandle: false,
+        disableOneColumnMode: false,
+        float: false,
+        animate: true,
+        swap: true,
+        swapScroll: false
       }, gridElementRef.current);
+
+      // Track drag state to handle compaction properly
+      let isDragging = false;
+
+      g.on('dragstart', () => {
+        isDragging = true;
+      });
+
+      g.on('dragstop', () => {
+        isDragging = false;
+        // Force a complete layout update
+        g.batchUpdate();
+        try {
+          // First compact to remove gaps
+          g.compact();
+          // Then ensure all widgets are in their correct positions
+          const nodes = g.engine.nodes;
+          nodes.forEach(node => {
+            if (node.el) {
+              g.update(node.el, {
+                x: node.x,
+                y: node.y,
+                w: node.w,
+                h: node.h
+              });
+            }
+          });
+        } finally {
+          g.commit();
+        }
+      });
+
+      // Only handle non-drag changes
+      g.on('change', () => {
+        if (!isDragging) {
+          requestAnimationFrame(() => {
+            g.compact();
+          });
+        }
+      });
 
       // Add mousedown handler to prevent dragging when text is selected
       const handleMouseDown = (e: MouseEvent) => {
@@ -1130,7 +1175,8 @@ function App() {
         requestAnimationFrame(() => {
           grid.setAnimation(prevAnimate);
           grid.setStatic(false);
-          grid.float(true);
+          grid.float(false); // Ensure float is disabled after drop
+          grid.compact(); // Force compaction after drop
         });
       }
     };
