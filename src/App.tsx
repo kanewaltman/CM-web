@@ -675,51 +675,86 @@ function App() {
           autoHide: true
         },
         minRow: 1,
-        staticGrid: currentPage !== 'dashboard', // Only allow editing on dashboard
+        staticGrid: currentPage !== 'dashboard',
         alwaysShowResizeHandle: false,
-        disableOneColumnMode: false,
         float: false,
-        animate: true,
         swap: true,
         swapScroll: false
       }, gridElementRef.current);
 
+      // Prevent any automatic compaction during initialization
+      g.float(true);
+      
       // Track drag state to handle compaction properly
       let isDragging = false;
 
       g.on('dragstart', () => {
         isDragging = true;
+        g.float(true); // Ensure float is enabled during drag
       });
 
-      g.on('dragstop', () => {
-        isDragging = false;
-        // Force a complete layout update
+      // Custom compaction that only moves widgets upward, not leftward
+      const compactVerticalOnly = () => {
+        if (!g.engine?.nodes) return;
+        
+        const nodes = [...g.engine.nodes]; // Create a copy of nodes array
+        if (nodes.length === 0) return;
+
         g.batchUpdate();
         try {
-          // First compact to remove gaps
-          g.compact();
-          // Then ensure all widgets are in their correct positions
-          const nodes = g.engine.nodes;
+          // Sort nodes by vertical position (top to bottom)
+          nodes.sort((a, b) => (a.y || 0) - (b.y || 0));
+          
           nodes.forEach(node => {
-            if (node.el) {
+            if (!node.el) return;
+            
+            // Store original x position
+            const originalX = node.x || 0;
+            
+            // Find the highest possible position for this node
+            let newY = node.y || 0;
+            while (newY > 0) {
+              // Check if we can move up without collisions
+              const testNode = { ...node, y: newY - 1, x: originalX };
+              const hasCollision = nodes.some(other => 
+                other !== node && 
+                other.el && // Ensure other node exists
+                g.engine.collide(testNode, other)
+              );
+              
+              if (hasCollision) break;
+              newY--;
+            }
+            
+            // Only update if y position changed, maintain x position
+            if (newY !== node.y) {
               g.update(node.el, {
-                x: node.x,
-                y: node.y,
-                w: node.w,
-                h: node.h
+                y: newY,
+                x: originalX, // Always maintain original x position
+                w: node.w, // Maintain width
+                h: node.h  // Maintain height
               });
             }
           });
         } finally {
           g.commit();
         }
+      };
+
+      g.on('dragstop', () => {
+        isDragging = false;
+        requestAnimationFrame(() => {
+          g.float(false);
+          // Use custom vertical-only compaction
+          compactVerticalOnly();
+        });
       });
 
       // Only handle non-drag changes
       g.on('change', () => {
         if (!isDragging) {
           requestAnimationFrame(() => {
-            g.compact();
+            compactVerticalOnly();
           });
         }
       });
@@ -837,6 +872,9 @@ function App() {
       // Apply layout
       g.batchUpdate();
       try {
+        // Ensure float is enabled during layout application
+        g.float(true);
+        
         // Create and add all widgets from the layout
         layoutToApply.forEach((node: LayoutWidget) => {
           // Get the base widget type from the ID (handle both default and dynamic IDs)
@@ -849,11 +887,14 @@ function App() {
           }
 
           try {
+            // Store original x position
+            const originalX = node.x;
+
             // Create widget element with the exact ID from the layout
             const widgetElement = createWidget({
               widgetType,
-              widgetId: node.id, // Use the full ID from the layout
-              x: node.x,
+              widgetId: node.id,
+              x: originalX,
               y: node.y,
               w: node.w,
               h: node.h,
@@ -864,8 +905,8 @@ function App() {
             // Add widget to grid with all properties
             g.addWidget({
               el: widgetElement,
-              id: node.id, // Use the full ID from the layout
-              x: node.x,
+              id: node.id,
+              x: originalX,
               y: node.y,
               w: node.w,
               h: node.h,
@@ -880,6 +921,27 @@ function App() {
             console.error('Failed to create widget:', node.id, error);
           }
         });
+
+        // Force exact positions after all widgets are added
+        const items = g.getGridItems();
+        items.forEach(item => {
+          const node = item.gridstackNode;
+          if (node && node.el) {
+            const layoutItem = layoutToApply.find(l => l.id === node.id);
+            if (layoutItem) {
+              g.update(node.el, {
+                x: layoutItem.x,
+                y: layoutItem.y,
+                w: layoutItem.w,
+                h: layoutItem.h,
+                autoPosition: false
+              });
+            }
+          }
+        });
+
+        // Keep float enabled to prevent unwanted compaction
+        g.float(true);
       } finally {
         g.commit();
         console.log('✅ Layout change completed for page:', currentPage);
