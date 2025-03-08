@@ -343,87 +343,61 @@ function App() {
       // Store the default layout
       localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
       
-      // Get current widgets
+      // First, remove all existing widgets and their DOM elements
       const currentWidgets = grid.getGridItems();
-      const currentWidgetsMap = new Map();
-      
-      // Group widgets by their base ID (without timestamp)
       currentWidgets.forEach(widget => {
-        const widgetId = widget.gridstackNode?.id;
-        if (widgetId) {
-          const baseId = widgetId.split('-')[0];
-          currentWidgetsMap.set(baseId, widget);
+        if (widget.gridstackNode?.id) {
+          // Remove the widget from GridStack
+          grid.removeWidget(widget, false);
+          // Also remove the DOM element
+          widget.remove();
         }
       });
       
-      // Track which widgets we've updated
-      const updatedWidgets = new Set<string>();
+      // Clear any remaining grid-stack-item elements
+      const gridElement = document.querySelector('.grid-stack');
+      if (gridElement) {
+        const remainingWidgets = gridElement.querySelectorAll('.grid-stack-item');
+        remainingWidgets.forEach(widget => widget.remove());
+      }
       
-      // First update existing widgets and create missing ones
+      // Now add all widgets from default layout
       defaultLayout.forEach(node => {
-        const baseId = node.id.split('-')[0];
-        const existingWidget = currentWidgetsMap.get(baseId);
+        const widgetType = widgetTypes[node.id];
         
-        if (existingWidget) {
-          // Update position and size of existing widget
-          grid.update(existingWidget, {
+        if (!widgetComponents[widgetType]) {
+          console.warn('❌ Unknown widget type:', widgetType);
+          return;
+        }
+
+        try {
+          const widgetElement = createWidget({
+            widgetType,
+            widgetId: node.id,
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+            minW: node.minW,
+            minH: node.minH
+          });
+
+          grid.addWidget({
+            el: widgetElement,
+            id: node.id,
             x: node.x,
             y: node.y,
             w: node.w,
             h: node.h,
             minW: node.minW,
             minH: node.minH,
-            autoPosition: false
-          });
-          updatedWidgets.add(existingWidget.gridstackNode?.id || '');
-        } else {
-          // Create new widget if it doesn't exist
-          const widgetType = widgetTypes[baseId];
-          
-          if (!widgetComponents[widgetType]) {
-            console.warn('❌ Unknown widget type:', widgetType);
-            return;
-          }
-
-          try {
-            const widgetElement = createWidget({
-              widgetType,
-              widgetId: node.id,
-              x: node.x,
-              y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH
-            });
-
-            grid.addWidget({
-              el: widgetElement,
-              id: node.id,
-              x: node.x,
-              y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH,
-              autoPosition: false,
-              noMove: false,
-              noResize: false,
-              locked: false
-            } as ExtendedGridStackWidget);
-            
-            updatedWidgets.add(node.id);
-          } catch (error) {
-            console.error('Failed to create widget:', node.id, error);
-          }
-        }
-      });
-
-      // Remove any widgets that aren't in the default layout
-      currentWidgets.forEach(widget => {
-        const widgetId = widget.gridstackNode?.id;
-        if (widgetId && !updatedWidgets.has(widgetId)) {
-          grid.removeWidget(widget, false);
+            autoPosition: false,
+            noMove: false,
+            noResize: false,
+            locked: false
+          } as ExtendedGridStackWidget);
+        } catch (error) {
+          console.error('Failed to create widget:', node.id, error);
         }
       });
 
@@ -438,8 +412,7 @@ function App() {
             grid.compact();
             // Verify final positions
             defaultLayout.forEach(node => {
-              const baseId = node.id.split('-')[0];
-              const widget = currentWidgetsMap.get(baseId);
+              const widget = grid.getGridItems().find(w => w.gridstackNode?.id === node.id);
               if (widget) {
                 grid.update(widget, {
                   x: node.x,
@@ -453,7 +426,6 @@ function App() {
           }
         }, 50);
       }, 0);
-
     } finally {
       grid.commit();
     }
