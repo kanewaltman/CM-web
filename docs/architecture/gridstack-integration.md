@@ -150,6 +150,122 @@ const extendedMobileOptions: GridStackOptions = {
 };
 ```
 
+## Widget Drag Behavior
+
+### Optimal Drag Configuration
+
+The following configuration provides the ideal balance of widget swapping, compaction, and smooth animations:
+
+```typescript
+const gridOptions = {
+  float: false,        // Disable floating to ensure proper compaction
+  animate: true,       // Enable smooth transitions
+  swap: true,         // Enable widget swapping during drag
+  swapScroll: false   // Prevent unwanted scrolling during swaps
+};
+```
+
+### Drag State Management
+
+To achieve consistent widget behavior during and after drag operations, we implement a state-tracking system:
+
+```typescript
+let isDragging = false;
+
+// Track drag state
+grid.on('dragstart', () => {
+  isDragging = true;
+});
+
+// Handle drag completion
+grid.on('dragstop', () => {
+  isDragging = false;
+  grid.batchUpdate();
+  try {
+    // First ensure proper compaction
+    grid.compact();
+    // Then force position updates
+    grid.engine.nodes.forEach(node => {
+      if (node.el) {
+        grid.update(node.el, {
+          x: node.x,
+          y: node.y,
+          w: node.w,
+          h: node.h
+        });
+      }
+    });
+  } finally {
+    grid.commit();
+  }
+});
+
+// Handle non-drag changes separately
+grid.on('change', () => {
+  if (!isDragging) {
+    requestAnimationFrame(() => {
+      grid.compact();
+    });
+  }
+});
+```
+
+### Key Behaviors
+
+This configuration achieves several critical behaviors:
+
+1. **Widget Swapping**
+   - Widgets swap positions horizontally instead of moving to new rows
+   - Swapping is visible during drag operations
+   - Maintains grid density without creating gaps
+
+2. **Compaction Control**
+   - Prevents unwanted vertical movement during horizontal drags
+   - Ensures consistent compaction after drag operations
+   - Maintains widget positions in their intended rows
+
+3. **Position Consistency**
+   - All widgets return to proper positions after drag
+   - No widgets get stuck in incorrect rows
+   - Grid maintains its compact state at all times
+
+### Common Issues Solved
+
+1. **Unwanted Row Shifting**
+   - Problem: Widgets moving to new rows during horizontal drag
+   - Solution: Disabled float and enabled swap behavior
+
+2. **Inconsistent Compaction**
+   - Problem: Some widgets failing to compact properly
+   - Solution: Two-phase update in dragstop (compact + position update)
+
+3. **Animation Smoothness**
+   - Problem: Jerky transitions during and after drag
+   - Solution: Batched updates and RAF-wrapped compaction
+
+### Implementation Notes
+
+1. The `float: false` setting is crucial for proper widget swapping
+2. Batch updates prevent visual flickering during complex operations
+3. Explicit position updates ensure consistency across all widgets
+4. The drag state tracker prevents compaction conflicts
+5. RequestAnimationFrame ensures smooth visual updates
+
+### Best Practices
+
+1. Always use `batchUpdate()/commit()` for multiple grid operations
+2. Track drag state to differentiate between drag and other changes
+3. Force position updates after compaction to ensure consistency
+4. Use `requestAnimationFrame` for smooth visual changes
+5. Keep animations enabled for better user experience
+
+This calibration provides the optimal balance between:
+- Intuitive widget movement
+- Consistent layout behavior
+- Smooth animations
+- Proper compaction
+- Reliable widget positioning
+
 ## Best Practices
 
 1. **Layout Operations**
