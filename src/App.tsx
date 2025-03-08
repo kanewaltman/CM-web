@@ -640,7 +640,8 @@ function App() {
         animate: true,
         draggable: {
           handle: '.widget-header',
-          cancel: '.widget-inset, .widget-content, table, td, th, tr, .table, .table-cell, .table-header, .table-row'
+          scroll: true,
+          appendTo: 'body'
         },
         resizable: {
           handles: 'e, se, s, sw, w',
@@ -650,61 +651,184 @@ function App() {
         staticGrid: currentPage !== 'dashboard',
         alwaysShowResizeHandle: false,
         float: false,
+        acceptWidgets: true,
+        removable: false,
+        // @ts-ignore - GridStack types are incomplete
         swap: true,
-        swapScroll: false
-      }, gridElementRef.current);
+        swapScroll: true
+      } as GridStackOptions, gridElementRef.current);
 
-      // Prevent any automatic compaction during initialization
-      g.float(true);
-      
-      // Track drag state to handle compaction properly
+      // Track drag state and original positions
       let isDragging = false;
+      let draggedNode: GridStackNode | null = null;
+      let originalPositions: Map<string, { x: number; y: number }> = new Map();
 
-      g.on('dragstart', () => {
+      g.on('dragstart', (event: Event, el: GridStackNode) => {
         isDragging = true;
-        g.float(true); // Ensure float is enabled during drag
+        draggedNode = el;
+        
+        // Store original positions of all widgets
+        originalPositions.clear();
+        g.engine.nodes.forEach(node => {
+          if (node.id) {
+            originalPositions.set(node.id, { x: node.x || 0, y: node.y || 0 });
+          }
+        });
       });
 
-      // Custom compaction that only moves widgets upward, not leftward
-      const compactVerticalOnly = () => {
+      g.on('drag', (event: Event, el: GridStackNode) => {
+        if (!isDragging || !draggedNode || !draggedNode.id) return;
+
+        const draggedId = draggedNode.id;
+        const draggedPos = originalPositions.get(draggedId);
+        if (!draggedPos) return;
+
+        // Find potential swap target
+        const currentX = el.x || 0;
+        const currentY = el.y || 0;
+        const draggedW = el.w || 1;
+        const draggedH = el.h || 1;
+
+        g.engine.nodes.forEach(targetNode => {
+          if (!targetNode.id || targetNode.id === draggedId) return;
+
+          const targetPos = originalPositions.get(targetNode.id);
+          if (!targetPos) return;
+
+          // Check if widgets are the same size (for swapping)
+          const sameSize = (targetNode.w === draggedW && targetNode.h === draggedH);
+          
+          if (sameSize) {
+            const targetX = targetNode.x || 0;
+            const targetY = targetNode.y || 0;
+
+            // Calculate if we should swap
+            const isOverlapping = !(currentX + draggedW <= targetX || 
+                                  currentX >= targetX + (targetNode.w || 1) ||
+                                  currentY + draggedH <= targetY ||
+                                  currentY >= targetY + (targetNode.h || 1));
+
+            if (isOverlapping && targetNode.el) {
+              // Swap positions
+              g.update(targetNode.el, {
+                x: draggedPos.x,
+                y: draggedPos.y,
+                autoPosition: false
+              });
+              
+              // Update stored position
+              originalPositions.set(targetNode.id, { x: draggedPos.x, y: draggedPos.y });
+              originalPositions.set(draggedId, { x: targetPos.x, y: targetPos.y });
+            }
+          }
+        });
+      });
+
+      g.on('dragstop', () => {
+        isDragging = false;
+        draggedNode = null;
+        originalPositions.clear();
+        
+        requestAnimationFrame(() => {
+          // Only compact vertically after drag
+          compactGrid(true);
+        });
+      });
+
+      // Add change event handler to save layout
+      g.on('change', () => {
+        if (currentPage === 'dashboard') {
+          const items = g.getGridItems();
+          const serializedLayout = items
+            .map(item => {
+              const node = item.gridstackNode;
+              if (!node || !node.id) return null;
+              return {
+                id: node.id,
+                x: node.x ?? 0,
+                y: node.y ?? 0,
+                w: node.w ?? 2,
+                h: node.h ?? 2,
+                minW: node.minW ?? 2,
+                minH: node.minH ?? 2
+              };
+            })
+            .filter((item): item is LayoutWidget => item !== null);
+
+          if (isValidLayout(serializedLayout)) {
+            localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+            console.log('✅ Saved layout after change:', serializedLayout);
+          }
+        }
+      });
+
+      // Custom compaction that allows both horizontal and vertical movement
+      const compactGrid = (verticalOnly: boolean = false) => {
         if (!g.engine?.nodes) return;
         
-        const nodes = [...g.engine.nodes]; // Create a copy of nodes array
+        const nodes = [...g.engine.nodes];
         if (nodes.length === 0) return;
 
         g.batchUpdate();
         try {
-          // Sort nodes by vertical position (top to bottom)
-          nodes.sort((a, b) => (a.y || 0) - (b.y || 0));
+          // Sort nodes by position (top to bottom, left to right)
+          nodes.sort((a, b) => {
+            const aY = a.y || 0;
+            const bY = b.y || 0;
+            if (aY !== bY) return aY - bY;
+            return (a.x || 0) - (b.x || 0);
+          });
           
           nodes.forEach(node => {
             if (!node.el) return;
             
-            // Store original x position
-            const originalX = node.x || 0;
-            
-            // Find the highest possible position for this node
+            // Try to move the widget up and optionally to the left
             let newY = node.y || 0;
-            while (newY > 0) {
-              // Check if we can move up without collisions
-              const testNode = { ...node, y: newY - 1, x: originalX };
-              const hasCollision = nodes.some(other => 
-                other !== node && 
-                other.el && // Ensure other node exists
-                g.engine.collide(testNode, other)
-              );
+            let newX = node.x || 0;
+            let moved;
+
+            do {
+              moved = false;
               
-              if (hasCollision) break;
-              newY--;
-            }
-            
-            // Only update if y position changed, maintain x position
-            if (newY !== node.y) {
+              // Try moving up
+              if (newY > 0) {
+                const testNodeUp = { ...node, y: newY - 1, x: newX };
+                const hasCollisionUp = nodes.some(other => 
+                  other !== node && 
+                  other.el && 
+                  g.engine.collide(testNodeUp, other)
+                );
+                
+                if (!hasCollisionUp) {
+                  newY--;
+                  moved = true;
+                }
+              }
+              
+              // Try moving left only if not verticalOnly mode
+              if (!verticalOnly && newX > 0) {
+                const testNodeLeft = { ...node, y: newY, x: newX - 1 };
+                const hasCollisionLeft = nodes.some(other => 
+                  other !== node && 
+                  other.el && 
+                  g.engine.collide(testNodeLeft, other)
+                );
+                
+                if (!hasCollisionLeft) {
+                  newX--;
+                  moved = true;
+                }
+              }
+            } while (moved);
+
+            // Update position if changed
+            if (newY !== node.y || (newX !== node.x && !verticalOnly)) {
               g.update(node.el, {
                 y: newY,
-                x: originalX, // Always maintain original x position
-                w: node.w, // Maintain width
-                h: node.h  // Maintain height
+                x: verticalOnly ? node.x : newX, // Preserve x position if verticalOnly
+                w: node.w,
+                h: node.h,
+                autoPosition: false
               });
             }
           });
@@ -712,24 +836,6 @@ function App() {
           g.commit();
         }
       };
-
-      g.on('dragstop', () => {
-        isDragging = false;
-        requestAnimationFrame(() => {
-          g.float(false);
-          // Use custom vertical-only compaction
-          compactVerticalOnly();
-        });
-      });
-
-      // Only handle non-drag changes
-      g.on('change', () => {
-        if (!isDragging) {
-          requestAnimationFrame(() => {
-            compactVerticalOnly();
-          });
-        }
-      });
 
       // Add mousedown handler to prevent dragging when text is selected
       const handleMouseDown = (e: MouseEvent) => {
@@ -752,56 +858,13 @@ function App() {
         gridElementRef.current.addEventListener('mousedown', handleMouseDown);
       }
 
-      // Add change event listener to save layout changes
-      g.on('change', (event: Event, items: GridStackNode[]) => {
-        if (currentPage === 'dashboard') {
-          const serializedLayout = items
-            .map(node => {
-              if (!node?.id) return null;
-              const baseId = node.id.split('-')[0];
-              return {
-                id: node.id,
-                baseId,
-                x: node.x ?? 0,
-                y: node.y ?? 0,
-                w: node.w ?? 2,
-                h: node.h ?? 2,
-                minW: node.minW ?? 2,
-                minH: node.minH ?? 2
-              };
-            })
-            .filter((item): item is (LayoutWidget & { baseId: string }) => item !== null);
-
-          // Get existing layout to merge with changes
-          const existingLayoutStr = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-          let finalLayout = serializedLayout;
-          
-          if (existingLayoutStr) {
-            try {
-              const existingLayout = JSON.parse(existingLayoutStr);
-              if (Array.isArray(existingLayout)) {
-                // Create a map of current widgets by ID
-                const currentWidgets = new Map(serializedLayout.map(w => [w.id, w]));
-                
-                // Include widgets from existing layout that aren't in the current layout
-                existingLayout.forEach((widget: LayoutWidget) => {
-                  if (!currentWidgets.has(widget.id)) {
-                    finalLayout.push({
-                      ...widget,
-                      baseId: widget.id.split('-')[0]
-                    });
-                  }
-                });
-              }
-            } catch (error) {
-              console.warn('Failed to parse existing layout:', error);
-            }
-          }
-
-          if (isValidLayout(finalLayout)) {
-            localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(finalLayout));
-            console.log('✅ Saved layout after change:', finalLayout);
-          }
+      // Only handle non-drag changes
+      g.on('change', () => {
+        if (!isDragging) {
+          requestAnimationFrame(() => {
+            // Only compact vertically for layout changes
+            compactGrid(true);
+          });
         }
       });
 
@@ -844,9 +907,6 @@ function App() {
       // Apply layout
       g.batchUpdate();
       try {
-        // Ensure float is enabled during layout application
-        g.float(true);
-        
         // Create and add all widgets from the layout
         layoutToApply.forEach((node: LayoutWidget) => {
           // Get the base widget type from the ID (handle both default and dynamic IDs)
@@ -859,14 +919,11 @@ function App() {
           }
 
           try {
-            // Store original x position
-            const originalX = node.x;
-
             // Create widget element with the exact ID from the layout
             const widgetElement = createWidget({
               widgetType,
               widgetId: node.id,
-              x: originalX,
+              x: node.x,
               y: node.y,
               w: node.w,
               h: node.h,
@@ -874,11 +931,11 @@ function App() {
               minH: node.minH
             });
 
-            // Add widget to grid with all properties
+            // Add widget to grid with exact position
             g.addWidget({
               el: widgetElement,
               id: node.id,
-              x: originalX,
+              x: node.x,
               y: node.y,
               w: node.w,
               h: node.h,
@@ -893,30 +950,8 @@ function App() {
             console.error('Failed to create widget:', node.id, error);
           }
         });
-
-        // Force exact positions after all widgets are added
-        const items = g.getGridItems();
-        items.forEach(item => {
-          const node = item.gridstackNode;
-          if (node && node.el) {
-            const layoutItem = layoutToApply.find(l => l.id === node.id);
-            if (layoutItem) {
-              g.update(node.el, {
-                x: layoutItem.x,
-                y: layoutItem.y,
-                w: layoutItem.w,
-                h: layoutItem.h,
-                autoPosition: false
-              });
-            }
-          }
-        });
-
-        // Keep float enabled to prevent unwanted compaction
-        g.float(true);
       } finally {
         g.commit();
-        console.log('✅ Layout change completed for page:', currentPage);
       }
 
       gridRef.current = g;
