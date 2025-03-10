@@ -84,44 +84,24 @@ export function RefundsChart() {
   const id = useId();
 
   return (
-    <Card className="gap-4">
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <Card className="h-full flex flex-col">
+      <CardHeader className="flex-none">
+        <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5">
             <CardTitle>Refunds</CardTitle>
             <div className="flex items-start gap-2">
-              <div className="font-semibold text-2xl">$42,379</div>
-              <Badge className="mt-1.5 bg-rose-500/24 text-rose-500 border-none">
-                +3.9%
+              <div className="font-semibold text-2xl">$15,000</div>
+              <Badge className="mt-1.5 bg-destructive/24 text-destructive border-none">
+                +12.5%
               </Badge>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div
-                aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-xs bg-destructive"
-              ></div>
-              <div className="text-[13px]/3 text-muted-foreground/50">
-                Actual
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div
-                aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-xs bg-muted-foreground"
-              ></div>
-              <div className="text-[13px]/3 text-muted-foreground/50">
-                Projected
-              </div>
             </div>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto h-60 w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-destructive/10 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-destructive/10 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
         >
           <LineChart
             accessibilityLayer

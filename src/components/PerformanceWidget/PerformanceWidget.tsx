@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { cn } from '../../lib/utils';
 
 export type ChartVariant = 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades';
 
@@ -69,7 +70,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   );
 
   return (
-    <div className={className}>
+    <div className={cn("h-full flex flex-col", className)}>
       <ChartComponent />
     </div>
   );

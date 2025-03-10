@@ -38,56 +38,28 @@ const chartConfig = {
 export function SubscriptionsChart() {
   const id = useId();
 
-  // Get first and last month with type assertions
   const firstMonth = chartData[0]?.month as string;
   const lastMonth = chartData[chartData.length - 1]?.month as string;
 
   return (
-    <Card className="gap-4">
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <Card className="h-full flex flex-col">
+      <CardHeader className="flex-none">
+        <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5">
-            <CardTitle>Subscriptions Sold</CardTitle>
+            <CardTitle>Subscriptions</CardTitle>
             <div className="flex items-start gap-2">
-              <div className="font-semibold text-2xl">12,296</div>
+              <div className="font-semibold text-2xl">6,500</div>
               <Badge className="mt-1.5 bg-emerald-500/24 text-emerald-500 border-none">
-                +11.9%
+                +8.3%
               </Badge>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div
-                aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-xs bg-primary"
-              ></div>
-              <div className="text-[13px]/3 text-muted-foreground/50">
-                Individual
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div
-                aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-xs bg-success"
-              ></div>
-              <div className="text-[13px]/3 text-muted-foreground/50">Team</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div
-                aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-xs bg-info"
-              ></div>
-              <div className="text-[13px]/3 text-muted-foreground/50">
-                Enterprise
-              </div>
             </div>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto h-60 w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-success/15"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-success/15"
         >
           <BarChart
             accessibilityLayer
@@ -134,7 +106,7 @@ export function SubscriptionsChart() {
                     enterprise: "Enterprise",
                   }}
                   dataKeys={["individual", "team", "enterprise"]}
-                  valueFormatter={(value) => `$${value.toLocaleString()}`}
+                  valueFormatter={(value) => value.toLocaleString()}
                 />
               }
             />

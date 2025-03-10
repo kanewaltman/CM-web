@@ -39,8 +39,8 @@ export function MRRGrowthChart() {
   const lastMonth = chartData[chartData.length - 1]?.month as string;
 
   return (
-    <Card className="gap-4">
-      <CardHeader>
+    <Card className="h-full flex flex-col">
+      <CardHeader className="flex-none">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-0.5">
             <CardTitle>MRR Growth</CardTitle>
@@ -73,10 +73,10 @@ export function MRRGrowthChart() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto h-60 w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-success/15"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-success/15"
         >
           <BarChart
             accessibilityLayer
