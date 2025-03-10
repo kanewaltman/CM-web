@@ -5,7 +5,6 @@ import { MRRGrowthChart } from './charts/MRRGrowthChart';
 import { RefundsChart } from './charts/RefundsChart';
 import { SubscriptionsChart } from './charts/SubscriptionsChart';
 import { UpgradesChart } from './charts/UpgradesChart';
-import { WidgetContainer } from '../WidgetContainer';
 import { Button } from '../ui/button';
 import {
   DropdownMenu,
@@ -40,13 +39,15 @@ interface PerformanceWidgetProps {
   defaultVariant?: ChartVariant;
   onVariantChange?: (variant: ChartVariant) => void;
   onRemove?: () => void;
+  headerControls?: boolean;
 }
 
 export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({ 
   className,
   defaultVariant = 'revenue',
   onVariantChange,
-  onRemove
+  onRemove,
+  headerControls
 }) => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const ChartComponent = chartComponents[selectedVariant];
@@ -56,7 +57,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     onVariantChange?.(value);
   };
 
-  const headerControls = (
+  const controls = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm">
@@ -80,16 +81,13 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     </DropdownMenu>
   );
 
+  if (headerControls) {
+    return controls;
+  }
+
   return (
-    <WidgetContainer
-      title="Performance"
-      headerControls={headerControls}
-      className={className}
-      onRemove={onRemove}
-    >
-      <div className="h-full flex flex-col">
-        <ChartComponent />
-      </div>
-    </WidgetContainer>
+    <div className={cn("h-full flex flex-col", className)}>
+      <ChartComponent />
+    </div>
   );
 }; 
