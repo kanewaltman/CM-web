@@ -180,6 +180,13 @@ interface LayoutWidget {
   minH: number;
 }
 
+interface SerializedLayoutWidget extends LayoutWidget {
+  baseId: string;
+  viewState?: {
+    chartVariant: ChartVariant;
+  };
+}
+
 // Update ExtendedGridStackWidget interface to include el and gridstackNode properties
 interface ExtendedGridStackWidget extends GridStackWidget {
   el?: HTMLElement;
@@ -522,8 +529,12 @@ function App() {
     
     grid.batchUpdate();
     try {
-      // Store the default layout
-      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
+      // Store the default layout with view states
+      const defaultLayoutWithState = defaultLayout.map(widget => ({
+        ...widget,
+        viewState: widget.id === 'performance' ? { chartVariant: 'revenue' as ChartVariant } : undefined
+      }));
+      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayoutWithState));
       
       // First, remove all existing widgets and their DOM elements
       const currentWidgets = grid.getGridItems();
@@ -544,7 +555,7 @@ function App() {
       }
       
       // Now add all widgets from default layout
-      defaultLayout.forEach(node => {
+      defaultLayoutWithState.forEach(node => {
         const widgetType = widgetTypes[node.id];
         
         if (!widgetComponents[widgetType]) {
@@ -593,7 +604,7 @@ function App() {
           try {
             grid.compact();
             // Verify final positions
-            defaultLayout.forEach(node => {
+            defaultLayoutWithState.forEach(node => {
               const widget = grid.getGridItems().find(w => w.gridstackNode?.id === node.id);
               if (widget) {
                 grid.update(widget, {
@@ -619,7 +630,7 @@ function App() {
     
     const items = grid.getGridItems();
     const serializedLayout = items
-      .map(item => {
+      .map<SerializedLayoutWidget | null>(item => {
         const node = item.gridstackNode;
         if (!node || !node.id) return null;
         
@@ -627,6 +638,10 @@ function App() {
         const baseId = node.id.split('-')[0];
         const defaultWidget = defaultLayout.find(w => w.id === baseId);
         if (!defaultWidget) return null;
+
+        // Get widget state if it exists
+        const widgetState = (item as any)._widgetState;
+        const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
 
         return {
           id: node.id, // Keep the full dynamic ID
@@ -636,10 +651,25 @@ function App() {
           w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
           h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
           minW: defaultWidget.minW ?? 2,
-          minH: defaultWidget.minH ?? 2
+          minH: defaultWidget.minH ?? 2,
+          viewState // Include view state if it exists
         };
       })
-      .filter((item): item is (LayoutWidget & { baseId: string }) => item !== null);
+      .filter((item): item is SerializedLayoutWidget => {
+        if (!item) return false;
+        return typeof item.id === 'string' &&
+               typeof item.baseId === 'string' &&
+               typeof item.x === 'number' &&
+               typeof item.y === 'number' &&
+               typeof item.w === 'number' &&
+               typeof item.h === 'number' &&
+               typeof item.minW === 'number' &&
+               typeof item.minH === 'number' &&
+               (!item.viewState || (
+                 typeof item.viewState === 'object' &&
+                 typeof item.viewState.chartVariant === 'string'
+               ));
+      });
 
     return JSON.stringify(serializedLayout);
   }, [grid]);
@@ -651,7 +681,7 @@ function App() {
     }
 
     try {
-      const layout = JSON.parse(layoutStr) as (LayoutWidget & { baseId: string })[];
+      const layout = JSON.parse(layoutStr) as SerializedLayoutWidget[];
       
       // Validate layout structure
       if (!Array.isArray(layout)) {
@@ -693,7 +723,7 @@ function App() {
         const updatedWidgets = new Set<string>();
         
         // First update existing widgets
-        layout.forEach((node: LayoutWidget & { baseId: string }) => {
+        layout.forEach(node => {
           const baseId = node.baseId || node.id.split('-')[0];
           const existingWidgets = currentWidgetsMap.get(baseId) || [];
           const existingWidget = existingWidgets.find((w: ExtendedGridStackWidget) => w.gridstackNode?.id === node.id) || existingWidgets[0];
@@ -709,6 +739,12 @@ function App() {
               minH: node.minH,
               autoPosition: false
             });
+
+            // Update widget state if it exists
+            if (node.viewState && (existingWidget as any)._widgetState) {
+              (existingWidget as any)._widgetState.setVariant(node.viewState.chartVariant);
+            }
+
             updatedWidgets.add(existingWidget.gridstackNode?.id || '');
             
             // Remove this widget from the map to track usage
@@ -751,6 +787,11 @@ function App() {
                 noResize: false,
                 locked: false
               } as ExtendedGridStackWidget);
+
+              // Update widget state if it exists
+              if (node.viewState && (widgetElement as any)._widgetState) {
+                (widgetElement as any)._widgetState.setVariant(node.viewState.chartVariant);
+              }
             } catch (error) {
               console.error('Failed to create widget:', node.id, error);
             }
