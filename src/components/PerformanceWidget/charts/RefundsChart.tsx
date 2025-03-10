@@ -30,11 +30,11 @@ const chartData = [
 const chartConfig = {
   actual: {
     label: "Actual",
-    color: "hsl(var(--color-destructive-default))",
+    color: "rgb(239 68 68)",
   },
   projected: {
     label: "Projected",
-    color: "hsl(var(--color-muted-foreground))",
+    color: "rgb(239 68 68 / 0.5)",
   },
 } satisfies ChartConfig;
 
@@ -91,7 +91,7 @@ export function RefundsChart() {
             <CardTitle>Refunds</CardTitle>
             <div className="flex items-start gap-2">
               <div className="font-semibold text-2xl">$15,000</div>
-              <Badge className="mt-1.5 bg-destructive/24 text-destructive border-none">
+              <Badge className="mt-1.5 bg-red-500/24 text-red-500 border-none">
                 +12.5%
               </Badge>
             </div>
@@ -101,7 +101,7 @@ export function RefundsChart() {
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-destructive/10 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
         >
           <LineChart
             accessibilityLayer
@@ -110,21 +110,22 @@ export function RefundsChart() {
           >
             <defs>
               <linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="hsl(var(--color-destructive-default))" />
-                <stop offset="100%" stopColor="hsl(var(--color-destructive-default) / 0.8)" />
+                <stop offset="0%" stopColor="rgb(239 68 68)" />
+                <stop offset="100%" stopColor="rgb(239 68 68 / 0.8)" />
               </linearGradient>
             </defs>
             <CartesianGrid
               vertical={false}
               strokeDasharray="2 2"
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
+              opacity={0.5}
             />
             <XAxis
               dataKey="month"
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => value.slice(0, 3)}
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
             />
             <YAxis
               axisLine={false}
@@ -138,7 +139,7 @@ export function RefundsChart() {
             <Line
               type="linear"
               dataKey="projected"
-              stroke="hsl(var(--color-muted-foreground))"
+              stroke="rgb(239 68 68 / 0.5)"
               strokeWidth={2}
               dot={false}
               activeDot={false}
@@ -147,8 +148,8 @@ export function RefundsChart() {
               content={
                 <CustomTooltipContent
                   colorMap={{
-                    actual: "hsl(var(--color-destructive-default))",
-                    projected: "hsl(var(--color-muted-foreground))",
+                    actual: "rgb(239 68 68)",
+                    projected: "rgb(239 68 68 / 0.5)",
                   }}
                   labelMap={{
                     actual: "Actual",
@@ -158,7 +159,7 @@ export function RefundsChart() {
                   valueFormatter={(value) => `$${value.toLocaleString()}`}
                 />
               }
-              cursor={<CustomCursor fill="hsl(var(--color-destructive-default))" />}
+              cursor={<CustomCursor fill="rgb(239 68 68)" />}
             />
             <Line
               type="linear"
@@ -168,7 +169,7 @@ export function RefundsChart() {
               dot={false}
               activeDot={{
                 r: 5,
-                fill: "hsl(var(--color-destructive-default))",
+                fill: "rgb(239 68 68)",
                 stroke: "hsl(var(--background))",
                 strokeWidth: 2,
               }}

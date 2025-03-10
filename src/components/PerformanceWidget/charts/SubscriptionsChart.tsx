@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
@@ -23,23 +23,35 @@ const chartData = [
 const chartConfig = {
   individual: {
     label: "Individual",
-    color: "hsl(var(--color-primary-default))",
+    color: "rgb(98 126 234 / 0.75)",
   },
   team: {
     label: "Team",
-    color: "hsl(var(--color-success-default))",
+    color: "rgb(0 194 110 / 0.75)",
   },
   enterprise: {
     label: "Enterprise",
-    color: "hsl(var(--color-info-default))",
+    color: "rgb(255 77 21 / 0.75)",
   },
 } satisfies ChartConfig;
 
 export function SubscriptionsChart() {
   const id = useId();
+  const [hoveredStack, setHoveredStack] = useState<string | null>(null);
+  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
 
   const firstMonth = chartData[0]?.month as string;
   const lastMonth = chartData[chartData.length - 1]?.month as string;
+
+  const getOpacity = (key: string, month: string) => {
+    if (hoveredMonth) {
+      return hoveredMonth === month ? 1 : 0.75;
+    }
+    if (hoveredStack) {
+      return hoveredStack === key ? 1 : 0.75;
+    }
+    return 0.75;
+  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -59,31 +71,36 @@ export function SubscriptionsChart() {
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-success/15"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25"
         >
           <BarChart
             accessibilityLayer
             data={chartData}
             maxBarSize={20}
             margin={{ left: -12, right: 12, top: 12 }}
+            onMouseLeave={() => {
+              setHoveredMonth(null);
+              setHoveredStack(null);
+            }}
           >
             <defs>
               <linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--color-success-default))" />
-                <stop offset="100%" stopColor="hsl(var(--color-success-default) / 0.8)" />
+                <stop offset="0%" stopColor={`rgb(0 194 110 / ${getOpacity('team', hoveredMonth || '')})`} />
+                <stop offset="100%" stopColor={`rgb(0 194 110 / ${getOpacity('team', hoveredMonth || '') * 0.8})`} />
               </linearGradient>
             </defs>
             <CartesianGrid
               vertical={false}
               strokeDasharray="2 2"
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
+              opacity={0.5}
             />
             <XAxis
               dataKey="month"
               tickLine={false}
               tickMargin={12}
               ticks={[firstMonth, lastMonth]}
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
             />
             <YAxis
               tickLine={false}
@@ -96,9 +113,9 @@ export function SubscriptionsChart() {
               content={
                 <CustomTooltipContent
                   colorMap={{
-                    individual: "hsl(var(--color-primary-default))",
-                    team: "hsl(var(--color-success-default))",
-                    enterprise: "hsl(var(--color-info-default))",
+                    individual: "rgb(98 126 234)",
+                    team: "rgb(0 194 110)",
+                    enterprise: "rgb(255 77 21)",
                   }}
                   labelMap={{
                     individual: "Individual",
@@ -107,12 +124,43 @@ export function SubscriptionsChart() {
                   }}
                   dataKeys={["individual", "team", "enterprise"]}
                   valueFormatter={(value) => value.toLocaleString()}
+                  onMouseEnter={(month) => {
+                    setHoveredMonth(month);
+                    setHoveredStack(null);
+                  }}
                 />
               }
             />
-            <Bar dataKey="individual" fill="hsl(var(--color-primary-default))" stackId="a" />
-            <Bar dataKey="team" fill={`url(#${id}-gradient)`} stackId="a" />
-            <Bar dataKey="enterprise" fill="hsl(var(--color-info-default))" stackId="a" />
+            <Bar 
+              dataKey="individual" 
+              fill={`rgb(98 126 234 / ${getOpacity('individual', hoveredMonth || '')})`}
+              stackId="a"
+              onMouseEnter={(data) => {
+                setHoveredStack('individual');
+                setHoveredMonth(null);
+              }}
+              onMouseLeave={() => setHoveredStack(null)}
+            />
+            <Bar 
+              dataKey="team" 
+              fill={`url(#${id}-gradient)`}
+              stackId="a"
+              onMouseEnter={(data) => {
+                setHoveredStack('team');
+                setHoveredMonth(null);
+              }}
+              onMouseLeave={() => setHoveredStack(null)}
+            />
+            <Bar 
+              dataKey="enterprise" 
+              fill={`rgb(255 77 21 / ${getOpacity('enterprise', hoveredMonth || '')})`}
+              stackId="a"
+              onMouseEnter={(data) => {
+                setHoveredStack('enterprise');
+                setHoveredMonth(null);
+              }}
+              onMouseLeave={() => setHoveredStack(null)}
+            />
           </BarChart>
         </ChartContainer>
       </CardContent>

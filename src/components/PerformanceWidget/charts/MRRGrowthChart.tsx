@@ -23,11 +23,11 @@ const chartData = [
 const chartConfig = {
   revenues: {
     label: "Revenues",
-    color: "hsl(var(--color-success-default))",
+    color: "rgb(16 185 129)", // emerald-500
   },
   churn: {
     label: "Churn",
-    color: "hsl(var(--color-destructive-default))",
+    color: "rgb(239 68 68)", // red-500
   },
 } satisfies ChartConfig;
 
@@ -55,7 +55,7 @@ export function MRRGrowthChart() {
             <div className="flex items-center gap-2">
               <div
                 aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-xs bg-success"
+                className="size-1.5 shrink-0 rounded-xs bg-[rgb(16_185_129)]"
               ></div>
               <div className="text-[13px]/3 text-muted-foreground/50">
                 Revenues
@@ -64,7 +64,7 @@ export function MRRGrowthChart() {
             <div className="flex items-center gap-2">
               <div
                 aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-xs bg-destructive"
+                className="size-1.5 shrink-0 rounded-xs bg-[rgb(239_68_68)]"
               ></div>
               <div className="text-[13px]/3 text-muted-foreground/50">
                 Churn
@@ -76,7 +76,7 @@ export function MRRGrowthChart() {
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-success/15"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25"
         >
           <BarChart
             accessibilityLayer
@@ -87,21 +87,22 @@ export function MRRGrowthChart() {
           >
             <defs>
               <linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--color-success-default))" />
-                <stop offset="100%" stopColor="hsl(var(--color-success-default) / 0.8)" />
+                <stop offset="0%" stopColor="rgb(16 185 129)" />
+                <stop offset="100%" stopColor="rgb(16 185 129 / 0.8)" />
               </linearGradient>
             </defs>
             <CartesianGrid
               vertical={false}
               strokeDasharray="2 2"
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
+              opacity={0.5}
             />
             <XAxis
               dataKey="month"
               tickLine={false}
               tickMargin={12}
               ticks={[firstMonth, lastMonth]}
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
             />
             <YAxis
               tickLine={false}
@@ -114,8 +115,8 @@ export function MRRGrowthChart() {
               content={
                 <CustomTooltipContent
                   colorMap={{
-                    revenues: "hsl(var(--color-success-default))",
-                    churn: "hsl(var(--color-destructive-default))",
+                    revenues: "rgb(16 185 129)",
+                    churn: "rgb(239 68 68)",
                   }}
                   labelMap={{
                     revenues: "Revenues",
@@ -127,7 +128,7 @@ export function MRRGrowthChart() {
               }
             />
             <Bar dataKey="revenues" fill={`url(#${id}-gradient)`} stackId="a" />
-            <Bar dataKey="churn" fill="hsl(var(--color-destructive-default))" stackId="a" />
+            <Bar dataKey="churn" fill="rgb(239 68 68)" stackId="a" />
           </BarChart>
         </ChartContainer>
       </CardContent>
