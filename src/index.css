@@ -333,6 +333,13 @@ body {
   margin-left: auto;
   margin-right: auto;
   padding: 0 1.5rem; /* Match TopBar padding */
+  transition: max-width 300ms ease-in-out;
+}
+
+/* When full width is enabled */
+.main-content-inner.max-w-none {
+  max-width: 100%;
+  padding: 0 1.5rem; /* Keep padding consistent */
 }
 
 /* Custom Scrollbar Styling */

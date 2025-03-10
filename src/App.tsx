@@ -246,9 +246,13 @@ function App() {
   const [grid, setGrid] = useState<GridStack | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'spot' | 'margin' | 'stake'>('dashboard');
+  const [isFullWidth, setIsFullWidth] = useState(false);
   const resizeFrameRef = useRef<number>();
   const gridRef = useRef<GridStack | null>(null);
   const gridElementRef = useRef<HTMLDivElement>(null);
+  const widgetRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const draggedWidgetRef = useRef<string | null>(null);
   let widgetCounter = 0;
 
   // Define handleRemoveWidget first
@@ -1490,6 +1494,28 @@ function App() {
     };
   }, []);
 
+  // Toggle full width mode
+  const toggleFullWidth = useCallback(() => {
+    setIsFullWidth(prev => {
+      const newValue = !prev;
+      
+      // If we have a grid, trigger a resize to adjust to the new width
+      if (grid) {
+        setTimeout(() => {
+          grid.batchUpdate();
+          try {
+            // Force a resize event to recalculate grid dimensions
+            window.dispatchEvent(new Event('resize'));
+          } finally {
+            grid.commit();
+          }
+        }, 50);
+      }
+      
+      return newValue;
+    });
+  }, [grid]);
+
   // Render error state if there's an error
   if (error) {
     return (
@@ -1509,12 +1535,40 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <TopBar 
+        currentPage={currentPage} 
+        onPageChange={handlePageChange} 
+        isFullWidth={isFullWidth}
+        onToggleFullWidth={toggleFullWidth}
+      />
       <div className="main-content">
-        <div className="main-content-inner">
-          <ControlBar onResetLayout={handleResetLayout} onCopyLayout={handleCopyLayout} onPasteLayout={handlePasteLayout} />
-          <div ref={gridElementRef} className="grid-stack" />
+        <div className={`main-content-inner ${isFullWidth ? 'max-w-none' : ''}`}>
+          {currentPage === 'dashboard' ? (
+            <>
+              <ControlBar 
+                onResetLayout={handleResetLayout} 
+                onCopyLayout={handleCopyLayout}
+                onPasteLayout={handlePasteLayout}
+              />
+              <div className="grid-stack" ref={gridElementRef}></div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-[calc(100vh-64px)] text-center p-8">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">Coming Soon</h2>
+                <p className="text-muted-foreground">
+                  The {currentPage} page is under development.
+                </p>
+                <button 
+                  className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md"
+                  onClick={() => handlePageChange('dashboard')}
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <Toaster 

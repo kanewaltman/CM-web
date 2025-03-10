@@ -1,4 +1,4 @@
-import { Search, Moon, Sun, ChevronDown, Menu } from '../components/ui-icons';
+import { Search, Moon, Sun, ChevronDown, Menu, Maximize2 } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useTheme } from 'next-themes';
@@ -10,9 +10,11 @@ import { useEffect, useState } from 'react';
 interface TopBarProps {
   currentPage: 'dashboard' | 'spot' | 'margin' | 'stake';
   onPageChange: (page: 'dashboard' | 'spot' | 'margin' | 'stake') => void;
+  isFullWidth?: boolean;
+  onToggleFullWidth?: () => void;
 }
 
-export function TopBar({ currentPage, onPageChange }: TopBarProps) {
+export function TopBar({ currentPage, onPageChange, isFullWidth = false, onToggleFullWidth }: TopBarProps) {
   const { theme, setTheme } = useTheme();
   const colors = getThemeValues(theme);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -143,6 +145,31 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
 
         {/* Right Section - with 6px right padding */}
         <div className="flex items-center space-x-2 pr-6">
+          {/* Full Width Toggle Button */}
+          {onToggleFullWidth && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleFullWidth}
+              className={cn(
+                "w-10 h-10 rounded-full hidden sm:flex items-center justify-center",
+                "text-muted-foreground/60 hover:text-foreground",
+                "hover:bg-[hsl(var(--color-bg-subtle))]"
+              )}
+              title={isFullWidth ? "Collapse to default width" : "Expand to full width"}
+            >
+              <Maximize2 
+                className={cn(
+                  "h-[1.2rem] w-[1.2rem] opacity-70",
+                  isFullWidth ? "rotate-180" : "rotate-0",
+                  "transition-transform duration-300"
+                )} 
+              />
+              <span className="sr-only">{isFullWidth ? "Collapse width" : "Expand width"}</span>
+            </Button>
+          )}
+          
+          {/* Theme Toggle Button */}
           <Button
             variant="ghost"
             size="icon"
