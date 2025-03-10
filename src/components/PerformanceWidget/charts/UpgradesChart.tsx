@@ -46,13 +46,13 @@ export function UpgradesChart() {
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         <div className="flex gap-1 h-5">
-          <div className="bg-chart-4 h-full" style={{ width: "22%" }}></div>
+          <div className="bg-[rgb(98,126,234,0.75)] h-full" style={{ width: "22%" }}></div>
           <div
-            className="bg-linear-to-r from-chart-2 to-chart-1 h-full"
+            className="bg-[rgb(0,194,110,0.75)] h-full"
             style={{ width: "24%" }}
           ></div>
-          <div className="bg-chart-6 h-full" style={{ width: "16%" }}></div>
-          <div className="bg-chart-3 h-full" style={{ width: "38%" }}></div>
+          <div className="bg-[rgb(255,77,21,0.75)] h-full" style={{ width: "16%" }}></div>
+          <div className="bg-[rgb(98,126,234,0.75)] h-full" style={{ width: "38%" }}></div>
         </div>
         <div>
           <div className="text-[13px]/3 text-muted-foreground/50 mb-3">
@@ -61,7 +61,7 @@ export function UpgradesChart() {
           <ul className="text-sm divide-y divide-border">
             <li className="py-2 flex items-center gap-2">
               <span
-                className="size-2 shrink-0 rounded-full bg-chart-4"
+                className="size-2 shrink-0 rounded-full bg-[rgb(98,126,234,0.75)]"
                 aria-hidden="true"
               ></span>
               <span className="grow text-muted-foreground">
@@ -73,7 +73,7 @@ export function UpgradesChart() {
             </li>
             <li className="py-2 flex items-center gap-2">
               <span
-                className="size-2 shrink-0 rounded-full bg-linear-to-r from-chart-2 to-chart-1"
+                className="size-2 shrink-0 rounded-full bg-[rgb(0,194,110,0.75)]"
                 aria-hidden="true"
               ></span>
               <span className="grow text-muted-foreground">
@@ -85,7 +85,7 @@ export function UpgradesChart() {
             </li>
             <li className="py-2 flex items-center gap-2">
               <span
-                className="size-2 shrink-0 rounded-full bg-chart-6"
+                className="size-2 shrink-0 rounded-full bg-[rgb(255,77,21,0.75)]"
                 aria-hidden="true"
               ></span>
               <span className="grow text-muted-foreground">
@@ -97,7 +97,7 @@ export function UpgradesChart() {
             </li>
             <li className="py-2 flex items-center gap-2">
               <span
-                className="size-2 shrink-0 rounded-full bg-chart-3"
+                className="size-2 shrink-0 rounded-full bg-[rgb(98,126,234,0.75)]"
                 aria-hidden="true"
               ></span>
               <span className="grow text-muted-foreground">
