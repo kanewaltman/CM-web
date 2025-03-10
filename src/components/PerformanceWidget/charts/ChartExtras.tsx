@@ -40,7 +40,7 @@ export function CustomTooltipContent({
     : payload;
 
   return (
-    <div className="bg-popover text-popover-foreground grid min-w-32 items-start gap-1.5 rounded-lg border border-border/50 px-3 py-1.5 text-xs shadow-lg">
+    <div className="bg-popover text-popover-foreground grid min-w-32 items-start gap-1.5 rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs shadow-lg">
       <div className="font-medium text-foreground">{label}</div>
       <div className="grid gap-1.5">
         {orderedPayload.map((entry, index) => {

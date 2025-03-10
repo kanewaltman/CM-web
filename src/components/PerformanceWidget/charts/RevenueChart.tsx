@@ -39,11 +39,11 @@ const arrData = [
 const chartConfig = {
   actual: {
     label: "Actual",
-    color: "hsl(var(--color-success-default))",
+    color: "rgb(16 185 129)",
   },
   projected: {
     label: "Projected",
-    color: "hsl(var(--color-muted-foreground))",
+    color: "rgb(16 185 129 / 0.5)",
   },
 } satisfies ChartConfig;
 
@@ -77,7 +77,7 @@ export function RevenueChart() {
             className="group text-xs after:border after:border-border after:bg-background has-focus-visible:after:border-ring has-focus-visible:after:ring-ring/50 relative inline-grid grid-cols-[1fr_1fr] items-center gap-0 font-medium after:absolute after:inset-y-0 after:w-1/2 after:rounded-md after:shadow-xs after:transition-[translate,box-shadow] after:duration-300 after:[transition-timing-function:cubic-bezier(0.16,1,0.3,1)] has-focus-visible:after:ring-[3px] data-[state=off]:after:translate-x-0 data-[state=on]:after:translate-x-full"
             data-state={selectedValue}
           >
-            <label className="group-data-[state=on]:text-muted-foreground/50 relative z-10 inline-flex h-full min-w-8 cursor-pointer items-center justify-center px-2 whitespace-nowrap transition-colors select-none">
+            <label className="group-data-[state=on]:text-muted-foreground/50 relative z-10 inline-flex h-full min-w-8 cursor-pointer items-center justify-center px-2 py-1.5 whitespace-nowrap transition-colors select-none">
               MRR
               <RadioGroupItem
                 id={`${id}-1`}
@@ -85,7 +85,7 @@ export function RevenueChart() {
                 className="sr-only"
               />
             </label>
-            <label className="group-data-[state=off]:text-muted-foreground/50 relative z-10 inline-flex h-full min-w-8 cursor-pointer items-center justify-center px-2 whitespace-nowrap transition-colors select-none">
+            <label className="group-data-[state=off]:text-muted-foreground/50 relative z-10 inline-flex h-full min-w-8 cursor-pointer items-center justify-center px-2 py-1.5 whitespace-nowrap transition-colors select-none">
               ARR
               <RadioGroupItem id={`${id}-2`} value="on" className="sr-only" />
             </label>
@@ -95,7 +95,7 @@ export function RevenueChart() {
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-success/15"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25"
         >
           <BarChart
             accessibilityLayer
@@ -105,21 +105,22 @@ export function RevenueChart() {
           >
             <defs>
               <linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--color-success-default))" />
-                <stop offset="100%" stopColor="hsl(var(--color-success-default) / 0.8)" />
+                <stop offset="0%" stopColor="rgb(16 185 129)" />
+                <stop offset="100%" stopColor="rgb(16 185 129 / 0.8)" />
               </linearGradient>
             </defs>
             <CartesianGrid
               vertical={false}
               strokeDasharray="2 2"
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
+              opacity={0.5}
             />
             <XAxis
               dataKey="month"
               tickLine={false}
               tickMargin={12}
               ticks={[firstMonth, lastMonth]}
-              stroke="hsl(var(--border))"
+              stroke="hsl(var(--color-border-muted))"
             />
             <YAxis
               tickLine={false}
@@ -132,8 +133,8 @@ export function RevenueChart() {
               content={
                 <CustomTooltipContent
                   colorMap={{
-                    actual: "hsl(var(--color-success-default))",
-                    projected: "hsl(var(--color-muted-foreground))",
+                    actual: "rgb(16 185 129)",
+                    projected: "rgb(16 185 129 / 0.5)",
                   }}
                   labelMap={{
                     actual: "Actual",
@@ -147,7 +148,7 @@ export function RevenueChart() {
             <Bar dataKey="actual" fill={`url(#${id}-gradient)`} stackId="a" />
             <Bar
               dataKey="projected"
-              fill="hsl(var(--color-muted-foreground))"
+              fill="rgb(16 185 129 / 0.5)"
               stackId="a"
             />
           </BarChart>
