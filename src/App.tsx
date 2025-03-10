@@ -15,10 +15,24 @@ import { BalancesWidget } from './components/BalancesWidget';
 import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWidget';
 
 // Widget Registry - Single source of truth for widget configuration
+interface BaseWidgetProps {
+  className?: string;
+}
+
+interface RemovableWidgetProps extends BaseWidgetProps {
+  onRemove?: () => void;
+}
+
+interface PerformanceWidgetProps extends RemovableWidgetProps {
+  headerControls?: boolean;
+  defaultVariant?: 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades';
+  onVariantChange?: (variant: 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades') => void;
+}
+
 interface WidgetConfig {
   id: string;
   title: string;
-  component: React.FC<any>;
+  component: React.FC<RemovableWidgetProps | PerformanceWidgetProps>;
   defaultSize: { w: number; h: number };
 }
 
@@ -293,7 +307,11 @@ function App() {
     }
     
     root.render(
-      <WidgetContainer title={widgetTitle} onRemove={() => handleRemoveWidgetRef.current(widgetId)}>
+      <WidgetContainer 
+        title={widgetTitle} 
+        onRemove={() => handleRemoveWidgetRef.current(widgetId)}
+        headerControls={widgetType === 'performance' ? <WidgetComponent headerControls={true} /> : undefined}
+      >
         <WidgetComponent />
       </WidgetContainer>
     );
