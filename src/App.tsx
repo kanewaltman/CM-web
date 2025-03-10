@@ -208,7 +208,7 @@ interface CreateWidgetParams {
   minH?: number;
 }
 
-// Add this near the top of the file, outside of the App component
+// Update the WidgetState class to be more robust
 class WidgetState {
   private listeners: Set<() => void> = new Set();
   private _variant: ChartVariant;
@@ -217,16 +217,18 @@ class WidgetState {
     this._variant = initialVariant;
   }
 
-  get variant() {
+  get variant(): ChartVariant {
     return this._variant;
   }
 
   setVariant(newVariant: ChartVariant) {
+    if (!newVariant) return;
     this._variant = newVariant;
     this.notifyListeners();
   }
 
   subscribe(listener: () => void) {
+    if (!listener) return () => {};
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
@@ -234,9 +236,18 @@ class WidgetState {
   }
 
   private notifyListeners() {
-    this.listeners.forEach(listener => listener());
+    this.listeners.forEach(listener => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Error in widget state listener:', error);
+      }
+    });
   }
 }
+
+// Update the widget state registry to be more robust
+const widgetStateRegistry = new Map<string, WidgetState>();
 
 function App() {
   console.log('App component is rendering');
@@ -330,12 +341,18 @@ function App() {
 
   // Now define createWidget which uses handleRemoveWidgetRef
   const createWidget = useCallback(({ widgetType, widgetId, x, y, w = 3, h = 4, minW = 2, minH = 2 }: CreateWidgetParams) => {
-    const WidgetComponent = widgetComponents[widgetType];
-    if (!WidgetComponent) {
-      throw new Error(`Unknown widget type: ${widgetType}`);
+    if (!widgetType || !widgetId) {
+      console.error('Invalid widget parameters:', { widgetType, widgetId });
+      return null;
     }
 
-    // Create the main widget container
+    const WidgetComponent = widgetComponents[widgetType];
+    if (!WidgetComponent) {
+      console.error('Unknown widget type:', widgetType);
+      return null;
+    }
+
+    const baseWidgetId = widgetId.split('-')[0];
     const widgetElement = document.createElement('div');
     widgetElement.className = 'grid-stack-item';
     
@@ -353,134 +370,150 @@ function App() {
     contentElement.className = 'grid-stack-item-content';
     widgetElement.appendChild(contentElement);
 
-    // Store the root in a data attribute for cleanup
     const root = createRoot(contentElement);
     (widgetElement as any)._reactRoot = root;
 
-    // Get the base widget type from the ID
-    const baseWidgetId = widgetId.split('-')[0];
-
-    // For Performance widget, create a shared state
-    if (baseWidgetId === 'performance') {
-      // Try to load initial variant from layout data
-      let initialVariant: ChartVariant = 'revenue';
-      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-      if (savedLayout) {
-        try {
-          const layout = JSON.parse(savedLayout);
-          const widgetData = layout.find((item: any) => item.id === widgetId);
-          if (widgetData?.viewState?.chartVariant) {
-            initialVariant = widgetData.viewState.chartVariant;
-          }
-        } catch (error) {
-          console.error('Failed to load widget view state:', error);
-        }
-      }
-
-      // Create shared state
-      const widgetState = new WidgetState(initialVariant);
-      (widgetElement as any)._widgetState = widgetState;
-
-      const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
-        const [variant, setVariant] = useState(widgetState.variant);
-
-        useEffect(() => {
-          // Update local state when widget state changes
-          setVariant(widgetState.variant);
-          // Subscribe to future changes
-          return widgetState.subscribe(() => {
-            setVariant(widgetState.variant);
-          });
-        }, []);
-
-        const handleVariantChange = (newVariant: ChartVariant) => {
-          // Update shared state first
-          widgetState.setVariant(newVariant);
-          // Update local state immediately
-          setVariant(newVariant);
-
-          // Save to layout data
+    try {
+      // For Performance widget, create a shared state
+      if (baseWidgetId === 'performance') {
+        // Try to load initial variant from layout data or existing state
+        let initialVariant: ChartVariant = 'revenue';
+        const existingState = widgetStateRegistry.get(widgetId);
+        if (existingState) {
+          initialVariant = existingState.variant;
+        } else {
           const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
           if (savedLayout) {
             try {
               const layout = JSON.parse(savedLayout);
-              const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-              if (widgetIndex !== -1) {
-                layout[widgetIndex] = {
-                  ...layout[widgetIndex],
-                  viewState: {
-                    ...layout[widgetIndex].viewState,
-                    chartVariant: newVariant
-                  }
-                };
-                localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+              const widgetData = layout.find((item: any) => item.id === widgetId);
+              if (widgetData?.viewState?.chartVariant) {
+                initialVariant = widgetData.viewState.chartVariant;
               }
             } catch (error) {
-              console.error('Failed to save widget view state:', error);
+              console.error('Failed to load widget view state:', error);
             }
           }
+        }
+
+        // Create or get shared state
+        let widgetState = widgetStateRegistry.get(widgetId);
+        if (!widgetState) {
+          widgetState = new WidgetState(initialVariant);
+          widgetStateRegistry.set(widgetId, widgetState);
+        }
+
+        const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
+          const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
+
+          useEffect(() => {
+            // Update local state when widget state changes
+            setVariant(widgetState.variant);
+            // Subscribe to future changes
+            return widgetState.subscribe(() => {
+              setVariant(widgetState.variant);
+            });
+          }, []);
+
+          const handleVariantChange = (newVariant: ChartVariant) => {
+            if (!newVariant) return;
+            
+            // Update shared state first
+            widgetState.setVariant(newVariant);
+            // Update local state immediately
+            setVariant(newVariant);
+
+            // Save to layout data
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              try {
+                const layout = JSON.parse(savedLayout);
+                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+                if (widgetIndex !== -1) {
+                  layout[widgetIndex] = {
+                    ...layout[widgetIndex],
+                    viewState: {
+                      ...layout[widgetIndex].viewState,
+                      chartVariant: newVariant
+                    }
+                  };
+                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                }
+              } catch (error) {
+                console.error('Failed to save widget view state:', error);
+              }
+            }
+          };
+
+          return (
+            <WidgetComponent
+              widgetId={widgetId}
+              headerControls={isHeader}
+              defaultVariant={variant}
+              onVariantChange={handleVariantChange}
+            />
+          );
         };
 
-        return (
-          <WidgetComponent
-            widgetId={widgetId}
-            headerControls={isHeader}
-            defaultVariant={variant}
-            onVariantChange={handleVariantChange}
-          />
+        root.render(
+          <React.StrictMode>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={() => {
+                if (gridRef.current) {
+                  const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                  if (widget) {
+                    const reactRoot = (widget as any)._reactRoot;
+                    if (reactRoot) {
+                      reactRoot.unmount();
+                    }
+                    // Clean up widget state
+                    widgetStateRegistry.delete(widgetId);
+                    gridRef.current.removeWidget(widget, false);
+                    widget.remove();
+                  }
+                }
+              }}
+              headerControls={<PerformanceWidgetWrapper isHeader />}
+            >
+              <PerformanceWidgetWrapper />
+            </WidgetContainer>
+          </React.StrictMode>
         );
-      };
+      } else {
+        // Regular widget rendering
+        root.render(
+          <React.StrictMode>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={() => {
+                if (gridRef.current) {
+                  const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                  if (widget) {
+                    const reactRoot = (widget as any)._reactRoot;
+                    if (reactRoot) {
+                      reactRoot.unmount();
+                    }
+                    gridRef.current.removeWidget(widget, false);
+                    widget.remove();
+                  }
+                }
+              }}
+            >
+              <WidgetComponent widgetId={widgetId} />
+            </WidgetContainer>
+          </React.StrictMode>
+        );
+      }
 
-      root.render(
-        <React.StrictMode>
-          <WidgetContainer
-            title={widgetTitles[widgetType]}
-            onRemove={() => {
-              if (gridRef.current) {
-                const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                if (widget) {
-                  const reactRoot = (widget as any)._reactRoot;
-                  if (reactRoot) {
-                    reactRoot.unmount();
-                  }
-                  gridRef.current.removeWidget(widget, false);
-                  widget.remove();
-                }
-              }
-            }}
-            headerControls={<PerformanceWidgetWrapper isHeader />}
-          >
-            <PerformanceWidgetWrapper />
-          </WidgetContainer>
-        </React.StrictMode>
-      );
-    } else {
-      // Regular widget rendering
-      root.render(
-        <React.StrictMode>
-          <WidgetContainer
-            title={widgetTitles[widgetType]}
-            onRemove={() => {
-              if (gridRef.current) {
-                const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                if (widget) {
-                  const reactRoot = (widget as any)._reactRoot;
-                  if (reactRoot) {
-                    reactRoot.unmount();
-                  }
-                  gridRef.current.removeWidget(widget, false);
-                  widget.remove();
-                }
-              }
-            }}
-          >
-            <WidgetComponent widgetId={widgetId} />
-          </WidgetContainer>
-        </React.StrictMode>
-      );
+      return widgetElement;
+    } catch (error) {
+      console.error('Error creating widget:', error);
+      // Clean up on error
+      root.unmount();
+      widgetElement.remove();
+      return null;
     }
-
-    return widgetElement;
   }, []);
 
   // Check for ad blocker on mount
@@ -537,6 +570,8 @@ function App() {
       const currentWidgets = grid.getGridItems();
       currentWidgets.forEach(widget => {
         if (widget.gridstackNode?.id) {
+          // Clean up widget state
+          widgetStateRegistry.delete(widget.gridstackNode.id);
           // Remove the widget from GridStack
           grid.removeWidget(widget, false);
           // Also remove the DOM element
@@ -572,24 +607,29 @@ function App() {
             minH: node.minH
           });
 
-          grid.addWidget({
-            el: widgetElement,
-            id: node.id,
-            x: node.x,
-            y: node.y,
-            w: node.w,
-            h: node.h,
-            minW: node.minW,
-            minH: node.minH,
-            autoPosition: false,
-            noMove: false,
-            noResize: false,
-            locked: false
-          } as ExtendedGridStackWidget);
+          if (widgetElement) {
+            grid.addWidget({
+              el: widgetElement,
+              id: node.id,
+              x: node.x,
+              y: node.y,
+              w: node.w,
+              h: node.h,
+              minW: node.minW,
+              minH: node.minH,
+              autoPosition: false,
+              noMove: false,
+              noResize: false,
+              locked: false
+            } as ExtendedGridStackWidget);
 
-          // Update widget state if it exists
-          if (node.viewState && (widgetElement as any)._widgetState) {
-            (widgetElement as any)._widgetState.setVariant(node.viewState.chartVariant);
+            // Update widget state if it exists
+            if (node.viewState) {
+              const widgetState = widgetStateRegistry.get(node.id);
+              if (widgetState) {
+                widgetState.setVariant(node.viewState.chartVariant as ChartVariant);
+              }
+            }
           }
         } catch (error) {
           console.error('Failed to create widget:', node.id, error);
@@ -642,36 +682,22 @@ function App() {
         if (!defaultWidget) return null;
 
         // Get widget state if it exists
-        const widgetState = (item as any)._widgetState;
+        const widgetState = widgetStateRegistry.get(node.id);
         const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
 
         return {
-          id: node.id, // Keep the full dynamic ID
-          baseId, // Add baseId for validation
+          id: node.id,
+          baseId,
           x: node.x ?? 0,
           y: node.y ?? 0,
           w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
           h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
           minW: defaultWidget.minW ?? 2,
           minH: defaultWidget.minH ?? 2,
-          viewState // Include view state if it exists
+          viewState
         };
       })
-      .filter((item): item is SerializedLayoutWidget => {
-        if (!item) return false;
-        return typeof item.id === 'string' &&
-               typeof item.baseId === 'string' &&
-               typeof item.x === 'number' &&
-               typeof item.y === 'number' &&
-               typeof item.w === 'number' &&
-               typeof item.h === 'number' &&
-               typeof item.minW === 'number' &&
-               typeof item.minH === 'number' &&
-               (!item.viewState || (
-                 typeof item.viewState === 'object' &&
-                 typeof item.viewState.chartVariant === 'string'
-               ));
-      });
+      .filter((item): item is SerializedLayoutWidget => item !== null);
 
     return JSON.stringify(serializedLayout);
   }, [grid]);
@@ -743,8 +769,11 @@ function App() {
             });
 
             // Update widget state if it exists
-            if (node.viewState && (existingWidget as any)._widgetState) {
-              (existingWidget as any)._widgetState.setVariant(node.viewState.chartVariant);
+            if (node.viewState) {
+              const widgetState = widgetStateRegistry.get(node.id);
+              if (widgetState) {
+                widgetState.setVariant(node.viewState.chartVariant as ChartVariant);
+              }
             }
 
             updatedWidgets.add(existingWidget.gridstackNode?.id || '');
@@ -775,24 +804,29 @@ function App() {
                 minH: node.minH
               });
 
-              grid.addWidget({
-                el: widgetElement,
-                id: node.id,
-                x: node.x,
-                y: node.y,
-                w: node.w,
-                h: node.h,
-                minW: node.minW,
-                minH: node.minH,
-                autoPosition: false,
-                noMove: false,
-                noResize: false,
-                locked: false
-              } as ExtendedGridStackWidget);
+              if (widgetElement) {
+                grid.addWidget({
+                  el: widgetElement,
+                  id: node.id,
+                  x: node.x,
+                  y: node.y,
+                  w: node.w,
+                  h: node.h,
+                  minW: node.minW,
+                  minH: node.minH,
+                  autoPosition: false,
+                  noMove: false,
+                  noResize: false,
+                  locked: false
+                } as ExtendedGridStackWidget);
 
-              // Update widget state if it exists
-              if (node.viewState && (widgetElement as any)._widgetState) {
-                (widgetElement as any)._widgetState.setVariant(node.viewState.chartVariant);
+                // Update widget state if it exists
+                if (node.viewState) {
+                  const widgetState = widgetStateRegistry.get(node.id);
+                  if (widgetState) {
+                    widgetState.setVariant(node.viewState.chartVariant as ChartVariant);
+                  }
+                }
               }
             } catch (error) {
               console.error('Failed to create widget:', node.id, error);
@@ -804,6 +838,8 @@ function App() {
         currentWidgets.forEach(widget => {
           const widgetId = widget.gridstackNode?.id;
           if (widgetId && !updatedWidgets.has(widgetId)) {
+            // Clean up widget state before removing
+            widgetStateRegistry.delete(widgetId);
             grid.removeWidget(widget, false);
           }
         });
