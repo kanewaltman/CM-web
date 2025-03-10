@@ -1,7 +1,9 @@
 import { ChevronDown, Maximize2, MoreHorizontal, Trash2 } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
+import { createPopoutWindow } from '../utils/windowManager';
+import { isTauri } from '../utils/platform';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +21,68 @@ interface WidgetContainerProps {
 export function WidgetContainer({ children, title, headerControls, onRemove }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const handleExpand = useCallback(async () => {
+    if (!containerRef.current) return;
+
+    try {
+      // Get the current content of the widget
+      const contentElement = containerRef.current.querySelector('.widget-content');
+      if (!contentElement) return;
+
+      const content = contentElement.innerHTML;
+      
+      // Create a styled HTML document for the popup
+      const popoutContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              :root {
+                color-scheme: light dark;
+              }
+              body {
+                margin: 0;
+                padding: 16px;
+                background: var(--background, white);
+                color: var(--foreground, black);
+                font-family: system-ui, -apple-system, sans-serif;
+              }
+              .widget-content {
+                height: 100%;
+                overflow: auto;
+                background: var(--background);
+                color: var(--foreground);
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                padding: 1rem;
+              }
+              @media (prefers-color-scheme: dark) {
+                body {
+                  background: rgb(9, 9, 11);
+                  color: rgb(250, 250, 250);
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="widget-content">${content}</div>
+          </body>
+        </html>
+      `;
+
+      const window = await createPopoutWindow({
+        title,
+        width: 600,
+        height: 400,
+        content: popoutContent,
+      });
+
+    } catch (error) {
+      console.error('Failed to create popout window:', error);
+    }
+  }, [title]);
+
   return (
     <div ref={containerRef} className="grid-stack-item-content">
       <div className="widget-inner-container">
@@ -32,7 +96,13 @@ export function WidgetContainer({ children, title, headerControls, onRemove }: W
           <div className="flex items-center space-x-1">
             {headerControls}
             <div className="flex items-center space-x-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8"
+                onClick={handleExpand}
+                title={`Expand widget ${isTauri ? 'to new window' : 'in browser'}`}
+              >
                 <Maximize2 className="h-4 w-4" />
               </Button>
               <DropdownMenu>
@@ -53,7 +123,7 @@ export function WidgetContainer({ children, title, headerControls, onRemove }: W
         </div>
 
         {/* Content wrapper */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="widget-content flex-1 min-h-0 overflow-hidden">
           {children}
         </div>
       </div>
