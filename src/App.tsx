@@ -12,6 +12,7 @@ import { RecentTrades } from './components/RecentTrades';
 import { Toaster } from './components/ui/sonner';
 import { WidgetContainer } from './components/WidgetContainer';
 import { BalancesWidget } from './components/BalancesWidget';
+import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWidget';
 
 // Widget Registry - Single source of truth for widget configuration
 interface WidgetConfig {
@@ -57,6 +58,12 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     title: 'Balances',
     component: BalancesWidget,
     defaultSize: { w: 4, h: 4 }
+  },
+  'performance': {
+    id: 'performance',
+    title: 'Performance',
+    component: PerformanceWidget,
+    defaultSize: { w: 8, h: 6 }
   }
 } as const;
 
@@ -79,10 +86,11 @@ const widgetTitles: Record<string, string> = Object.fromEntries(
 
 // Default layout is now generated from registry
 const generateDefaultLayout = () => [
-  { id: 'market', x: 8, y: 0, w: 4, h: 4, minW: 2, minH: 2 },
-  { id: 'trades', x: 0, y: 4, w: 12, h: 2, minW: 2, minH: 2 },
-  { id: 'orderbook', x: 4, y: 0, w: 4, h: 4, minW: 2, minH: 2 },
-  { id: 'balances', x: 0, y: 0, w: 4, h: 4, minW: 2, minH: 2 }
+  { id: 'performance', x: 0, y: 0, w: 12, h: 3, minW: 2, minH: 2 },
+  { id: 'market', x: 4, y: 3, w: 4, h: 3, minW: 2, minH: 2 },
+  { id: 'trades', x: 0, y: 6, w: 12, h: 3, minW: 2, minH: 2 },
+  { id: 'orderbook', x: 8, y: 3, w: 4, h: 3, minW: 2, minH: 2 },
+  { id: 'balances', x: 0, y: 3, w: 4, h: 3, minW: 2, minH: 2 }
 ];
 
 const defaultLayout = generateDefaultLayout();
@@ -129,7 +137,8 @@ const mobileLayout = [
   { x: 0, y: 12, w: 1, h: 4, id: 'tradeform', minW: 2, minH: 2 },
   { x: 0, y: 16, w: 1, h: 4, id: 'market', minW: 2, minH: 2 },
   { x: 0, y: 20, w: 1, h: 4, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 24, w: 1, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 0, y: 24, w: 1, h: 4, id: 'balances', minW: 2, minH: 2 },
+  { x: 0, y: 28, w: 1, h: 6, id: 'performance', minW: 2, minH: 2 }
 ];
 
 // Breakpoint for mobile view
