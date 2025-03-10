@@ -26,6 +26,7 @@ import { WIDGET_REGISTRY } from '@/App';
 import { GridStack } from 'gridstack';
 // Import Tauri API
 import { isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 // Custom style types for grid layout
 type GridStyle = 'rounded' | 'dense';
@@ -235,9 +236,33 @@ export function ControlBar({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [isOpen]);
 
+  // Handle drag and drop events
+  useEffect(() => {
+    if (isTauri()) {
+      // Listen for drag and drop events in Tauri
+      const unlisten = listen('tauri://drag-and-drop', (event) => {
+        try {
+          // In Tauri, we'll just use click-only behavior
+          // The drag and drop event is not needed
+        } catch (error) {
+          console.error('Error handling drag and drop:', error);
+        }
+      });
+
+      return () => {
+        unlisten.then(fn => fn());
+      };
+    }
+  }, [onAddWidget]);
+
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, widgetType: string) => {
-    console.log('Starting drag with widget type:', widgetType);
-    // Set multiple formats to ensure compatibility
+    if (isTauri()) {
+      // In Tauri, prevent drag and drop
+      e.preventDefault();
+      return;
+    }
+    
+    // In web, use standard drag and drop
     e.dataTransfer.setData('text/plain', widgetType);
     e.dataTransfer.setData('widget/type', widgetType);
     e.dataTransfer.setData('application/json', JSON.stringify({ type: widgetType }));
@@ -323,12 +348,9 @@ export function ControlBar({
                   <div
                     key={type}
                     draggable={!isTauriEnv}
-                    onDragStart={(e) => !isTauriEnv && handleDragStart(e, type)}
+                    onDragStart={(e) => handleDragStart(e, type)}
                     onClick={() => handleWidgetClick(type)}
-                    className={cn(
-                      "relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer active:bg-accent/80",
-                      isTauriEnv && "cursor-pointer"
-                    )}
+                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer active:bg-accent/80"
                   >
                     <div
                       className="bg-background flex size-8 items-center justify-center rounded-md border"
