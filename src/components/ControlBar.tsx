@@ -322,10 +322,13 @@ export function ControlBar({
                 {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][]).map(([type, config]) => (
                   <div
                     key={type}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, type)}
+                    draggable={!isTauriEnv}
+                    onDragStart={(e) => !isTauriEnv && handleDragStart(e, type)}
                     onClick={() => handleWidgetClick(type)}
-                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer active:bg-accent/80"
+                    className={cn(
+                      "relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer active:bg-accent/80",
+                      isTauriEnv && "cursor-pointer"
+                    )}
                   >
                     <div
                       className="bg-background flex size-8 items-center justify-center rounded-md border"
