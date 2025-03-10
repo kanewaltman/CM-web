@@ -643,7 +643,7 @@ function App() {
       const margin = parseInt(computedStyle.getPropertyValue('--grid-margin') || '8', 10);
       
       const g = GridStack.init({
-        cellHeight: isMobile ? '100px' : 'auto',
+        cellHeight: '100px',
         margin: margin,
         column: isMobile ? 1 : 12,
         animate: true,
