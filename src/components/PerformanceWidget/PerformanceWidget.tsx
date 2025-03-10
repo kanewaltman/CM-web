@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RevenueChart } from './charts/RevenueChart';
 import { SubscribersChart } from './charts/SubscribersChart';
 import { MRRGrowthChart } from './charts/MRRGrowthChart';
@@ -40,6 +40,7 @@ interface PerformanceWidgetProps {
   onVariantChange?: (variant: ChartVariant) => void;
   onRemove?: () => void;
   headerControls?: boolean;
+  widgetId?: string;
 }
 
 export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({ 
@@ -47,10 +48,18 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   defaultVariant = 'revenue',
   onVariantChange,
   onRemove,
-  headerControls
+  headerControls,
+  widgetId
 }) => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const ChartComponent = chartComponents[selectedVariant];
+
+  // Update local state when defaultVariant changes
+  useEffect(() => {
+    if (defaultVariant !== selectedVariant) {
+      setSelectedVariant(defaultVariant);
+    }
+  }, [defaultVariant]);
 
   const handleVariantChange = (value: ChartVariant) => {
     setSelectedVariant(value);

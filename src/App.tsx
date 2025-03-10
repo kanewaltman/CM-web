@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { GridStack, GridStackWidget, GridStackOptions, GridStackNode, GridStackElement } from 'gridstack';
 import * as ReactDOM from 'react-dom/client';
 import 'gridstack/dist/gridstack.min.css';
@@ -13,6 +13,8 @@ import { Toaster } from './components/ui/sonner';
 import { WidgetContainer } from './components/WidgetContainer';
 import { BalancesWidget } from './components/BalancesWidget';
 import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWidget';
+import { createRoot } from 'react-dom/client';
+import { ChartVariant } from './components/PerformanceWidget/PerformanceWidget';
 
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
@@ -90,7 +92,17 @@ const widgetTypes: Record<string, string> = Object.fromEntries(
   Object.entries(WIDGET_REGISTRY).map(([key, config]) => [config.id, key])
 );
 
-const widgetComponents: Record<string, React.FC> = Object.fromEntries(
+interface WidgetComponentProps {
+  widgetId?: string;
+  headerControls?: boolean;
+  className?: string;
+  onRemove?: () => void;
+  defaultVariant?: ChartVariant;
+  onVariantChange?: (variant: ChartVariant) => void;
+}
+
+// Update the widgetComponents type to include the widgetId prop
+const widgetComponents: Record<string, React.FC<WidgetComponentProps>> = Object.fromEntries(
   Object.entries(WIDGET_REGISTRY).map(([key, config]) => [key, config.component])
 );
 
@@ -177,6 +189,47 @@ interface ExtendedGridStackWidget extends GridStackWidget {
 // Add constant for localStorage key
 const DASHBOARD_LAYOUT_KEY = 'dashboard-layout';
 
+interface CreateWidgetParams {
+  widgetType: string;
+  widgetId: string;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  minW?: number;
+  minH?: number;
+}
+
+// Add this near the top of the file, outside of the App component
+class WidgetState {
+  private listeners: Set<() => void> = new Set();
+  private _variant: ChartVariant;
+
+  constructor(initialVariant: ChartVariant = 'revenue') {
+    this._variant = initialVariant;
+  }
+
+  get variant() {
+    return this._variant;
+  }
+
+  setVariant(newVariant: ChartVariant) {
+    this._variant = newVariant;
+    this.notifyListeners();
+  }
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach(listener => listener());
+  }
+}
+
 function App() {
   console.log('App component is rendering');
   
@@ -210,9 +263,15 @@ function App() {
       const widgetElement = gridElement.querySelector(`[gs-id="${widgetId}"]`) as HTMLElement;
       if (!widgetElement) return;
 
+      // Unmount React component first
+      const reactRoot = (widgetElement as any)._reactRoot;
+      if (reactRoot) {
+        reactRoot.unmount();
+      }
+
       // Remove widget from grid
       grid.removeWidget(widgetElement as GridStackElement, false);
-      // Also remove the DOM element
+      // Remove the DOM element
       widgetElement.remove();
 
       // Save updated layout after removal
@@ -262,22 +321,17 @@ function App() {
   }, [handleRemoveWidget]);
 
   // Now define createWidget which uses handleRemoveWidgetRef
-  const createWidget = useCallback((params: {
-    widgetType: string,
-    widgetId: string,
-    x: number,
-    y: number,
-    w?: number,
-    h?: number,
-    minW?: number,
-    minH?: number
-  }): HTMLElement => {
-    const { widgetType, widgetId, x, y, w = 3, h = 4, minW = 2, minH = 2 } = params;
-    console.log('Creating widget:', { widgetType, widgetId, x, y, w, h });
-    
-    // Create widget element
+  const createWidget = useCallback(({ widgetType, widgetId, x, y, w = 3, h = 4, minW = 2, minH = 2 }: CreateWidgetParams) => {
+    const WidgetComponent = widgetComponents[widgetType];
+    if (!WidgetComponent) {
+      throw new Error(`Unknown widget type: ${widgetType}`);
+    }
+
+    // Create the main widget container
     const widgetElement = document.createElement('div');
     widgetElement.className = 'grid-stack-item';
+    
+    // Set grid attributes
     widgetElement.setAttribute('gs-id', widgetId);
     widgetElement.setAttribute('gs-x', String(x));
     widgetElement.setAttribute('gs-y', String(y));
@@ -286,37 +340,138 @@ function App() {
     widgetElement.setAttribute('gs-min-w', String(minW));
     widgetElement.setAttribute('gs-min-h', String(minH));
 
-    // Create content wrapper
+    // Create the content wrapper
     const contentElement = document.createElement('div');
     contentElement.className = 'grid-stack-item-content';
     widgetElement.appendChild(contentElement);
 
-    // Create widget container div
-    const containerElement = document.createElement('div');
-    containerElement.className = 'widget-container';
-    contentElement.appendChild(containerElement);
+    // Store the root in a data attribute for cleanup
+    const root = createRoot(contentElement);
+    (widgetElement as any)._reactRoot = root;
 
-    // Render React component into container
-    const root = ReactDOM.createRoot(containerElement);
-    const WidgetComponent = widgetComponents[widgetType];
-    const widgetTitle = widgetTitles[widgetType];
-    
-    if (!WidgetComponent) {
-      console.error('Widget component not found:', widgetType);
-      throw new Error(`Widget component not found: ${widgetType}`);
+    // Get the base widget type from the ID
+    const baseWidgetId = widgetId.split('-')[0];
+
+    // For Performance widget, create a shared state
+    if (baseWidgetId === 'performance') {
+      // Try to load initial variant from layout data
+      let initialVariant: ChartVariant = 'revenue';
+      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+      if (savedLayout) {
+        try {
+          const layout = JSON.parse(savedLayout);
+          const widgetData = layout.find((item: any) => item.id === widgetId);
+          if (widgetData?.viewState?.chartVariant) {
+            initialVariant = widgetData.viewState.chartVariant;
+          }
+        } catch (error) {
+          console.error('Failed to load widget view state:', error);
+        }
+      }
+
+      // Create shared state
+      const widgetState = new WidgetState(initialVariant);
+      (widgetElement as any)._widgetState = widgetState;
+
+      const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
+        const [variant, setVariant] = useState(widgetState.variant);
+
+        useEffect(() => {
+          // Update local state when widget state changes
+          setVariant(widgetState.variant);
+          // Subscribe to future changes
+          return widgetState.subscribe(() => {
+            setVariant(widgetState.variant);
+          });
+        }, []);
+
+        const handleVariantChange = (newVariant: ChartVariant) => {
+          // Update shared state first
+          widgetState.setVariant(newVariant);
+          // Update local state immediately
+          setVariant(newVariant);
+
+          // Save to layout data
+          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          if (savedLayout) {
+            try {
+              const layout = JSON.parse(savedLayout);
+              const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+              if (widgetIndex !== -1) {
+                layout[widgetIndex] = {
+                  ...layout[widgetIndex],
+                  viewState: {
+                    ...layout[widgetIndex].viewState,
+                    chartVariant: newVariant
+                  }
+                };
+                localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+              }
+            } catch (error) {
+              console.error('Failed to save widget view state:', error);
+            }
+          }
+        };
+
+        return (
+          <WidgetComponent
+            widgetId={widgetId}
+            headerControls={isHeader}
+            defaultVariant={variant}
+            onVariantChange={handleVariantChange}
+          />
+        );
+      };
+
+      root.render(
+        <React.StrictMode>
+          <WidgetContainer
+            title={widgetTitles[widgetType]}
+            onRemove={() => {
+              if (gridRef.current) {
+                const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                if (widget) {
+                  const reactRoot = (widget as any)._reactRoot;
+                  if (reactRoot) {
+                    reactRoot.unmount();
+                  }
+                  gridRef.current.removeWidget(widget, false);
+                  widget.remove();
+                }
+              }
+            }}
+            headerControls={<PerformanceWidgetWrapper isHeader />}
+          >
+            <PerformanceWidgetWrapper />
+          </WidgetContainer>
+        </React.StrictMode>
+      );
+    } else {
+      // Regular widget rendering
+      root.render(
+        <React.StrictMode>
+          <WidgetContainer
+            title={widgetTitles[widgetType]}
+            onRemove={() => {
+              if (gridRef.current) {
+                const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                if (widget) {
+                  const reactRoot = (widget as any)._reactRoot;
+                  if (reactRoot) {
+                    reactRoot.unmount();
+                  }
+                  gridRef.current.removeWidget(widget, false);
+                  widget.remove();
+                }
+              }
+            }}
+          >
+            <WidgetComponent widgetId={widgetId} />
+          </WidgetContainer>
+        </React.StrictMode>
+      );
     }
-    
-    root.render(
-      <WidgetContainer 
-        title={widgetTitle} 
-        onRemove={() => handleRemoveWidgetRef.current(widgetId)}
-        headerControls={widgetType === 'performance' ? <WidgetComponent headerControls={true} /> : undefined}
-      >
-        <WidgetComponent />
-      </WidgetContainer>
-    );
 
-    console.log('Widget element created:', widgetElement);
     return widgetElement;
   }, []);
 
