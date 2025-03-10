@@ -5,13 +5,14 @@ import { MRRGrowthChart } from './charts/MRRGrowthChart';
 import { RefundsChart } from './charts/RefundsChart';
 import { SubscriptionsChart } from './charts/SubscriptionsChart';
 import { UpgradesChart } from './charts/UpgradesChart';
+import { WidgetContainer } from '../WidgetContainer';
+import { Button } from '../ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import { cn } from '../../lib/utils';
 
 export type ChartVariant = 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades';
@@ -38,40 +39,57 @@ interface PerformanceWidgetProps {
   className?: string;
   defaultVariant?: ChartVariant;
   onVariantChange?: (variant: ChartVariant) => void;
+  onRemove?: () => void;
 }
 
 export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({ 
   className,
   defaultVariant = 'revenue',
-  onVariantChange
+  onVariantChange,
+  onRemove
 }) => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const ChartComponent = chartComponents[selectedVariant];
 
-  const handleVariantChange = (value: string) => {
-    const newVariant = value as ChartVariant;
-    setSelectedVariant(newVariant);
-    onVariantChange?.(newVariant);
+  const handleVariantChange = (value: ChartVariant) => {
+    setSelectedVariant(value);
+    onVariantChange?.(value);
   };
 
   const headerControls = (
-    <Select value={selectedVariant} onValueChange={handleVariantChange}>
-      <SelectTrigger className="w-[180px]">
-        <SelectValue placeholder="Select chart" />
-      </SelectTrigger>
-      <SelectContent>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm">
+          Views
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
         {Object.entries(chartLabels).map(([value, label]) => (
-          <SelectItem key={value} value={value}>
+          <DropdownMenuItem
+            key={value}
+            onClick={() => handleVariantChange(value as ChartVariant)}
+            className={cn(
+              "cursor-pointer",
+              selectedVariant === value && "bg-accent"
+            )}
+          >
             {label}
-          </SelectItem>
+          </DropdownMenuItem>
         ))}
-      </SelectContent>
-    </Select>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
-    <div className={cn("h-full flex flex-col", className)}>
-      <ChartComponent />
-    </div>
+    <WidgetContainer
+      title="Performance"
+      headerControls={headerControls}
+      className={className}
+      onRemove={onRemove}
+    >
+      <div className="h-full flex flex-col">
+        <ChartComponent />
+      </div>
+    </WidgetContainer>
   );
 }; 
