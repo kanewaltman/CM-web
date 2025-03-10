@@ -112,11 +112,12 @@ const widgetTitles: Record<string, string> = Object.fromEntries(
 
 // Default layout is now generated from registry
 const generateDefaultLayout = () => [
-  { id: 'performance', x: 0, y: 0, w: 12, h: 3, minW: 2, minH: 2 },
-  { id: 'market', x: 4, y: 3, w: 4, h: 3, minW: 2, minH: 2 },
-  { id: 'trades', x: 0, y: 6, w: 12, h: 3, minW: 2, minH: 2 },
-  { id: 'orderbook', x: 8, y: 3, w: 4, h: 3, minW: 2, minH: 2 },
-  { id: 'balances', x: 0, y: 3, w: 4, h: 3, minW: 2, minH: 2 }
+  { id: 'performance', x: 0, y: 0, w: 12, h: 5, minW: 2, minH: 2, viewState: { chartVariant: 'subscribers' } },
+  { id: 'balances', x: 0, y: 5, w: 4, h: 4, minW: 2, minH: 2 },
+  { id: 'performance-1741622599204', x: 0, y: 9, w: 6, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'subscriptions' } },
+  { id: 'performance-1741622640337', x: 4, y: 5, w: 4, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'upgrades' } },
+  { id: 'performance-1741622665346', x: 6, y: 9, w: 6, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'revenue' } },
+  { id: 'performance-1741622685739', x: 8, y: 5, w: 4, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'mrr-growth' } }
 ];
 
 const defaultLayout = generateDefaultLayout();
@@ -529,12 +530,8 @@ function App() {
     
     grid.batchUpdate();
     try {
-      // Store the default layout with view states
-      const defaultLayoutWithState = defaultLayout.map(widget => ({
-        ...widget,
-        viewState: widget.id === 'performance' ? { chartVariant: 'revenue' as ChartVariant } : undefined
-      }));
-      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayoutWithState));
+      // Use the default layout directly since it already includes view states
+      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
       
       // First, remove all existing widgets and their DOM elements
       const currentWidgets = grid.getGridItems();
@@ -555,8 +552,8 @@ function App() {
       }
       
       // Now add all widgets from default layout
-      defaultLayoutWithState.forEach(node => {
-        const widgetType = widgetTypes[node.id];
+      defaultLayout.forEach(node => {
+        const widgetType = widgetTypes[node.id.split('-')[0]];
         
         if (!widgetComponents[widgetType]) {
           console.warn('❌ Unknown widget type:', widgetType);
@@ -589,6 +586,11 @@ function App() {
             noResize: false,
             locked: false
           } as ExtendedGridStackWidget);
+
+          // Update widget state if it exists
+          if (node.viewState && (widgetElement as any)._widgetState) {
+            (widgetElement as any)._widgetState.setVariant(node.viewState.chartVariant);
+          }
         } catch (error) {
           console.error('Failed to create widget:', node.id, error);
         }
@@ -604,7 +606,7 @@ function App() {
           try {
             grid.compact();
             // Verify final positions
-            defaultLayoutWithState.forEach(node => {
+            defaultLayout.forEach(node => {
               const widget = grid.getGridItems().find(w => w.gridstackNode?.id === node.id);
               if (widget) {
                 grid.update(widget, {
