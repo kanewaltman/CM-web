@@ -1526,6 +1526,61 @@ function App() {
     };
   }, []);
 
+  // Add handleAddWidget function
+  const handleAddWidget = useCallback((widgetType: string) => {
+    if (!grid) return;
+    
+    const widgetId = `${widgetType}-${Date.now()}`;
+    const widgetConfig = WIDGET_REGISTRY[widgetType];
+    
+    if (!widgetConfig) {
+      console.error('Unknown widget type:', widgetType);
+      return;
+    }
+
+    // Create widget at the front (top-left)
+    const newWidget = createWidget({
+      widgetType,
+      widgetId,
+      x: 0,
+      y: 0,
+      w: widgetConfig.defaultSize.w,
+      h: widgetConfig.defaultSize.h,
+      minW: 2,
+      minH: 2
+    });
+
+    if (newWidget) {
+      // Add to grid
+      grid.addWidget(newWidget);
+      
+      // Compact the grid to fill gaps
+      grid.compact();
+      
+      // Save the updated layout
+      const items = grid.getGridItems();
+      const serializedLayout = items
+        .map(item => {
+          const node = item.gridstackNode;
+          if (!node?.id) return null;
+          return {
+            id: node.id,
+            x: node.x ?? 0,
+            y: node.y ?? 0,
+            w: node.w ?? 2,
+            h: node.h ?? 2,
+            minW: node.minW ?? 2,
+            minH: node.minH ?? 2
+          };
+        })
+        .filter((item): item is LayoutWidget => item !== null);
+
+      if (isValidLayout(serializedLayout)) {
+        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+      }
+    }
+  }, [grid]);
+
   // Render error state if there's an error
   if (error) {
     return (
@@ -1549,7 +1604,12 @@ function App() {
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
       <div className="main-content">
         <div className="main-content-inner">
-          <ControlBar onResetLayout={handleResetLayout} onCopyLayout={handleCopyLayout} onPasteLayout={handlePasteLayout} />
+          <ControlBar 
+            onResetLayout={handleResetLayout}
+            onCopyLayout={handleCopyLayout}
+            onPasteLayout={handlePasteLayout}
+            onAddWidget={handleAddWidget}
+          />
           <div ref={gridElementRef} className="grid-stack" />
         </div>
       </div>

@@ -24,13 +24,8 @@ import { toast } from 'sonner';
 import { WIDGET_REGISTRY } from '@/App';
 // Import GridStack directly
 import { GridStack } from 'gridstack';
-
-// Extend HTMLElement to include gridstack property
-declare global {
-  interface HTMLElement {
-    gridstack?: GridStack;
-  }
-}
+// Import Tauri API
+import { isTauri } from '@tauri-apps/api/core';
 
 // Custom style types for grid layout
 type GridStyle = 'rounded' | 'dense';
@@ -43,6 +38,8 @@ interface ControlBarProps {
   initialGridStyle?: GridStyle;
   defaultIsOpen?: boolean;
   defaultIsAppearanceOpen?: boolean;
+  // Add new prop for handling widget addition
+  onAddWidget?: (widgetType: string) => void;
 }
 
 export function ControlBar({ 
@@ -51,13 +48,20 @@ export function ControlBar({
   onPasteLayout,
   initialGridStyle = 'rounded',
   defaultIsOpen = false,
-  defaultIsAppearanceOpen = false
+  defaultIsAppearanceOpen = false,
+  onAddWidget
 }: ControlBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const colors = getThemeValues(resolvedTheme || theme);
   const [isOpen, setIsOpen] = useState(defaultIsOpen);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(defaultIsAppearanceOpen);
   const [gridStyle, setGridStyle] = useState<GridStyle>(initialGridStyle);
+  const [isTauriEnv, setIsTauriEnv] = useState(false);
+
+  // Check if we're in Tauri environment
+  useEffect(() => {
+    setIsTauriEnv(isTauri());
+  }, []);
 
   // Initialize grid style on mount
   useEffect(() => {
@@ -240,6 +244,13 @@ export function ControlBar({
     e.dataTransfer.effectAllowed = 'copy';
   };
 
+  const handleWidgetClick = (widgetType: string) => {
+    if (onAddWidget) {
+      onAddWidget(widgetType);
+      setIsOpen(false); // Close dropdown after adding
+    }
+  };
+
   return (
     <div className={cn(
       "w-full py-4",
@@ -313,7 +324,8 @@ export function ControlBar({
                     key={type}
                     draggable
                     onDragStart={(e) => handleDragStart(e, type)}
-                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-grab active:cursor-grabbing"
+                    onClick={() => handleWidgetClick(type)}
+                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer active:bg-accent/80"
                   >
                     <div
                       className="bg-background flex size-8 items-center justify-center rounded-md border"
@@ -323,7 +335,9 @@ export function ControlBar({
                     </div>
                     <div>
                       <div className="text-sm font-medium">{config.title}</div>
-                      <div className="text-muted-foreground text-xs">Drag to add to dashboard</div>
+                      <div className="text-muted-foreground text-xs">
+                        {isTauriEnv ? 'Click to add to dashboard' : 'Click or drag to add to dashboard'}
+                      </div>
                     </div>
                   </div>
                 ))}
