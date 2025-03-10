@@ -91,6 +91,14 @@ interface BalancesWidgetProps {
   compact?: boolean;
 }
 
+const HeaderDivider: React.FC = () => {
+  return (
+    <div className="w-full sticky z-10" style={{ top: '33px' }}>
+      <div className="h-px w-full bg-border"></div>
+    </div>
+  );
+};
+
 export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compact = false }) => {
   const { theme, resolvedTheme } = useTheme();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
@@ -301,7 +309,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 <span className="font-jakarta font-semibold text-sm leading-[150%]">
                   {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
                 </span>
-                <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground ml-1">
+                <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground/80 ml-1">
                   {balance.asset}
                 </span>
               </TableCell>
@@ -312,7 +320,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               </TableCell>
               <TableCell className={cn(
                 "text-right whitespace-nowrap font-mono",
-                parseFloat(balance.change24h) >= 0 ? "text-green-500" : "text-red-500"
+                parseFloat(balance.change24h) > 0 ? "text-green-500" : parseFloat(balance.change24h) < 0 ? "text-red-500" : "text-muted-foreground/80"
               )}>
                 {balance.change24h}%
               </TableCell>
@@ -369,7 +377,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                           >
                             <circle cx="4" cy="4" r="4"></circle>
                           </svg>
-                          <span className="flex grow gap-2 text-muted-foreground/70">
+                          <span className="flex grow gap-2 text-muted-foreground/80">
                             Staked <span className="ml-auto">0%</span>
                           </span>
                         </div>
@@ -385,7 +393,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                           >
                             <circle cx="4" cy="4" r="4"></circle>
                           </svg>
-                          <span className="flex grow gap-2 text-muted-foreground/70">
+                          <span className="flex grow gap-2 text-muted-foreground/80">
                             In Exchange <span className="ml-auto">0%</span>
                           </span>
                         </div>
@@ -406,7 +414,8 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       "h-full flex flex-col p-2",
       className
     )}>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 relative">
+        <div className="absolute left-0 right-0 h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         <Table>
           <TableHeader>
             <TableRow>

@@ -240,7 +240,7 @@
 .dark .grid-stack-item-content {
   background: hsl(var(--color-widget-bg));
   border: none;
-  outline: 1px solid rgba(255, 255, 255, 0.08);
+  outline: 1px solid hsl(var(--border));
   box-shadow: none;
   overflow: hidden; /* Prevent any overflow issues */
 }
