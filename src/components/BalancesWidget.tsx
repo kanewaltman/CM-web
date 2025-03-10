@@ -415,7 +415,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       className
     )}>
       <div className="flex-1 min-h-0 relative">
-        <div className="absolute left-0 right-0 h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
+        <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         <Table>
           <TableHeader>
             <TableRow>
