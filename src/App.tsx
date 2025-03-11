@@ -212,18 +212,30 @@ interface CreateWidgetParams {
 class WidgetState {
   private listeners: Set<() => void> = new Set();
   private _variant: ChartVariant;
+  private _title: string;
 
-  constructor(initialVariant: ChartVariant = 'revenue') {
+  constructor(initialVariant: ChartVariant = 'revenue', initialTitle: string = 'Performance') {
     this._variant = initialVariant;
+    this._title = initialTitle;
   }
 
   get variant(): ChartVariant {
     return this._variant;
   }
 
+  get title(): string {
+    return this._title;
+  }
+
   setVariant(newVariant: ChartVariant) {
     if (!newVariant) return;
     this._variant = newVariant;
+    this.notifyListeners();
+  }
+
+  setTitle(newTitle: string) {
+    if (!newTitle) return;
+    this._title = newTitle;
     this.notifyListeners();
   }
 
@@ -248,6 +260,26 @@ class WidgetState {
 
 // Update the widget state registry to be more robust
 const widgetStateRegistry = new Map<string, WidgetState>();
+
+// Add helper function for performance titles
+const getPerformanceTitle = (variant: ChartVariant): string => {
+  switch (variant) {
+    case 'revenue':
+      return 'Revenue';
+    case 'subscribers':
+      return 'Subscribers';
+    case 'mrr-growth':
+      return 'MRR Growth';
+    case 'refunds':
+      return 'Refunds';
+    case 'subscriptions':
+      return 'Subscriptions';
+    case 'upgrades':
+      return 'Upgrades';
+    default:
+      return 'Performance';
+  }
+};
 
 function App() {
   console.log('App component is rendering');
@@ -378,9 +410,12 @@ function App() {
       if (baseWidgetId === 'performance') {
         // Try to load initial variant from layout data or existing state
         let initialVariant: ChartVariant = 'revenue';
+        let initialTitle = getPerformanceTitle('revenue');
         const existingState = widgetStateRegistry.get(widgetId);
+        
         if (existingState) {
           initialVariant = existingState.variant;
+          initialTitle = existingState.title;
         } else {
           const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
           if (savedLayout) {
@@ -389,6 +424,7 @@ function App() {
               const widgetData = layout.find((item: any) => item.id === widgetId);
               if (widgetData?.viewState?.chartVariant) {
                 initialVariant = widgetData.viewState.chartVariant;
+                initialTitle = getPerformanceTitle(widgetData.viewState.chartVariant);
               }
             } catch (error) {
               console.error('Failed to load widget view state:', error);
@@ -399,19 +435,22 @@ function App() {
         // Create or get shared state
         let widgetState = widgetStateRegistry.get(widgetId);
         if (!widgetState) {
-          widgetState = new WidgetState(initialVariant);
+          widgetState = new WidgetState(initialVariant, initialTitle);
           widgetStateRegistry.set(widgetId, widgetState);
         }
 
         const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
           const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
+          const [title, setTitle] = useState(widgetState.title);
 
           useEffect(() => {
             // Update local state when widget state changes
             setVariant(widgetState.variant);
+            setTitle(widgetState.title);
             // Subscribe to future changes
             return widgetState.subscribe(() => {
               setVariant(widgetState.variant);
+              setTitle(widgetState.title);
             });
           }, []);
 
@@ -422,6 +461,11 @@ function App() {
             widgetState.setVariant(newVariant);
             // Update local state immediately
             setVariant(newVariant);
+            
+            // Get title from PerformanceWidget component
+            const newTitle = getPerformanceTitle(newVariant);
+            widgetState.setTitle(newTitle);
+            setTitle(newTitle);
 
             // Save to layout data
             const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
@@ -451,6 +495,7 @@ function App() {
               headerControls={isHeader}
               defaultVariant={variant}
               onVariantChange={handleVariantChange}
+              onTitleChange={setTitle}
             />
           );
         };
@@ -458,7 +503,7 @@ function App() {
         root.render(
           <React.StrictMode>
             <WidgetContainer
-              title={widgetTitles[widgetType]}
+              title={widgetState.title}
               onRemove={() => {
                 if (gridRef.current) {
                   const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
@@ -1536,6 +1581,14 @@ function App() {
     if (!widgetConfig) {
       console.error('Unknown widget type:', widgetType);
       return;
+    }
+
+    // Initialize widget state if it's a performance widget
+    if (widgetType === 'performance') {
+      const initialVariant: ChartVariant = 'revenue';
+      const initialTitle = getPerformanceTitle(initialVariant);
+      const widgetState = new WidgetState(initialVariant, initialTitle);
+      widgetStateRegistry.set(widgetId, widgetState);
     }
 
     // Create widget at the front (top-left)

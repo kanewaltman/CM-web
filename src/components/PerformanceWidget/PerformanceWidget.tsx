@@ -38,6 +38,7 @@ interface PerformanceWidgetProps {
   className?: string;
   defaultVariant?: ChartVariant;
   onVariantChange?: (variant: ChartVariant) => void;
+  onTitleChange?: (title: string) => void;
   onRemove?: () => void;
   headerControls?: boolean;
   widgetId?: string;
@@ -47,6 +48,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   className,
   defaultVariant = 'revenue',
   onVariantChange,
+  onTitleChange,
   onRemove,
   headerControls,
   widgetId
@@ -58,12 +60,16 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   useEffect(() => {
     if (defaultVariant !== selectedVariant) {
       setSelectedVariant(defaultVariant);
+      // Update title when variant changes via prop
+      onTitleChange?.(chartLabels[defaultVariant]);
     }
-  }, [defaultVariant]);
+  }, [defaultVariant, onTitleChange]);
 
   const handleVariantChange = (value: ChartVariant) => {
     setSelectedVariant(value);
     onVariantChange?.(value);
+    // Update title when variant changes via user interaction
+    onTitleChange?.(chartLabels[value]);
   };
 
   const controls = (
