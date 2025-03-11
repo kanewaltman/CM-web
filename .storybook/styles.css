@@ -17,16 +17,33 @@
 [data-theme='dark'],
 .dark {
   color-scheme: dark;
-  --background: 0 0% 10%;
-  --foreground: 0 0% 95%;
+  /* Use the same HSL values as your main app */
+  --color-bg-base: 0 0% 4%;
+  --color-bg-surface: 0 0% 4%;
+  --color-bg-surface-alt: 0 0% 4%;
+  --color-bg-elevated: 0 0% 4%;
+  --color-bg-inset: 0 0% 4%;
+  --color-bg-subtle: 0 0% 4%;
+  --color-foreground-default: 0 0% 98%;
+  
+  --background: var(--color-bg-base);
+  --foreground: var(--color-foreground-default);
 }
 
 /* Light mode specific styles */
 [data-theme='light'],
 .light {
   color-scheme: light;
-  --background: 0 0% 100%;
-  --foreground: 0 0% 10%;
+  /* Use the same HSL values as your main app */
+  --color-bg-base: 0 0% 96%;
+  --color-bg-surface: 0 0% 96%;
+  --color-bg-elevated: 0 0% 100%;
+  --color-bg-inset: 0 0% 92%;
+  --color-bg-subtle: 0 0% 92%;
+  --color-foreground-default: 222.2 84% 4.9%;
+  
+  --background: var(--color-bg-base);
+  --foreground: var(--color-foreground-default);
 }
 
 /* Docs container dark mode */
@@ -37,33 +54,33 @@
 
 /* Dark mode specific overrides for docs */
 .docs-container.dark {
-  --docs-bg: hsl(var(--background));
-  --docs-text: hsl(var(--foreground));
+  --docs-bg: var(--background);
+  --docs-text: var(--foreground);
   --docs-border: rgba(255, 255, 255, 0.1);
 }
 
 .docs-container.dark .sbdocs.sbdocs-wrapper {
-  background-color: var(--docs-bg);
-  color: var(--docs-text);
+  background-color: hsl(var(--docs-bg));
+  color: hsl(var(--docs-text));
 }
 
 .docs-container.dark .sbdocs.sbdocs-content {
-  background-color: var(--docs-bg);
-  color: var(--docs-text);
+  background-color: hsl(var(--docs-bg));
+  color: hsl(var(--docs-text));
 }
 
 .docs-container.dark .docblock-source {
-  background-color: var(--docs-bg);
+  background-color: hsl(var(--docs-bg));
   border-color: var(--docs-border);
 }
 
 .docs-container.dark .docblock-argstable-head {
-  background-color: var(--docs-bg);
+  background-color: hsl(var(--docs-bg));
 }
 
 .docs-container.dark .docblock-argstable-body {
-  background-color: var(--docs-bg);
-  color: var(--docs-text);
+  background-color: hsl(var(--docs-bg));
+  color: hsl(var(--docs-text));
 }
 
 /* Main docs container setup */
@@ -112,4 +129,11 @@
 /* Remove iframe constraints */
 #storybook-preview-iframe {
   height: auto;
+}
+
+/* Ensure proper theme inheritance in stories */
+#storybook-root {
+  color-scheme: inherit;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
 } 

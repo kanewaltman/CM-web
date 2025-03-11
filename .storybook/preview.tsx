@@ -19,49 +19,19 @@ const preview: Preview = {
       },
     },
     backgrounds: {
-      disable: false,
-      grid: {
-        disable: false,
-        cellSize: 20,
-        opacity: 0.2,
-        cellAmount: 5
-      },
-      default: 'dark',
-      values: [
-        { name: 'dark', value: '#0A0A0A'  },
-        { name: 'light', value: '#F5F5F5' },
-        { name: 'transparent', value: 'transparent' }
-      ]
+      disable: true, // Disable the background addon as we handle theming via CSS
     },
     layout: 'padded',
-    toolbar: {
-      position: 'right',
+    darkMode: {
+      dark: { ...darkTheme },
+      current: 'dark'
     },
-    viewport: {
-      viewports: {
-        mobile: {
-          name: 'Mobile',
-          styles: {
-            width: '375px',
-            height: '667px',
-          },
-        },
-        tablet: {
-          name: 'Tablet',
-          styles: {
-            width: '768px',
-            height: '1024px',
-          },
-        },
-        desktop: {
-          name: 'Desktop',
-          styles: {
-            width: '1440px',
-            height: '900px',
-          },
-        },
-      },
-      defaultViewport: 'desktop',
+    themes: {
+      default: 'dark',
+      list: [
+        { name: 'dark', class: 'dark', color: '#0A0A0A' },
+        { name: 'light', class: 'light', color: '#F5F5F5' }
+      ],
     },
     docs: {
       theme: darkTheme,
@@ -81,11 +51,18 @@ const preview: Preview = {
           enableSystem={false}
           value={{ light: 'light', dark: 'dark' }}
           key={selectedTheme}
+          forcedTheme={selectedTheme}
         >
-          <div className={`w-full min-h-screen ${selectedTheme === 'dark' ? 'bg-zinc-900' : 'bg-white'} text-foreground ${selectedTheme}`}>
-            <div className="p-4">
-              <Story />
-            </div>
+          <div 
+            className={`w-full min-h-screen ${selectedTheme}`} 
+            data-theme={selectedTheme}
+            style={{
+              backgroundColor: `hsl(var(--color-bg-base))`,
+              color: `hsl(var(--color-foreground-default))`,
+              fontFamily: '"Plus Jakarta Sans", system-ui, -apple-system, sans-serif'
+            }}
+          >
+            <Story />
           </div>
         </ThemeProvider>
       );

@@ -14,4 +14,8 @@ addons.setConfig({
     copy: { hidden: false },
     fullscreen: { hidden: false },
   },
+  darkMode: {
+    dark: darkTheme,
+    current: 'dark'
+  }
 }); 
