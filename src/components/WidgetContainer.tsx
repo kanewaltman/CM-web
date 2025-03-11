@@ -1,7 +1,7 @@
 import { ChevronDown, Maximize2, MoreHorizontal, Trash2 } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, memo } from 'react';
 import { createPopoutWindow } from '../utils/windowManager';
 import { isTauri } from '../utils/platform';
 import {
@@ -18,7 +18,7 @@ interface WidgetContainerProps {
   onRemove?: () => void;
 }
 
-export function WidgetContainer({ children, title, headerControls, onRemove }: WidgetContainerProps) {
+export const WidgetContainer = memo(function WidgetContainer({ children, title, headerControls, onRemove }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleExpand = useCallback(async () => {
@@ -89,7 +89,7 @@ export function WidgetContainer({ children, title, headerControls, onRemove }: W
         {/* Header */}
         <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
           <div className="flex items-center space-x-2">
-            <h2 className="text-sm font-semibold">{title}</h2>
+            <h2 key={title} className="text-sm font-semibold">{title}</h2>
             <ChevronDown className="h-4 w-4 opacity-50" />
           </div>
           
@@ -129,4 +129,4 @@ export function WidgetContainer({ children, title, headerControls, onRemove }: W
       </div>
     </div>
   );
-} 
+}); 

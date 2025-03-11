@@ -444,28 +444,66 @@ function App() {
           const [title, setTitle] = useState(widgetState.title);
 
           useEffect(() => {
-            // Update local state when widget state changes
+            // Initial state sync
             setVariant(widgetState.variant);
             setTitle(widgetState.title);
-            // Subscribe to future changes
-            return widgetState.subscribe(() => {
+
+            // Subscribe to state changes
+            const unsubscribe = widgetState.subscribe(() => {
               setVariant(widgetState.variant);
               setTitle(widgetState.title);
             });
+
+            return unsubscribe;
           }, []);
 
-          const handleVariantChange = (newVariant: ChartVariant) => {
+          const handleVariantChange = useCallback((newVariant: ChartVariant) => {
             if (!newVariant) return;
             
-            // Update shared state first
-            widgetState.setVariant(newVariant);
-            // Update local state immediately
-            setVariant(newVariant);
-            
-            // Get title from PerformanceWidget component
+            // Get new title first
             const newTitle = getPerformanceTitle(newVariant);
-            widgetState.setTitle(newTitle);
+
+            // Force immediate re-render of the container by updating state first
+            setVariant(newVariant);
             setTitle(newTitle);
+            
+            // Update shared state
+            widgetState.setVariant(newVariant);
+            widgetState.setTitle(newTitle);
+
+            // Force a re-render of the widget container
+            const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+            if (widgetContainer) {
+              const root = (widgetContainer as any)._reactRoot;
+              if (root) {
+                root.render(
+                  <React.StrictMode>
+                    <WidgetContainer
+                      key={newTitle} // Force re-render with new title
+                      title={newTitle}
+                      onRemove={() => {
+                        if (gridRef.current) {
+                          const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                          if (widget) {
+                            const reactRoot = (widget as any)._reactRoot;
+                            if (reactRoot) {
+                              reactRoot.unmount();
+                            }
+                            // Clean up widget state
+                            widgetStateRegistry.delete(widgetId);
+                            gridRef.current.removeWidget(widget, false);
+                            widget.remove();
+                          }
+                        }
+                      }}
+                      headerControls={<PerformanceWidgetWrapper isHeader />}
+                    >
+                      <PerformanceWidgetWrapper />
+                    </WidgetContainer>
+                  </React.StrictMode>
+                );
+              }
+            }
 
             // Save to layout data
             const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
@@ -487,7 +525,7 @@ function App() {
                 console.error('Failed to save widget view state:', error);
               }
             }
-          };
+          }, []);
 
           return (
             <WidgetComponent
@@ -503,6 +541,7 @@ function App() {
         root.render(
           <React.StrictMode>
             <WidgetContainer
+              key={widgetState.title}
               title={widgetState.title}
               onRemove={() => {
                 if (gridRef.current) {
