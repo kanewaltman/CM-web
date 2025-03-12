@@ -6,6 +6,7 @@ import {
   Rectangle,
   XAxis,
   YAxis,
+  ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
@@ -379,6 +380,27 @@ export function PerformanceChart() {
     });
   }, [balanceData, assets]);
 
+  // Find year transition points in the visible data
+  const yearTransitions = useMemo(() => {
+    if (balanceData.length === 0) return [];
+    
+    const transitions: { index: number; year: string }[] = [];
+    let lastYear: string | null = null;
+    
+    // Get the visible data range
+    const visibleData = viewMode === 'split' ? balanceData : cumulativeData;
+    
+    visibleData.forEach((point, index) => {
+      const [, year] = point.timestamp.split(' ');
+      if (lastYear !== null && year !== lastYear) {
+        transitions.push({ index, year });
+      }
+      lastYear = year;
+    });
+    
+    return transitions;
+  }, [balanceData, cumulativeData, viewMode]);
+
   if (error) {
     return (
       <Card className="h-full flex flex-col">
@@ -435,22 +457,50 @@ export function PerformanceChart() {
             data={viewMode === 'split' ? balanceData : cumulativeData}
             margin={{ left: -12, right: 12, top: 12 }}
           >
+            <defs>
+              <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
+                <path d="M 8 0 L 0 0 0 8" fill="none" stroke="hsl(var(--color-border-muted))" strokeWidth="0.5" />
+              </pattern>
+            </defs>
             <CartesianGrid
+              horizontal
               vertical={false}
               strokeDasharray="2 2"
               stroke="hsl(var(--color-border-muted))"
               opacity={0.5}
             />
+            {yearTransitions.map(({ index, year }) => (
+              <ReferenceLine
+                key={index}
+                x={index}
+                stroke="hsl(var(--color-border-muted))"
+                strokeDasharray="2 2"
+                opacity={0.5}
+                ifOverflow="hidden"
+                position="middle"
+                label={{
+                  value: year,
+                  position: 'top',
+                  fill: 'hsl(var(--color-border-muted))',
+                  fontSize: 10,
+                  opacity: 0.5,
+                  dy: -8
+                }}
+              />
+            ))}
             <XAxis
               dataKey="timestamp"
+              type="category"
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => {
                 const [month, year] = value.split(' ');
                 
                 if (month !== lastShownDate.current.month || year !== lastShownDate.current.year) {
+                  // Show year if this is the first month we're seeing in a new year
+                  const showYear = year !== lastShownDate.current.year;
                   lastShownDate.current = { month, year };
-                  return month;
+                  return showYear ? `${month}'${year.slice(-2)}` : month;
                 }
                 return '';
               }}
