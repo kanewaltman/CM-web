@@ -592,13 +592,13 @@ export function PerformanceChart() {
                           key={`hover-${asset}`}
                           type="linear"
                           dataKey={asset}
-                          stroke="transparent"
+                          stroke="rgba(0,0,0,0)"
                           strokeWidth={20}
                           dot={false}
                           isAnimationActive={false}
-                          style={{ cursor: 'pointer' }}
+                          style={{ cursor: 'pointer', pointerEvents: 'all' }}
                           connectNulls={true}
-                          onMouseOver={() => {
+                          onMouseMove={() => {
                             if (hoverValues) {
                               setHoverValues({
                                 ...hoverValues,
@@ -606,6 +606,7 @@ export function PerformanceChart() {
                               });
                             }
                           }}
+                          className="[&_path]:!pointer-events-auto"
                         />
                         <Line
                           key={`line-${asset}`}
@@ -643,12 +644,21 @@ export function PerformanceChart() {
                     key="hover-total"
                     type="linear"
                     dataKey="total"
-                    stroke="transparent"
+                    stroke="rgba(0,0,0,0)"
                     strokeWidth={20}
                     dot={false}
                     isAnimationActive={false}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', pointerEvents: 'all' }}
                     connectNulls={true}
+                    onMouseMove={() => {
+                      if (hoverValues) {
+                        setHoverValues({
+                          ...hoverValues,
+                          activeLine: 'total'
+                        });
+                      }
+                    }}
+                    className="[&_path]:!pointer-events-auto"
                   />
                   <Line
                     key="line-total"
