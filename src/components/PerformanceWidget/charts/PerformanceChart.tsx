@@ -205,6 +205,19 @@ export function PerformanceChart() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'split' | 'cumulative'>('split');
   const [hoverValues, setHoverValues] = useState<{ index: number; values: { [key: string]: number }; activeLine?: string } | null>(null);
+  const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
+
+  const toggleAssetVisibility = (asset: string) => {
+    setHiddenAssets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(asset)) {
+        newSet.delete(asset);
+      } else {
+        newSet.add(asset);
+      }
+      return newSet;
+    });
+  };
 
   // Track container width
   useEffect(() => {
@@ -418,7 +431,55 @@ export function PerformanceChart() {
       <CardHeader className="flex-none">
         <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5">
-            <CardTitle>Performance</CardTitle>
+            <CardTitle>
+              {viewMode === 'split' ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {assets.map(asset => {
+                    const assetConfig = ASSETS[asset];
+                    const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                    const isHidden = hiddenAssets.has(asset);
+                    return (
+                      <button 
+                        key={asset}
+                        type="button"
+                        className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
+                        style={{ 
+                          color: assetColor,
+                          backgroundColor: `${assetColor}14`,
+                          cursor: 'pointer',
+                          WebkitTouchCallout: 'none',
+                          WebkitUserSelect: 'text',
+                          userSelect: 'text',
+                          opacity: isHidden ? 0.5 : 1
+                        }}
+                        onClick={() => toggleAssetVisibility(asset)}
+                        onMouseEnter={(e) => {
+                          const target = e.currentTarget;
+                          target.style.backgroundColor = assetColor;
+                          target.style.color = 'hsl(var(--color-widget-bg))';
+                        }}
+                        onMouseLeave={(e) => {
+                          const target = e.currentTarget;
+                          target.style.backgroundColor = `${assetColor}14`;
+                          target.style.color = assetColor;
+                        }}
+                        onMouseDown={(e) => {
+                          if (e.detail > 1) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        {assetConfig.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center">
+                  <div className="font-jakarta font-bold text-sm rounded-md px-1">Portfolio</div>
+                </div>
+              )}
+            </CardTitle>
             <div className="flex items-start gap-2">
               <div className="font-semibold text-2xl">
                 €{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -507,49 +568,56 @@ export function PerformanceChart() {
               />
             ))}
             {viewMode === 'split' ? 
-              assets.map(asset => (
-                <React.Fragment key={asset}>
-                  <ReferenceLine
-                    key={`value-${asset}`}
-                    stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
-                    strokeDasharray="2 2"
-                    opacity={hoverValues?.values[asset] ? 0.25 : 0}
-                    ifOverflow="hidden"
-                    position="middle"
-                    segment={[
-                      { x: 0, y: hoverValues?.values[asset] || 0 },
-                      { x: hoverValues?.index || 0, y: hoverValues?.values[asset] || 0 }
-                    ]}
-                  />
-                  <Line
-                    type="linear"
-                    dataKey={asset}
-                    stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                    strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
-                  />
-                  {/* Invisible wider line for hover detection */}
-                  <Line
-                    type="linear"
-                    dataKey={asset}
-                    stroke="transparent"
-                    strokeWidth={20}
-                    dot={false}
-                    isAnimationActive={false}
-                    style={{ cursor: 'pointer' }}
-                    onMouseOver={() => {
-                      if (hoverValues) {
-                        setHoverValues({
-                          ...hoverValues,
-                          activeLine: asset
-                        });
-                      }
-                    }}
-                  />
-                </React.Fragment>
-              )) : (
+              assets.map(asset => {
+                const isHidden = hiddenAssets.has(asset);
+                return (
+                  <React.Fragment key={asset}>
+                    {!isHidden && (
+                      <>
+                        <ReferenceLine
+                          key={`value-${asset}`}
+                          stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                          strokeDasharray="2 2"
+                          opacity={hoverValues?.values[asset] ? 0.25 : 0}
+                          ifOverflow="hidden"
+                          position="middle"
+                          segment={[
+                            { x: 0, y: hoverValues?.values[asset] || 0 },
+                            { x: hoverValues?.index || 0, y: hoverValues?.values[asset] || 0 }
+                          ]}
+                        />
+                        <Line
+                          type="linear"
+                          dataKey={asset}
+                          stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                          strokeWidth={2}
+                          dot={false}
+                          isAnimationActive={false}
+                          strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
+                        />
+                        {/* Invisible wider line for hover detection */}
+                        <Line
+                          type="linear"
+                          dataKey={asset}
+                          stroke="transparent"
+                          strokeWidth={20}
+                          dot={false}
+                          isAnimationActive={false}
+                          style={{ cursor: 'pointer' }}
+                          onMouseOver={() => {
+                            if (hoverValues) {
+                              setHoverValues({
+                                ...hoverValues,
+                                activeLine: asset
+                              });
+                            }
+                          }}
+                        />
+                      </>
+                    )}
+                  </React.Fragment>
+                );
+              }) : (
                 <React.Fragment>
                   <ReferenceLine
                     key="value-total"
@@ -618,37 +686,6 @@ export function PerformanceChart() {
               }}
               interval="preserveStartEnd"
             />
-            {viewMode === 'split' ? (
-              assets.map(asset => (
-                <Line
-                  key={asset}
-                  type="linear"
-                  dataKey={asset}
-                  stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                  strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
-                  onMouseOver={() => {
-                    if (hoverValues) {
-                      setHoverValues({
-                        ...hoverValues,
-                        activeLine: asset
-                      });
-                    }
-                  }}
-                />
-              ))
-            ) : (
-              <Line
-                type="linear"
-                dataKey="total"
-                stroke="hsl(var(--foreground))"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            )}
             <ChartTooltip
               content={
                 viewMode === 'split' ? (
