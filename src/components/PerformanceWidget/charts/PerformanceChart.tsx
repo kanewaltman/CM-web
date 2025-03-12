@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, useEffect, useMemo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -12,47 +12,15 @@ import { ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart
 import { CustomTooltipContent } from "./ChartExtras";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
+import { getApiUrl } from '@/lib/api-config';
+import { useTheme } from 'next-themes';
+import { cn } from '@/lib/utils';
 
-const mrrData = [
-  { month: "Jan 2025", actual: 300000, projected: 120000 },
-  { month: "Feb 2025", actual: 420000, projected: 180000 },
-  { month: "Mar 2025", actual: 500000, projected: 90000 },
-  { month: "Apr 2025", actual: 630000, projected: 110000 },
-  { month: "May 2025", actual: 710000, projected: 120000 },
-  { month: "Jun 2025", actual: 800000, projected: 100000 },
-  { month: "Jul 2025", actual: 900000, projected: 140000 },
-  { month: "Aug 2025", actual: 1010000, projected: 120000 },
-  { month: "Sep 2025", actual: 1090000, projected: 130000 },
-  { month: "Oct 2025", actual: 1180000, projected: 110000 },
-  { month: "Nov 2025", actual: 1280000, projected: 130000 },
-  { month: "Dec 2025", actual: 1380000, projected: 100000 },
-];
-
-const arrData = [
-  { month: "Jan 2025", actual: 3600000, projected: 1440000 },
-  { month: "Feb 2025", actual: 4200000, projected: 1800000 },
-  { month: "Mar 2025", actual: 5000000, projected: 900000 },
-  { month: "Apr 2025", actual: 6300000, projected: 1100000 },
-  { month: "May 2025", actual: 7100000, projected: 1200000 },
-  { month: "Jun 2025", actual: 8000000, projected: 1000000 },
-  { month: "Jul 2025", actual: 9000000, projected: 1400000 },
-  { month: "Aug 2025", actual: 10100000, projected: 1200000 },
-  { month: "Sep 2025", actual: 10900000, projected: 1300000 },
-  { month: "Oct 2025", actual: 11800000, projected: 1100000 },
-  { month: "Nov 2025", actual: 12800000, projected: 1300000 },
-  { month: "Dec 2025", actual: 16560000, projected: 1200000 },
-];
-
-const chartConfig = {
-  actual: {
-    label: "Actual",
-    color: "rgb(16 185 129)",
-  },
-  projected: {
-    label: "Projected",
-    color: "rgb(16 185 129 / 0.5)",
-  },
-} satisfies ChartConfig;
+interface BalanceDataPoint {
+  timestamp: string;
+  [key: string]: number | string;
+}
 
 interface CustomCursorProps {
   fill?: string;
@@ -98,9 +66,119 @@ function CustomCursor(props: CustomCursorProps) {
 
 export function PerformanceChart() {
   const id = useId();
-  const [selectedValue, setSelectedValue] = useState("off");
+  const { resolvedTheme } = useTheme();
+  const [balanceData, setBalanceData] = useState<BalanceDataPoint[]>([]);
+  const [assets, setAssets] = useState<AssetTicker[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const chartData = selectedValue === "on" ? arrData : mrrData;
+  // Fetch balance data
+  useEffect(() => {
+    const fetchBalanceData = async () => {
+      try {
+        setIsLoading(true);
+        const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
+        const tokenData = await tokenResponse.json();
+        
+        if (!tokenData.token) {
+          throw new Error('Failed to get demo token');
+        }
+
+        const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
+          headers: {
+            'Authorization': `Bearer ${tokenData.token}`
+          }
+        });
+        
+        if (!balancesResponse.ok) {
+          throw new Error(`Balances request failed with status ${balancesResponse.status}`);
+        }
+        
+        const data = await balancesResponse.json();
+
+        // Process balances and create mock historical data
+        if (data && typeof data === 'object') {
+          const validAssets = Object.entries(data)
+            .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
+            .map(([asset]) => asset as AssetTicker);
+
+          setAssets(validAssets);
+
+          // Create mock historical data for the last 12 months
+          const historicalData: BalanceDataPoint[] = Array.from({ length: 12 }).map((_, i) => {
+            const date = new Date();
+            date.setMonth(date.getMonth() - (11 - i));
+            const dataPoint: BalanceDataPoint = {
+              timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+            };
+
+            validAssets.forEach(asset => {
+              const currentValue = parseFloat(data[asset].EUR || '0');
+              // Create some variation in historical data
+              const variation = 1 + (Math.random() * 0.4 - 0.2); // ±20% variation
+              dataPoint[asset] = currentValue * variation;
+            });
+
+            return dataPoint;
+          });
+
+          setBalanceData(historicalData);
+        }
+
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching balances:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch balances');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBalanceData();
+  }, []);
+
+  // Create chart configuration based on assets
+  const chartConfig = useMemo(() => {
+    const config: ChartConfig = {};
+    assets.forEach(asset => {
+      const assetConfig = ASSETS[asset];
+      config[asset] = {
+        label: assetConfig.name,
+        color: resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light
+      };
+    });
+    return config;
+  }, [assets, resolvedTheme]);
+
+  // Calculate total value and 24h change
+  const { totalValue, totalChange } = useMemo(() => {
+    if (balanceData.length < 2) return { totalValue: 0, totalChange: 0 };
+    
+    const currentTotal = assets.reduce((sum, asset) => {
+      return sum + (balanceData[balanceData.length - 1]?.[asset] as number || 0);
+    }, 0);
+
+    const previousTotal = assets.reduce((sum, asset) => {
+      return sum + (balanceData[balanceData.length - 2]?.[asset] as number || 0);
+    }, 0);
+
+    const change = ((currentTotal - previousTotal) / previousTotal) * 100;
+
+    return {
+      totalValue: currentTotal,
+      totalChange: change
+    };
+  }, [balanceData, assets]);
+
+  if (error) {
+    return (
+      <Card className="h-full flex flex-col">
+        <CardContent className="flex items-center justify-center flex-1">
+          <div className="text-red-500">{error}</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="h-full flex flex-col">
@@ -110,32 +188,16 @@ export function PerformanceChart() {
             <CardTitle>Performance</CardTitle>
             <div className="flex items-start gap-2">
               <div className="font-semibold text-2xl">
-                {selectedValue === "off" ? "$1,439,346" : "$8,272,152"}
+                €{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </div>
-              <Badge className="mt-1.5 bg-emerald-500/24 text-emerald-500 border-none">
-                {selectedValue === "off" ? "+48.1%" : "+52.7%"}
+              <Badge className={cn(
+                "mt-1.5 border-none",
+                totalChange > 0 ? "bg-emerald-500/24 text-emerald-500" : "bg-red-500/24 text-red-500"
+              )}>
+                {totalChange > 0 ? "+" : ""}{totalChange.toFixed(1)}%
               </Badge>
             </div>
           </div>
-          <RadioGroup
-            value={selectedValue}
-            onValueChange={setSelectedValue}
-            className="group text-xs after:border after:border-border after:bg-background has-focus-visible:after:border-ring has-focus-visible:after:ring-ring/50 relative inline-grid grid-cols-[1fr_1fr] items-center gap-0 font-medium after:absolute after:inset-y-0 after:w-1/2 after:rounded-md after:shadow-xs after:transition-[translate,box-shadow] after:duration-300 after:[transition-timing-function:cubic-bezier(0.16,1,0.3,1)] has-focus-visible:after:ring-[3px] data-[state=off]:after:translate-x-0 data-[state=on]:after:translate-x-full"
-            data-state={selectedValue}
-          >
-            <label className="group-data-[state=on]:text-muted-foreground/50 relative z-10 inline-flex h-full min-w-8 cursor-pointer items-center justify-center px-2 py-1.5 whitespace-nowrap transition-colors select-none">
-              MRR
-              <RadioGroupItem
-                id={`${id}-1`}
-                value="off"
-                className="sr-only"
-              />
-            </label>
-            <label className="group-data-[state=off]:text-muted-foreground/50 relative z-10 inline-flex h-full min-w-8 cursor-pointer items-center justify-center px-2 py-1.5 whitespace-nowrap transition-colors select-none">
-              ARR
-              <RadioGroupItem id={`${id}-2`} value="on" className="sr-only" />
-            </label>
-          </RadioGroup>
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0">
@@ -145,15 +207,9 @@ export function PerformanceChart() {
         >
           <LineChart
             accessibilityLayer
-            data={chartData}
+            data={balanceData}
             margin={{ left: -12, right: 12, top: 12 }}
           >
-            <defs>
-              <linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="rgb(16 185 129)" />
-                <stop offset="100%" stopColor="rgb(16 185 129 / 0.8)" />
-              </linearGradient>
-            </defs>
             <CartesianGrid
               vertical={false}
               strokeDasharray="2 2"
@@ -161,7 +217,7 @@ export function PerformanceChart() {
               opacity={0.5}
             />
             <XAxis
-              dataKey="month"
+              dataKey="timestamp"
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => value.slice(0, 3)}
@@ -171,48 +227,44 @@ export function PerformanceChart() {
               axisLine={false}
               tickLine={false}
               tickFormatter={(value) => {
-                if (value === 0) return "$0";
-                return `$${(value / 1000000).toFixed(1)}M`;
+                if (value === 0) return "€0";
+                return `€${(value / 1000000).toFixed(1)}M`;
               }}
               interval="preserveStartEnd"
             />
-            <Line
-              type="linear"
-              dataKey="projected"
-              stroke="rgb(16 185 129 / 0.5)"
-              strokeWidth={2}
-              dot={false}
-              activeDot={false}
-            />
+            {assets.map(asset => (
+              <Line
+                key={asset}
+                type="monotone"
+                dataKey={asset}
+                stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{
+                  r: 5,
+                  fill: resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light,
+                  stroke: "hsl(var(--background))",
+                  strokeWidth: 2,
+                }}
+              />
+            ))}
             <ChartTooltip
               content={
                 <CustomTooltipContent
-                  colorMap={{
-                    actual: "rgb(16 185 129)",
-                    projected: "rgb(16 185 129 / 0.5)",
-                  }}
-                  labelMap={{
-                    actual: "Actual",
-                    projected: "Projected",
-                  }}
-                  dataKeys={["actual", "projected"]}
-                  valueFormatter={(value) => `$${value.toLocaleString()}`}
+                  colorMap={Object.fromEntries(
+                    assets.map(asset => [
+                      asset,
+                      resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light
+                    ])
+                  )}
+                  labelMap={Object.fromEntries(
+                    assets.map(asset => [asset, ASSETS[asset].name])
+                  )}
+                  dataKeys={assets}
+                  valueFormatter={(value) => `€${value.toLocaleString()}`}
                 />
               }
-              cursor={<CustomCursor fill="rgb(16 185 129)" />}
-            />
-            <Line
-              type="linear"
-              dataKey="actual"
-              stroke={`url(#${id}-gradient)`}
-              strokeWidth={2}
-              dot={false}
-              activeDot={{
-                r: 5,
-                fill: "rgb(16 185 129)",
-                stroke: "hsl(var(--background))",
-                strokeWidth: 2,
-              }}
+              cursor={<CustomCursor fill="currentColor" />}
             />
           </LineChart>
         </ChartContainer>
