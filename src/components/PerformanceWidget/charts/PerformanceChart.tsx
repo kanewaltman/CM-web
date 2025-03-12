@@ -570,13 +570,14 @@ export function PerformanceChart() {
             {viewMode === 'split' ? 
               assets.map(asset => {
                 const isHidden = hiddenAssets.has(asset);
+                const assetColor = resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light;
                 return (
                   <React.Fragment key={asset}>
                     {!isHidden && (
                       <>
                         <ReferenceLine
                           key={`value-${asset}`}
-                          stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                          stroke={assetColor}
                           strokeDasharray="2 2"
                           opacity={hoverValues?.values[asset] ? 0.25 : 0}
                           ifOverflow="hidden"
@@ -586,17 +587,9 @@ export function PerformanceChart() {
                             { x: hoverValues?.index || 0, y: hoverValues?.values[asset] || 0 }
                           ]}
                         />
-                        <Line
-                          type="linear"
-                          dataKey={asset}
-                          stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
-                          strokeWidth={2}
-                          dot={false}
-                          isAnimationActive={false}
-                          strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
-                        />
                         {/* Invisible wider line for hover detection */}
                         <Line
+                          key={`hover-${asset}`}
                           type="linear"
                           dataKey={asset}
                           stroke="transparent"
@@ -604,6 +597,7 @@ export function PerformanceChart() {
                           dot={false}
                           isAnimationActive={false}
                           style={{ cursor: 'pointer' }}
+                          connectNulls={true}
                           onMouseOver={() => {
                             if (hoverValues) {
                               setHoverValues({
@@ -612,6 +606,19 @@ export function PerformanceChart() {
                               });
                             }
                           }}
+                        />
+                        <Line
+                          key={`line-${asset}`}
+                          type="linear"
+                          dataKey={asset}
+                          stroke={assetColor}
+                          strokeWidth={2}
+                          dot={false}
+                          isAnimationActive={true}
+                          animationDuration={1000}
+                          animationBegin={0}
+                          strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
+                          connectNulls={true}
                         />
                       </>
                     )}
@@ -631,16 +638,9 @@ export function PerformanceChart() {
                       { x: hoverValues?.index || 0, y: hoverValues?.values.total || 0 }
                     ]}
                   />
-                  <Line
-                    type="linear"
-                    dataKey="total"
-                    stroke="hsl(var(--foreground))"
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
                   {/* Invisible wider line for hover detection */}
                   <Line
+                    key="hover-total"
                     type="linear"
                     dataKey="total"
                     stroke="transparent"
@@ -648,6 +648,19 @@ export function PerformanceChart() {
                     dot={false}
                     isAnimationActive={false}
                     style={{ cursor: 'pointer' }}
+                    connectNulls={true}
+                  />
+                  <Line
+                    key="line-total"
+                    type="linear"
+                    dataKey="total"
+                    stroke="hsl(var(--foreground))"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={true}
+                    animationDuration={1000}
+                    animationBegin={0}
+                    connectNulls={true}
                   />
                 </React.Fragment>
               )
