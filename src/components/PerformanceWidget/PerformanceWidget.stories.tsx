@@ -48,7 +48,7 @@ export const Default: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'The default PerformanceWidget showing the Revenue chart.',
+        story: 'The default PerformanceWidget showing the Performance chart.',
       },
     },
   },

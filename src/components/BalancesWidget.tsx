@@ -75,6 +75,7 @@ interface PriceData {
   [key: string]: {
     price: number;
     change24h: number;
+    lastDayPrice?: number;
   };
 }
 
@@ -139,18 +140,121 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const fetchPrices = useCallback(async () => {
     try {
       setIsUpdating(true);
-      const response = await fetch(getApiUrl('exchange/prices'));
-      if (!response.ok) {
-        throw new Error(`Prices request failed with status ${response.status}`);
+      
+      // Fetch current prices from demo environment
+      const pricesResponse = await fetch(getApiUrl('open/exchange/prices'));
+      if (!pricesResponse.ok) {
+        throw new Error(`Prices request failed with status ${pricesResponse.status}`);
       }
-      const data = await response.json();
-      setPrices(data);
+      const rawPriceData = await pricesResponse.json();
+      
+      console.log('📊 Raw prices data received:', {
+        timestamp: new Date().toISOString(),
+        latestPrices: rawPriceData.latestPrices?.length,
+        info24h: rawPriceData['24hInfo']?.length,
+        data: rawPriceData
+      });
+
+      // Process latest prices into a more usable format
+      const currentPrices: Record<string, any> = {};
+      
+      // First, process latest prices
+      rawPriceData.latestPrices.forEach((price: any) => {
+        currentPrices[price.pair] = {
+          price: parseFloat(price.price),
+          change24h: 0
+        };
+      });
+
+      console.log('📈 Current prices before 24h calculation:', currentPrices);
+
+      // Calculate 24h changes
+      if (rawPriceData['24hInfo']) {
+        rawPriceData['24hInfo'].forEach((info: any) => {
+          if (currentPrices[info.pair]) {
+            // Log the full info object to see its structure
+            console.log(`📊 24h info for ${info.pair}:`, info);
+            
+            // Use the delta value directly (it's already in percentage form)
+            const change = info.delta * 100; // Convert to percentage
+            currentPrices[info.pair].change24h = change;
+            console.log(`✅ Set 24h change for ${info.pair}: ${change}%`);
+          }
+        });
+      }
+
+      // Get unique pairs from balances, excluding EUR/EUR
+      const pairs = balances
+        .map(balance => `${balance.asset}EUR`)
+        .filter((value, index, self) => 
+          self.indexOf(value) === index && 
+          !value.startsWith('EUR')
+        );
+
+      console.log('🔍 Pairs from balances:', pairs);
+
+      // Initialize enriched prices with current data
+      const enrichedPrices: PriceData = {};
+      
+      // Add all pairs with current price data
+      pairs.forEach(pair => {
+        const baseAsset = pair.replace('EUR', '');
+        const alternativePairs = [
+          { pair: `${baseAsset}EUR`, type: 'EUR' },
+          { pair: `${baseAsset}USD`, type: 'USD' },
+          { pair: `${baseAsset}USDT`, type: 'USDT' },
+          { pair: `${baseAsset}USDC`, type: 'USDC' }
+        ];
+        
+        console.log(`🔎 Looking for price data for ${baseAsset}:`, {
+          availablePairs: alternativePairs.map(p => ({
+            pair: p.pair,
+            hasData: !!currentPrices[p.pair],
+            change: currentPrices[p.pair]?.change24h
+          }))
+        });
+
+        // Find the best price data (prioritize non-zero changes)
+        let bestPriceData = null;
+        for (const { pair: pairName } of alternativePairs) {
+          if (currentPrices[pairName]) {
+            const priceData = currentPrices[pairName];
+            // If we don't have any data yet, or if this pair has a non-zero change
+            if (!bestPriceData || (priceData.change24h !== 0 && bestPriceData.change24h === 0)) {
+              bestPriceData = priceData;
+              console.log(`📈 Found better price data for ${baseAsset} from ${pairName}:`, priceData);
+            }
+          }
+        }
+
+        if (bestPriceData) {
+          enrichedPrices[pair] = {
+            price: bestPriceData.price,
+            change24h: bestPriceData.change24h
+          };
+          console.log(`💹 Added price data for ${pair}:`, enrichedPrices[pair]);
+        } else {
+          console.log(`⚠️ No price data found for ${baseAsset} in any pair`);
+        }
+      });
+
+      // Add EUR with no change
+      enrichedPrices['EUREUR'] = {
+        price: 1,
+        change24h: 0,
+        lastDayPrice: 1
+      };
+
+      console.log('💰 Final enriched prices:', enrichedPrices);
+
+      setPrices(enrichedPrices);
+
     } catch (err) {
-      console.error('Error fetching prices:', err);
+      console.error('❌ Error fetching prices:', err);
     } finally {
       setIsUpdating(false);
     }
-  }, []);
+  }, [balances]);
 
   // Initial balance fetch
   useEffect(() => {
@@ -159,6 +263,11 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         setIsInitialLoading(true);
         const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
         const tokenData = await tokenResponse.json();
+        
+        console.log('🔑 Demo token received:', {
+          timestamp: new Date().toISOString(),
+          success: !!tokenData.token
+        });
         
         if (!tokenData.token) {
           throw new Error('Failed to get demo token');
@@ -175,6 +284,11 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         }
         
         const data = await balancesResponse.json();
+        console.log('💼 Raw balances data:', {
+          timestamp: new Date().toISOString(),
+          assets: Object.keys(data).length,
+          data: data
+        });
 
         if (data && typeof data === 'object') {
           const balancesArray = Object.entries(data)
@@ -196,11 +310,17 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               parseFloat(balance.balance) > 0
             );
 
+          console.log('💼 Processed balances:', {
+            timestamp: new Date().toISOString(),
+            count: balancesArray.length,
+            data: balancesArray
+          });
+
           setBalances(balancesArray);
           setError(null);
         }
       } catch (err) {
-        console.error('Error fetching balances:', err);
+        console.error('❌ Error fetching balances:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch balances');
       } finally {
         setIsInitialLoading(false);
@@ -213,7 +333,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   // Update prices periodically
   useEffect(() => {
     fetchPrices();
-    const interval = setInterval(fetchPrices, 30000);
+    const interval = setInterval(fetchPrices, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, [fetchPrices]);
 
@@ -221,7 +341,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const balancesWithPrices = useMemo(() => {
     return balances.map(balance => ({
       ...balance,
-      change24h: (prices[`${balance.asset}/EUR`]?.change24h || 0).toFixed(2)
+      change24h: (prices[`${balance.asset}EUR`]?.change24h || 0).toFixed(2)
     }));
   }, [balances, prices]);
 

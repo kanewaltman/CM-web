@@ -268,7 +268,7 @@ const widgetStateRegistry = new Map<string, WidgetState>();
 const getPerformanceTitle = (variant: ChartVariant): string => {
   switch (variant) {
     case 'revenue':
-      return 'Revenue';
+      return 'Performance';
     case 'subscribers':
       return 'Subscribers';
     case 'mrr-growth':

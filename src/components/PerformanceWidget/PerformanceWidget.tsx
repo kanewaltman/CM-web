@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RevenueChart } from './charts/RevenueChart';
+import { PerformanceChart } from './charts/PerformanceChart';
 import { SubscribersChart } from './charts/SubscribersChart';
 import { MRRGrowthChart } from './charts/MRRGrowthChart';
 import { RefundsChart } from './charts/RefundsChart';
@@ -17,7 +17,7 @@ import { cn } from '../../lib/utils';
 export type ChartVariant = 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades';
 
 const chartComponents: Record<ChartVariant, React.ComponentType> = {
-  revenue: RevenueChart,
+  revenue: PerformanceChart,
   subscribers: SubscribersChart,
   'mrr-growth': MRRGrowthChart,
   refunds: RefundsChart,
@@ -26,7 +26,7 @@ const chartComponents: Record<ChartVariant, React.ComponentType> = {
 };
 
 const chartLabels: Record<ChartVariant, string> = {
-  revenue: 'Revenue',
+  revenue: 'Performance',
   subscribers: 'Subscribers',
   'mrr-growth': 'MRR Growth',
   refunds: 'Refunds',

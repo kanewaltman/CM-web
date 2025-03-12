@@ -1,5 +1,12 @@
 import { useId, useState } from "react";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  Rectangle,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { CustomTooltipContent } from "./ChartExtras";
@@ -47,21 +54,60 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function RevenueChart() {
+interface CustomCursorProps {
+  fill?: string;
+  pointerEvents?: string;
+  height?: number;
+  points?: Array<{ x: number; y: number }>;
+  className?: string;
+}
+
+function CustomCursor(props: CustomCursorProps) {
+  const { fill, pointerEvents, height, points, className } = props;
+
+  if (!points || points.length === 0) {
+    return null;
+  }
+
+  const { x, y } = points[0]!;
+  return (
+    <>
+      <Rectangle
+        x={x - 12}
+        y={y}
+        fill={fill}
+        pointerEvents={pointerEvents}
+        width={24}
+        height={height}
+        className={className}
+        type="linear"
+      />
+      <Rectangle
+        x={x - 1}
+        y={y}
+        fill={fill}
+        pointerEvents={pointerEvents}
+        width={1}
+        height={height}
+        className="recharts-tooltip-inner-cursor"
+        type="linear"
+      />
+    </>
+  );
+}
+
+export function PerformanceChart() {
   const id = useId();
   const [selectedValue, setSelectedValue] = useState("off");
 
   const chartData = selectedValue === "on" ? arrData : mrrData;
-
-  const firstMonth = chartData[0]?.month as string;
-  const lastMonth = chartData[chartData.length - 1]?.month as string;
 
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="flex-none">
         <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5">
-            <CardTitle>Recurring Revenue</CardTitle>
+            <CardTitle>Performance</CardTitle>
             <div className="flex items-start gap-2">
               <div className="font-semibold text-2xl">
                 {selectedValue === "off" ? "$1,439,346" : "$8,272,152"}
@@ -95,16 +141,15 @@ export function RevenueChart() {
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
           config={chartConfig}
-          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25"
+          className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
         >
-          <BarChart
+          <LineChart
             accessibilityLayer
             data={chartData}
-            maxBarSize={20}
             margin={{ left: -12, right: 12, top: 12 }}
           >
             <defs>
-              <linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={`${id}-gradient`} x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0%" stopColor="rgb(16 185 129)" />
                 <stop offset="100%" stopColor="rgb(16 185 129 / 0.8)" />
               </linearGradient>
@@ -119,15 +164,25 @@ export function RevenueChart() {
               dataKey="month"
               tickLine={false}
               tickMargin={12}
-              ticks={[firstMonth, lastMonth]}
+              tickFormatter={(value) => value.slice(0, 3)}
               stroke="hsl(var(--color-border-muted))"
             />
             <YAxis
-              tickLine={false}
               axisLine={false}
-              tickFormatter={(value) =>
-                value === 0 ? "$0" : `$${(value / 1000000).toFixed(1)}M`
-              }
+              tickLine={false}
+              tickFormatter={(value) => {
+                if (value === 0) return "$0";
+                return `$${(value / 1000000).toFixed(1)}M`;
+              }}
+              interval="preserveStartEnd"
+            />
+            <Line
+              type="linear"
+              dataKey="projected"
+              stroke="rgb(16 185 129 / 0.5)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={false}
             />
             <ChartTooltip
               content={
@@ -144,14 +199,22 @@ export function RevenueChart() {
                   valueFormatter={(value) => `$${value.toLocaleString()}`}
                 />
               }
+              cursor={<CustomCursor fill="rgb(16 185 129)" />}
             />
-            <Bar dataKey="actual" fill={`url(#${id}-gradient)`} stackId="a" />
-            <Bar
-              dataKey="projected"
-              fill="rgb(16 185 129 / 0.5)"
-              stackId="a"
+            <Line
+              type="linear"
+              dataKey="actual"
+              stroke={`url(#${id}-gradient)`}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{
+                r: 5,
+                fill: "rgb(16 185 129)",
+                stroke: "hsl(var(--background))",
+                strokeWidth: 2,
+              }}
             />
-          </BarChart>
+          </LineChart>
         </ChartContainer>
       </CardContent>
     </Card>
