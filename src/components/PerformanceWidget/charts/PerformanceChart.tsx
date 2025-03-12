@@ -201,6 +201,7 @@ export function PerformanceChart() {
   const [assets, setAssets] = useState<AssetTicker[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'split' | 'cumulative'>('split');
 
   // Track container width
   useEffect(() => {
@@ -367,6 +368,17 @@ export function PerformanceChart() {
     };
   }, [balanceData, assets]);
 
+  // Calculate cumulative data
+  const cumulativeData = useMemo(() => {
+    return balanceData.map(point => {
+      const total = assets.reduce((sum, asset) => sum + (point[asset] as number || 0), 0);
+      return {
+        timestamp: point.timestamp,
+        total
+      };
+    });
+  }, [balanceData, assets]);
+
   if (error) {
     return (
       <Card className="h-full flex flex-col">
@@ -395,17 +407,32 @@ export function PerformanceChart() {
               </Badge>
             </div>
           </div>
+          <RadioGroup
+            defaultValue="split"
+            value={viewMode}
+            onValueChange={(value) => setViewMode(value as 'split' | 'cumulative')}
+            className="flex items-center space-x-2"
+          >
+            <div className="flex items-center space-x-1">
+              <RadioGroupItem value="split" id="split" />
+              <label htmlFor="split" className="text-sm">Split</label>
+            </div>
+            <div className="flex items-center space-x-1">
+              <RadioGroupItem value="cumulative" id="cumulative" />
+              <label htmlFor="cumulative" className="text-sm">Combined</label>
+            </div>
+          </RadioGroup>
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
           ref={chartContainerRef}
-          config={chartConfig}
+          config={viewMode === 'split' ? chartConfig : { total: { label: 'Portfolio Total', color: 'hsl(var(--foreground))' } }}
           className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
         >
           <LineChart
             accessibilityLayer
-            data={balanceData}
+            data={viewMode === 'split' ? balanceData : cumulativeData}
             margin={{ left: -12, right: 12, top: 12 }}
           >
             <CartesianGrid
@@ -421,10 +448,8 @@ export function PerformanceChart() {
               tickFormatter={(value) => {
                 const [month, year] = value.split(' ');
                 
-                // Check if this is a new month in a different year
                 if (month !== lastShownDate.current.month || year !== lastShownDate.current.year) {
                   lastShownDate.current = { month, year };
-                  // Only show month
                   return month;
                 }
                 return '';
@@ -447,37 +472,62 @@ export function PerformanceChart() {
               }}
               interval="preserveStartEnd"
             />
-            {assets.map(asset => (
+            {viewMode === 'split' ? (
+              assets.map(asset => (
+                <Line
+                  key={asset}
+                  type="linear"
+                  dataKey={asset}
+                  stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light,
+                    stroke: "hsl(var(--background))",
+                    strokeWidth: 2,
+                  }}
+                />
+              ))
+            ) : (
               <Line
-                key={asset}
                 type="linear"
-                dataKey={asset}
-                stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                dataKey="total"
+                stroke="hsl(var(--foreground))"
                 strokeWidth={2}
                 dot={false}
                 activeDot={{
                   r: 5,
-                  fill: resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light,
+                  fill: "hsl(var(--foreground))",
                   stroke: "hsl(var(--background))",
                   strokeWidth: 2,
                 }}
               />
-            ))}
+            )}
             <ChartTooltip
               content={
-                <CustomTooltipContent
-                  colorMap={Object.fromEntries(
-                    assets.map(asset => [
-                      asset,
-                      resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light
-                    ])
-                  )}
-                  labelMap={Object.fromEntries(
-                    assets.map(asset => [asset, ASSETS[asset].name])
-                  )}
-                  dataKeys={assets}
-                  valueFormatter={(value) => `€${value.toLocaleString()}`}
-                />
+                viewMode === 'split' ? (
+                  <CustomTooltipContent
+                    colorMap={Object.fromEntries(
+                      assets.map(asset => [
+                        asset,
+                        resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light
+                      ])
+                    )}
+                    labelMap={Object.fromEntries(
+                      assets.map(asset => [asset, ASSETS[asset].name])
+                    )}
+                    dataKeys={assets}
+                    valueFormatter={(value) => `€${value.toLocaleString()}`}
+                  />
+                ) : (
+                  <CustomTooltipContent
+                    colorMap={{ total: 'hsl(var(--foreground))' }}
+                    labelMap={{ total: 'Portfolio Total' }}
+                    dataKeys={['total']}
+                    valueFormatter={(value) => `€${value.toLocaleString()}`}
+                  />
+                )
               }
               cursor={<CustomCursor fill="currentColor" />}
             />
