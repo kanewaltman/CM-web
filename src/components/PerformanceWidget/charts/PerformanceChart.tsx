@@ -18,6 +18,7 @@ import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useDataSource } from '@/lib/DataSourceContext';
+import React from "react";
 
 interface BalanceDataPoint {
   timestamp: string;
@@ -203,6 +204,7 @@ export function PerformanceChart() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'split' | 'cumulative'>('split');
+  const [hoverValues, setHoverValues] = useState<{ index: number; values: { [key: string]: number }; activeLine?: string } | null>(null);
 
   // Track container width
   useEffect(() => {
@@ -456,6 +458,22 @@ export function PerformanceChart() {
             accessibilityLayer
             data={viewMode === 'split' ? balanceData : cumulativeData}
             margin={{ left: -12, right: 12, top: 12 }}
+            onMouseMove={(e) => {
+              if (e?.activePayload?.[0] && e.activeTooltipIndex !== undefined) {
+                const values = Object.fromEntries(
+                  e.activePayload.map(entry => [entry.dataKey, entry.value])
+                );
+
+                setHoverValues({ 
+                  index: e.activeTooltipIndex, 
+                  values,
+                  activeLine: hoverValues?.activeLine || e.activePayload[0].dataKey
+                });
+              }
+            }}
+            onMouseLeave={() => {
+              setHoverValues(null);
+            }}
           >
             <defs>
               <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
@@ -463,7 +481,7 @@ export function PerformanceChart() {
               </pattern>
             </defs>
             <CartesianGrid
-              horizontal
+              horizontal={false}
               vertical={false}
               strokeDasharray="2 2"
               stroke="hsl(var(--color-border-muted))"
@@ -471,7 +489,7 @@ export function PerformanceChart() {
             />
             {yearTransitions.map(({ index, year }) => (
               <ReferenceLine
-                key={index}
+                key={`year-${index}`}
                 x={index}
                 stroke="hsl(var(--color-border-muted))"
                 strokeDasharray="2 2"
@@ -488,6 +506,84 @@ export function PerformanceChart() {
                 }}
               />
             ))}
+            {viewMode === 'split' ? 
+              assets.map(asset => (
+                <React.Fragment key={asset}>
+                  <ReferenceLine
+                    key={`value-${asset}`}
+                    stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                    strokeDasharray="2 2"
+                    opacity={hoverValues?.values[asset] ? 0.25 : 0}
+                    ifOverflow="hidden"
+                    position="middle"
+                    segment={[
+                      { x: 0, y: hoverValues?.values[asset] || 0 },
+                      { x: hoverValues?.index || 0, y: hoverValues?.values[asset] || 0 }
+                    ]}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey={asset}
+                    stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                    strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
+                  />
+                  {/* Invisible wider line for hover detection */}
+                  <Line
+                    type="linear"
+                    dataKey={asset}
+                    stroke="transparent"
+                    strokeWidth={20}
+                    dot={false}
+                    isAnimationActive={false}
+                    style={{ cursor: 'pointer' }}
+                    onMouseOver={() => {
+                      if (hoverValues) {
+                        setHoverValues({
+                          ...hoverValues,
+                          activeLine: asset
+                        });
+                      }
+                    }}
+                  />
+                </React.Fragment>
+              )) : (
+                <React.Fragment>
+                  <ReferenceLine
+                    key="value-total"
+                    stroke="hsl(var(--foreground))"
+                    strokeDasharray="2 2"
+                    opacity={hoverValues?.values.total ? 0.25 : 0}
+                    ifOverflow="hidden"
+                    position="middle"
+                    segment={[
+                      { x: 0, y: hoverValues?.values.total || 0 },
+                      { x: hoverValues?.index || 0, y: hoverValues?.values.total || 0 }
+                    ]}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="total"
+                    stroke="hsl(var(--foreground))"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  {/* Invisible wider line for hover detection */}
+                  <Line
+                    type="linear"
+                    dataKey="total"
+                    stroke="transparent"
+                    strokeWidth={20}
+                    dot={false}
+                    isAnimationActive={false}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </React.Fragment>
+              )
+            }
             <XAxis
               dataKey="timestamp"
               type="category"
@@ -531,11 +627,15 @@ export function PerformanceChart() {
                   stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{
-                    r: 5,
-                    fill: resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light,
-                    stroke: "hsl(var(--background))",
-                    strokeWidth: 2,
+                  isAnimationActive={false}
+                  strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
+                  onMouseOver={() => {
+                    if (hoverValues) {
+                      setHoverValues({
+                        ...hoverValues,
+                        activeLine: asset
+                      });
+                    }
                   }}
                 />
               ))
@@ -546,12 +646,7 @@ export function PerformanceChart() {
                 stroke="hsl(var(--foreground))"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{
-                  r: 5,
-                  fill: "hsl(var(--foreground))",
-                  stroke: "hsl(var(--background))",
-                  strokeWidth: 2,
-                }}
+                isAnimationActive={false}
               />
             )}
             <ChartTooltip
