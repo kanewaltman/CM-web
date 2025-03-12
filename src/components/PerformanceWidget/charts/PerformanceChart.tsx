@@ -1,4 +1,4 @@
-import { useId, useState, useEffect, useMemo } from "react";
+import { useId, useState, useEffect, useMemo, useRef } from "react";
 import {
   CartesianGrid,
   Line,
@@ -65,27 +65,204 @@ function CustomCursor(props: CustomCursorProps) {
   );
 }
 
-// Add sample data
-const SAMPLE_PERFORMANCE_DATA = Array.from({ length: 12 }).map((_, i) => {
-  const date = new Date();
-  date.setMonth(date.getMonth() - (11 - i));
-  return {
-    timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-    BTC: 35000 + Math.random() * 10000,
-    ETH: 1800 + Math.random() * 400,
-    DOT: 9 + Math.random() * 3,
-    USDT: 0.92 + Math.random() * 0.02
-  };
-});
+// Asset volatility profiles
+const VOLATILITY_PROFILES = {
+  FIAT: {
+    trend: 0.03, // 3% macro trend
+    volatility: 0.02, // 2% volatility
+    noise: 0.005, // 0.5% noise
+    variation: 0.05, // 5% variation in base value
+    marketBeta: 0 // No correlation with crypto market
+  },
+  STABLECOIN: {
+    trend: 0.001, // 0.1% macro trend
+    volatility: 0.001, // 0.1% volatility
+    noise: 0.0005, // 0.05% noise
+    variation: 0.02, // 2% variation in base value
+    marketBeta: 0 // No correlation with crypto market
+  },
+  MAJOR_CRYPTO: {
+    trend: 0.4, // 40% macro trend
+    volatility: 0.25, // 25% volatility
+    noise: 0.1, // 10% noise
+    variation: 0.15, // 15% variation in base value
+    marketBeta: 1 // Base market correlation
+  },
+  LARGE_CAP: {
+    trend: 0.5, // 50% macro trend
+    volatility: 0.35, // 35% volatility
+    noise: 0.15, // 15% noise
+    variation: 0.2, // 20% variation in base value
+    marketBeta: 1.2 // 20% more volatile than market
+  },
+  MID_CAP: {
+    trend: 0.6, // 60% macro trend
+    volatility: 0.45, // 45% volatility
+    noise: 0.2, // 20% noise
+    variation: 0.25, // 25% variation in base value
+    marketBeta: 1.5 // 50% more volatile than market
+  },
+  SMALL_CAP: {
+    trend: 0.7, // 70% macro trend
+    volatility: 0.55, // 55% volatility
+    noise: 0.25, // 25% noise
+    variation: 0.3, // 30% variation in base value
+    marketBeta: 2 // 100% more volatile than market
+  }
+} as const;
+
+// Reference values from demo API (updated periodically)
+const REFERENCE_VALUES: Record<string, number> = {
+  'Euro': 40683,
+  'USD': 46219,
+  'BTC': 42556,
+  'ETH': 50273,
+  'XRP': 59952,
+  'LTC': 68211,
+  'BCH': 65389,
+  'USDT': 55912,
+  'USDC': 45508
+};
+
+// Function to determine asset volatility profile
+function getAssetProfile(asset: AssetTicker) {
+  // Fiat currencies
+  if (['Euro', 'USD', 'GBP', 'AUD'].some(fiat => asset.includes(fiat))) {
+    return VOLATILITY_PROFILES.FIAT;
+  }
+  
+  // Stablecoins
+  if (asset.includes('USDT') || asset.includes('USDC')) {
+    return VOLATILITY_PROFILES.STABLECOIN;
+  }
+  
+  // Major cryptocurrencies
+  if (['BTC', 'ETH'].includes(asset)) {
+    return VOLATILITY_PROFILES.MAJOR_CRYPTO;
+  }
+  
+  // Large cap assets
+  if (['XRP', 'LTC', 'BCH', 'DOT', 'LINK'].includes(asset)) {
+    return VOLATILITY_PROFILES.LARGE_CAP;
+  }
+  
+  // Mid cap assets
+  if (['ALGO', 'ATOM', 'XLM', 'FIL'].includes(asset)) {
+    return VOLATILITY_PROFILES.MID_CAP;
+  }
+  
+  // All other assets are treated as small cap
+  return VOLATILITY_PROFILES.SMALL_CAP;
+}
+
+// Add sample data that reflects portfolio value history
+function generateSampleData(currentBalances: Record<string, number>, pointCount: number) {
+  return Array.from({ length: pointCount }).map((_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (pointCount - 1 - i) * 7);
+    
+    // Format date to include year for proper month transitions
+    const dataPoint: BalanceDataPoint = {
+      timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    };
+
+    Object.entries(currentBalances).forEach(([asset, currentValue]) => {
+      const profile = getAssetProfile(asset as AssetTicker);
+      
+      if (i === pointCount - 1) {
+        // For the last data point, use exact current balance
+        dataPoint[asset] = currentValue;
+      } else {
+        const baseValue = currentValue * (1 + (Math.random() * 2 - 1) * profile.variation);
+        
+        const variation = () => {
+          // Market influence based on asset's beta
+          const marketInfluence = (Math.sin((i / pointCount) * Math.PI * 2) * profile.trend + Math.sin((i / pointCount) * Math.PI * 6) * profile.volatility) * profile.marketBeta;
+          // Asset-specific noise
+          const noise = (Math.random() - 0.5) * profile.noise;
+          return 1 + marketInfluence + noise;
+        };
+
+        dataPoint[asset] = baseValue * variation();
+      }
+    });
+
+    return dataPoint;
+  });
+}
 
 export function PerformanceChart() {
   const id = useId();
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const { resolvedTheme } = useTheme();
   const { dataSource } = useDataSource();
-  const [balanceData, setBalanceData] = useState<BalanceDataPoint[]>([]);
+  const [fullBalanceData, setFullBalanceData] = useState<BalanceDataPoint[]>([]);
   const [assets, setAssets] = useState<AssetTicker[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Track container width
+  useEffect(() => {
+    const updateWidth = () => {
+      if (chartContainerRef.current) {
+        setContainerWidth(chartContainerRef.current.clientWidth);
+      }
+    };
+
+    // Initial width
+    updateWidth();
+
+    // Update width on resize
+    const resizeObserver = new ResizeObserver(updateWidth);
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  // Track the last shown date to prevent repetition
+  const lastShownDate = useRef<{ month: string; year: string }>({ month: '', year: '' });
+
+  // Calculate responsive chart parameters
+  const chartParams = useMemo(() => {
+    // Default values for narrow screens (< 480px)
+    let interval = Math.floor(26 / 6); // Show ~6 labels
+    let visiblePoints = 26;
+
+    // Adjust based on container width
+    if (containerWidth >= 480) {
+      interval = Math.floor(39 / 7); // Show ~7 labels
+      visiblePoints = 39;
+    }
+    if (containerWidth >= 768) {
+      interval = Math.floor(52 / 8); // Show ~8 labels
+      visiblePoints = 52;
+    }
+    if (containerWidth >= 1024) {
+      interval = Math.floor(104 / 10); // Show ~10 labels
+      visiblePoints = 104;
+    }
+    if (containerWidth >= 1280) {
+      interval = Math.floor(156 / 12); // Show ~12 labels
+      visiblePoints = 156;
+    }
+    if (containerWidth >= 1536) {
+      interval = Math.floor(156 / 13); // Show ~13 labels
+      visiblePoints = 156;
+    }
+
+    return { interval, visiblePoints };
+  }, [containerWidth]);
+
+  // Get visible data based on screen width
+  const balanceData = useMemo(() => {
+    if (fullBalanceData.length === 0) return [];
+    
+    // Always show the most recent data points based on visiblePoints
+    return fullBalanceData.slice(-chartParams.visiblePoints);
+  }, [fullBalanceData, chartParams.visiblePoints]);
 
   // Fetch balance data
   useEffect(() => {
@@ -94,12 +271,18 @@ export function PerformanceChart() {
         setIsLoading(true);
 
         if (dataSource === 'sample') {
-          // Use sample data
-          const validAssets = Object.keys(SAMPLE_PERFORMANCE_DATA[0])
-            .filter(key => key !== 'timestamp' && key in ASSETS) as AssetTicker[];
+          // Use hardcoded sample balances that match the demo values
+          const sampleBalances = {
+            'BTC': 45678.90,
+            'ETH': 28901.23,
+            'DOT': 12345.67,
+            'USDT': 45678.90
+          };
           
+          const validAssets = Object.keys(sampleBalances) as AssetTicker[];
           setAssets(validAssets);
-          setBalanceData(SAMPLE_PERFORMANCE_DATA);
+          // Generate maximum number of data points once
+          setFullBalanceData(generateSampleData(sampleBalances, 156));
           setError(null);
         } else {
           const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
@@ -129,25 +312,13 @@ export function PerformanceChart() {
 
             setAssets(validAssets);
 
-            // Create mock historical data for the last 12 months
-            const historicalData: BalanceDataPoint[] = Array.from({ length: 12 }).map((_, i) => {
-              const date = new Date();
-              date.setMonth(date.getMonth() - (11 - i));
-              const dataPoint: BalanceDataPoint = {
-                timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-              };
+            // Create current balances object
+            const currentBalances = Object.fromEntries(
+              validAssets.map(asset => [asset, parseFloat(data[asset].EUR || '0')])
+            );
 
-              validAssets.forEach(asset => {
-                const currentValue = parseFloat(data[asset].EUR || '0');
-                // Create some variation in historical data
-                const variation = 1 + (Math.random() * 0.4 - 0.2); // ±20% variation
-                dataPoint[asset] = currentValue * variation;
-              });
-
-              return dataPoint;
-            });
-
-            setBalanceData(historicalData);
+            // Generate maximum number of data points once
+            setFullBalanceData(generateSampleData(currentBalances, 156));
           }
 
           setError(null);
@@ -161,7 +332,7 @@ export function PerformanceChart() {
     };
 
     fetchBalanceData();
-  }, [dataSource]);
+  }, [dataSource]); // Remove chartParams.dataPoints dependency
 
   // Create chart configuration based on assets
   const chartConfig = useMemo(() => {
@@ -228,6 +399,7 @@ export function PerformanceChart() {
       </CardHeader>
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
+          ref={chartContainerRef}
           config={chartConfig}
           className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
         >
@@ -246,15 +418,32 @@ export function PerformanceChart() {
               dataKey="timestamp"
               tickLine={false}
               tickMargin={12}
-              tickFormatter={(value) => value.slice(0, 3)}
+              tickFormatter={(value) => {
+                const [month, year] = value.split(' ');
+                
+                // Check if this is a new month in a different year
+                if (month !== lastShownDate.current.month || year !== lastShownDate.current.year) {
+                  lastShownDate.current = { month, year };
+                  // Only show month
+                  return month;
+                }
+                return '';
+              }}
               stroke="hsl(var(--color-border-muted))"
+              interval={chartParams.interval}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
               tickFormatter={(value) => {
-                if (value === 0) return "€0";
-                return `€${(value / 1000000).toFixed(1)}M`;
+                if (value === 0) return "0";
+                if (value >= 1000000) {
+                  return `${(value / 1000000).toFixed(1)}M`;
+                }
+                if (value >= 1000) {
+                  return `${(value / 1000).toFixed(1)}K`;
+                }
+                return value.toFixed(0);
               }}
               interval="preserveStartEnd"
             />
