@@ -450,7 +450,7 @@ export function PerformanceChart() {
             {assets.map(asset => (
               <Line
                 key={asset}
-                type="monotone"
+                type="linear"
                 dataKey={asset}
                 stroke={resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light}
                 strokeWidth={2}
