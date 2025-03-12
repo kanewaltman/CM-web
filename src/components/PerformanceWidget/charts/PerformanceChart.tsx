@@ -16,6 +16,7 @@ import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { useDataSource } from '@/lib/DataSourceContext';
 
 interface BalanceDataPoint {
   timestamp: string;
@@ -64,9 +65,23 @@ function CustomCursor(props: CustomCursorProps) {
   );
 }
 
+// Add sample data
+const SAMPLE_PERFORMANCE_DATA = Array.from({ length: 12 }).map((_, i) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() - (11 - i));
+  return {
+    timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+    BTC: 35000 + Math.random() * 10000,
+    ETH: 1800 + Math.random() * 400,
+    DOT: 9 + Math.random() * 3,
+    USDT: 0.92 + Math.random() * 0.02
+  };
+});
+
 export function PerformanceChart() {
   const id = useId();
   const { resolvedTheme } = useTheme();
+  const { dataSource } = useDataSource();
   const [balanceData, setBalanceData] = useState<BalanceDataPoint[]>([]);
   const [assets, setAssets] = useState<AssetTicker[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,55 +92,66 @@ export function PerformanceChart() {
     const fetchBalanceData = async () => {
       try {
         setIsLoading(true);
-        const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
-        const tokenData = await tokenResponse.json();
-        
-        if (!tokenData.token) {
-          throw new Error('Failed to get demo token');
-        }
 
-        const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
-          headers: {
-            'Authorization': `Bearer ${tokenData.token}`
-          }
-        });
-        
-        if (!balancesResponse.ok) {
-          throw new Error(`Balances request failed with status ${balancesResponse.status}`);
-        }
-        
-        const data = await balancesResponse.json();
-
-        // Process balances and create mock historical data
-        if (data && typeof data === 'object') {
-          const validAssets = Object.entries(data)
-            .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
-            .map(([asset]) => asset as AssetTicker);
-
+        if (dataSource === 'sample') {
+          // Use sample data
+          const validAssets = Object.keys(SAMPLE_PERFORMANCE_DATA[0])
+            .filter(key => key !== 'timestamp' && key in ASSETS) as AssetTicker[];
+          
           setAssets(validAssets);
+          setBalanceData(SAMPLE_PERFORMANCE_DATA);
+          setError(null);
+        } else {
+          const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
+          const tokenData = await tokenResponse.json();
+          
+          if (!tokenData.token) {
+            throw new Error('Failed to get demo token');
+          }
 
-          // Create mock historical data for the last 12 months
-          const historicalData: BalanceDataPoint[] = Array.from({ length: 12 }).map((_, i) => {
-            const date = new Date();
-            date.setMonth(date.getMonth() - (11 - i));
-            const dataPoint: BalanceDataPoint = {
-              timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-            };
+          const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
+            headers: {
+              'Authorization': `Bearer ${tokenData.token}`
+            }
+          });
+          
+          if (!balancesResponse.ok) {
+            throw new Error(`Balances request failed with status ${balancesResponse.status}`);
+          }
+          
+          const data = await balancesResponse.json();
 
-            validAssets.forEach(asset => {
-              const currentValue = parseFloat(data[asset].EUR || '0');
-              // Create some variation in historical data
-              const variation = 1 + (Math.random() * 0.4 - 0.2); // ±20% variation
-              dataPoint[asset] = currentValue * variation;
+          // Process balances and create mock historical data
+          if (data && typeof data === 'object') {
+            const validAssets = Object.entries(data)
+              .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
+              .map(([asset]) => asset as AssetTicker);
+
+            setAssets(validAssets);
+
+            // Create mock historical data for the last 12 months
+            const historicalData: BalanceDataPoint[] = Array.from({ length: 12 }).map((_, i) => {
+              const date = new Date();
+              date.setMonth(date.getMonth() - (11 - i));
+              const dataPoint: BalanceDataPoint = {
+                timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+              };
+
+              validAssets.forEach(asset => {
+                const currentValue = parseFloat(data[asset].EUR || '0');
+                // Create some variation in historical data
+                const variation = 1 + (Math.random() * 0.4 - 0.2); // ±20% variation
+                dataPoint[asset] = currentValue * variation;
+              });
+
+              return dataPoint;
             });
 
-            return dataPoint;
-          });
+            setBalanceData(historicalData);
+          }
 
-          setBalanceData(historicalData);
+          setError(null);
         }
-
-        setError(null);
       } catch (err) {
         console.error('Error fetching balances:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch balances');
@@ -135,7 +161,7 @@ export function PerformanceChart() {
     };
 
     fetchBalanceData();
-  }, []);
+  }, [dataSource]);
 
   // Create chart configuration based on assets
   const chartConfig = useMemo(() => {

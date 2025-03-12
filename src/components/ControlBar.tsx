@@ -41,6 +41,9 @@ interface ControlBarProps {
   defaultIsAppearanceOpen?: boolean;
   // Add new prop for handling widget addition
   onAddWidget?: (widgetType: string) => void;
+  // Add new prop for data source
+  dataSource: 'demo' | 'sample';
+  onDataSourceChange?: (source: 'demo' | 'sample') => void;
 }
 
 export function ControlBar({ 
@@ -50,7 +53,9 @@ export function ControlBar({
   initialGridStyle = 'rounded',
   defaultIsOpen = false,
   defaultIsAppearanceOpen = false,
-  onAddWidget
+  onAddWidget,
+  dataSource,
+  onDataSourceChange
 }: ControlBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const colors = getThemeValues(resolvedTheme || theme);
@@ -276,6 +281,12 @@ export function ControlBar({
     }
   };
 
+  // Handle data source change
+  const handleDataSourceChange = (source: 'demo' | 'sample') => {
+    onDataSourceChange?.(source);
+    toast.success(`Switched to ${source === 'demo' ? 'Demo API' : 'Sample Data'}`);
+  };
+
   return (
     <div className={cn(
       "w-full py-4",
@@ -410,6 +421,26 @@ export function ControlBar({
                           >
                             <Monitor className="h-4 w-4 mr-2" />
                             <span>System</span>
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <div className="mb-3 text-sm font-medium">Data Source</div>
+                        <div className="flex space-x-3">
+                          <Button 
+                            variant={dataSource === 'demo' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => handleDataSourceChange('demo')}
+                          >
+                            <span>Demo API</span>
+                          </Button>
+                          <Button 
+                            variant={dataSource === 'sample' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => handleDataSourceChange('sample')}
+                          >
+                            <span>Sample Data</span>
                           </Button>
                         </div>
                       </div>

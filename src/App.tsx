@@ -15,6 +15,7 @@ import { BalancesWidget } from './components/BalancesWidget';
 import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWidget';
 import { createRoot } from 'react-dom/client';
 import { ChartVariant } from './components/PerformanceWidget/PerformanceWidget';
+import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
 
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
@@ -284,7 +285,8 @@ const getPerformanceTitle = (variant: ChartVariant): string => {
   }
 };
 
-function App() {
+function AppContent() {
+  const { dataSource, setDataSource } = useDataSource();
   console.log('App component is rendering');
   
   const [error, setError] = useState<string | null>(null);
@@ -488,28 +490,30 @@ function App() {
               if (root) {
                 root.render(
                   <React.StrictMode>
-                    <WidgetContainer
-                      key={newTitle} // Force re-render with new title
-                      title={newTitle}
-                      onRemove={() => {
-                        if (gridRef.current) {
-                          const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                          if (widget) {
-                            const reactRoot = (widget as any)._reactRoot;
-                            if (reactRoot) {
-                              reactRoot.unmount();
+                    <DataSourceProvider>
+                      <WidgetContainer
+                        key={newTitle} // Force re-render with new title
+                        title={newTitle}
+                        onRemove={() => {
+                          if (gridRef.current) {
+                            const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                            if (widget) {
+                              const reactRoot = (widget as any)._reactRoot;
+                              if (reactRoot) {
+                                reactRoot.unmount();
+                              }
+                              // Clean up widget state
+                              widgetStateRegistry.delete(widgetId);
+                              gridRef.current.removeWidget(widget, false);
+                              widget.remove();
                             }
-                            // Clean up widget state
-                            widgetStateRegistry.delete(widgetId);
-                            gridRef.current.removeWidget(widget, false);
-                            widget.remove();
                           }
-                        }
-                      }}
-                      headerControls={<PerformanceWidgetWrapper isHeader />}
-                    >
-                      <PerformanceWidgetWrapper />
-                    </WidgetContainer>
+                        }}
+                        headerControls={<PerformanceWidgetWrapper isHeader />}
+                      >
+                        <PerformanceWidgetWrapper />
+                      </WidgetContainer>
+                    </DataSourceProvider>
                   </React.StrictMode>
                 );
               }
@@ -550,52 +554,56 @@ function App() {
 
         root.render(
           <React.StrictMode>
-            <WidgetContainer
-              key={widgetState.title}
-              title={widgetState.title}
-              onRemove={() => {
-                if (gridRef.current) {
-                  const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                  if (widget) {
-                    const reactRoot = (widget as any)._reactRoot;
-                    if (reactRoot) {
-                      reactRoot.unmount();
+            <DataSourceProvider>
+              <WidgetContainer
+                key={widgetState.title}
+                title={widgetState.title}
+                onRemove={() => {
+                  if (gridRef.current) {
+                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                    if (widget) {
+                      const reactRoot = (widget as any)._reactRoot;
+                      if (reactRoot) {
+                        reactRoot.unmount();
+                      }
+                      // Clean up widget state
+                      widgetStateRegistry.delete(widgetId);
+                      gridRef.current.removeWidget(widget, false);
+                      widget.remove();
                     }
-                    // Clean up widget state
-                    widgetStateRegistry.delete(widgetId);
-                    gridRef.current.removeWidget(widget, false);
-                    widget.remove();
                   }
-                }
-              }}
-              headerControls={<PerformanceWidgetWrapper isHeader />}
-            >
-              <PerformanceWidgetWrapper />
-            </WidgetContainer>
+                }}
+                headerControls={<PerformanceWidgetWrapper isHeader />}
+              >
+                <PerformanceWidgetWrapper />
+              </WidgetContainer>
+            </DataSourceProvider>
           </React.StrictMode>
         );
       } else {
         // Regular widget rendering
         root.render(
           <React.StrictMode>
-            <WidgetContainer
-              title={widgetTitles[widgetType]}
-              onRemove={() => {
-                if (gridRef.current) {
-                  const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                  if (widget) {
-                    const reactRoot = (widget as any)._reactRoot;
-                    if (reactRoot) {
-                      reactRoot.unmount();
+            <DataSourceProvider>
+              <WidgetContainer
+                title={widgetTitles[widgetType]}
+                onRemove={() => {
+                  if (gridRef.current) {
+                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                    if (widget) {
+                      const reactRoot = (widget as any)._reactRoot;
+                      if (reactRoot) {
+                        reactRoot.unmount();
+                      }
+                      gridRef.current.removeWidget(widget, false);
+                      widget.remove();
                     }
-                    gridRef.current.removeWidget(widget, false);
-                    widget.remove();
                   }
-                }
-              }}
-            >
-              <WidgetComponent widgetId={widgetId} />
-            </WidgetContainer>
+                }}
+              >
+                <WidgetComponent widgetId={widgetId} />
+              </WidgetContainer>
+            </DataSourceProvider>
           </React.StrictMode>
         );
       }
@@ -1745,7 +1753,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
       <div className="main-content">
         <div className="main-content-inner">
@@ -1754,6 +1762,87 @@ function App() {
             onCopyLayout={handleCopyLayout}
             onPasteLayout={handlePasteLayout}
             onAddWidget={handleAddWidget}
+            dataSource={dataSource}
+            onDataSourceChange={(source) => {
+              // First update the context
+              setDataSource(source);
+              
+              // Force re-render of all widgets by unmounting and remounting
+              if (grid) {
+                const items = grid.getGridItems();
+                items.forEach(item => {
+                  const node = item.gridstackNode;
+                  if (!node?.id) return;
+                  
+                  const widgetContainer = document.querySelector(`[gs-id="${node.id}"]`);
+                  if (widgetContainer) {
+                    const root = (widgetContainer as any)._reactRoot;
+                    if (root) {
+                      const content = widgetContainer.querySelector('.grid-stack-item-content');
+                      if (content) {
+                        const baseId = node.id.split('-')[0];
+                        const widgetType = widgetTypes[baseId];
+                        const WidgetComponent = widgetComponents[widgetType];
+                        
+                        // Unmount first to clear any cached state
+                        root.unmount();
+                        
+                        // Create a new root to force a fresh mount
+                        const newRoot = createRoot(content);
+                        (widgetContainer as any)._reactRoot = newRoot;
+                        
+                        if (baseId === 'performance') {
+                          const widgetState = widgetStateRegistry.get(node.id);
+                          if (widgetState) {
+                            const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
+                              <WidgetComponent
+                                key={`${node.id}-${source}`} // Add source to key to force remount
+                                widgetId={node.id}
+                                headerControls={isHeader}
+                                defaultVariant={widgetState.variant}
+                                onVariantChange={(variant) => {
+                                  widgetState.setVariant(variant);
+                                  widgetState.setTitle(getPerformanceTitle(variant));
+                                }}
+                              />
+                            );
+
+                            newRoot.render(
+                              <React.StrictMode>
+                                <DataSourceProvider>
+                                  <WidgetContainer
+                                    key={`${widgetState.title}-${source}`} // Add source to key to force remount
+                                    title={widgetState.title}
+                                    onRemove={() => handleRemoveWidget(node.id)}
+                                    headerControls={<PerformanceWidgetWrapper isHeader />}
+                                  >
+                                    <PerformanceWidgetWrapper />
+                                  </WidgetContainer>
+                                </DataSourceProvider>
+                              </React.StrictMode>
+                            );
+                          }
+                        } else {
+                          newRoot.render(
+                            <React.StrictMode>
+                              <DataSourceProvider>
+                                <WidgetContainer
+                                  key={`${widgetType}-${source}`} // Add source to key to force remount
+                                  title={widgetTitles[widgetType]}
+                                  onRemove={() => handleRemoveWidget(node.id)}
+                                >
+                                  <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
+                                </WidgetContainer>
+                              </DataSourceProvider>
+                            </React.StrictMode>
+                          );
+                        }
+                      }
+                    }
+                  }
+                });
+              }
+            }}
           />
           <div ref={gridElementRef} className="grid-stack" />
         </div>
@@ -1764,6 +1853,14 @@ function App() {
         visibleToasts={16}
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <DataSourceProvider>
+      <AppContent />
+    </DataSourceProvider>
   );
 }
 

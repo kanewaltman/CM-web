@@ -14,6 +14,7 @@ import { useTheme } from 'next-themes';
 import { Button } from './ui/button';
 import { TableSkeleton } from './TableSkeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { useDataSource } from '@/lib/DataSourceContext';
 
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
@@ -100,8 +101,36 @@ const HeaderDivider: React.FC = () => {
   );
 };
 
+// Add sample data
+const SAMPLE_BALANCES = {
+  "BTC": {
+    "BTC": "1.23456789",
+    "EUR": "45678.90"
+  },
+  "ETH": {
+    "ETH": "15.432109",
+    "EUR": "28901.23"
+  },
+  "DOT": {
+    "DOT": "1234.5678",
+    "EUR": "12345.67"
+  },
+  "USDT": {
+    "USDT": "50000.00",
+    "EUR": "45678.90"
+  }
+};
+
+const SAMPLE_PRICES = {
+  "BTCEUR": { price: 37000.50, change24h: 2.5 },
+  "ETHEUR": { price: 1875.25, change24h: -1.2 },
+  "DOTEUR": { price: 10.05, change24h: 0.8 },
+  "USDTEUR": { price: 0.91, change24h: -0.1 }
+};
+
 export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compact = false }) => {
   const { theme, resolvedTheme } = useTheme();
+  const { dataSource } = useDataSource();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [balances, setBalances] = useState<BalanceData[]>([]);
   const [prices, setPrices] = useState<PriceData>({});
@@ -136,12 +165,95 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
     return () => observer.disconnect();
   }, []);
 
+  // Initial balance fetch
+  useEffect(() => {
+    const fetchInitialBalances = async () => {
+      try {
+        setIsInitialLoading(true);
+
+        if (dataSource === 'sample') {
+          // Use sample data
+          const balancesArray = Object.entries(SAMPLE_BALANCES)
+            .filter(([asset]) => asset !== 'TOTAL')
+            .map(([asset, details]: [string, any]) => ({
+              asset: asset as AssetTicker,
+              balance: details[asset]?.toString() || '0',
+              valueInEuro: details.EUR?.toString() || '0',
+              change24h: '0',
+              availablePercentage: '100'
+            }))
+            .filter(balance => 
+              balance.asset in ASSETS && 
+              parseFloat(balance.balance) > 0
+            );
+
+          setBalances(balancesArray);
+          setError(null);
+        } else {
+          const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
+          const tokenData = await tokenResponse.json();
+          
+          if (!tokenData.token) {
+            throw new Error('Failed to get demo token');
+          }
+
+          const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
+            headers: {
+              'Authorization': `Bearer ${tokenData.token}`
+            }
+          });
+          
+          if (!balancesResponse.ok) {
+            throw new Error(`Balances request failed with status ${balancesResponse.status}`);
+          }
+          
+          const data = await balancesResponse.json();
+
+          if (data && typeof data === 'object') {
+            const balancesArray = Object.entries(data)
+              .filter(([asset]) => asset !== 'TOTAL')
+              .map(([asset, details]: [string, any]) => {
+                const balance = parseFloat(details[asset]?.toString() || '0');
+                const valueInEuro = details.EUR?.toString() || '0';
+                
+                return {
+                  asset: asset as AssetTicker,
+                  balance: balance.toString(),
+                  valueInEuro: parseFloat(valueInEuro).toFixed(2),
+                  change24h: '0',
+                  availablePercentage: '100'
+                };
+              })
+              .filter(balance => 
+                balance.asset in ASSETS && 
+                parseFloat(balance.balance) > 0
+              );
+
+            setBalances(balancesArray);
+            setError(null);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching balances:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch balances');
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    fetchInitialBalances();
+  }, [dataSource]); // Add dataSource as dependency
+
   // Memoize the fetch prices function to prevent recreating it on every render
   const fetchPrices = useCallback(async () => {
+    if (dataSource === 'sample') {
+      setPrices(SAMPLE_PRICES);
+      return;
+    }
+
     try {
       setIsUpdating(true);
       
-      // Fetch current prices from demo environment
       const pricesResponse = await fetch(getApiUrl('open/exchange/prices'));
       if (!pricesResponse.ok) {
         throw new Error(`Prices request failed with status ${pricesResponse.status}`);
@@ -250,85 +362,11 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       setPrices(enrichedPrices);
 
     } catch (err) {
-      console.error('❌ Error fetching prices:', err);
+      console.error('Error fetching prices:', err);
     } finally {
       setIsUpdating(false);
     }
-  }, [balances]);
-
-  // Initial balance fetch
-  useEffect(() => {
-    const fetchInitialBalances = async () => {
-      try {
-        setIsInitialLoading(true);
-        const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
-        const tokenData = await tokenResponse.json();
-        
-        console.log('🔑 Demo token received:', {
-          timestamp: new Date().toISOString(),
-          success: !!tokenData.token
-        });
-        
-        if (!tokenData.token) {
-          throw new Error('Failed to get demo token');
-        }
-
-        const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
-          headers: {
-            'Authorization': `Bearer ${tokenData.token}`
-          }
-        });
-        
-        if (!balancesResponse.ok) {
-          throw new Error(`Balances request failed with status ${balancesResponse.status}`);
-        }
-        
-        const data = await balancesResponse.json();
-        console.log('💼 Raw balances data:', {
-          timestamp: new Date().toISOString(),
-          assets: Object.keys(data).length,
-          data: data
-        });
-
-        if (data && typeof data === 'object') {
-          const balancesArray = Object.entries(data)
-            .filter(([asset]) => asset !== 'TOTAL')
-            .map(([asset, details]: [string, any]) => {
-              const balance = parseFloat(details[asset]?.toString() || '0');
-              const valueInEuro = details.EUR?.toString() || '0';
-              
-              return {
-                asset: asset as AssetTicker,
-                balance: balance.toString(),
-                valueInEuro: parseFloat(valueInEuro).toFixed(2),
-                change24h: '0',
-                availablePercentage: '100'
-              };
-            })
-            .filter(balance => 
-              balance.asset in ASSETS && 
-              parseFloat(balance.balance) > 0
-            );
-
-          console.log('💼 Processed balances:', {
-            timestamp: new Date().toISOString(),
-            count: balancesArray.length,
-            data: balancesArray
-          });
-
-          setBalances(balancesArray);
-          setError(null);
-        }
-      } catch (err) {
-        console.error('❌ Error fetching balances:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch balances');
-      } finally {
-        setIsInitialLoading(false);
-      }
-    };
-
-    fetchInitialBalances();
-  }, []);
+  }, [dataSource, balances]);
 
   // Update prices periodically
   useEffect(() => {
