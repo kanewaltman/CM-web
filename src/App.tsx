@@ -179,6 +179,9 @@ interface LayoutWidget {
   h: number;
   minW: number;
   minH: number;
+  viewState?: {
+    chartVariant: ChartVariant;
+  };
 }
 
 interface SerializedLayoutWidget extends LayoutWidget {
@@ -331,6 +334,12 @@ function App() {
         .map(item => {
           const node = item.gridstackNode;
           if (!node?.id) return null;
+          
+          // Get widget state if it's a performance widget
+          const baseId = node.id.split('-')[0];
+          const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
+          const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+
           return {
             id: node.id,
             x: node.x ?? 0,
@@ -338,7 +347,8 @@ function App() {
             w: node.w ?? 2,
             h: node.h ?? 2,
             minW: node.minW ?? 2,
-            minH: node.minH ?? 2
+            minH: node.minH ?? 2,
+            viewState
           };
         })
         .filter((item): item is LayoutWidget => item !== null);
@@ -946,10 +956,33 @@ function App() {
     // Save current layout if we're leaving dashboard
     if (currentPage === 'dashboard' && grid && grid.engine && grid.engine.nodes.length > 0) {
       try {
-        const currentLayout = grid.save(false);
-        if (isValidLayout(currentLayout)) {
-          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(currentLayout));
-          console.log('✅ Saved dashboard layout:', currentLayout);
+        const items = grid.getGridItems();
+        const serializedLayout = items
+          .map(item => {
+            const node = item.gridstackNode;
+            if (!node || !node.id) return null;
+            
+            // Get widget state if it's a performance widget
+            const baseId = node.id.split('-')[0];
+            const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
+            const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: node.w ?? 2,
+              h: node.h ?? 2,
+              minW: node.minW ?? 2,
+              minH: node.minH ?? 2,
+              viewState
+            };
+          })
+          .filter((item): item is LayoutWidget => item !== null);
+
+        if (isValidLayout(serializedLayout)) {
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+          console.log('✅ Saved dashboard layout:', serializedLayout);
         }
       } catch (error) {
         console.warn('Failed to save dashboard layout:', error);
@@ -1088,6 +1121,12 @@ function App() {
             .map(item => {
               const node = item.gridstackNode;
               if (!node || !node.id) return null;
+              
+              // Get widget state if it's a performance widget
+              const baseId = node.id.split('-')[0];
+              const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
+              const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+
               return {
                 id: node.id,
                 x: node.x ?? 0,
@@ -1095,7 +1134,8 @@ function App() {
                 w: node.w ?? 2,
                 h: node.h ?? 2,
                 minW: node.minW ?? 2,
-                minH: node.minH ?? 2
+                minH: node.minH ?? 2,
+                viewState
               };
             })
             .filter((item): item is LayoutWidget => item !== null);
@@ -1378,6 +1418,11 @@ function App() {
       const baseId = widget.id?.split('-')[0];
       const isValidBaseType = baseId && validBaseIds.includes(baseId);
       
+      // Check if viewState is valid for performance widgets
+      const hasValidViewState = baseId === 'performance' 
+        ? widget.viewState && typeof widget.viewState.chartVariant === 'string'
+        : true;
+
       const isValid = (
         typeof widget === 'object' &&
         widget !== null &&
@@ -1388,11 +1433,12 @@ function App() {
         typeof widget.h === 'number' &&
         widget.w >= (widget.minW ?? 2) &&
         widget.h >= (widget.minH ?? 2) &&
-        isValidBaseType
+        isValidBaseType &&
+        hasValidViewState
       );
 
       if (!isValid) {
-        console.warn('Invalid widget in layout:', widget, { baseId, isValidBaseType });
+        console.warn('Invalid widget in layout:', widget, { baseId, isValidBaseType, hasValidViewState });
       }
       return isValid;
     });
@@ -1655,6 +1701,12 @@ function App() {
         .map(item => {
           const node = item.gridstackNode;
           if (!node?.id) return null;
+          
+          // Get widget state if it's a performance widget
+          const baseId = node.id.split('-')[0];
+          const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
+          const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+
           return {
             id: node.id,
             x: node.x ?? 0,
@@ -1662,7 +1714,8 @@ function App() {
             w: node.w ?? 2,
             h: node.h ?? 2,
             minW: node.minW ?? 2,
-            minH: node.minH ?? 2
+            minH: node.minH ?? 2,
+            viewState
           };
         })
         .filter((item): item is LayoutWidget => item !== null);
