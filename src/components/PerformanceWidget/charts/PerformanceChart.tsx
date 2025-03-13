@@ -208,16 +208,10 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const [assets, setAssets] = useState<AssetTicker[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(propViewMode);
   const [hoverValues, setHoverValues] = useState<{ index: number; values: { [key: string]: number }; activeLine?: string } | null>(null);
   const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
   const [hoveredAsset, setHoveredAsset] = useState<string | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Sync with prop changes
-  useEffect(() => {
-    setViewMode(propViewMode);
-  }, [propViewMode]);
 
   const toggleAssetVisibility = (asset: string) => {
     setHiddenAssets(prev => {
@@ -415,7 +409,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     let lastYear: string | null = null;
     
     // Get the visible data range
-    const visibleData = viewMode === 'split' ? balanceData : cumulativeData;
+    const visibleData = propViewMode === 'split' ? balanceData : cumulativeData;
     
     visibleData.forEach((point, index) => {
       const [, year] = point.timestamp.split(' ');
@@ -426,7 +420,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     });
     
     return transitions;
-  }, [balanceData, cumulativeData, viewMode]);
+  }, [balanceData, cumulativeData, propViewMode]);
 
   if (error) {
     return (
@@ -444,7 +438,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
         <div className="flex items-center justify-between gap-2">
           <div className="space-y-0.5">
             <CardTitle>
-              {viewMode === 'split' ? (
+              {propViewMode === 'split' ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   {assets.map((asset: AssetTicker) => {
                     const assetConfig = ASSETS[asset];
@@ -512,16 +506,16 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             </CardTitle>
             <div className="flex items-baseline gap-2 min-h-[2rem]">
               <div className="font-semibold text-2xl leading-none">
-                €{(viewMode === 'split' && hoverValues?.activeLine ? 
+                €{(propViewMode === 'split' && hoverValues?.activeLine ? 
                   hoverValues.values[hoverValues.activeLine] :
                   hoverValues?.values.total ?? totalValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </div>
               <div className="flex-none h-5">
-                {((viewMode === 'cumulative' && !hoverValues) || (viewMode === 'split' && hoverValues?.activeLine) || (viewMode === 'cumulative' && hoverValues)) && (
+                {((propViewMode === 'cumulative' && !hoverValues) || (propViewMode === 'split' && hoverValues?.activeLine) || (propViewMode === 'cumulative' && hoverValues)) && (
                   <Badge variant="outline" className={cn(
                     "flex items-center h-5 translate-y-[-2px]",
                     (() => {
-                      if (viewMode === 'split' && hoverValues?.activeLine) {
+                      if (propViewMode === 'split' && hoverValues?.activeLine) {
                         const currentValue = hoverValues.values[hoverValues.activeLine] as number;
                         const previousIndex = hoverValues.index - 1;
                         const previousValue = previousIndex >= 0 ? 
@@ -532,7 +526,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           change < 0 ?
                           "bg-price-down/10 text-price-down hover:bg-price-down/20" :
                           "bg-muted/10 text-muted-foreground hover:bg-muted/20";
-                      } else if (viewMode === 'cumulative' && hoverValues) {
+                      } else if (propViewMode === 'cumulative' && hoverValues) {
                         const currentValue = hoverValues.values.total as number;
                         const previousIndex = hoverValues.index - 1;
                         const previousValue = previousIndex >= 0 ? 
@@ -554,14 +548,14 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                     })()
                   )}>
                     {(() => {
-                      if (viewMode === 'split' && hoverValues?.activeLine) {
+                      if (propViewMode === 'split' && hoverValues?.activeLine) {
                         const currentValue = hoverValues.values[hoverValues.activeLine] as number;
                         const previousIndex = hoverValues.index - 1;
                         const previousValue = previousIndex >= 0 ? 
                           (balanceData[previousIndex]?.[hoverValues.activeLine] as number || 0) : 0;
                         const change = ((currentValue - previousValue) / (previousValue || 1)) * 100;
                         return `${change > 0 ? "+" : ""}${change.toFixed(2)}%`;
-                      } else if (viewMode === 'cumulative' && hoverValues) {
+                      } else if (propViewMode === 'cumulative' && hoverValues) {
                         const currentValue = hoverValues.values.total as number;
                         const previousIndex = hoverValues.index - 1;
                         const previousValue = previousIndex >= 0 ? 
@@ -578,11 +572,10 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             </div>
           </div>
           <RadioGroup
-            defaultValue={viewMode}
-            value={viewMode}
+            defaultValue={propViewMode}
+            value={propViewMode}
             onValueChange={(value) => {
               const newMode = value as 'split' | 'cumulative';
-              setViewMode(newMode);
               onViewModeChange?.(newMode);
             }}
             className="flex items-center space-x-2"
@@ -601,12 +594,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       <CardContent className="flex-1 min-h-0">
         <ChartContainer
           ref={chartContainerRef}
-          config={viewMode === 'split' ? chartConfig : { total: { label: 'Portfolio Total', color: 'hsl(var(--foreground))' } }}
+          config={propViewMode === 'split' ? chartConfig : { total: { label: 'Portfolio Total', color: 'hsl(var(--foreground))' } }}
           className="h-full w-full [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[hsl(var(--color-widget-hover))] [&_.recharts-rectangle.recharts-tooltip-cursor]:opacity-25 [&_.recharts-rectangle.recharts-tooltip-inner-cursor]:fill-white/20"
         >
           <LineChart
             accessibilityLayer
-            data={viewMode === 'split' ? balanceData : cumulativeData}
+            data={propViewMode === 'split' ? balanceData : cumulativeData}
             margin={{ left: -12, right: 12, top: 12 }}
             onMouseMove={(e) => {
               if (e?.activePayload?.[0] && e.activeTooltipIndex !== undefined) {
@@ -656,7 +649,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                 }}
               />
             ))}
-            {viewMode === 'split' ? 
+            {propViewMode === 'split' ? 
               assets.map(asset => {
                 const isHidden = hiddenAssets.has(asset);
                 const assetColor = resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light;
@@ -805,7 +798,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             />
             <ChartTooltip
               content={
-                viewMode === 'split' ? (
+                propViewMode === 'split' ? (
                   <CustomTooltipContent
                     colorMap={Object.fromEntries(
                       assets.map(asset => [
