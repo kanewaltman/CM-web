@@ -155,10 +155,20 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     widgetIntensity
   );
 
+  // Get card colors based on intensity
+  const cardBase = getInterpolatedValue(
+    {
+      oled: '0 0% 2.63%',
+      default: '0 0.67% 7.59%',
+      backlit: '240 2.08% 19.4%'
+    },
+    widgetIntensity
+  );
+
   // Get border colors based on border intensity and background state
   const getBorderColor = (intensity: number, opacity: number = 1): string => {
     // If we're in backlit mode, adjust the border colors to be lighter
-    if (backgroundIntensity >= 1) {
+    if (widgetIntensity >= 1) {
       return getInterpolatedValue(
         {
           oled: '0 0% 18%',
@@ -227,7 +237,7 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
       ),
       '--color-border-default': borderBase,
       '--color-border-muted': borderMuted,
-      '--card': widgetBase,
+      '--card': cardBase,
       '--card-foreground': '0 0% 98%',
       '--popover': widgetBase,
       '--popover-foreground': '0 0% 98%',
@@ -281,7 +291,7 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
   // Get border colors based on border intensity and background state
   const getBorderColor = (intensity: number, opacity: number = 1): string => {
     // If we're in backlit mode, adjust the border colors to be darker
-    if (backgroundIntensity >= 1) {
+    if (widgetIntensity >= 1) {
       return getInterpolatedValue(
         {
           oled: '0 0% 85%',
