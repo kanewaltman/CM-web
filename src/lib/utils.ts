@@ -58,19 +58,19 @@ type ThemeColors = {
   };
 };
 
-// Helper function to interpolate between two HSL values
-const interpolateHSL = (start: string, end: string, t: number): string => {
-  const [h1, s1, l1] = start.split(' ').map(Number);
-  const [h2, s2, l2] = end.split(' ').map(Number);
-  
-  // For hue, we want to take the shortest path
-  let h = h1;
-  if (Math.abs(h2 - h1) > 180) {
-    h = h1 + (h2 > h1 ? 360 : -360);
-  }
-  
-  return `${h1 + (h2 - h1) * t} ${s1 + (s2 - s1) * t}% ${l1 + (l2 - l1) * t}%`;
-};
+  // Helper function to interpolate between two HSL values
+  const interpolateHSL = (start: string, end: string, t: number): string => {
+    const [h1, s1, l1] = start.split(' ').map(Number);
+    const [h2, s2, l2] = end.split(' ').map(Number);
+    
+    // For hue, we want to take the shortest path
+    let h = h1;
+    if (Math.abs(h2 - h1) > 180) {
+      h = h1 + (h2 > h1 ? 360 : -360);
+    }
+    
+    return `${h1 + (h2 - h1) * t} ${s1 + (s2 - s1) * t}% ${l1 + (l2 - l1) * t}%`;
+  };
 
 // Helper function to get interpolated value based on intensity
 const getInterpolatedValue = (colors: { oled: string; default: string; backlit: string }, intensity: number, opacity: number = 1): string => {
@@ -121,17 +121,17 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     background: {
       default: 'hsl(0 0% 0%)',
       oled: 'hsl(0 0% 0%)',
-      backlit: 'hsl(0 0% 3%)'
+      backlit: 'hsl(0 0% 2%)'
     },
     widget: {
       default: 'hsl(0 0% 3%)',
       oled: 'hsl(0 0% 2%)',
-      backlit: 'hsl(0 0% 5%)'
+      backlit: 'hsl(0 0% 4%)'
     },
     border: {
-      default: '0 0% 10%',
-      oled: '0 0% 5%',
-      backlit: '0 0% 25%'
+      default: '0 0% 12%',
+      oled: '0 0% 8%',
+      backlit: '0 0% 16%'
     }
   };
 
@@ -140,7 +140,7 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     {
       oled: '0 0% 0%',
       default: '0 0% 4%',
-      backlit: '220 3% 21%'
+      backlit: '220 3% 18%'
     },
     backgroundIntensity
   );
@@ -150,7 +150,7 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     {
       oled: '0 0% 2%',
       default: '0 0% 6%',
-      backlit: '220 3% 24%'
+      backlit: '220 3% 21%'
     },
     widgetIntensity
   );
@@ -161,9 +161,9 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     if (backgroundIntensity >= 1) {
       return getInterpolatedValue(
         {
-          oled: '0 0% 30%',
-          default: '0 0% 35%',
-          backlit: '0 0% 40%'
+          oled: '0 0% 20%',
+          default: '0 0% 24%',
+          backlit: '0 0% 28%'
         },
         intensity,
         opacity

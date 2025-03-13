@@ -23,7 +23,10 @@ export function ThemeIntensitySlider({
   currentWidgetIntensity,
   currentBorderIntensity
 }: ThemeIntensitySliderProps) {
-  const [isLocked, setIsLocked] = useState(true);
+  const [isLocked, setIsLocked] = useState(() => {
+    const savedLockState = localStorage.getItem('theme-sliders-locked');
+    return savedLockState === null ? true : savedLockState === 'true';
+  });
 
   // Snap to nearest valid position
   const snapToPosition = (value: number): number => {
@@ -66,7 +69,9 @@ export function ThemeIntensitySlider({
       onWidgetIntensityChange(currentBackgroundIntensity);
       onBorderIntensityChange(currentBackgroundIntensity);
     }
-    setIsLocked(!isLocked);
+    const newLockState = !isLocked;
+    setIsLocked(newLockState);
+    localStorage.setItem('theme-sliders-locked', newLockState.toString());
   };
 
   return (
