@@ -45,9 +45,12 @@ const formatBalance = (value: number, decimals: number) => {
   return `${wholeWithCommas}.${trimmedDecimal}`;
 };
 
-const SkeletonRow: React.FC = () => (
+const SkeletonRow: React.FC<{ assetColumnWidth?: number }> = ({ assetColumnWidth = 150 }) => (
   <TableRow isHeader={false}>
-    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
+    <TableCell 
+      className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap"
+      style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
+    >
       <div className="relative">
         <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
         <div className="relative z-10 flex items-center gap-2">
@@ -138,14 +141,49 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const textMeasureRef = useRef<HTMLDivElement>(null);
+  const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150); // Default width
 
   // Check for container width to determine compact mode
   useEffect(() => {
-    const FULL_TABLE_MIN_WIDTH = 400; // Minimum width in pixels for full table view (3 grid cells in GridStack)
+    // Calculate the minimum width needed for the full table view
+    const calculateMinTableWidth = () => {
+      // Base width for asset column
+      const assetColWidth = assetColumnWidth;
+      
+      // Width for balance column (approximately)
+      const balanceColWidth = 120;
+      
+      // Width for additional columns in full view
+      const valueColWidth = 120;
+      const changeColWidth = 100;
+      const availableColWidth = 100;
+      
+      // Add a small buffer to prevent edge cases (10px)
+      const buffer = 10;
+      
+      // Total width needed for full table
+      return assetColWidth + balanceColWidth + valueColWidth + changeColWidth + availableColWidth + buffer;
+    };
+
     const checkWidth = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.clientWidth;
-        setIsCompact(containerWidth < FULL_TABLE_MIN_WIDTH);
+        const minTableWidth = calculateMinTableWidth();
+        
+        // Enable compact mode if container is narrower than the minimum table width
+        // This ensures compact mode is enabled as soon as horizontal scrolling would be needed
+        const shouldBeCompact = containerWidth < minTableWidth;
+        
+        // Log for debugging
+        console.log('Width check:', {
+          containerWidth,
+          minTableWidth,
+          assetColumnWidth,
+          shouldBeCompact
+        });
+        
+        setIsCompact(shouldBeCompact);
       }
     };
 
@@ -165,7 +203,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       resizeObserver.disconnect();
       window.removeEventListener('resize', checkWidth);
     };
-  }, []);
+  }, [assetColumnWidth]); // Add assetColumnWidth as dependency
 
   // Detect theme from document class list
   useEffect(() => {
@@ -412,17 +450,101 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
     }));
   }, [balances, prices]);
 
+  // Calculate the width needed for the asset column based on the longest asset name
+  useEffect(() => {
+    if (balances.length === 0 || !textMeasureRef.current) return;
+
+    // Create a temporary span to measure text width
+    const measureElement = document.createElement('span');
+    measureElement.style.visibility = 'hidden';
+    measureElement.style.position = 'absolute';
+    measureElement.style.whiteSpace = 'nowrap';
+    measureElement.style.fontFamily = 'var(--font-jakarta)';
+    measureElement.style.fontWeight = 'bold';
+    measureElement.style.fontSize = '14px'; // Adjust based on your text size
+    document.body.appendChild(measureElement);
+
+    // Find the longest asset name
+    let maxWidth = 0;
+    balances.forEach(balance => {
+      const assetConfig = ASSETS[balance.asset];
+      if (assetConfig) {
+        measureElement.textContent = assetConfig.name;
+        const width = measureElement.getBoundingClientRect().width;
+        maxWidth = Math.max(maxWidth, width);
+      }
+    });
+
+    // Remove the temporary element
+    document.body.removeChild(measureElement);
+
+    // Add padding for icon (32px) + gap (8px) + padding (16px)
+    const totalWidth = maxWidth + 32 + 8 + 16;
+    
+    // Set minimum width
+    const minWidth = 120;
+    setAssetColumnWidth(Math.max(totalWidth, minWidth));
+  }, [balances]);
+
+  // Initialize asset column width based on all available assets when no balances are loaded yet
+  useEffect(() => {
+    if (balances.length > 0 || !textMeasureRef.current) return;
+
+    // Create a temporary span to measure text width
+    const measureElement = document.createElement('span');
+    measureElement.style.visibility = 'hidden';
+    measureElement.style.position = 'absolute';
+    measureElement.style.whiteSpace = 'nowrap';
+    measureElement.style.fontFamily = 'var(--font-jakarta)';
+    measureElement.style.fontWeight = 'bold';
+    measureElement.style.fontSize = '14px';
+    document.body.appendChild(measureElement);
+
+    // Find the longest asset name from all available assets
+    let maxWidth = 0;
+    Object.values(ASSETS).forEach(asset => {
+      measureElement.textContent = asset.name;
+      const width = measureElement.getBoundingClientRect().width;
+      maxWidth = Math.max(maxWidth, width);
+    });
+
+    // Remove the temporary element
+    document.body.removeChild(measureElement);
+
+    // Add padding for icon (32px) + gap (8px) + padding (16px)
+    const totalWidth = maxWidth + 32 + 8 + 16;
+    
+    // Set minimum width
+    const minWidth = 120;
+    setAssetColumnWidth(Math.max(totalWidth, minWidth));
+  }, []);
+
   return (
     <div 
-      className={cn("h-full flex flex-col p-2", className)}
+      className={cn("h-full flex flex-col p-2 relative", className)}
       ref={containerRef}
     >
+      {/* Compact mode indicator (for debugging) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div 
+          className={cn(
+            "absolute top-1 right-1 w-2 h-2 rounded-full z-50 transition-colors",
+            isCompact ? "bg-amber-500" : "bg-green-500"
+          )}
+          title={isCompact ? "Compact mode" : "Full mode"}
+        />
+      )}
       <div className="flex-1 min-h-0 relative">
         <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
+        {/* Hidden div for text measurement */}
+        <div ref={textMeasureRef} className="absolute -left-[9999px] -top-[9999px]"></div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
+              <TableHead 
+                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap"
+                style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
+              >
                 <div className="relative">
                   <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 px-0 py-1">Asset</div>
@@ -441,7 +563,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           {isInitialLoading ? (
             <TableBody>
               {[...Array(5)].map((_, i) => (
-                <SkeletonRow key={i} />
+                <SkeletonRow key={i} assetColumnWidth={assetColumnWidth} />
               ))}
             </TableBody>
           ) : error ? (
@@ -459,7 +581,10 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
                 return (
                   <TableRow key={balance.asset} className="group" isHeader={false}>
-                    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
+                    <TableCell 
+                      className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap"
+                      style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
+                    >
                       <div className="relative">
                         <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                         <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
