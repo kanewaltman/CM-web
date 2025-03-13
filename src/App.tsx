@@ -115,22 +115,39 @@ const widgetTitles: Record<string, string> = Object.fromEntries(
 const generateDefaultLayout = () => [
   { 
     id: 'performance', 
-    x: 0, 
+    x: 7, 
     y: 0, 
-    w: 12, 
-    h: 5, 
+    w: 5, 
+    h: 6, 
     minW: 2, 
     minH: 2, 
     viewState: { 
-      chartVariant: 'subscribers',
+      chartVariant: 'revenue',
       viewMode: 'split'
     } 
   },
-  { id: 'balances', x: 0, y: 5, w: 4, h: 4, minW: 2, minH: 2 },
-  { id: 'performance-1741622599204', x: 0, y: 9, w: 6, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'subscriptions' } },
-  { id: 'performance-1741622640337', x: 4, y: 5, w: 4, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'upgrades' } },
-  { id: 'performance-1741622665346', x: 6, y: 9, w: 6, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'revenue' } },
-  { id: 'performance-1741622685739', x: 8, y: 5, w: 4, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'mrr-growth' } }
+  { 
+    id: 'balances', 
+    x: 0, 
+    y: 6, 
+    w: 12, 
+    h: 5, 
+    minW: 2, 
+    minH: 2 
+  },
+  { 
+    id: 'performance-1741826205331', 
+    x: 0, 
+    y: 0, 
+    w: 7, 
+    h: 6, 
+    minW: 2, 
+    minH: 2, 
+    viewState: { 
+      chartVariant: 'revenue',
+      viewMode: 'cumulative'
+    } 
+  }
 ];
 
 const defaultLayout = generateDefaultLayout();
