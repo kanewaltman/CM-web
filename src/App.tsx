@@ -501,6 +501,7 @@ function AppContent() {
           const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
           const [title, setTitle] = useState(widgetState.title);
           const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(widgetState.viewMode);
+          const { dataSource } = useDataSource();
 
           useEffect(() => {
             // Initial state sync
@@ -541,24 +542,11 @@ function AppContent() {
                   <React.StrictMode>
                     <DataSourceProvider>
                       <WidgetContainer
-                        key={newTitle} // Force re-render with new title
+                        key={`${newTitle}-${dataSource}`}
                         title={newTitle}
-                        onRemove={() => {
-                          if (gridRef.current) {
-                            const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                            if (widget) {
-                              const reactRoot = (widget as any)._reactRoot;
-                              if (reactRoot) {
-                                reactRoot.unmount();
-                              }
-                              // Clean up widget state
-                              widgetStateRegistry.delete(widgetId);
-                              gridRef.current.removeWidget(widget, false);
-                              widget.remove();
-                            }
-                          }
-                        }}
+                        onRemove={() => handleRemoveWidget(widgetId)}
                         headerControls={<PerformanceWidgetWrapper isHeader />}
+                        isMobile={isMobile}
                       >
                         <PerformanceWidgetWrapper />
                       </WidgetContainer>
@@ -632,24 +620,11 @@ function AppContent() {
           <React.StrictMode>
             <DataSourceProvider>
               <WidgetContainer
-                key={widgetState.title}
+                key={`${widgetState.title}-${dataSource}`}
                 title={widgetState.title}
-                onRemove={() => {
-                  if (gridRef.current) {
-                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                    if (widget) {
-                      const reactRoot = (widget as any)._reactRoot;
-                      if (reactRoot) {
-                        reactRoot.unmount();
-                      }
-                      // Clean up widget state
-                      widgetStateRegistry.delete(widgetId);
-                      gridRef.current.removeWidget(widget, false);
-                      widget.remove();
-                    }
-                  }
-                }}
+                onRemove={() => handleRemoveWidget(widgetId)}
                 headerControls={<PerformanceWidgetWrapper isHeader />}
+                isMobile={isMobile}
               >
                 <PerformanceWidgetWrapper />
               </WidgetContainer>
@@ -662,22 +637,12 @@ function AppContent() {
           <React.StrictMode>
             <DataSourceProvider>
               <WidgetContainer
+                key={`${widgetType}-${dataSource}`}
                 title={widgetTitles[widgetType]}
-                onRemove={() => {
-                  if (gridRef.current) {
-                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                    if (widget) {
-                      const reactRoot = (widget as any)._reactRoot;
-                      if (reactRoot) {
-                        reactRoot.unmount();
-                      }
-                      gridRef.current.removeWidget(widget, false);
-                      widget.remove();
-                    }
-                  }
-                }}
+                onRemove={() => handleRemoveWidget(widgetId)}
+                isMobile={isMobile}
               >
-                <WidgetComponent widgetId={widgetId} />
+                <WidgetComponent key={`${widgetId}-${dataSource}`} widgetId={widgetId} />
               </WidgetContainer>
             </DataSourceProvider>
           </React.StrictMode>
@@ -692,7 +657,7 @@ function AppContent() {
       widgetElement.remove();
       return null;
     }
-  }, []);
+  }, [handleRemoveWidget, isMobile]);
 
   // Check for ad blocker on mount
   useEffect(() => {
@@ -1942,6 +1907,7 @@ function AppContent() {
                                     title={widgetState.title}
                                     onRemove={() => handleRemoveWidget(node.id)}
                                     headerControls={<PerformanceWidgetWrapper isHeader />}
+                                    isMobile={isMobile}
                                   >
                                     <PerformanceWidgetWrapper />
                                   </WidgetContainer>
@@ -1957,6 +1923,7 @@ function AppContent() {
                                   key={`${widgetType}-${source}`} // Add source to key to force remount
                                   title={widgetTitles[widgetType]}
                                   onRemove={() => handleRemoveWidget(node.id)}
+                                  isMobile={isMobile}
                                 >
                                   <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
                                 </WidgetContainer>

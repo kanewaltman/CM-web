@@ -16,9 +16,16 @@ interface WidgetContainerProps {
   title: string;
   headerControls?: React.ReactNode;
   onRemove?: () => void;
+  isMobile?: boolean;
 }
 
-export const WidgetContainer = memo(function WidgetContainer({ children, title, headerControls, onRemove }: WidgetContainerProps) {
+export const WidgetContainer = memo(function WidgetContainer({ 
+  children, 
+  title, 
+  headerControls, 
+  onRemove,
+  isMobile = false 
+}: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleExpand = useCallback(async () => {
@@ -87,7 +94,10 @@ export const WidgetContainer = memo(function WidgetContainer({ children, title, 
     <div ref={containerRef} className="grid-stack-item-content">
       <div className="widget-inner-container">
         {/* Header */}
-        <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
+        <div className={cn(
+          "widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0",
+          !isMobile && "cursor-move" // Only show move cursor on desktop
+        )}>
           <div className="flex items-center space-x-2">
             <h2 key={title} className="text-sm font-semibold">{title}</h2>
             <ChevronDown className="h-4 w-4 opacity-50" />
