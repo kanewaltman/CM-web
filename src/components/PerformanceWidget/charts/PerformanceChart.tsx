@@ -193,7 +193,12 @@ function generateSampleData(currentBalances: Record<string, number>, pointCount:
   });
 }
 
-export function PerformanceChart() {
+export interface PerformanceChartProps {
+  viewMode?: 'split' | 'cumulative';
+  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+}
+
+export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeChange }: PerformanceChartProps) {
   const id = useId();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -203,9 +208,14 @@ export function PerformanceChart() {
   const [assets, setAssets] = useState<AssetTicker[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'split' | 'cumulative'>('split');
+  const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(propViewMode);
   const [hoverValues, setHoverValues] = useState<{ index: number; values: { [key: string]: number }; activeLine?: string } | null>(null);
   const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
+
+  // Sync with prop changes
+  useEffect(() => {
+    setViewMode(propViewMode);
+  }, [propViewMode]);
 
   const toggleAssetVisibility = (asset: string) => {
     setHiddenAssets(prev => {
@@ -493,9 +503,13 @@ export function PerformanceChart() {
             </div>
           </div>
           <RadioGroup
-            defaultValue="split"
+            defaultValue={viewMode}
             value={viewMode}
-            onValueChange={(value) => setViewMode(value as 'split' | 'cumulative')}
+            onValueChange={(value) => {
+              const newMode = value as 'split' | 'cumulative';
+              setViewMode(newMode);
+              onViewModeChange?.(newMode);
+            }}
             className="flex items-center space-x-2"
           >
             <div className="flex items-center space-x-1">

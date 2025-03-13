@@ -37,7 +37,9 @@ const chartLabels: Record<ChartVariant, string> = {
 interface PerformanceWidgetProps {
   className?: string;
   defaultVariant?: ChartVariant;
+  defaultViewMode?: 'split' | 'cumulative';
   onVariantChange?: (variant: ChartVariant) => void;
+  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
   onTitleChange?: (title: string) => void;
   onRemove?: () => void;
   headerControls?: boolean;
@@ -47,13 +49,16 @@ interface PerformanceWidgetProps {
 export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({ 
   className,
   defaultVariant = 'revenue',
+  defaultViewMode = 'split',
   onVariantChange,
+  onViewModeChange,
   onTitleChange,
   onRemove,
   headerControls,
   widgetId
 }) => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
+  const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(defaultViewMode);
   const ChartComponent = chartComponents[selectedVariant];
 
   // Update local state when defaultVariant changes
@@ -65,11 +70,23 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     }
   }, [defaultVariant, onTitleChange]);
 
+  // Update local state when defaultViewMode changes
+  useEffect(() => {
+    if (defaultViewMode !== viewMode) {
+      setViewMode(defaultViewMode);
+    }
+  }, [defaultViewMode]);
+
   const handleVariantChange = (value: ChartVariant) => {
     setSelectedVariant(value);
     onVariantChange?.(value);
     // Update title when variant changes via user interaction
     onTitleChange?.(chartLabels[value]);
+  };
+
+  const handleViewModeChange = (mode: 'split' | 'cumulative') => {
+    setViewMode(mode);
+    onViewModeChange?.(mode);
   };
 
   const controls = (
@@ -102,7 +119,14 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
-      <ChartComponent />
+      {selectedVariant === 'revenue' ? (
+        <PerformanceChart 
+          viewMode={viewMode} 
+          onViewModeChange={handleViewModeChange} 
+        />
+      ) : (
+        <ChartComponent />
+      )}
     </div>
   );
 }; 

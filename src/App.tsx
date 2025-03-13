@@ -113,7 +113,19 @@ const widgetTitles: Record<string, string> = Object.fromEntries(
 
 // Default layout is now generated from registry
 const generateDefaultLayout = () => [
-  { id: 'performance', x: 0, y: 0, w: 12, h: 5, minW: 2, minH: 2, viewState: { chartVariant: 'subscribers' } },
+  { 
+    id: 'performance', 
+    x: 0, 
+    y: 0, 
+    w: 12, 
+    h: 5, 
+    minW: 2, 
+    minH: 2, 
+    viewState: { 
+      chartVariant: 'subscribers',
+      viewMode: 'split'
+    } 
+  },
   { id: 'balances', x: 0, y: 5, w: 4, h: 4, minW: 2, minH: 2 },
   { id: 'performance-1741622599204', x: 0, y: 9, w: 6, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'subscriptions' } },
   { id: 'performance-1741622640337', x: 4, y: 5, w: 4, h: 4, minW: 2, minH: 2, viewState: { chartVariant: 'upgrades' } },
@@ -178,10 +190,11 @@ interface LayoutWidget {
   y: number;
   w: number;
   h: number;
-  minW: number;
-  minH: number;
+  minW?: number;
+  minH?: number;
   viewState?: {
-    chartVariant: ChartVariant;
+    chartVariant?: ChartVariant;
+    viewMode?: 'split' | 'cumulative';
   };
 }
 
@@ -189,6 +202,7 @@ interface SerializedLayoutWidget extends LayoutWidget {
   baseId: string;
   viewState?: {
     chartVariant: ChartVariant;
+    viewMode?: 'split' | 'cumulative';
   };
 }
 
@@ -217,10 +231,12 @@ class WidgetState {
   private listeners: Set<() => void> = new Set();
   private _variant: ChartVariant;
   private _title: string;
+  private _viewMode: 'split' | 'cumulative';
 
-  constructor(initialVariant: ChartVariant = 'revenue', initialTitle: string = 'Performance') {
+  constructor(initialVariant: ChartVariant = 'revenue', initialTitle: string = 'Performance', initialViewMode: 'split' | 'cumulative' = 'split') {
     this._variant = initialVariant;
     this._title = initialTitle;
+    this._viewMode = initialViewMode;
   }
 
   get variant(): ChartVariant {
@@ -229,6 +245,10 @@ class WidgetState {
 
   get title(): string {
     return this._title;
+  }
+
+  get viewMode(): 'split' | 'cumulative' {
+    return this._viewMode;
   }
 
   setVariant(newVariant: ChartVariant) {
@@ -240,6 +260,12 @@ class WidgetState {
   setTitle(newTitle: string) {
     if (!newTitle) return;
     this._title = newTitle;
+    this.notifyListeners();
+  }
+
+  setViewMode(newViewMode: 'split' | 'cumulative') {
+    if (!newViewMode) return;
+    this._viewMode = newViewMode;
     this.notifyListeners();
   }
 
@@ -423,20 +449,27 @@ function AppContent() {
         // Try to load initial variant from layout data or existing state
         let initialVariant: ChartVariant = 'revenue';
         let initialTitle = getPerformanceTitle('revenue');
+        let initialViewMode: 'split' | 'cumulative' = 'split';
         const existingState = widgetStateRegistry.get(widgetId);
         
         if (existingState) {
           initialVariant = existingState.variant;
           initialTitle = existingState.title;
+          initialViewMode = existingState.viewMode;
         } else {
           const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
           if (savedLayout) {
             try {
               const layout = JSON.parse(savedLayout);
               const widgetData = layout.find((item: any) => item.id === widgetId);
-              if (widgetData?.viewState?.chartVariant) {
-                initialVariant = widgetData.viewState.chartVariant;
-                initialTitle = getPerformanceTitle(widgetData.viewState.chartVariant);
+              if (widgetData?.viewState) {
+                if (widgetData.viewState.chartVariant) {
+                  initialVariant = widgetData.viewState.chartVariant;
+                  initialTitle = getPerformanceTitle(widgetData.viewState.chartVariant);
+                }
+                if (widgetData.viewState.viewMode) {
+                  initialViewMode = widgetData.viewState.viewMode;
+                }
               }
             } catch (error) {
               console.error('Failed to load widget view state:', error);
@@ -447,23 +480,26 @@ function AppContent() {
         // Create or get shared state
         let widgetState = widgetStateRegistry.get(widgetId);
         if (!widgetState) {
-          widgetState = new WidgetState(initialVariant, initialTitle);
+          widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode);
           widgetStateRegistry.set(widgetId, widgetState);
         }
 
         const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
           const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
           const [title, setTitle] = useState(widgetState.title);
+          const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(widgetState.viewMode);
 
           useEffect(() => {
             // Initial state sync
             setVariant(widgetState.variant);
             setTitle(widgetState.title);
+            setViewMode(widgetState.viewMode);
 
             // Subscribe to state changes
             const unsubscribe = widgetState.subscribe(() => {
               setVariant(widgetState.variant);
               setTitle(widgetState.title);
+              setViewMode(widgetState.viewMode);
             });
 
             return unsubscribe;
@@ -541,13 +577,40 @@ function AppContent() {
             }
           }, []);
 
+          const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative') => {
+            widgetState.setViewMode(newViewMode);
+
+            // Save to layout data
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              try {
+                const layout = JSON.parse(savedLayout);
+                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+                if (widgetIndex !== -1) {
+                  layout[widgetIndex] = {
+                    ...layout[widgetIndex],
+                    viewState: {
+                      ...layout[widgetIndex].viewState,
+                      chartVariant: widgetState.variant,
+                      viewMode: newViewMode
+                    }
+                  };
+                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                }
+              } catch (error) {
+                console.error('Failed to save widget view state:', error);
+              }
+            }
+          }, []);
+
           return (
             <WidgetComponent
               widgetId={widgetId}
               headerControls={isHeader}
               defaultVariant={variant}
+              defaultViewMode={viewMode}
               onVariantChange={handleVariantChange}
-              onTitleChange={setTitle}
+              onViewModeChange={handleViewModeChange}
             />
           );
         };
@@ -785,7 +848,10 @@ function AppContent() {
 
         // Get widget state if it exists
         const widgetState = widgetStateRegistry.get(node.id);
-        const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+        const viewState = widgetState ? { 
+          chartVariant: widgetState.variant,
+          viewMode: widgetState.viewMode 
+        } : undefined;
 
         return {
           id: node.id,
@@ -875,6 +941,9 @@ function AppContent() {
               const widgetState = widgetStateRegistry.get(node.id);
               if (widgetState) {
                 widgetState.setVariant(node.viewState.chartVariant as ChartVariant);
+                if (node.viewState.viewMode) {
+                  widgetState.setViewMode(node.viewState.viewMode);
+                }
               }
             }
 
@@ -927,6 +996,9 @@ function AppContent() {
                   const widgetState = widgetStateRegistry.get(node.id);
                   if (widgetState) {
                     widgetState.setVariant(node.viewState.chartVariant as ChartVariant);
+                    if (node.viewState.viewMode) {
+                      widgetState.setViewMode(node.viewState.viewMode);
+                    }
                   }
                 }
               }
@@ -973,7 +1045,10 @@ function AppContent() {
             // Get widget state if it's a performance widget
             const baseId = node.id.split('-')[0];
             const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
-            const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+            const viewState = widgetState ? { 
+              chartVariant: widgetState.variant,
+              viewMode: widgetState.viewMode 
+            } : undefined;
 
             return {
               id: node.id,
@@ -1133,7 +1208,10 @@ function AppContent() {
               // Get widget state if it's a performance widget
               const baseId = node.id.split('-')[0];
               const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
-              const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+              const viewState = widgetState ? { 
+                chartVariant: widgetState.variant,
+                viewMode: widgetState.viewMode 
+              } : undefined;
 
               return {
                 id: node.id,
@@ -1270,6 +1348,27 @@ function AppContent() {
           try {
             const parsedLayout = JSON.parse(savedLayout);
             if (isValidLayout(parsedLayout)) {
+              // Before applying the saved layout, ensure all widget states are initialized
+              parsedLayout.forEach((node: LayoutWidget) => {
+                const baseId = node.id.split('-')[0];
+                if (baseId === 'performance') {
+                  // Initialize widget state with both variant and viewMode
+                  const initialVariant = node.viewState?.chartVariant || 'revenue';
+                  const initialTitle = getPerformanceTitle(initialVariant);
+                  const initialViewMode = node.viewState?.viewMode || 'split';
+                  
+                  // Create or update widget state
+                  let widgetState = widgetStateRegistry.get(node.id);
+                  if (!widgetState) {
+                    widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode);
+                    widgetStateRegistry.set(node.id, widgetState);
+                  } else {
+                    widgetState.setVariant(initialVariant);
+                    widgetState.setViewMode(initialViewMode);
+                  }
+                }
+              });
+              
               // Use the saved layout directly, preserving all widgets
               layoutToApply = parsedLayout;
               console.log('✅ Using saved dashboard layout:', layoutToApply);
@@ -1428,7 +1527,9 @@ function AppContent() {
       
       // Check if viewState is valid for performance widgets
       const hasValidViewState = baseId === 'performance' 
-        ? widget.viewState && typeof widget.viewState.chartVariant === 'string'
+        ? widget.viewState && 
+          typeof widget.viewState.chartVariant === 'string' &&
+          (!widget.viewState.viewMode || ['split', 'cumulative'].includes(widget.viewState.viewMode))
         : true;
 
       const isValid = (
@@ -1680,7 +1781,8 @@ function AppContent() {
     if (widgetType === 'performance') {
       const initialVariant: ChartVariant = 'revenue';
       const initialTitle = getPerformanceTitle(initialVariant);
-      const widgetState = new WidgetState(initialVariant, initialTitle);
+      const initialViewMode: 'split' | 'cumulative' = 'split';
+      const widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode);
       widgetStateRegistry.set(widgetId, widgetState);
     }
 
@@ -1713,7 +1815,10 @@ function AppContent() {
           // Get widget state if it's a performance widget
           const baseId = node.id.split('-')[0];
           const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
-          const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+          const viewState = widgetState ? { 
+            chartVariant: widgetState.variant,
+            viewMode: widgetState.viewMode
+          } : undefined;
 
           return {
             id: node.id,
@@ -1800,9 +1905,13 @@ function AppContent() {
                                 widgetId={node.id}
                                 headerControls={isHeader}
                                 defaultVariant={widgetState.variant}
+                                defaultViewMode={widgetState.viewMode}
                                 onVariantChange={(variant) => {
                                   widgetState.setVariant(variant);
                                   widgetState.setTitle(getPerformanceTitle(variant));
+                                }}
+                                onViewModeChange={(mode) => {
+                                  widgetState.setViewMode(mode);
                                 }}
                               />
                             );
