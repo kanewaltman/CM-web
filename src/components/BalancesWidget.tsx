@@ -14,6 +14,7 @@ import { useTheme } from 'next-themes';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
+import { Treemap, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
@@ -90,6 +91,7 @@ interface BalanceData {
 interface BalancesWidgetProps {
   className?: string;
   compact?: boolean;
+  gridSize?: number;
 }
 
 const HeaderDivider: React.FC = () => {
@@ -127,7 +129,7 @@ const SAMPLE_PRICES = {
   "USDTEUR": { price: 0.91, change24h: -0.1 }
 };
 
-export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compact = false }) => {
+export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compact = false, gridSize = 0 }) => {
   const { theme, resolvedTheme } = useTheme();
   const { dataSource } = useDataSource();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
@@ -137,33 +139,51 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
+  const [showTreemap, setShowTreemap] = useState(false);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Check for container width to determine compact mode
+  // Check for container dimensions to determine layout and treemap visibility
   useEffect(() => {
-    const FULL_TABLE_MIN_WIDTH = 400; // Minimum width in pixels for full table view (3 grid cells in GridStack)
-    const checkWidth = () => {
+    const FULL_TABLE_MIN_WIDTH = 400; // Minimum width in pixels for full table view
+    const MIN_HEIGHT_FOR_TREEMAP = 300; // Minimum height needed for treemap
+    const MIN_WIDTH_FOR_TREEMAP = 600; // Minimum width needed for treemap
+    
+    const checkDimensions = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.clientWidth;
+        const containerHeight = containerRef.current.clientHeight;
+        
+        setContainerSize({ width: containerWidth, height: containerHeight });
         setIsCompact(containerWidth < FULL_TABLE_MIN_WIDTH);
+        
+        // Show treemap only if we have enough space for both table and treemap
+        const shouldShowTreemap = containerWidth >= MIN_WIDTH_FOR_TREEMAP && 
+                                 containerHeight >= MIN_HEIGHT_FOR_TREEMAP;
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Container dimensions: ${containerWidth}x${containerHeight} - Show treemap: ${shouldShowTreemap}`);
+        }
+        
+        setShowTreemap(shouldShowTreemap);
       }
     };
 
     // Initial check
-    checkWidth();
+    checkDimensions();
 
     // Set up resize observer
-    const resizeObserver = new ResizeObserver(checkWidth);
+    const resizeObserver = new ResizeObserver(checkDimensions);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
 
     // Also add window resize event listener as backup
-    window.addEventListener('resize', checkWidth);
+    window.addEventListener('resize', checkDimensions);
 
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener('resize', checkWidth);
+      window.removeEventListener('resize', checkDimensions);
     };
   }, []);
 
@@ -411,205 +431,324 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       change24h: (prices[`${balance.asset}EUR`]?.change24h || 0).toFixed(2)
     }));
   }, [balances, prices]);
+  
+  // Format data for treemap
+  const treemapData = useMemo(() => {
+    return balancesWithPrices.map(balance => ({
+      name: balance.asset,
+      size: parseFloat(balance.valueInEuro),
+      color: ASSETS[balance.asset]?.theme?.[currentTheme] || '#888888',
+      formattedValue: `€${parseFloat(balance.valueInEuro).toLocaleString(undefined, { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      })}`
+    }));
+  }, [balancesWithPrices, currentTheme]);
+
+  // Custom Treemap content component with white text
+  const CustomTreemapContent = (props: any) => {
+    const { x, y, width, height, name, formattedValue, color } = props;
+    
+    // Only show text if rectangle is big enough
+    if (width < 60 || height < 40) return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: color,
+            stroke: 'var(--border)',
+            strokeWidth: 2,
+          }}
+        />
+      </g>
+    );
+    
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: color,
+            stroke: 'var(--border)',
+            strokeWidth: 2,
+          }}
+        />
+        <text
+          x={x + width / 2}
+          y={y + height / 2 - 12}
+          textAnchor="middle"
+          fill="#FFFFFF"
+          fontSize={14}
+          fontWeight="bold"
+          style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.7)' }}
+        >
+          {name}
+        </text>
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + 12}
+          textAnchor="middle"
+          fill="#FFFFFF"
+          fontSize={13}
+          style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.7)' }}
+        >
+          {formattedValue}
+        </text>
+      </g>
+    );
+  };
 
   return (
     <div 
       className={cn("h-full flex flex-col p-2", className)}
       ref={containerRef}
     >
-      <div className="flex-1 min-h-0 relative">
-        <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
-                  <div className="relative z-10 px-0 py-1">Asset</div>
-                </div>
-              </TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Balance</TableHead>
-              {!isCompact && (
-                <>
-                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
-                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
-                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Available</TableHead>
-                </>
-              )}
-            </TableRow>
-          </TableHeader>
-          {isInitialLoading ? (
-            <TableBody>
-              {[...Array(5)].map((_, i) => (
-                <SkeletonRow key={i} />
-              ))}
-            </TableBody>
-          ) : error ? (
-            <div className="p-3">
-              <div className="text-red-500">{error}</div>
-            </div>
-          ) : balances.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-sm text-muted-foreground">No balances found</div>
-            </div>
-          ) : (
-            <TableBody>
-              {balancesWithPrices.map((balance) => {
-                const assetConfig = ASSETS[balance.asset];
-                const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
-                return (
-                  <TableRow key={balance.asset} className="group" isHeader={false}>
-                    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
-                      <div className="relative">
-                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
-                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="relative z-10 flex items-center gap-2">
-                          <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
-                          >
-                            <img
-                              src={assetConfig.icon}
-                              alt={balance.asset}
-                              className="w-full h-full object-cover"
-                            />
+      {/* Debug indicator - only in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="text-xs text-muted-foreground mb-1">
+          Container: {containerSize.width}x{containerSize.height} | 
+          Show treemap: {showTreemap ? 'Yes' : 'No'} | 
+          Compact: {isCompact ? 'Yes' : 'No'}
+        </div>
+      )}
+      
+      <div className={cn("flex-1 min-h-0 relative", showTreemap ? "flex gap-4" : "")}>
+        <div className={cn("relative", showTreemap ? "w-1/2" : "w-full")}>
+          <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
+                    <div className="relative z-10 px-0 py-1">Asset</div>
+                  </div>
+                </TableHead>
+                <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Balance</TableHead>
+                {!isCompact && (
+                  <>
+                    <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
+                    <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
+                    <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Available</TableHead>
+                  </>
+                )}
+              </TableRow>
+            </TableHeader>
+            {isInitialLoading ? (
+              <TableBody>
+                {[...Array(5)].map((_, i) => (
+                  <SkeletonRow key={i} />
+                ))}
+              </TableBody>
+            ) : error ? (
+              <div className="p-3">
+                <div className="text-red-500">{error}</div>
+              </div>
+            ) : balances.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-sm text-muted-foreground">No balances found</div>
+              </div>
+            ) : (
+              <TableBody>
+                {balancesWithPrices.map((balance) => {
+                  const assetConfig = ASSETS[balance.asset];
+                  const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                  return (
+                    <TableRow key={balance.asset} className="group" isHeader={false}>
+                      <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
+                          <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          <div className="relative z-10 flex items-center gap-2">
+                            <div 
+                              className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
+                            >
+                              <img
+                                src={assetConfig.icon}
+                                alt={balance.asset}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <span
+                              className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
+                              style={{ 
+                                color: assetColor,
+                                backgroundColor: `${assetColor}14`
+                              }}
+                            >
+                              {assetConfig.name}
+                            </span>
                           </div>
-                          <span
-                            className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
-                            style={{ 
-                              color: assetColor,
-                              backgroundColor: `${assetColor}14`
-                            }}
-                          >
-                            {assetConfig.name}
-                          </span>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
-                      {isCompact ? (
-                        <div className="flex flex-col items-end">
-                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                            €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                          <div className="text-muted-foreground">
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {isCompact ? (
+                          <div className="flex flex-col items-end">
+                            <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                              €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <div className="text-muted-foreground">
+                              <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                                {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
+                              </span>
+                              <span className="font-jakarta font-bold text-sm leading-[150%] ml-1">
+                                {balance.asset}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
                             <span className="font-jakarta font-semibold text-sm leading-[150%]">
                               {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
                             </span>
-                            <span className="font-jakarta font-bold text-sm leading-[150%] ml-1">
+                            <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground/80 ml-1">
                               {balance.asset}
                             </span>
                           </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                            {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
-                          </span>
-                          <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground/80 ml-1">
-                            {balance.asset}
-                          </span>
-                        </div>
+                        )}
+                      </TableCell>
+                      {!isCompact && (
+                        <>
+                          <TableCell className="text-right whitespace-nowrap">
+                            <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                              €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </TableCell>
+                          <TableCell className={cn(
+                            "text-right whitespace-nowrap font-mono",
+                            parseFloat(balance.change24h) > 0 ? "text-green-500" : parseFloat(balance.change24h) < 0 ? "text-red-500" : "text-muted-foreground/80"
+                          )}>
+                            {balance.change24h}%
+                          </TableCell>
+                          <TableCell className="text-right whitespace-nowrap">
+                            <TooltipProvider delayDuration={0}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button 
+                                    type="button"
+                                    className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
+                                    style={{
+                                      cursor: 'pointer',
+                                      WebkitTouchCallout: 'none',
+                                      WebkitUserSelect: 'text',
+                                      userSelect: 'text'
+                                    }}
+                                    onMouseDown={(e) => {
+                                      if (e.detail > 1) {
+                                        e.preventDefault();
+                                      }
+                                    }}
+                                  >
+                                    {balance.availablePercentage}%
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="py-2 px-3 w-56 bg-background text-foreground border border-border">
+                                  <div className="space-y-2">
+                                    <div className="text-[13px] font-medium text-left">Balances</div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <svg
+                                        width="8"
+                                        height="8"
+                                        fill="currentColor"
+                                        viewBox="0 0 8 8"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="shrink-0 text-green-500"
+                                        aria-hidden="true"
+                                      >
+                                        <circle cx="4" cy="4" r="4"></circle>
+                                      </svg>
+                                      <span className="flex grow gap-2">
+                                        Available <span className="ml-auto">100%</span>
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <svg
+                                        width="8"
+                                        height="8"
+                                        fill="currentColor"
+                                        viewBox="0 0 8 8"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="shrink-0 text-muted-foreground/40"
+                                        aria-hidden="true"
+                                      >
+                                        <circle cx="4" cy="4" r="4"></circle>
+                                      </svg>
+                                      <span className="flex grow gap-2 text-muted-foreground/80">
+                                        Staked <span className="ml-auto">0%</span>
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <svg
+                                        width="8"
+                                        height="8"
+                                        fill="currentColor"
+                                        viewBox="0 0 8 8"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="shrink-0 text-muted-foreground/40"
+                                        aria-hidden="true"
+                                      >
+                                        <circle cx="4" cy="4" r="4"></circle>
+                                      </svg>
+                                      <span className="flex grow gap-2 text-muted-foreground/80">
+                                        In Exchange <span className="ml-auto">0%</span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                        </>
                       )}
-                    </TableCell>
-                    {!isCompact && (
-                      <>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                            €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </TableCell>
-                        <TableCell className={cn(
-                          "text-right whitespace-nowrap font-mono",
-                          parseFloat(balance.change24h) > 0 ? "text-green-500" : parseFloat(balance.change24h) < 0 ? "text-red-500" : "text-muted-foreground/80"
-                        )}>
-                          {balance.change24h}%
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <TooltipProvider delayDuration={0}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button 
-                                  type="button"
-                                  className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
-                                  style={{
-                                    cursor: 'pointer',
-                                    WebkitTouchCallout: 'none',
-                                    WebkitUserSelect: 'text',
-                                    userSelect: 'text'
-                                  }}
-                                  onMouseDown={(e) => {
-                                    if (e.detail > 1) {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                >
-                                  {balance.availablePercentage}%
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent className="py-2 px-3 w-56 bg-background text-foreground border border-border">
-                                <div className="space-y-2">
-                                  <div className="text-[13px] font-medium text-left">Balances</div>
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <svg
-                                      width="8"
-                                      height="8"
-                                      fill="currentColor"
-                                      viewBox="0 0 8 8"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="shrink-0 text-green-500"
-                                      aria-hidden="true"
-                                    >
-                                      <circle cx="4" cy="4" r="4"></circle>
-                                    </svg>
-                                    <span className="flex grow gap-2">
-                                      Available <span className="ml-auto">100%</span>
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <svg
-                                      width="8"
-                                      height="8"
-                                      fill="currentColor"
-                                      viewBox="0 0 8 8"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="shrink-0 text-muted-foreground/40"
-                                      aria-hidden="true"
-                                    >
-                                      <circle cx="4" cy="4" r="4"></circle>
-                                    </svg>
-                                    <span className="flex grow gap-2 text-muted-foreground/80">
-                                      Staked <span className="ml-auto">0%</span>
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <svg
-                                      width="8"
-                                      height="8"
-                                      fill="currentColor"
-                                      viewBox="0 0 8 8"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="shrink-0 text-muted-foreground/40"
-                                      aria-hidden="true"
-                                    >
-                                      <circle cx="4" cy="4" r="4"></circle>
-                                    </svg>
-                                    <span className="flex grow gap-2 text-muted-foreground/80">
-                                      In Exchange <span className="ml-auto">0%</span>
-                                    </span>
-                                  </div>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-                      </>
-                    )}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          )}
-        </Table>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            )}
+          </Table>
+        </div>
+        
+        {showTreemap && !isInitialLoading && balances.length > 0 && (
+          <div className="w-1/2 border border-border rounded-md overflow-hidden">
+            <div className="w-full h-full p-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <Treemap
+                  data={treemapData}
+                  dataKey="size"
+                  stroke="var(--border)"
+                  fill="#8884d8"
+                  content={<CustomTreemapContent />}
+                  animationDuration={500}
+                  animationEasing="ease-out"
+                >
+                  <RechartsTooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-background p-2 border border-border rounded-md shadow-md">
+                            <p className="font-bold">{data.name}</p>
+                            <p>{data.formattedValue}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {((data.size / treemapData.reduce((sum, item) => sum + item.size, 0)) * 100).toFixed(1)}% of portfolio
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                </Treemap>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

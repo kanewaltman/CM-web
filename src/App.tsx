@@ -100,6 +100,7 @@ interface WidgetComponentProps {
   onRemove?: () => void;
   defaultVariant?: ChartVariant;
   onVariantChange?: (variant: ChartVariant) => void;
+  gridSize?: number;
 }
 
 // Update the widgetComponents type to include the widgetId prop
@@ -328,6 +329,9 @@ const getPerformanceTitle = (variant: ChartVariant): string => {
   }
 };
 
+// Add a map to track widget grid sizes
+const widgetGridSizes = new Map<string, number>();
+
 function AppContent() {
   const { dataSource, setDataSource } = useDataSource();
   console.log('App component is rendering');
@@ -501,133 +505,22 @@ function AppContent() {
           widgetStateRegistry.set(widgetId, widgetState);
         }
 
-        const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
-          const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
-          const [title, setTitle] = useState(widgetState.title);
-          const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(widgetState.viewMode);
-
-          useEffect(() => {
-            // Initial state sync
-            setVariant(widgetState.variant);
-            setTitle(widgetState.title);
-            setViewMode(widgetState.viewMode);
-
-            // Subscribe to state changes
-            const unsubscribe = widgetState.subscribe(() => {
-              setVariant(widgetState.variant);
-              setTitle(widgetState.title);
-              setViewMode(widgetState.viewMode);
-            });
-
-            return unsubscribe;
-          }, []);
-
-          const handleVariantChange = useCallback((newVariant: ChartVariant) => {
-            if (!newVariant) return;
-            
-            // Get new title first
-            const newTitle = getPerformanceTitle(newVariant);
-
-            // Force immediate re-render of the container by updating state first
-            setVariant(newVariant);
-            setTitle(newTitle);
-            
-            // Update shared state
-            widgetState.setVariant(newVariant);
-            widgetState.setTitle(newTitle);
-
-            // Force a re-render of the widget container
-            const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
-            if (widgetContainer) {
-              const root = (widgetContainer as any)._reactRoot;
-              if (root) {
-                root.render(
-                  <React.StrictMode>
-                    <DataSourceProvider>
-                      <WidgetContainer
-                        key={newTitle} // Force re-render with new title
-                        title={newTitle}
-                        onRemove={() => {
-                          if (gridRef.current) {
-                            const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                            if (widget) {
-                              const reactRoot = (widget as any)._reactRoot;
-                              if (reactRoot) {
-                                reactRoot.unmount();
-                              }
-                              // Clean up widget state
-                              widgetStateRegistry.delete(widgetId);
-                              gridRef.current.removeWidget(widget, false);
-                              widget.remove();
-                            }
-                          }
-                        }}
-                        headerControls={<PerformanceWidgetWrapper isHeader />}
-                      >
-                        <PerformanceWidgetWrapper />
-                      </WidgetContainer>
-                    </DataSourceProvider>
-                  </React.StrictMode>
-                );
-              }
-            }
-
-            // Save to layout data
-            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-            if (savedLayout) {
-              try {
-                const layout = JSON.parse(savedLayout);
-                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-                if (widgetIndex !== -1) {
-                  layout[widgetIndex] = {
-                    ...layout[widgetIndex],
-                    viewState: {
-                      ...layout[widgetIndex].viewState,
-                      chartVariant: newVariant
-                    }
-                  };
-                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-                }
-              } catch (error) {
-                console.error('Failed to save widget view state:', error);
-              }
-            }
-          }, []);
-
-          const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative') => {
-            widgetState.setViewMode(newViewMode);
-
-            // Save to layout data
-            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-            if (savedLayout) {
-              try {
-                const layout = JSON.parse(savedLayout);
-                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-                if (widgetIndex !== -1) {
-                  layout[widgetIndex] = {
-                    ...layout[widgetIndex],
-                    viewState: {
-                      ...layout[widgetIndex].viewState,
-                      chartVariant: widgetState.variant,
-                      viewMode: newViewMode
-                    }
-                  };
-                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-                }
-              } catch (error) {
-                console.error('Failed to save widget view state:', error);
-              }
-            }
-          }, []);
-
+        const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => {
+          const WidgetComponent = widgetComponents[baseWidgetId];
           return (
             <WidgetComponent
+              key={`${widgetId}-${isHeader}`}
               widgetId={widgetId}
               headerControls={isHeader}
-              defaultVariant={variant}
-              defaultViewMode={viewMode}
-              onVariantChange={handleVariantChange}
-              onViewModeChange={handleViewModeChange}
+              defaultVariant={widgetState.variant}
+              defaultViewMode={widgetState.viewMode}
+              onVariantChange={(variant) => {
+                widgetState.setVariant(variant);
+                widgetState.setTitle(getPerformanceTitle(variant));
+              }}
+              onViewModeChange={(mode) => {
+                widgetState.setViewMode(mode);
+              }}
             />
           );
         };
@@ -636,7 +529,7 @@ function AppContent() {
           <React.StrictMode>
             <DataSourceProvider>
               <WidgetContainer
-                key={widgetState.title}
+                key={`${widgetState.title}-${dataSource}`}
                 title={widgetState.title}
                 onRemove={() => {
                   if (gridRef.current) {
@@ -1466,6 +1359,74 @@ function AppContent() {
       gridRef.current = g;
       setGrid(g);
 
+      // Add event listener for grid changes to update the gridSize prop
+      g.on('change', (event, items) => {
+        // Update the grid size for any balances widgets
+        items.forEach(item => {
+          if (item.el) {
+            const widgetId = item.id?.toString() || '';
+            const widgetType = widgetId.split('-')[0];
+            
+            // Only update BalancesWidget grid size
+            if (widgetType === 'balances') {
+              const w = item.w || 0;
+              const h = item.h || 0;
+              const widgetGridSize = w * h;
+              
+              console.log(`Widget ${widgetId} resized: ${w}x${h} = ${widgetGridSize}`);
+              
+              // Get the widget element directly from the GridStack item
+              const widgetElement = item.el;
+              if (!widgetElement) return;
+              
+              // Find the component container
+              const componentContainer = widgetElement.querySelector('.widget-content');
+              if (!componentContainer) return;
+              
+              // Get the React component instance
+              const reactRoot = (componentContainer as any)._reactRootContainer;
+              if (!reactRoot) return;
+              
+              try {
+                // Re-render the widget with the updated gridSize
+                reactRoot.render(
+                  <React.StrictMode>
+                    <DataSourceProvider>
+                      <WidgetContainer 
+                        title={widgetTitles['balances']}
+                        onRemove={() => handleRemoveWidget(widgetId)}
+                      >
+                        <BalancesWidget 
+                          widgetId={widgetId} 
+                          gridSize={widgetGridSize} 
+                        />
+                      </WidgetContainer>
+                    </DataSourceProvider>
+                  </React.StrictMode>
+                );
+              } catch (error) {
+                console.error('Error updating balances widget after resize:', error);
+              }
+            }
+          }
+        });
+      });
+
+      // Add a change listener to update grid sizes
+      if (grid) {
+        grid.on('change', (event, items) => {
+          items.forEach(item => {
+            const id = item.id?.toString();
+            if (id) {
+              const w = item.w || 0;
+              const h = item.h || 0;
+              widgetGridSizes.set(id, w * h);
+              console.log(`Updated grid size for ${id}: ${w}x${h} = ${w * h}`);
+            }
+          });
+        });
+      }
+
       return () => {
         console.log('🚮 Cleaning up grid instance');
         if (g) {
@@ -1474,6 +1435,7 @@ function AppContent() {
             gridElementRef.current.removeEventListener('mousedown', handleMouseDown);
           }
         }
+        g.off('change');
       };
     } catch (err) {
       console.error('Failed to initialize grid:', err);
@@ -1900,25 +1862,21 @@ function AppContent() {
                   if (widgetContainer) {
                     const root = (widgetContainer as any)._reactRoot;
                     if (root) {
-                      const content = widgetContainer.querySelector('.grid-stack-item-content');
-                      if (content) {
-                        const baseId = node.id.split('-')[0];
-                        const widgetType = widgetTypes[baseId];
-                        const WidgetComponent = widgetComponents[widgetType];
-                        
-                        // Unmount first to clear any cached state
-                        root.unmount();
-                        
-                        // Create a new root to force a fresh mount
-                        const newRoot = createRoot(content);
-                        (widgetContainer as any)._reactRoot = newRoot;
-                        
-                        if (baseId === 'performance') {
-                          const widgetState = widgetStateRegistry.get(node.id);
-                          if (widgetState) {
-                            const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
+                      // Unmount first to clear any cached state
+                      root.unmount();
+                      
+                      // Create a new root to force a fresh mount
+                      const newRoot = createRoot(widgetContainer);
+                      (widgetContainer as any)._reactRoot = newRoot;
+                      
+                      if (node.id.split('-')[0] === 'performance') {
+                        const widgetState = widgetStateRegistry.get(node.id);
+                        if (widgetState) {
+                          const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => {
+                            const WidgetComponent = widgetComponents[node.id.split('-')[0]];
+                            return (
                               <WidgetComponent
-                                key={`${node.id}-${source}`} // Add source to key to force remount
+                                key={`${node.id}-${source}`}
                                 widgetId={node.id}
                                 headerControls={isHeader}
                                 defaultVariant={widgetState.variant}
@@ -1932,37 +1890,51 @@ function AppContent() {
                                 }}
                               />
                             );
+                          };
 
-                            newRoot.render(
-                              <React.StrictMode>
-                                <DataSourceProvider>
-                                  <WidgetContainer
-                                    key={`${widgetState.title}-${source}`} // Add source to key to force remount
-                                    title={widgetState.title}
-                                    onRemove={() => handleRemoveWidget(node.id)}
-                                    headerControls={<PerformanceWidgetWrapper isHeader />}
-                                  >
-                                    <PerformanceWidgetWrapper />
-                                  </WidgetContainer>
-                                </DataSourceProvider>
-                              </React.StrictMode>
-                            );
-                          }
-                        } else {
                           newRoot.render(
                             <React.StrictMode>
                               <DataSourceProvider>
                                 <WidgetContainer
-                                  key={`${widgetType}-${source}`} // Add source to key to force remount
-                                  title={widgetTitles[widgetType]}
+                                  key={`${widgetState.title}-${source}`}
+                                  title={widgetState.title}
                                   onRemove={() => handleRemoveWidget(node.id)}
+                                  headerControls={<PerformanceWidgetWrapper isHeader />}
                                 >
-                                  <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
+                                  <PerformanceWidgetWrapper />
                                 </WidgetContainer>
                               </DataSourceProvider>
                             </React.StrictMode>
                           );
                         }
+                      } else {
+                        // Get the current grid size (or use initial if not set)
+                        const currentGridSize = widgetGridSizes.get(node.id) || (node.w * node.h);
+                        
+                        newRoot.render(
+                          <React.StrictMode>
+                            <DataSourceProvider>
+                              <WidgetContainer
+                                key={`${node.id}-${source}`}
+                                title={widgetTitles[node.id.split('-')[0]]}
+                                onRemove={() => handleRemoveWidget(node.id)}
+                              >
+                                {(() => {
+                                  const WidgetComponent = widgetComponents[node.id.split('-')[0]];
+                                  return node.id.split('-')[0] === 'balances' ? (
+                                    <WidgetComponent 
+                                      key={`${node.id}-${source}`} 
+                                      widgetId={node.id} 
+                                      gridSize={currentGridSize} 
+                                    />
+                                  ) : (
+                                    <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
+                                  );
+                                })()}
+                              </WidgetContainer>
+                            </DataSourceProvider>
+                          </React.StrictMode>
+                        );
                       }
                     }
                   }
