@@ -6,6 +6,14 @@ import { cn, getThemeValues } from '@/lib/utils';
 import { CoinmetroLogo } from './icons/CoinmetroLogo';
 import { CoinmetroText } from './icons/CoinmetroText';
 import { useEffect, useState } from 'react';
+import { ThemeIntensity } from './ThemeIntensity';
+import { useThemeIntensity } from '@/contexts/ThemeContext';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/tooltip';
 
 interface TopBarProps {
   currentPage: 'dashboard' | 'spot' | 'margin' | 'stake';
@@ -13,9 +21,18 @@ interface TopBarProps {
 }
 
 export function TopBar({ currentPage, onPageChange }: TopBarProps) {
-  const { theme, setTheme } = useTheme();
-  const colors = getThemeValues(theme);
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { backgroundIntensity, widgetIntensity, borderIntensity } = useThemeIntensity();
+  const colors = getThemeValues(resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // Apply CSS variables when theme or intensities change
+  useEffect(() => {
+    const root = document.documentElement;
+    Object.entries(colors.cssVariables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+  }, [theme, backgroundIntensity, widgetIntensity, borderIntensity]);
 
   const handlePageClick = (page: 'dashboard' | 'spot' | 'margin' | 'stake') => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -38,14 +55,11 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
   }, [currentPage]);
 
   return (
-    <div 
-      className={cn(
-        "fixed top-0 left-0 right-0 z-50",
-        "bg-[hsl(var(--color-bg-base))]",
-        isScrolled ? "border-b border-[hsl(var(--color-border-default))]" : ""
-      )}
-    >
-      <div className="max-w-[1920px] mx-auto flex h-16 items-center justify-between">
+    <header className={cn(
+      "fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-sm transition-all duration-200",
+      isScrolled ? "border-border/50" : "border-transparent"
+    )}>
+      <div className="flex h-16 items-center justify-between px-4 md:px-6">
         {/* Left Section - with 6px left padding */}
         <div className="flex items-center space-x-6 lg:space-x-8 pl-6">
           {/* Logo and Brand */}
@@ -126,7 +140,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
                 "bg-[hsl(var(--color-widget-content))]",
                 colors.text,
                 colors.searchPlaceholder,
-                "border border-[hsl(var(--color-border-default)]",
+                "border border-border",
               )}
             />
             <div className="absolute inset-y-0 right-3 flex items-center">
@@ -142,21 +156,38 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
         </div>
 
         {/* Right Section - with 6px right padding */}
-        <div className="flex items-center space-x-2 pr-6">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className={cn(
-              "w-10 h-10 rounded-full hidden sm:flex items-center justify-center",
-              "text-muted-foreground/60 hover:text-foreground",
-              "hover:bg-[hsl(var(--color-bg-subtle))]"
-            )}
-          >
-            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 opacity-70" />
-            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 opacity-70" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
+        <div className="flex items-center space-x-4 pr-6">
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  className={cn(
+                    "w-10 h-10 rounded-full hidden sm:flex items-center justify-center",
+                    "text-muted-foreground/60 hover:text-foreground",
+                    "hover:bg-[hsl(var(--color-bg-subtle))]"
+                  )}
+                >
+                  <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 opacity-70" />
+                  <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 opacity-70" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent 
+                className="tooltip-content w-64 p-4" 
+                side="bottom" 
+                align="center"
+                alignOffset={-20}
+                sideOffset={8}
+              >
+                <div className="space-y-4">
+                  <ThemeIntensity />
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button 
             variant="ghost" 
             className={cn(
@@ -199,6 +230,6 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
           </Button>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

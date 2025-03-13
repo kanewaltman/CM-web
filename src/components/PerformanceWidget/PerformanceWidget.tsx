@@ -118,7 +118,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   }
 
   return (
-    <div className={cn("h-full flex flex-col", className)}>
+    <div className={cn("h-full flex flex-col px-1 pb-1", className)}>
       {selectedVariant === 'revenue' ? (
         <PerformanceChart 
           viewMode={viewMode} 

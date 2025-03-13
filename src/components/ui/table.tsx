@@ -37,7 +37,7 @@ function TableRow({ className, isHeader, ...props }: React.ComponentProps<"tr"> 
     <tr
       data-slot="table-row"
       className={cn(
-        isHeader ? "border-b" : "",
+        isHeader ? "border-b border-border" : "",
         "transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
         className,
       )}
