@@ -724,8 +724,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                   stroke="var(--border)"
                   fill="#8884d8"
                   content={<CustomTreemapContent />}
-                  animationDuration={500}
-                  animationEasing="ease-out"
+                  isAnimationActive={false}
                 >
                   <RechartsTooltip 
                     content={({ active, payload }) => {
