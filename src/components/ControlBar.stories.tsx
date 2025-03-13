@@ -143,6 +143,18 @@ export const Default: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    
+    // Wait a bit for initial render
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Find and hover over the Main button
+    const mainButton = await canvas.findByRole('button', { name: /main/i });
+    await userEvent.hover(mainButton);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await userEvent.unhover(mainButton);
+  },
 };
 
 export const WithGridStyleRounded: Story = {

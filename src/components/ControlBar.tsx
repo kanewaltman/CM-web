@@ -307,14 +307,16 @@ export function ControlBar({
         }}
       >
         <div className="flex items-center space-x-6">
-          <button 
+          <Button 
+            variant="outline"
             className={cn(
-              "flex items-center space-x-2 px-4 py-3 transition-colors",
+              "flex items-center space-x-2 px-2",
               "bg-[hsl(var(--card))]",
               "text-foreground",
               "border border-border",
               "shadow-sm",
-              "rounded-[calc(var(--grid-item-border-radius)/2)]"
+              "rounded-[calc(var(--grid-item-border-radius)/2)]",
+              "[padding-top:1.4rem] [padding-bottom:1.4rem]"
             )}
           >
             <div className="w-8 h-8 rounded-full bg-[hsl(var(--primary))]/10 flex items-center justify-center text-base">
@@ -322,12 +324,7 @@ export function ControlBar({
             </div>
             <span className="font-bold">Main</span>
             <ChevronDown className="h-4 w-4 opacity-50" />
-          </button>
-          
-          <div className="-space-y-0.5 hidden md:block">
-            <div className="text-sm text-muted-foreground">Balance</div>
-            <div className="text-lg font-bold leading-tight">55,444.15 EUR</div>
-          </div>
+          </Button>
         </div>
 
         {/* Right Section - Grid Controls */}
@@ -338,9 +335,10 @@ export function ControlBar({
               <Button
                 variant="ghost"
                 className={cn(
-                  "h-12 px-4 text-base",
+                  "px-4 text-base",
                   "text-foreground",
-                  "hover:bg-accent hover:text-accent-foreground"
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "[padding-top:1.4rem] [padding-bottom:1.4rem]"
                 )}
               >
                 <LayoutGrid className="h-5 w-5 mr-2 opacity-50" />

@@ -73,7 +73,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
     )}>
       <div className="flex h-16 items-center justify-between px-4 md:px-6">
         {/* Left Section - with 6px left padding */}
-        <div className="flex items-center space-x-6 lg:space-x-8 pl-6">
+        <div className="flex items-center space-x-6 lg:space-x-8 [padding-left:0.5rem]">
           {/* Logo and Brand */}
           <a 
             className="flex items-center space-x-2 shrink-0" 
@@ -168,7 +168,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
         </div>
 
         {/* Right Section - with 6px right padding */}
-        <div className="flex items-center space-x-4 pr-6">
+        <div className="flex items-center space-x-4 [padding-right:1rem]">
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
