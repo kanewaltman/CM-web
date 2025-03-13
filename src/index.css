@@ -163,7 +163,7 @@
   --color-foreground-muted: 0 0% 64%;
   --color-foreground-subtle: 0 0% 50%;
   
-  --color-border-default: 0 0% 08%;
+  --color-border-default: 0 0% 8%;
   --color-border-muted: 0 0% 20%;
   
   --color-primary-default: 0 0% 98%;
@@ -194,6 +194,27 @@
   /* Focus & Interactive States */
   --color-focus-ring: 0 0% 83%;
   --color-hover-overlay: 0 0% 100%;
+
+  /* Theme Variables */
+  --background: var(--color-bg-base);
+  --foreground: var(--color-foreground-default);
+  --card: 0 0% 6%;
+  --card-foreground: var(--color-foreground-default);
+  --popover: var(--color-bg-elevated);
+  --popover-foreground: var(--color-foreground-default);
+  --primary: var(--color-primary-default);
+  --primary-foreground: var(--color-primary-foreground);
+  --secondary: var(--color-bg-subtle);
+  --secondary-foreground: var(--color-foreground-default);
+  --muted: var(--color-bg-subtle);
+  --muted-foreground: var(--color-foreground-muted);
+  --accent: var(--color-accent-default);
+  --accent-foreground: var(--color-accent-foreground);
+  --destructive: var(--color-destructive-default);
+  --destructive-foreground: var(--color-destructive-foreground);
+  --border: var(--color-border-default);
+  --input: var(--color-input-border);
+  --ring: var(--color-focus-ring);
 }
 
 /* Add GridStack specific styles */
@@ -398,7 +419,7 @@ body {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground overflow-hidden;
+    @apply bg-background text-foreground;
   }
 }
 
@@ -545,7 +566,7 @@ body {
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;

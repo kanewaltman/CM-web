@@ -64,7 +64,7 @@ export function ControlBar({
   onDataSourceChange
 }: ControlBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const colors = getThemeValues(resolvedTheme || theme);
+  const colors = getThemeValues(resolvedTheme || theme, 0, 0, 0);
   const [isOpen, setIsOpen] = useState(defaultIsOpen);
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(defaultIsAppearanceOpen);
   const [gridStyle, setGridStyle] = useState<GridStyle>(initialGridStyle);
@@ -312,7 +312,7 @@ export function ControlBar({
               "flex items-center space-x-2 px-4 py-3 transition-colors",
               "bg-[hsl(var(--card))]",
               "text-foreground",
-              "border border-[hsl(var(--border))]",
+              "border border-border",
               "shadow-sm",
               "rounded-[calc(var(--grid-item-border-radius)/2)]"
             )}
