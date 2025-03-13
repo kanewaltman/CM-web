@@ -797,9 +797,9 @@ function AppContent() {
               minW: node.minW,
               minH: node.minH,
               autoPosition: false,
-              noMove: false,
-              noResize: false,
-              locked: false
+              noMove: isMobile || currentPage !== 'dashboard',
+              noResize: isMobile || currentPage !== 'dashboard',
+              locked: isMobile || currentPage !== 'dashboard'
             } as ExtendedGridStackWidget);
 
             // Update widget state if it exists
@@ -1002,9 +1002,9 @@ function AppContent() {
                   minW: node.minW,
                   minH: node.minH,
                   autoPosition: false,
-                  noMove: false,
-                  noResize: false,
-                  locked: false
+                  noMove: isMobile || currentPage !== 'dashboard',
+                  noResize: isMobile || currentPage !== 'dashboard',
+                  locked: isMobile || currentPage !== 'dashboard'
                 } as ExtendedGridStackWidget);
 
                 // Update widget state if it exists
@@ -1126,15 +1126,16 @@ function AppContent() {
           autoHide: true,
           enabled: !isMobile
         },
+        disableDrag: isMobile,
+        disableResize: isMobile,
+        staticGrid: isMobile || currentPage !== 'dashboard',
         minRow: 1,
-        staticGrid: currentPage !== 'dashboard',
         alwaysShowResizeHandle: false,
         float: false,
-        acceptWidgets: true,
+        acceptWidgets: !isMobile,
         removable: false,
-        // @ts-ignore - GridStack types are incomplete
-        swap: true,
-        swapScroll: true
+        swap: !isMobile,
+        swapScroll: !isMobile
       } as GridStackOptions, gridElementRef.current);
 
       // Track drag state and original positions
@@ -1343,7 +1344,17 @@ function AppContent() {
         }
       };
 
+      // Add touch event handlers for mobile
+      const handleTouchStart = (e: TouchEvent) => {
+        if (isMobile) {
+          // Prevent touch events from initiating drag on mobile
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      };
+
       if (gridElementRef.current) {
+        gridElementRef.current.addEventListener('touchstart', handleTouchStart as EventListener, { passive: false });
         gridElementRef.current.addEventListener('mousedown', handleMouseDown);
       }
 
@@ -1452,9 +1463,9 @@ function AppContent() {
               minW: node.minW,
               minH: node.minH,
               autoPosition: false,
-              noMove: currentPage !== 'dashboard',
-              noResize: currentPage !== 'dashboard',
-              locked: currentPage !== 'dashboard'
+              noMove: isMobile || currentPage !== 'dashboard',
+              noResize: isMobile || currentPage !== 'dashboard',
+              locked: isMobile || currentPage !== 'dashboard'
             } as ExtendedGridStackWidget);
           } catch (error) {
             console.error('Failed to create widget:', node.id, error);
@@ -1472,6 +1483,7 @@ function AppContent() {
         if (g) {
           g.destroy(false);
           if (gridElementRef.current) {
+            gridElementRef.current.removeEventListener('touchstart', handleTouchStart as EventListener);
             gridElementRef.current.removeEventListener('mousedown', handleMouseDown);
           }
         }
@@ -1729,8 +1741,9 @@ function AppContent() {
           minH: 2,
           id: widgetId,
           autoPosition: false,
-          noMove: false,
-          float: true
+          noMove: isMobile || currentPage !== 'dashboard',
+          noResize: isMobile || currentPage !== 'dashboard',
+          locked: isMobile || currentPage !== 'dashboard'
         } as ExtendedGridStackWidget);
 
         // Save updated layout
