@@ -165,7 +165,7 @@ function generateSampleData(currentBalances: Record<string, number>, pointCount:
     
     // Format date to include year for proper month transitions
     const dataPoint: BalanceDataPoint = {
-      timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      timestamp: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     };
 
     Object.entries(currentBalances).forEach(([asset, currentValue]) => {
@@ -768,13 +768,13 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => {
-                const [month, year] = value.split(' ');
+                const [month, day, year] = value.split(' ');
                 
                 if (month !== lastShownDate.current.month || year !== lastShownDate.current.year) {
                   // Show year if this is the first month we're seeing in a new year
                   const showYear = year !== lastShownDate.current.year;
                   lastShownDate.current = { month, year };
-                  return showYear ? `${month}'${year.slice(-2)}` : month;
+                  return showYear ? `${month} ${day}'${year.slice(-2)}` : `${month} ${day}`;
                 }
                 return '';
               }}
