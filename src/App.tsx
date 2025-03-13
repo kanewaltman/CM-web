@@ -188,14 +188,10 @@ const stakeLayout = [
 ];
 
 // Mobile layout configuration (single column)
-const mobileLayout = [
-  { x: 0, y: 0, w: 1, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 1, h: 6, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 0, y: 12, w: 1, h: 4, id: 'tradeform', minW: 2, minH: 2 },
-  { x: 0, y: 16, w: 1, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 20, w: 1, h: 4, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 24, w: 1, h: 4, id: 'balances', minW: 2, minH: 2 },
-  { x: 0, y: 28, w: 1, h: 6, id: 'performance', minW: 2, minH: 2 }
+const mobileLayout: SerializedLayoutWidget[] = [
+  {"id":"performance","baseId":"performance","x":0,"y":8,"w":2,"h":5,"minW":2,"minH":2,"viewState":{"chartVariant":"revenue" as ChartVariant,"viewMode":"split" as "split"}},
+  {"id":"balances","baseId":"balances","x":0,"y":4,"w":2,"h":4,"minW":2,"minH":2},
+  {"id":"performance-1741826205331","baseId":"performance","x":0,"y":0,"w":2,"h":4,"minW":2,"minH":2,"viewState":{"chartVariant":"revenue" as ChartVariant,"viewMode":"cumulative" as "cumulative"}}
 ];
 
 // Breakpoint for mobile view
