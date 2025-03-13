@@ -335,6 +335,12 @@ body {
   padding: 0 1.5rem; /* Match TopBar padding */
 }
 
+@media (max-width: 768px) {
+  .main-content-inner {
+    padding: 0;
+  }
+}
+
 /* Custom Scrollbar Styling */
 @supports (scrollbar-width: thin) {
   /* Firefox */
