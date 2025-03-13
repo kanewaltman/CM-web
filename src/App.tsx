@@ -16,6 +16,9 @@ import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWid
 import { createRoot } from 'react-dom/client';
 import { ChartVariant } from './components/PerformanceWidget/PerformanceWidget';
 import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
+import { useThemeIntensity } from '@/contexts/ThemeContext';
+import { useTheme } from 'next-themes';
+import { getThemeValues } from '@/lib/utils';
 
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
@@ -326,6 +329,10 @@ const getPerformanceTitle = (variant: ChartVariant): string => {
 
 function AppContent() {
   const { dataSource, setDataSource } = useDataSource();
+  const { resolvedTheme } = useTheme();
+  const { backgroundIntensity, widgetIntensity, borderIntensity } = useThemeIntensity();
+  const colors = getThemeValues(resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity);
+  
   console.log('App component is rendering');
   
   const [error, setError] = useState<string | null>(null);
@@ -337,6 +344,14 @@ function AppContent() {
   const gridRef = useRef<GridStack | null>(null);
   const gridElementRef = useRef<HTMLDivElement>(null);
   let widgetCounter = 0;
+
+  // Apply CSS variables when theme or intensities change
+  useEffect(() => {
+    const root = document.documentElement;
+    Object.entries(colors.cssVariables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+  }, [resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity]);
 
   // Define handleRemoveWidget first
   const handleRemoveWidget = useCallback((widgetId: string) => {
@@ -1903,10 +1918,7 @@ function AppContent() {
             onAddWidget={handleAddWidget}
             dataSource={dataSource}
             onDataSourceChange={(source) => {
-              // First update the context
               setDataSource(source);
-              
-              // Force re-render of all widgets by unmounting and remounting
               if (grid) {
                 const items = grid.getGridItems();
                 items.forEach(item => {
@@ -1923,62 +1935,60 @@ function AppContent() {
                         const widgetType = widgetTypes[baseId];
                         const WidgetComponent = widgetComponents[widgetType];
                         
-                        // Unmount first to clear any cached state
-                        root.unmount();
-                        
-                        // Create a new root to force a fresh mount
-                        const newRoot = createRoot(content);
-                        (widgetContainer as any)._reactRoot = newRoot;
-                        
-                        if (baseId === 'performance') {
-                          const widgetState = widgetStateRegistry.get(node.id);
-                          if (widgetState) {
-                            const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
-                              <WidgetComponent
-                                key={`${node.id}-${source}`} // Add source to key to force remount
-                                widgetId={node.id}
-                                headerControls={isHeader}
-                                defaultVariant={widgetState.variant}
-                                defaultViewMode={widgetState.viewMode}
-                                onVariantChange={(variant) => {
-                                  widgetState.setVariant(variant);
-                                  widgetState.setTitle(getPerformanceTitle(variant));
-                                }}
-                                onViewModeChange={(mode) => {
-                                  widgetState.setViewMode(mode);
-                                }}
-                              />
-                            );
+                        if (baseId === 'performance' || baseId === 'tradingview' || baseId === 'orderbook') {
+                          root.unmount();
+                          const newRoot = createRoot(content);
+                          (widgetContainer as any)._reactRoot = newRoot;
+                          
+                          if (baseId === 'performance') {
+                            const widgetState = widgetStateRegistry.get(node.id);
+                            if (widgetState) {
+                              const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
+                                <WidgetComponent
+                                  key={`${node.id}-${source}`}
+                                  widgetId={node.id}
+                                  headerControls={isHeader}
+                                  defaultVariant={widgetState.variant}
+                                  onVariantChange={(variant) => {
+                                    widgetState.setVariant(variant);
+                                    widgetState.setTitle(getPerformanceTitle(variant));
+                                  }}
+                                  onViewModeChange={(mode: 'split' | 'cumulative') => {
+                                    widgetState.setViewMode(mode);
+                                  }}
+                                />
+                              );
 
+                              newRoot.render(
+                                <React.StrictMode>
+                                  <DataSourceProvider>
+                                    <WidgetContainer
+                                      key={`${widgetState.title}-${source}`}
+                                      title={widgetState.title}
+                                      onRemove={() => node.id && handleRemoveWidget(node.id)}
+                                      headerControls={<PerformanceWidgetWrapper isHeader />}
+                                    >
+                                      <PerformanceWidgetWrapper />
+                                    </WidgetContainer>
+                                  </DataSourceProvider>
+                                </React.StrictMode>
+                              );
+                            }
+                          } else {
                             newRoot.render(
                               <React.StrictMode>
                                 <DataSourceProvider>
                                   <WidgetContainer
-                                    key={`${widgetState.title}-${source}`} // Add source to key to force remount
-                                    title={widgetState.title}
-                                    onRemove={() => handleRemoveWidget(node.id)}
-                                    headerControls={<PerformanceWidgetWrapper isHeader />}
+                                    key={`${widgetType}-${source}`}
+                                    title={widgetTitles[widgetType]}
+                                    onRemove={() => node.id && handleRemoveWidget(node.id)}
                                   >
-                                    <PerformanceWidgetWrapper />
+                                    <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
                                   </WidgetContainer>
                                 </DataSourceProvider>
                               </React.StrictMode>
                             );
                           }
-                        } else {
-                          newRoot.render(
-                            <React.StrictMode>
-                              <DataSourceProvider>
-                                <WidgetContainer
-                                  key={`${widgetType}-${source}`} // Add source to key to force remount
-                                  title={widgetTitles[widgetType]}
-                                  onRemove={() => handleRemoveWidget(node.id)}
-                                >
-                                  <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
-                                </WidgetContainer>
-                              </DataSourceProvider>
-                            </React.StrictMode>
-                          );
                         }
                       }
                     }

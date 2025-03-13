@@ -7,6 +7,7 @@ import { CoinmetroLogo } from './icons/CoinmetroLogo';
 import { CoinmetroText } from './icons/CoinmetroText';
 import { useEffect, useState } from 'react';
 import { ThemeIntensity } from './ThemeIntensity';
+import { useThemeIntensity } from '@/contexts/ThemeContext';
 import {
   Tooltip,
   TooltipContent,
@@ -19,37 +20,11 @@ interface TopBarProps {
   onPageChange: (page: 'dashboard' | 'spot' | 'margin' | 'stake') => void;
 }
 
-interface ThemeIntensities {
-  background: number;
-  widget: number;
-  border: number;
-}
-
 export function TopBar({ currentPage, onPageChange }: TopBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const [backgroundIntensity, setBackgroundIntensity] = useState(0);
-  const [widgetIntensity, setWidgetIntensity] = useState(0);
-  const [borderIntensity, setBorderIntensity] = useState(0);
+  const { backgroundIntensity, widgetIntensity, borderIntensity } = useThemeIntensity();
   const colors = getThemeValues(resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity);
   const [isScrolled, setIsScrolled] = useState(false);
-
-  // Load theme-specific intensities when theme changes
-  useEffect(() => {
-    if (resolvedTheme) {
-      const saved = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-      if (saved) {
-        const intensities: ThemeIntensities = JSON.parse(saved);
-        setBackgroundIntensity(intensities.background);
-        setWidgetIntensity(intensities.widget);
-        setBorderIntensity(intensities.border);
-      } else {
-        // Reset to defaults for new theme
-        setBackgroundIntensity(0);
-        setWidgetIntensity(0);
-        setBorderIntensity(0);
-      }
-    }
-  }, [resolvedTheme]);
 
   // Apply CSS variables when theme or intensities change
   useEffect(() => {
@@ -208,14 +183,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
                 sideOffset={8}
               >
                 <div className="space-y-4">
-                  <ThemeIntensity
-                    currentBackgroundIntensity={backgroundIntensity}
-                    currentWidgetIntensity={widgetIntensity}
-                    currentBorderIntensity={borderIntensity}
-                    onBackgroundIntensityChange={setBackgroundIntensity}
-                    onWidgetIntensityChange={setWidgetIntensity}
-                    onBorderIntensityChange={setBorderIntensity}
-                  />
+                  <ThemeIntensity />
                 </div>
               </TooltipContent>
             </Tooltip>

@@ -1,18 +1,13 @@
 import { cn } from '@/lib/utils';
 import { Lock, Unlock } from 'lucide-react';
 import { Button } from './ui/button';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { useThemeIntensity } from '@/contexts/ThemeContext';
 
 interface ThemeIntensityProps {
   className?: string;
-  onBackgroundIntensityChange: (intensity: number) => void;
-  onWidgetIntensityChange: (intensity: number) => void;
-  onBorderIntensityChange: (intensity: number) => void;
-  currentBackgroundIntensity: number;
-  currentWidgetIntensity: number;
-  currentBorderIntensity: number;
 }
 
 interface ThemeIntensities {
@@ -21,16 +16,17 @@ interface ThemeIntensities {
   border: number;
 }
 
-export function ThemeIntensity({ 
-  className, 
-  onBackgroundIntensityChange, 
-  onWidgetIntensityChange,
-  onBorderIntensityChange,
-  currentBackgroundIntensity,
-  currentWidgetIntensity,
-  currentBorderIntensity
-}: ThemeIntensityProps) {
+export function ThemeIntensity({ className }: ThemeIntensityProps) {
   const { resolvedTheme } = useTheme();
+  const {
+    backgroundIntensity,
+    widgetIntensity,
+    borderIntensity,
+    setBackgroundIntensity,
+    setWidgetIntensity,
+    setBorderIntensity,
+  } = useThemeIntensity();
+  
   const [isLocked, setIsLocked] = useState(() => {
     const savedLockState = localStorage.getItem('theme-sliders-locked');
     return savedLockState === null ? true : savedLockState === 'true';
@@ -59,7 +55,7 @@ export function ThemeIntensity({
 
   const handleBackgroundValueChange = (value: string) => {
     const intensity = value === 'min' ? -1 : value === 'max' ? 1 : 0;
-    onBackgroundIntensityChange(intensity);
+    setBackgroundIntensity(intensity);
     
     if (resolvedTheme) {
       const currentIntensities = getThemeIntensities(resolvedTheme);
@@ -67,8 +63,8 @@ export function ThemeIntensity({
       if (isLocked) {
         currentIntensities.widget = intensity;
         currentIntensities.border = intensity;
-        onWidgetIntensityChange(intensity);
-        onBorderIntensityChange(intensity);
+        setWidgetIntensity(intensity);
+        setBorderIntensity(intensity);
       }
       saveThemeIntensities(resolvedTheme, currentIntensities);
     }
@@ -76,7 +72,7 @@ export function ThemeIntensity({
 
   const handleWidgetValueChange = (value: string) => {
     const intensity = value === 'min' ? -1 : value === 'max' ? 1 : 0;
-    onWidgetIntensityChange(intensity);
+    setWidgetIntensity(intensity);
     
     if (resolvedTheme) {
       const currentIntensities = getThemeIntensities(resolvedTheme);
@@ -84,8 +80,8 @@ export function ThemeIntensity({
       if (isLocked) {
         currentIntensities.background = intensity;
         currentIntensities.border = intensity;
-        onBackgroundIntensityChange(intensity);
-        onBorderIntensityChange(intensity);
+        setBackgroundIntensity(intensity);
+        setBorderIntensity(intensity);
       }
       saveThemeIntensities(resolvedTheme, currentIntensities);
     }
@@ -93,7 +89,7 @@ export function ThemeIntensity({
 
   const handleBorderValueChange = (value: string) => {
     const intensity = value === 'min' ? -1 : value === 'max' ? 1 : 0;
-    onBorderIntensityChange(intensity);
+    setBorderIntensity(intensity);
     
     if (resolvedTheme) {
       const currentIntensities = getThemeIntensities(resolvedTheme);
@@ -101,8 +97,8 @@ export function ThemeIntensity({
       if (isLocked) {
         currentIntensities.background = intensity;
         currentIntensities.widget = intensity;
-        onBackgroundIntensityChange(intensity);
-        onWidgetIntensityChange(intensity);
+        setBackgroundIntensity(intensity);
+        setWidgetIntensity(intensity);
       }
       saveThemeIntensities(resolvedTheme, currentIntensities);
     }
@@ -111,10 +107,10 @@ export function ThemeIntensity({
   const toggleLock = () => {
     if (!isLocked && resolvedTheme) {
       const currentIntensities = getThemeIntensities(resolvedTheme);
-      onWidgetIntensityChange(currentBackgroundIntensity);
-      onBorderIntensityChange(currentBackgroundIntensity);
-      currentIntensities.widget = currentBackgroundIntensity;
-      currentIntensities.border = currentBackgroundIntensity;
+      setWidgetIntensity(backgroundIntensity);
+      setBorderIntensity(backgroundIntensity);
+      currentIntensities.widget = backgroundIntensity;
+      currentIntensities.border = backgroundIntensity;
       saveThemeIntensities(resolvedTheme, currentIntensities);
     }
     const newLockState = !isLocked;
@@ -154,7 +150,7 @@ export function ThemeIntensity({
             </div>
           </div>
           <Tabs
-            value={getValueFromIntensity(currentBackgroundIntensity)}
+            value={getValueFromIntensity(backgroundIntensity)}
             onValueChange={handleBackgroundValueChange}
             className="w-full"
           >
@@ -185,7 +181,7 @@ export function ThemeIntensity({
             <span className="text-sm font-medium">Widgets</span>
           </div>
           <Tabs
-            value={getValueFromIntensity(currentWidgetIntensity)}
+            value={getValueFromIntensity(widgetIntensity)}
             onValueChange={handleWidgetValueChange}
             className="w-full"
           >
@@ -216,7 +212,7 @@ export function ThemeIntensity({
             <span className="text-sm font-medium">Borders</span>
           </div>
           <Tabs
-            value={getValueFromIntensity(currentBorderIntensity)}
+            value={getValueFromIntensity(borderIntensity)}
             onValueChange={handleBorderValueChange}
             className="w-full"
           >
