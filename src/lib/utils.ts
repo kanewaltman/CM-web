@@ -266,27 +266,35 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
 }
 
 function getLightThemeValues(backgroundIntensity: number, widgetIntensity: number, borderIntensity: number): ThemeColors {
-  const baseColors = {
-    background: {
-      default: 'hsl(0 0% 100%)',
-      oled: 'hsl(0 0% 100%)',
-      backlit: 'hsl(0 0% 97%)'
-    },
-    widget: {
-      default: 'hsl(0 0% 97%)',
-      oled: 'hsl(0 0% 98%)',
-      backlit: 'hsl(0 0% 95%)'
-    },
-    border: {
-      default: '0 0% 90%',
-      oled: '0 0% 95%',
-      backlit: '0 0% 75%'
-    }
-  };
-
   // Get background colors based on background intensity
-  const bgBase = getInterpolatedValue(baseColors.background, backgroundIntensity);
-  const widgetBase = getInterpolatedValue(baseColors.widget, widgetIntensity);
+  const bgBase = getInterpolatedValue(
+    {
+      oled: '210 40% 98%', // Cooler temperature
+      default: '0 0% 100%',
+      backlit: '45 30% 98%' // FLUX-like warm glow
+    },
+    backgroundIntensity
+  );
+
+  // Get widget colors based on widget intensity
+  const widgetBase = getInterpolatedValue(
+    {
+      oled: '210 40% 96%', // Cooler temperature
+      default: '0 0% 97%',
+      backlit: '45 30% 96%' // FLUX-like warm glow
+    },
+    widgetIntensity
+  );
+
+  // Get card colors based on intensity
+  const cardBase = getInterpolatedValue(
+    {
+      oled: '210 40% 97%',
+      default: '0 0% 98%',
+      backlit: '45 30% 97%'
+    },
+    widgetIntensity
+  );
 
   // Get border colors based on border intensity and background state
   const getBorderColor = (intensity: number, opacity: number = 1): string => {
@@ -294,30 +302,102 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
     if (widgetIntensity >= 1) {
       return getInterpolatedValue(
         {
-          oled: '0 0% 85%',
+          oled: '210 40% 85%',
           default: '0 0% 80%',
-          backlit: '0 0% 65%'
+          backlit: '45 30% 88%' // Made warmer but more subtle
         },
         intensity,
         opacity
       );
     }
-    return getInterpolatedValue(baseColors.border, intensity, opacity);
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 92%',
+        default: '0 0% 90%',
+        backlit: '45 30% 92%' // Made warmer but more subtle
+      },
+      intensity,
+      opacity
+    );
   };
 
   const borderBase = getBorderColor(borderIntensity);
   const borderMuted = getBorderColor(borderIntensity, 0.5);
 
+  // Get foreground colors based on intensity
+  const getForegroundColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 20%',
+        default: '222.2 84% 4.9%',
+        backlit: '45 30% 20%'
+      },
+      intensity
+    );
+  };
+
+  const getMutedForegroundColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 40%',
+        default: '215.4 16.3% 46.9%',
+        backlit: '45 30% 40%'
+      },
+      intensity
+    );
+  };
+
+  // Get button background color based on intensity
+  const getButtonBgColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 96%',
+        default: '0 0% 96%',
+        backlit: '45 30% 96%'
+      },
+      intensity
+    );
+  };
+
+  // Get search background color based on intensity
+  const getSearchBgColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 98%',
+        default: '0 0% 98%',
+        backlit: '45 30% 98%'
+      },
+      intensity
+    );
+  };
+
+  // Get widget inset color based on intensity
+  const getWidgetInsetColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 94%',
+        default: '0 0% 92%',
+        backlit: '45 30% 94%'
+      },
+      intensity
+    );
+  };
+
+  const foregroundColor = getForegroundColor(backgroundIntensity);
+  const mutedForegroundColor = getMutedForegroundColor(backgroundIntensity);
+  const buttonBgColor = getButtonBgColor(backgroundIntensity);
+  const searchBgColor = getSearchBgColor(backgroundIntensity);
+
   return {
     background: `bg-[${bgBase}]`,
-    text: 'text-gray-800',
-    textMuted: 'text-gray-600',
-    hover: 'hover:text-gray-900',
-    buttonBg: 'bg-gray-100',
-    searchBg: `bg-[${widgetBase}]`,
-    searchPlaceholder: 'placeholder:text-gray-500',
+    text: `text-[${foregroundColor}]`,
+    textMuted: `text-[${mutedForegroundColor}]`,
+    hover: `hover:text-[${foregroundColor}]/80`,
+    buttonBg: `bg-[${buttonBgColor}]`,
+    searchBg: `bg-[${searchBgColor}]`,
+    searchPlaceholder: `placeholder:text-[${mutedForegroundColor}]`,
     searchBorder: 'border-border',
-    kbdBg: 'bg-gray-100',
+    kbdBg: `bg-[${buttonBgColor}]`,
     intensity: backgroundIntensity,
     cssVariables: {
       '--color-bg-base': bgBase,
@@ -328,29 +408,29 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
       '--color-widget-bg': widgetBase,
       '--color-widget-header': widgetBase,
       '--color-widget-content': widgetBase,
-      '--color-widget-inset': '0 0% 92%',
-      '--color-foreground-default': '222.2 84% 4.9%',
-      '--color-foreground-muted': '215.4 16.3% 46.9%',
-      '--color-foreground-subtle': '0 0% 45%',
+      '--color-widget-inset': getWidgetInsetColor(widgetIntensity),
+      '--color-foreground-default': foregroundColor,
+      '--color-foreground-muted': mutedForegroundColor,
+      '--color-foreground-subtle': mutedForegroundColor,
       '--color-border-default': borderBase,
       '--color-border-muted': borderMuted,
-      '--card': widgetBase,
-      '--card-foreground': '222.2 84% 4.9%',
+      '--card': cardBase,
+      '--card-foreground': foregroundColor,
       '--popover': widgetBase,
-      '--popover-foreground': '222.2 84% 4.9%',
-      '--primary': '222.2 47.4% 11.2%',
+      '--popover-foreground': foregroundColor,
+      '--primary': foregroundColor,
       '--primary-foreground': '210 40% 98%',
-      '--secondary': '210 40% 96.1%',
-      '--secondary-foreground': '222.2 47.4% 11.2%',
-      '--muted': '210 40% 96.1%',
-      '--muted-foreground': '215.4 16.3% 46.9%',
-      '--accent': '210 40% 96.1%',
-      '--accent-foreground': '222.2 47.4% 11.2%',
+      '--secondary': widgetBase,
+      '--secondary-foreground': foregroundColor,
+      '--muted': widgetBase,
+      '--muted-foreground': mutedForegroundColor,
+      '--accent': widgetBase,
+      '--accent-foreground': foregroundColor,
       '--destructive': '0 84.2% 60.2%',
       '--destructive-foreground': '210 40% 98%',
       '--border': borderBase,
       '--input': borderBase,
-      '--ring': '222.2 84% 4.9%',
+      '--ring': foregroundColor,
     }
   };
 }
