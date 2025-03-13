@@ -324,7 +324,7 @@ export function ControlBar({
             <ChevronDown className="h-4 w-4 opacity-50" />
           </button>
           
-          <div className="-space-y-0.5">
+          <div className="-space-y-0.5 hidden md:block">
             <div className="text-sm text-muted-foreground">Balance</div>
             <div className="text-lg font-bold leading-tight">55,444.15 EUR</div>
           </div>
