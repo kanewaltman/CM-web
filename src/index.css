@@ -133,22 +133,22 @@
 }
 
 .dark {
-  /* Background Elevation Levels - All flattened to same level */
+  /* Background Elevation Levels - Proper contrast for hover effects */
   --color-bg-base: 0 0% 4%;           /* Main app background */
-  --color-bg-surface: 0 0% 4%;        /* First level elevation */
-  --color-bg-surface-alt: 0 0% 4%;    /* Alternative surface color */
-  --color-bg-elevated: 0 0% 4%;       /* Elevated components */
-  --color-bg-inset: 0 0% 4%;          /* Inset areas */
-  --color-bg-subtle: 0 0% 4%;         /* Subtle backgrounds */
+  --color-bg-surface: 0 0% 6%;        /* First level elevation */
+  --color-bg-surface-alt: 0 0% 8%;    /* Alternative surface color */
+  --color-bg-elevated: 0 0% 10%;      /* Elevated components */
+  --color-bg-inset: 0 0% 8%;          /* Inset areas */
+  --color-bg-subtle: 0 0% 6%;         /* Subtle backgrounds */
   
-  /* Widget Specific - All flattened */
+  /* Widget Specific - Proper contrast */
   --color-widget-bg: 0 0% 6%;         /* Widget background - #0F0F0F */
-  --color-widget-header: 0 0% 6%;     /* Widget header - same as widget bg */
+  --color-widget-header: 0 0% 8%;     /* Widget header - slightly elevated */
   --color-widget-content: 0 0% 6%;    /* Widget content area */
   --color-widget-inset: 0 0% 10%;     /* Widget inset areas (scrollable) */
   
   /* Explicitly set card variable for consistent dark mode */
-  --card: 0 0% 6%;
+  --card: 0 0% 8%;
 
   background-color: hsl(var(--color-bg-base));
   --scrollbar-thumb-color: rgba(255, 255, 255, 0.15);
@@ -169,7 +169,7 @@
   --color-primary-default: 0 0% 98%;
   --color-primary-foreground: 0 0% 9%;
   
-  --color-accent-default: 0 0% 15%;
+  --color-accent-default: 0 0% 20%;    /* Lighter accent for hover effect */
   --color-accent-foreground: 0 0% 98%;
   
   --color-success-default: 142 72% 29%;
@@ -198,7 +198,7 @@
   /* Theme Variables */
   --background: var(--color-bg-base);
   --foreground: var(--color-foreground-default);
-  --card: 0 0% 6%;
+  --card: 0 0% 8%;
   --card-foreground: var(--color-foreground-default);
   --popover: var(--color-bg-elevated);
   --popover-foreground: var(--color-foreground-default);
@@ -208,7 +208,7 @@
   --secondary-foreground: var(--color-foreground-default);
   --muted: var(--color-bg-subtle);
   --muted-foreground: var(--color-foreground-muted);
-  --accent: var(--color-accent-default);
+  --accent: 0 0% 20%;                   /* Lighter accent for hover effect */
   --accent-foreground: var(--color-accent-foreground);
   --destructive: var(--color-destructive-default);
   --destructive-foreground: var(--color-destructive-foreground);
@@ -706,8 +706,8 @@ button.font-bold,
 }
 
 .dark .tooltip-content {
-  background: hsl(var(--color-widget-bg));
-  box-shadow: none;
+  background: hsl(var(--color-bg-elevated));
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 @layer utilities {

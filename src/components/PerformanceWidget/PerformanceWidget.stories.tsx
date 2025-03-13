@@ -67,11 +67,21 @@ const BaseStory = (args: any) => {
   return (
     <div className="w-[800px] h-[600px]">
       <DataSourceProvider defaultDataSource="sample">
-        <WidgetContainer title="Performance Metrics" headerControls={headerControls}>
+        <WidgetContainer 
+          title="Performance Metrics" 
+          headerControls={
+            <PerformanceWidget 
+              {...args} 
+              headerControls={true}
+              onVariantChange={(variant) => {
+                console.log('Variant changed to:', variant);
+              }}
+            />
+          }
+        >
           <PerformanceWidget 
             {...args} 
             onVariantChange={(variant) => {
-              // This will be handled by the widget internally
               console.log('Variant changed to:', variant);
             }}
           />

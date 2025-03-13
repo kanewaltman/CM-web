@@ -197,6 +197,16 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     );
   };
 
+  // Get accent color based on intensity
+  const accentBase = getInterpolatedValue(
+    {
+      oled: '0 0% 15%',
+      default: '0 0% 20%',
+      backlit: '220 3% 25%'
+    },
+    widgetIntensity
+  );
+
   return {
     background: `bg-[${bgBase}]`,
     text: 'text-white',
@@ -254,7 +264,7 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
         },
         backgroundIntensity
       ),
-      '--accent': widgetBase,
+      '--accent': accentBase,
       '--accent-foreground': '0 0% 98%',
       '--destructive': '0 63% 31%',
       '--destructive-foreground': '0 0% 98%',
