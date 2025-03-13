@@ -29,9 +29,15 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
   // Apply CSS variables when theme or intensities change
   useEffect(() => {
     const root = document.documentElement;
-    Object.entries(colors.cssVariables).forEach(([key, value]) => {
-      root.style.setProperty(key, value);
-    });
+    const styleTag = document.createElement('style');
+    styleTag.textContent = `:root {\n${Object.entries(colors.cssVariables)
+      .map(([key, value]) => `  ${key}: ${value};`)
+      .join('\n')}\n}`;
+    document.head.appendChild(styleTag);
+
+    return () => {
+      styleTag.remove();
+    };
   }, [theme, backgroundIntensity, widgetIntensity, borderIntensity]);
 
   const handlePageClick = (page: 'dashboard' | 'spot' | 'margin' | 'stake') => (e: React.MouseEvent) => {
