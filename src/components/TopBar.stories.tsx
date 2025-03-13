@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { TopBar } from './TopBar';
+import { ThemeProvider } from 'next-themes';
+import { ThemeProvider as ThemeIntensityProvider } from '../contexts/ThemeContext';
 
 const meta: Meta<typeof TopBar> = {
   title: 'Layout/TopBar',
@@ -8,6 +10,22 @@ const meta: Meta<typeof TopBar> = {
     layout: 'fullscreen',
   },
   tags: ['autodocs'],
+  decorators: [
+    (Story) => (
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        <ThemeIntensityProvider>
+          <div className="min-h-screen bg-background">
+            <Story />
+          </div>
+        </ThemeIntensityProvider>
+      </ThemeProvider>
+    ),
+  ],
   argTypes: {
     currentPage: {
       control: 'select',
