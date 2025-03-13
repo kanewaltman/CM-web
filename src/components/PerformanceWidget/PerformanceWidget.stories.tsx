@@ -2,8 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { PerformanceWidget } from './PerformanceWidget';
 import { WidgetContainer } from '../WidgetContainer';
 import { userEvent, within } from '@storybook/test';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DataSourceProvider } from '../../lib/DataSourceContext';
+import { ThemeProvider } from 'next-themes';
+import { ThemeProvider as ThemeIntensityProvider } from '@/contexts/ThemeContext';
+import { getThemeValues } from '@/lib/utils';
 
 // Sample data that matches the platform's sample data
 const SAMPLE_BALANCES = {
@@ -43,11 +46,58 @@ global.fetch = async (url: string) => {
   return originalFetch(url);
 };
 
-const meta = {
+// Theme wrapper component to handle theme initialization
+const ThemeWrapper = ({ children }: { children: React.ReactNode }) => {
+  useEffect(() => {
+    const root = document.documentElement;
+    const darkColors = getThemeValues('dark');
+    const lightColors = getThemeValues('light');
+
+    // Set both light and dark mode variables
+    Object.entries(lightColors.cssVariables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+
+    // Set dark mode variables with proper scoping
+    const darkStyles = document.createElement('style');
+    darkStyles.textContent = `.dark {\n${Object.entries(darkColors.cssVariables)
+      .map(([key, value]) => `  ${key}: ${value};`)
+      .join('\n')}\n}`;
+    document.head.appendChild(darkStyles);
+
+    return () => {
+      // Clean up
+      Object.keys(lightColors.cssVariables).forEach((key) => {
+        root.style.removeProperty(key);
+      });
+      darkStyles.remove();
+    };
+  }, []);
+
+  return children;
+};
+
+const meta: Meta<typeof PerformanceWidget> = {
   title: 'Widgets/PerformanceWidget',
   component: PerformanceWidget,
   parameters: {
-    layout: 'centered',
+    layout: 'padded',
+    backgrounds: {
+      default: 'dark',
+      values: [
+        {
+          name: 'dark',
+          value: 'hsl(0 0% 0%)',
+        },
+        {
+          name: 'light',
+          value: 'hsl(0 0% 100%)',
+        },
+      ],
+    },
+    darkMode: {
+      current: 'dark',
+    },
     docs: {
       description: {
         component: 'A widget that displays various performance charts with the ability to switch between different visualizations.',
@@ -55,39 +105,55 @@ const meta = {
     },
   },
   tags: ['autodocs'],
-} satisfies Meta<typeof PerformanceWidget>;
+  decorators: [
+    (Story) => (
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem={false}
+        disableTransitionOnChange
+      >
+        <ThemeIntensityProvider>
+          <ThemeWrapper>
+            <div className="w-[800px] h-[600px]">
+              <Story />
+            </div>
+          </ThemeWrapper>
+        </ThemeIntensityProvider>
+      </ThemeProvider>
+    ),
+  ],
+};
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof PerformanceWidget>;
 
 // Base story with WidgetContainer
 const BaseStory = (args: any) => {
   const [headerControls, setHeaderControls] = React.useState<React.ReactNode>(null);
   
   return (
-    <div className="w-[800px] h-[600px]">
-      <DataSourceProvider defaultDataSource="sample">
-        <WidgetContainer 
-          title="Performance Metrics" 
-          headerControls={
-            <PerformanceWidget 
-              {...args} 
-              headerControls={true}
-              onVariantChange={(variant) => {
-                console.log('Variant changed to:', variant);
-              }}
-            />
-          }
-        >
+    <DataSourceProvider defaultDataSource="sample">
+      <WidgetContainer 
+        title="Performance Metrics" 
+        headerControls={
           <PerformanceWidget 
             {...args} 
+            headerControls={true}
             onVariantChange={(variant) => {
               console.log('Variant changed to:', variant);
             }}
           />
-        </WidgetContainer>
-      </DataSourceProvider>
-    </div>
+        }
+      >
+        <PerformanceWidget 
+          {...args} 
+          onVariantChange={(variant) => {
+            console.log('Variant changed to:', variant);
+          }}
+        />
+      </WidgetContainer>
+    </DataSourceProvider>
   );
 };
 

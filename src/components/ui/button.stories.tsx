@@ -1,10 +1,78 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from './button';
+import React, { useEffect } from 'react';
+import { ThemeProvider } from 'next-themes';
+import { ThemeProvider as ThemeIntensityProvider } from '../../contexts/ThemeContext';
+import { getThemeValues } from '@/lib/utils';
+
+// Theme wrapper component to handle theme initialization
+const ThemeWrapper = ({ children }: { children: React.ReactNode }) => {
+  useEffect(() => {
+    const root = document.documentElement;
+    const darkColors = getThemeValues('dark');
+    const lightColors = getThemeValues('light');
+
+    // Set both light and dark mode variables
+    Object.entries(lightColors.cssVariables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+
+    // Set dark mode variables with proper scoping
+    const darkStyles = document.createElement('style');
+    darkStyles.textContent = `.dark {\n${Object.entries(darkColors.cssVariables)
+      .map(([key, value]) => `  ${key}: ${value};`)
+      .join('\n')}\n}`;
+    document.head.appendChild(darkStyles);
+
+    return () => {
+      // Clean up
+      Object.keys(lightColors.cssVariables).forEach((key) => {
+        root.style.removeProperty(key);
+      });
+      darkStyles.remove();
+    };
+  }, []);
+
+  return children;
+};
 
 const meta: Meta<typeof Button> = {
   title: 'UI/Button',
   component: Button,
+  parameters: {
+    backgrounds: {
+      default: 'light',
+      values: [
+        {
+          name: 'dark',
+          value: 'hsl(0 0% 0%)',
+        },
+        {
+          name: 'light',
+          value: 'hsl(0 0% 100%)',
+        },
+      ],
+    },
+  },
   tags: ['autodocs'],
+  decorators: [
+    (Story) => (
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        <ThemeIntensityProvider>
+          <ThemeWrapper>
+            <div className="p-4">
+              <Story />
+            </div>
+          </ThemeWrapper>
+        </ThemeIntensityProvider>
+      </ThemeProvider>
+    ),
+  ],
   argTypes: {
     variant: {
       control: 'select',
