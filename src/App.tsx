@@ -1347,9 +1347,12 @@ function AppContent() {
       // Add touch event handlers for mobile
       const handleTouchStart = (e: TouchEvent) => {
         if (isMobile) {
-          // Prevent touch events from initiating drag on mobile
-          e.preventDefault();
-          e.stopPropagation();
+          // Only prevent touch events on widget headers
+          const target = e.target as HTMLElement;
+          if (target.closest('.widget-header')) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
         }
       };
 
@@ -1891,7 +1894,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
-      <div className="main-content">
+      <div className="main-content h-[calc(100vh-4rem)] overflow-y-auto">
         <div className="main-content-inner">
           <ControlBar 
             onResetLayout={handleResetLayout}
