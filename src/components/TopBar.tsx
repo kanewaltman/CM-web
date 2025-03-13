@@ -43,11 +43,17 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
   useEffect(() => {
     console.log('📍 TopBar mounted with page:', currentPage);
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 0);
+      const mainContent = document.querySelector('.main-content');
+      if (mainContent) {
+        setIsScrolled(mainContent.scrollTop > 0);
+      }
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+      mainContent.addEventListener('scroll', handleScroll);
+      return () => mainContent.removeEventListener('scroll', handleScroll);
+    }
   }, [currentPage]);
 
   useEffect(() => {
@@ -56,8 +62,8 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
 
   return (
     <header className={cn(
-      "fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-sm transition-all duration-200",
-      isScrolled ? "border-border/50" : "border-transparent"
+      "fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-sm transition-all duration-300",
+      isScrolled ? "border-border" : "border-transparent"
     )}>
       <div className="flex h-16 items-center justify-between px-4 md:px-6">
         {/* Left Section - with 6px left padding */}
