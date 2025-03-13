@@ -3,6 +3,45 @@ import { PerformanceWidget } from './PerformanceWidget';
 import { WidgetContainer } from '../WidgetContainer';
 import { userEvent, within } from '@storybook/test';
 import React from 'react';
+import { DataSourceProvider } from '../../lib/DataSourceContext';
+
+// Sample data that matches the platform's sample data
+const SAMPLE_BALANCES = {
+  "BTC": {
+    "BTC": "1.23456789",
+    "EUR": "45678.90"
+  },
+  "ETH": {
+    "ETH": "15.432109",
+    "EUR": "28901.23"
+  },
+  "DOT": {
+    "DOT": "1234.5678",
+    "EUR": "12345.67"
+  },
+  "USDT": {
+    "USDT": "50000.00",
+    "EUR": "45678.90"
+  }
+};
+
+// Mock the fetch function for sample data
+const originalFetch = global.fetch;
+global.fetch = async (url: string) => {
+  if (url.includes('open/users/balances')) {
+    return new Response(JSON.stringify(SAMPLE_BALANCES), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+  if (url.includes('open/demo/temp')) {
+    return new Response(JSON.stringify({ token: 'sample-token' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+  return originalFetch(url);
+};
 
 const meta = {
   title: 'Widgets/PerformanceWidget',
@@ -27,15 +66,17 @@ const BaseStory = (args: any) => {
   
   return (
     <div className="w-[800px] h-[600px]">
-      <WidgetContainer title="Performance Metrics" headerControls={headerControls}>
-        <PerformanceWidget 
-          {...args} 
-          onVariantChange={(variant) => {
-            // This will be handled by the widget internally
-            console.log('Variant changed to:', variant);
-          }}
-        />
-      </WidgetContainer>
+      <DataSourceProvider defaultDataSource="sample">
+        <WidgetContainer title="Performance Metrics" headerControls={headerControls}>
+          <PerformanceWidget 
+            {...args} 
+            onVariantChange={(variant) => {
+              // This will be handled by the widget internally
+              console.log('Variant changed to:', variant);
+            }}
+          />
+        </WidgetContainer>
+      </DataSourceProvider>
     </div>
   );
 };

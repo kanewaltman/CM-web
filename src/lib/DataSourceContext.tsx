@@ -9,10 +9,15 @@ interface DataSourceContextType {
 
 const DataSourceContext = createContext<DataSourceContextType | undefined>(undefined);
 
-export function DataSourceProvider({ children }: { children: ReactNode }) {
+interface DataSourceProviderProps {
+  children: ReactNode;
+  defaultDataSource?: DataSource;
+}
+
+export function DataSourceProvider({ children, defaultDataSource }: DataSourceProviderProps) {
   const [dataSource, setDataSource] = useState<DataSource>(() => {
     const saved = localStorage.getItem('data-source');
-    return (saved === 'demo' || saved === 'sample') ? saved : 'demo';
+    return (saved === 'demo' || saved === 'sample') ? saved : (defaultDataSource || 'demo');
   });
 
   useEffect(() => {

@@ -2,6 +2,28 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { BalancesWidget } from './BalancesWidget';
 import { WidgetContainer } from './WidgetContainer';
 import { handlers } from '../mocks/handlers';
+import { DataSourceProvider } from '../lib/DataSourceContext';
+import React from 'react';
+
+// Sample data that matches the platform's sample data
+const SAMPLE_BALANCES = {
+  "BTC": {
+    "BTC": "1.23456789",
+    "EUR": "45678.90"
+  },
+  "ETH": {
+    "ETH": "15.432109",
+    "EUR": "28901.23"
+  },
+  "DOT": {
+    "DOT": "1234.5678",
+    "EUR": "12345.67"
+  },
+  "USDT": {
+    "USDT": "50000.00",
+    "EUR": "45678.90"
+  }
+};
 
 const meta: Meta<typeof BalancesWidget> = {
   title: 'Widgets/BalancesWidget',
@@ -26,9 +48,11 @@ const meta: Meta<typeof BalancesWidget> = {
   decorators: [
     (Story) => (
       <div className="w-[800px] h-[600px]">
-        <WidgetContainer title="Balances">
-          <Story />
-        </WidgetContainer>
+        <DataSourceProvider defaultDataSource="sample">
+          <WidgetContainer title="Balances">
+            <Story />
+          </WidgetContainer>
+        </DataSourceProvider>
       </div>
     ),
   ],
