@@ -129,9 +129,9 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
       backlit: 'hsl(0 0% 4%)'
     },
     border: {
-      default: '0 0% 12%',
-      oled: '0 0% 8%',
-      backlit: '0 0% 16%'
+      default: '0 0% 10%',
+      oled: '0 0% 6%',
+      backlit: '0 0% 14%'
     }
   };
 
@@ -161,9 +161,9 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     if (backgroundIntensity >= 1) {
       return getInterpolatedValue(
         {
-          oled: '0 0% 20%',
-          default: '0 0% 24%',
-          backlit: '0 0% 28%'
+          oled: '0 0% 18%',
+          default: '0 0% 22%',
+          backlit: '0 0% 26%'
         },
         intensity,
         opacity
