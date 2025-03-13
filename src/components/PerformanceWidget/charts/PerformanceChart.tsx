@@ -446,18 +446,24 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             <CardTitle>
               {viewMode === 'split' ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  {assets.map(asset => {
+                  {assets.map((asset: AssetTicker) => {
                     const assetConfig = ASSETS[asset];
                     const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
                     const isHidden = hiddenAssets.has(asset);
+                    const isActive = hoverValues?.activeLine === asset;
+                    const currentValue = isActive ? hoverValues?.values[asset] : undefined;
+                    const previousIndex = hoverValues?.index ? hoverValues.index - 1 : 0;
+                    const previousValue = previousIndex >= 0 ? balanceData[previousIndex]?.[asset] : undefined;
+                    const change = typeof currentValue === 'number' && typeof previousValue === 'number' ? 
+                      ((currentValue - previousValue) / previousValue * 100) : 0;
                     return (
                       <button 
                         key={asset}
                         type="button"
-                        className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
+                        className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
                         style={{ 
-                          color: assetColor,
-                          backgroundColor: `${assetColor}14`,
+                          color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
+                          backgroundColor: isActive ? assetColor : `${assetColor}14`,
                           cursor: 'pointer',
                           WebkitTouchCallout: 'none',
                           WebkitUserSelect: 'text',
@@ -477,8 +483,10 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                         }}
                         onMouseLeave={(e) => {
                           const target = e.currentTarget;
-                          target.style.backgroundColor = `${assetColor}14`;
-                          target.style.color = assetColor;
+                          if (!isActive) {
+                            target.style.backgroundColor = `${assetColor}14`;
+                            target.style.color = assetColor;
+                          }
                           
                           // Delay clearing the hover state
                           hoverTimeoutRef.current = setTimeout(() => {
@@ -502,16 +510,71 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                 </div>
               )}
             </CardTitle>
-            <div className="flex items-start gap-2">
-              <div className="font-semibold text-2xl">
-                €{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            <div className="flex items-baseline gap-2 min-h-[2rem]">
+              <div className="font-semibold text-2xl leading-none">
+                €{(viewMode === 'split' && hoverValues?.activeLine ? 
+                  hoverValues.values[hoverValues.activeLine] :
+                  hoverValues?.values.total ?? totalValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </div>
-              <Badge className={cn(
-                "mt-1.5 border-none",
-                totalChange > 0 ? "bg-emerald-500/24 text-emerald-500" : "bg-red-500/24 text-red-500"
-              )}>
-                {totalChange > 0 ? "+" : ""}{totalChange.toFixed(1)}%
-              </Badge>
+              <div className="flex-none h-5">
+                {((viewMode === 'cumulative' && !hoverValues) || (viewMode === 'split' && hoverValues?.activeLine) || (viewMode === 'cumulative' && hoverValues)) && (
+                  <Badge variant="outline" className={cn(
+                    "flex items-center h-5 translate-y-[-2px]",
+                    (() => {
+                      if (viewMode === 'split' && hoverValues?.activeLine) {
+                        const currentValue = hoverValues.values[hoverValues.activeLine] as number;
+                        const previousIndex = hoverValues.index - 1;
+                        const previousValue = previousIndex >= 0 ? 
+                          (balanceData[previousIndex]?.[hoverValues.activeLine] as number || 0) : 0;
+                        const change = ((currentValue - previousValue) / (previousValue || 1)) * 100;
+                        return change > 0 ? 
+                          "bg-price-up/10 text-price-up hover:bg-price-up/20" : 
+                          change < 0 ?
+                          "bg-price-down/10 text-price-down hover:bg-price-down/20" :
+                          "bg-muted/10 text-muted-foreground hover:bg-muted/20";
+                      } else if (viewMode === 'cumulative' && hoverValues) {
+                        const currentValue = hoverValues.values.total as number;
+                        const previousIndex = hoverValues.index - 1;
+                        const previousValue = previousIndex >= 0 ? 
+                          cumulativeData[previousIndex]?.total || 0 : 0;
+                        const change = ((currentValue - previousValue) / (previousValue || 1)) * 100;
+                        return change > 0 ? 
+                          "bg-price-up/10 text-price-up hover:bg-price-up/20" : 
+                          change < 0 ?
+                          "bg-price-down/10 text-price-down hover:bg-price-down/20" :
+                          "bg-muted/10 text-muted-foreground hover:bg-muted/20";
+                      } else {
+                        const change = totalChange;
+                        return change > 0 ? 
+                          "bg-price-up/10 text-price-up hover:bg-price-up/20" : 
+                          change < 0 ?
+                          "bg-price-down/10 text-price-down hover:bg-price-down/20" :
+                          "bg-muted/10 text-muted-foreground hover:bg-muted/20";
+                      }
+                    })()
+                  )}>
+                    {(() => {
+                      if (viewMode === 'split' && hoverValues?.activeLine) {
+                        const currentValue = hoverValues.values[hoverValues.activeLine] as number;
+                        const previousIndex = hoverValues.index - 1;
+                        const previousValue = previousIndex >= 0 ? 
+                          (balanceData[previousIndex]?.[hoverValues.activeLine] as number || 0) : 0;
+                        const change = ((currentValue - previousValue) / (previousValue || 1)) * 100;
+                        return `${change > 0 ? "+" : ""}${change.toFixed(2)}%`;
+                      } else if (viewMode === 'cumulative' && hoverValues) {
+                        const currentValue = hoverValues.values.total as number;
+                        const previousIndex = hoverValues.index - 1;
+                        const previousValue = previousIndex >= 0 ? 
+                          cumulativeData[previousIndex]?.total || 0 : 0;
+                        const change = ((currentValue - previousValue) / (previousValue || 1)) * 100;
+                        return `${change > 0 ? "+" : ""}${change.toFixed(2)}%`;
+                      } else {
+                        return `${totalChange > 0 ? "+" : ""}${totalChange.toFixed(1)}%`;
+                      }
+                    })()}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           <RadioGroup

@@ -50,12 +50,12 @@ export function OrderBook() {
           </TableHeader>
           <TableBody>
             {asks.map((ask, i) => (
-              <TableRow key={`ask-${i}`} className="group hover:bg-red-500/5" isHeader={false}>
+              <TableRow key={`ask-${i}`} className="group hover:bg-price-down/5" isHeader={false}>
                 <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
                   <div className="relative">
                     <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                     <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="relative z-10 text-red-500 font-mono">{ask.price.toFixed(2)}</div>
+                    <div className="relative z-10 text-price-down font-mono">{ask.price.toFixed(2)}</div>
                   </div>
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap font-mono">{ask.amount.toFixed(4)}</TableCell>
@@ -63,12 +63,12 @@ export function OrderBook() {
               </TableRow>
             ))}
             {bids.map((bid, i) => (
-              <TableRow key={`bid-${i}`} className="group hover:bg-green-500/5" isHeader={false}>
+              <TableRow key={`bid-${i}`} className="group hover:bg-price-up/5" isHeader={false}>
                 <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
                   <div className="relative">
                     <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                     <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="relative z-10 text-green-500 font-mono">{bid.price.toFixed(2)}</div>
+                    <div className="relative z-10 text-price-up font-mono">{bid.price.toFixed(2)}</div>
                   </div>
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap font-mono">{bid.amount.toFixed(4)}</TableCell>

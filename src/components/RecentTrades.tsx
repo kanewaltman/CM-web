@@ -39,7 +39,7 @@ export function RecentTrades() {
                 </TableCell>
                 <TableCell className={cn(
                   "text-right whitespace-nowrap font-mono",
-                  trade.side === 'buy' ? "text-green-500" : "text-red-500"
+                  trade.side === 'buy' ? "text-price-up" : "text-price-down"
                 )}>
                   {trade.price}
                 </TableCell>

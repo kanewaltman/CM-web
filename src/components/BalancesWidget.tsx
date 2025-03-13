@@ -627,7 +627,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                         </TableCell>
                         <TableCell className={cn(
                           "text-right whitespace-nowrap font-mono",
-                          parseFloat(balance.change24h) > 0 ? "text-green-500" : parseFloat(balance.change24h) < 0 ? "text-red-500" : "text-muted-foreground/80"
+                          parseFloat(balance.change24h) > 0 ? "text-price-up" : parseFloat(balance.change24h) < 0 ? "text-price-down" : "text-muted-foreground/80"
                         )}>
                           {balance.change24h}%
                         </TableCell>

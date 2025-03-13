@@ -77,9 +77,9 @@
   --color-destructive-foreground: 210 40% 98%;
   
   /* Trading Colors */
-  --color-price-up: 142 72% 29%;
-  --color-price-down: 355 78% 50%;
-  --color-price-unchanged: 0 0% 45%;
+  --color-price-up: 34 197 94;      /* green-500 */
+  --color-price-down: 239 68 68;    /* red-500 */
+  --color-price-unchanged: 215.4 16.3% 46.9%;  /* text-muted-foreground */
   
   /* Component Specific */
   --color-input-background: var(--color-bg-inset);
@@ -180,6 +180,11 @@
   
   --color-destructive-default: 0 63% 31%;
   --color-destructive-foreground: 0 0% 98%;
+
+  /* Trading Colors - Updated to match Tailwind colors */
+  --color-price-up: 34 197 94;      /* green-500 */
+  --color-price-down: 239 68 68;    /* red-500 */
+  --color-price-unchanged: 0 0% 64%; /* text-muted-foreground */
 
   /* Component Specific */
   --color-input-background: var(--color-bg-inset);
@@ -682,4 +687,43 @@ button.font-bold,
 .dark .tooltip-content {
   background: hsl(var(--color-widget-bg));
   box-shadow: none;
+}
+
+@layer utilities {
+  .text-price-up {
+    color: rgb(var(--color-price-up));
+  }
+  .text-price-down {
+    color: rgb(var(--color-price-down));
+  }
+  .text-price-unchanged {
+    color: hsl(var(--color-price-unchanged));
+  }
+  .bg-price-up {
+    background-color: rgb(var(--color-price-up));
+  }
+  .bg-price-down {
+    background-color: rgb(var(--color-price-down));
+  }
+  .bg-price-unchanged {
+    background-color: hsl(var(--color-price-unchanged));
+  }
+  .bg-price-up\/10 {
+    background-color: rgb(var(--color-price-up) / 0.1);
+  }
+  .bg-price-down\/10 {
+    background-color: rgb(var(--color-price-down) / 0.1);
+  }
+  .bg-price-unchanged\/10 {
+    background-color: hsl(var(--color-price-unchanged) / 0.1);
+  }
+  .bg-price-up\/20 {
+    background-color: rgb(var(--color-price-up) / 0.2);
+  }
+  .bg-price-down\/20 {
+    background-color: rgb(var(--color-price-down) / 0.2);
+  }
+  .bg-price-unchanged\/20 {
+    background-color: hsl(var(--color-price-unchanged) / 0.2);
+  }
 }
