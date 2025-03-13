@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   Table,
   TableHeader,
@@ -12,7 +12,6 @@ import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
 import { Button } from './ui/button';
-import { TableSkeleton } from './TableSkeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
 
@@ -46,9 +45,12 @@ const formatBalance = (value: number, decimals: number) => {
   return `${wholeWithCommas}.${trimmedDecimal}`;
 };
 
-const SkeletonRow: React.FC = () => (
+const SkeletonRow: React.FC<{ assetColumnWidth?: number }> = ({ assetColumnWidth = 150 }) => (
   <TableRow isHeader={false}>
-    <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
+    <TableCell 
+      className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap"
+      style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
+    >
       <div className="relative">
         <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
         <div className="relative z-10 flex items-center gap-2">
@@ -137,6 +139,63 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const [error, setError] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textMeasureRef = useRef<HTMLDivElement>(null);
+  const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150); // Default width
+
+  // Check for container width to determine compact mode
+  useEffect(() => {
+    // Calculate the minimum width needed for the full table view
+    const calculateMinTableWidth = () => {
+      // Base width for asset column
+      const assetColWidth = assetColumnWidth;
+      
+      // Width for balance column (approximately)
+      const balanceColWidth = 120;
+      
+      // Width for additional columns in full view
+      const valueColWidth = 120;
+      const changeColWidth = 100;
+      const availableColWidth = 100;
+      
+      // Add a small buffer to prevent edge cases (10px)
+      const buffer = 10;
+      
+      // Total width needed for full table
+      return assetColWidth + balanceColWidth + valueColWidth + changeColWidth + availableColWidth + buffer;
+    };
+
+    const checkWidth = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.clientWidth;
+        const minTableWidth = calculateMinTableWidth();
+        
+        // Enable compact mode if container is narrower than the minimum table width
+        // This ensures compact mode is enabled as soon as horizontal scrolling would be needed
+        const shouldBeCompact = containerWidth < minTableWidth;
+        
+        setIsCompact(shouldBeCompact);
+      }
+    };
+
+    // Initial check
+    checkWidth();
+
+    // Set up resize observer
+    const resizeObserver = new ResizeObserver(checkWidth);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    // Also add window resize event listener as backup
+    window.addEventListener('resize', checkWidth);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', checkWidth);
+    };
+  }, [assetColumnWidth]); // Add assetColumnWidth as dependency
 
   // Detect theme from document class list
   useEffect(() => {
@@ -187,8 +246,8 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               parseFloat(balance.balance) > 0
             );
 
-          setBalances(balancesArray);
-          setError(null);
+            setBalances(balancesArray);
+            setError(null);
         } else {
           const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
           const tokenData = await tokenResponse.json();
@@ -383,213 +442,280 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
     }));
   }, [balances, prices]);
 
-  const renderContent = () => {
-    if (isInitialLoading) {
-      return (
-        <TableBody>
-          {[...Array(5)].map((_, i) => (
-            <SkeletonRow key={i} />
-          ))}
-        </TableBody>
-      );
-    }
+  // Calculate the width needed for the asset column based on the longest asset name
+  useEffect(() => {
+    if (balances.length === 0 || !textMeasureRef.current) return;
 
-    if (error) {
-      return (
-        <div className="p-3">
-          <div className="text-red-500">{error}</div>
-        </div>
-      );
-    }
+    // Create a temporary span to measure text width
+    const measureElement = document.createElement('span');
+    measureElement.style.visibility = 'hidden';
+    measureElement.style.position = 'absolute';
+    measureElement.style.whiteSpace = 'nowrap';
+    measureElement.style.fontFamily = 'var(--font-jakarta)';
+    measureElement.style.fontWeight = 'bold';
+    measureElement.style.fontSize = '14px'; // Adjust based on your text size
+    document.body.appendChild(measureElement);
 
-    if (balances.length === 0) {
-      return (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-sm text-muted-foreground">No balances found</div>
-        </div>
-      );
-    }
+    // Find the longest asset name
+    let maxWidth = 0;
+    balances.forEach(balance => {
+      const assetConfig = ASSETS[balance.asset];
+      if (assetConfig) {
+        measureElement.textContent = assetConfig.name;
+        const width = measureElement.getBoundingClientRect().width;
+        maxWidth = Math.max(maxWidth, width);
+      }
+    });
 
-    return (
-      <TableBody>
-        {balancesWithPrices.map((balance) => {
-          const assetConfig = ASSETS[balance.asset];
-          const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
-          return (
-            <TableRow key={balance.asset} className="group" isHeader={false}>
-              <TableCell className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="relative z-10 flex items-center gap-2">
-                    <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
-                    >
-                      <img
-                        src={assetConfig.icon}
-                        alt={balance.asset}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <button 
-                      type="button"
-                      className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
-                      style={{ 
-                        color: assetColor,
-                        backgroundColor: `${assetColor}14`,
-                        cursor: 'pointer',
-                        WebkitTouchCallout: 'none',
-                        WebkitUserSelect: 'text',
-                        userSelect: 'text'
-                      }}
-                      onMouseEnter={(e) => {
-                        const target = e.currentTarget;
-                        target.style.backgroundColor = assetColor;
-                        target.style.color = 'hsl(var(--color-widget-bg))';
-                      }}
-                      onMouseLeave={(e) => {
-                        const target = e.currentTarget;
-                        target.style.backgroundColor = `${assetColor}14`;
-                        target.style.color = assetColor;
-                      }}
-                      onMouseDown={(e) => {
-                        if (e.detail > 1) {
-                          e.preventDefault();
-                        }
-                      }}
-                    >
-                      {assetConfig.name}
-                    </button>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                  {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
-                </span>
-                <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground/80 ml-1">
-                  {balance.asset}
-                </span>
-              </TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                  {parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </TableCell>
-              <TableCell className={cn(
-                "text-right whitespace-nowrap font-mono",
-                parseFloat(balance.change24h) > 0 ? "text-green-500" : parseFloat(balance.change24h) < 0 ? "text-red-500" : "text-muted-foreground/80"
-              )}>
-                {balance.change24h}%
-              </TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <TooltipProvider delayDuration={0}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button 
-                        type="button"
-                        className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
-                        style={{
-                          cursor: 'pointer',
-                          WebkitTouchCallout: 'none',
-                          WebkitUserSelect: 'text',
-                          userSelect: 'text'
-                        }}
-                        onMouseDown={(e) => {
-                          if (e.detail > 1) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        {balance.availablePercentage}%
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="py-2 px-3 w-56 bg-background text-foreground border border-border">
-                      <div className="space-y-2">
-                        <div className="text-[13px] font-medium text-left">Balances</div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <svg
-                            width="8"
-                            height="8"
-                            fill="currentColor"
-                            viewBox="0 0 8 8"
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="shrink-0 text-green-500"
-                            aria-hidden="true"
-                          >
-                            <circle cx="4" cy="4" r="4"></circle>
-                          </svg>
-                          <span className="flex grow gap-2">
-                            Available <span className="ml-auto">100%</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <svg
-                            width="8"
-                            height="8"
-                            fill="currentColor"
-                            viewBox="0 0 8 8"
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="shrink-0 text-muted-foreground/40"
-                            aria-hidden="true"
-                          >
-                            <circle cx="4" cy="4" r="4"></circle>
-                          </svg>
-                          <span className="flex grow gap-2 text-muted-foreground/80">
-                            Staked <span className="ml-auto">0%</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <svg
-                            width="8"
-                            height="8"
-                            fill="currentColor"
-                            viewBox="0 0 8 8"
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="shrink-0 text-muted-foreground/40"
-                            aria-hidden="true"
-                          >
-                            <circle cx="4" cy="4" r="4"></circle>
-                          </svg>
-                          <span className="flex grow gap-2 text-muted-foreground/80">
-                            In Exchange <span className="ml-auto">0%</span>
-                          </span>
-                        </div>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    );
-  };
+    // Remove the temporary element
+    document.body.removeChild(measureElement);
+
+    // Add padding for icon (32px) + gap (8px) + padding (16px)
+    const totalWidth = maxWidth + 32 + 8 + 16;
+    
+    // Set minimum width
+    const minWidth = 120;
+    setAssetColumnWidth(Math.max(totalWidth, minWidth));
+  }, [balances]);
+
+  // Initialize asset column width based on all available assets when no balances are loaded yet
+  useEffect(() => {
+    if (balances.length > 0 || !textMeasureRef.current) return;
+
+    // Create a temporary span to measure text width
+    const measureElement = document.createElement('span');
+    measureElement.style.visibility = 'hidden';
+    measureElement.style.position = 'absolute';
+    measureElement.style.whiteSpace = 'nowrap';
+    measureElement.style.fontFamily = 'var(--font-jakarta)';
+    measureElement.style.fontWeight = 'bold';
+    measureElement.style.fontSize = '14px';
+    document.body.appendChild(measureElement);
+
+    // Find the longest asset name from all available assets
+    let maxWidth = 0;
+    Object.values(ASSETS).forEach(asset => {
+      measureElement.textContent = asset.name;
+      const width = measureElement.getBoundingClientRect().width;
+      maxWidth = Math.max(maxWidth, width);
+    });
+
+    // Remove the temporary element
+    document.body.removeChild(measureElement);
+
+    // Add padding for icon (32px) + gap (8px) + padding (16px)
+    const totalWidth = maxWidth + 32 + 8 + 16;
+    
+    // Set minimum width
+    const minWidth = 120;
+    setAssetColumnWidth(Math.max(totalWidth, minWidth));
+  }, []);
 
   return (
-    <div className={cn(
-      "h-full flex flex-col p-2",
-      className
-    )}>
+    <div 
+      className={cn("h-full flex flex-col p-2 relative", className)}
+      ref={containerRef}
+    >
       <div className="flex-1 min-h-0 relative">
         <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
+        {/* Hidden div for text measurement */}
+        <div ref={textMeasureRef} className="absolute -left-[9999px] -top-[9999px]"></div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap">
+              <TableHead 
+                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap"
+                style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
+              >
                 <div className="relative">
                   <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 px-0 py-1">Asset</div>
                 </div>
               </TableHead>
               <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Balance</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Available</TableHead>
+              {!isCompact && (
+                <>
+                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
+                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
+                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Available</TableHead>
+                </>
+              )}
             </TableRow>
           </TableHeader>
-          {renderContent()}
+          {isInitialLoading ? (
+            <TableBody>
+              {[...Array(5)].map((_, i) => (
+                <SkeletonRow key={i} assetColumnWidth={assetColumnWidth} />
+              ))}
+            </TableBody>
+          ) : error ? (
+            <div className="p-3">
+              <div className="text-red-500">{error}</div>
+            </div>
+          ) : balances.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-sm text-muted-foreground">No balances found</div>
+            </div>
+          ) : (
+            <TableBody>
+              {balancesWithPrices.map((balance) => {
+                const assetConfig = ASSETS[balance.asset];
+                const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                return (
+                  <TableRow key={balance.asset} className="group" isHeader={false}>
+                    <TableCell 
+                      className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap"
+                      style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
+                    >
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
+                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="relative z-10 flex items-center gap-2">
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
+                          >
+                            <img
+                              src={assetConfig.icon}
+                              alt={balance.asset}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <span
+                            className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
+                            style={{ 
+                              color: assetColor,
+                              backgroundColor: `${assetColor}14`
+                            }}
+                          >
+                            {assetConfig.name}
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      {isCompact ? (
+                        <div className="flex flex-col items-end">
+                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                            €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <div className="text-muted-foreground">
+                            <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                              {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
+                            </span>
+                            <span className="font-jakarta font-bold text-sm leading-[150%] ml-1">
+                              {balance.asset}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                            {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
+                          </span>
+                          <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground/80 ml-1">
+                            {balance.asset}
+                          </span>
+                        </div>
+                      )}
+                    </TableCell>
+                    {!isCompact && (
+                      <>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                            €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </TableCell>
+                        <TableCell className={cn(
+                          "text-right whitespace-nowrap font-mono",
+                          parseFloat(balance.change24h) > 0 ? "text-green-500" : parseFloat(balance.change24h) < 0 ? "text-red-500" : "text-muted-foreground/80"
+                        )}>
+                          {balance.change24h}%
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button 
+                                  type="button"
+                                  className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
+                                  style={{
+                                    cursor: 'pointer',
+                                    WebkitTouchCallout: 'none',
+                                    WebkitUserSelect: 'text',
+                                    userSelect: 'text'
+                                  }}
+                                  onMouseDown={(e) => {
+                                    if (e.detail > 1) {
+                                      e.preventDefault();
+                                    }
+                                  }}
+                                >
+                                  {balance.availablePercentage}%
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="py-2 px-3 w-56 bg-background text-foreground border border-border">
+                                <div className="space-y-2">
+                                  <div className="text-[13px] font-medium text-left">Balances</div>
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <svg
+                                      width="8"
+                                      height="8"
+                                      fill="currentColor"
+                                      viewBox="0 0 8 8"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className="shrink-0 text-green-500"
+                                      aria-hidden="true"
+                                    >
+                                      <circle cx="4" cy="4" r="4"></circle>
+                                    </svg>
+                                    <span className="flex grow gap-2">
+                                      Available <span className="ml-auto">100%</span>
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <svg
+                                      width="8"
+                                      height="8"
+                                      fill="currentColor"
+                                      viewBox="0 0 8 8"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className="shrink-0 text-muted-foreground/40"
+                                      aria-hidden="true"
+                                    >
+                                      <circle cx="4" cy="4" r="4"></circle>
+                                    </svg>
+                                    <span className="flex grow gap-2 text-muted-foreground/80">
+                                      Staked <span className="ml-auto">0%</span>
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <svg
+                                      width="8"
+                                      height="8"
+                                      fill="currentColor"
+                                      viewBox="0 0 8 8"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className="shrink-0 text-muted-foreground/40"
+                                      aria-hidden="true"
+                                    >
+                                      <circle cx="4" cy="4" r="4"></circle>
+                                    </svg>
+                                    <span className="flex grow gap-2 text-muted-foreground/80">
+                                      In Exchange <span className="ml-auto">0%</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          )}
         </Table>
       </div>
     </div>
