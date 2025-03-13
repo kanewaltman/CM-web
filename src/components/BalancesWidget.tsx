@@ -516,9 +516,6 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       className={cn("h-full flex flex-col p-2 relative", className)}
       ref={containerRef}
     >
-      {/* Compact mode indicator (for debugging) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div 
       <div className="flex-1 min-h-0 relative">
         <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         {/* Hidden div for text measurement */}
