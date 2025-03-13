@@ -17,6 +17,12 @@ import {
   DialogFooter,
   DialogClose,
 } from './ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/tooltip';
 import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
@@ -342,20 +348,44 @@ export function ControlBar({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-72">
-              <div className="flex space-x-2 p-2">
-                <Button variant="outline" className="flex-1 h-10" onClick={handleCopyLayout}>
-                  <Copy className="h-4 w-4 mr-2 opacity-80" />
-                  <span>Copy</span>
-                </Button>
-                <Button variant="outline" className="flex-1 h-10" onClick={handlePasteLayout}>
-                  <Clipboard className="h-4 w-4 mr-2 opacity-80" />
-                  <span>Paste</span>
+              <div className="flex items-center justify-between p-2">
+                <div className="flex items-center gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handleCopyLayout}>
+                          <Copy className="h-4 w-4 opacity-80" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="tooltip-content">
+                        <p>Copy Layout</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handlePasteLayout}>
+                          <Clipboard className="h-4 w-4 opacity-80" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="tooltip-content">
+                        <p>Paste Layout</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+
+                <Button variant="ghost" size="sm" onClick={onResetLayout}>
+                  <RotateCcw className="h-4 w-4 mr-2 opacity-80" />
+                  <span>Reset</span>
                 </Button>
               </div>
               <DropdownMenuSeparator />
               <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
               <div className="px-1 py-1 pb-2">
-                {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][]).map(([type, config]) => (
+                {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
+                  .filter(([type]) => type === 'balances' || type === 'performance')
+                  .map(([type, config]) => (
                   <div
                     key={type}
                     draggable={!isTauriEnv}
@@ -498,17 +528,6 @@ export function ControlBar({
                             <div className="text-xs text-muted-foreground mt-3">16px radius, 4px spacing</div>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div>
-                        <div className="mb-3 text-sm font-medium">Layout</div>
-                        <Button variant="outline" className="w-full h-11" onClick={() => {
-                          onResetLayout();
-                          setIsAppearanceOpen(false);
-                        }}>
-                          <RotateCcw className="h-4 w-4 mr-2 opacity-80" />
-                          <span>Reset Layout</span>
-                        </Button>
                       </div>
                     </div>
                   </DialogContent>
