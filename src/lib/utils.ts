@@ -139,7 +139,7 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
   const bgBase = getInterpolatedValue(
     {
       oled: '0 0% 0%',
-      default: '0 0% 4%',
+      default: '0 0% 7.83%',
       backlit: '220 3% 18%'
     },
     backgroundIntensity
