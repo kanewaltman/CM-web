@@ -1115,11 +1115,13 @@ function AppContent() {
         draggable: {
           handle: '.widget-header',
           scroll: true,
-          appendTo: 'body'
+          appendTo: 'body',
+          enabled: !isMobile
         },
         resizable: {
           handles: 'e, se, s, sw, w',
-          autoHide: true
+          autoHide: true,
+          enabled: !isMobile
         },
         minRow: 1,
         staticGrid: currentPage !== 'dashboard',
