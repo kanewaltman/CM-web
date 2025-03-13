@@ -175,14 +175,6 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         // This ensures compact mode is enabled as soon as horizontal scrolling would be needed
         const shouldBeCompact = containerWidth < minTableWidth;
         
-        // Log for debugging
-        console.log('Width check:', {
-          containerWidth,
-          minTableWidth,
-          assetColumnWidth,
-          shouldBeCompact
-        });
-        
         setIsCompact(shouldBeCompact);
       }
     };
@@ -527,13 +519,6 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       {/* Compact mode indicator (for debugging) */}
       {process.env.NODE_ENV === 'development' && (
         <div 
-          className={cn(
-            "absolute top-1 right-1 w-2 h-2 rounded-full z-50 transition-colors",
-            isCompact ? "bg-amber-500" : "bg-green-500"
-          )}
-          title={isCompact ? "Compact mode" : "Full mode"}
-        />
-      )}
       <div className="flex-1 min-h-0 relative">
         <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         {/* Hidden div for text measurement */}
