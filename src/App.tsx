@@ -741,8 +741,9 @@ function AppContent() {
     
     grid.batchUpdate();
     try {
-      // Use the default layout directly since it already includes view states
-      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(defaultLayout));
+      // Use the appropriate layout based on device type
+      const layoutToApply = isMobile ? mobileLayout : defaultLayout;
+      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
       
       // First, remove all existing widgets and their DOM elements
       const currentWidgets = grid.getGridItems();
@@ -764,8 +765,8 @@ function AppContent() {
         remainingWidgets.forEach(widget => widget.remove());
       }
       
-      // Now add all widgets from default layout
-      defaultLayout.forEach(node => {
+      // Now add all widgets from the appropriate layout
+      layoutToApply.forEach(node => {
         const widgetType = widgetTypes[node.id.split('-')[0]];
         
         if (!widgetComponents[widgetType]) {
@@ -824,12 +825,14 @@ function AppContent() {
           try {
             grid.compact();
             // Verify final positions
-            defaultLayout.forEach(node => {
+            layoutToApply.forEach(node => {
               const widget = grid.getGridItems().find(w => w.gridstackNode?.id === node.id);
               if (widget) {
                 grid.update(widget, {
                   x: node.x,
                   y: node.y,
+                  w: node.w,
+                  h: node.h,
                   autoPosition: false
                 });
               }
@@ -843,7 +846,7 @@ function AppContent() {
       grid.commit();
     }
     console.log('✅ Reset layout completed');
-  }, [grid, createWidget]);
+  }, [grid, createWidget, isMobile]);
 
   const handleCopyLayout = useCallback(() => {
     if (!grid) return '';
