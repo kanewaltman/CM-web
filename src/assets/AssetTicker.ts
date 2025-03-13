@@ -398,7 +398,7 @@ export const ASSETS: {[K in AssetTicker]: AssetConfig<K>} = {
   AXL    : { name: "Axelar"               , symbol: "AXL"    , type: ASSET_TYPE.Crypto , icon: iconAXL    , theme: { light: "#090604", dark: "#090604" }, decimalPlaces: 5, multiplier: 1e2, networks: [{ type: ASSET_NETWORK.Ethereum    }] },
 
   POL    : { name: "Polygon"              , symbol: "POL"    , type: ASSET_TYPE.Crypto , icon: iconMATIC  , theme: { light: "#8247E5", dark: "#8247E5" }, decimalPlaces: 2, multiplier: 1e2, networks: [{ type: ASSET_NETWORK.Polygon }] },
-  USDT   : { name: "Tether USDt"          , symbol: "USDT"   , type: ASSET_TYPE.Crypto , icon: iconUSDT   , theme: { light: "#3bff34", dark: "#3bff34" }, decimalPlaces: 5, multiplier: 1e2, networks: [{ type: ASSET_NETWORK.Ethereum    }, { type: ASSET_NETWORK.Polygon, isAlternative: true }] },
+  USDT   : { name: "Tether"               , symbol: "USDT"   , type: ASSET_TYPE.Crypto , icon: iconUSDT   , theme: { light: "#3bff34", dark: "#3bff34" }, decimalPlaces: 5, multiplier: 1e2, networks: [{ type: ASSET_NETWORK.Ethereum    }, { type: ASSET_NETWORK.Polygon, isAlternative: true }] },
 };
 
 export const ASSETS_ARRAY = recordValues(ASSETS);
