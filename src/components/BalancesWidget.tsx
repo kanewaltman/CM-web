@@ -434,23 +434,31 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   
   // Format data for treemap
   const treemapData = useMemo(() => {
-    return balancesWithPrices.map(balance => ({
-      name: balance.asset,
-      size: parseFloat(balance.valueInEuro),
-      color: ASSETS[balance.asset]?.theme?.[currentTheme] || '#888888',
-      formattedValue: `€${parseFloat(balance.valueInEuro).toLocaleString(undefined, { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      })}`
-    }));
+    const totalValue = balancesWithPrices.reduce((sum, balance) => sum + parseFloat(balance.valueInEuro), 0);
+    
+    return balancesWithPrices.map(balance => {
+      const value = parseFloat(balance.valueInEuro);
+      const percentage = (value / totalValue) * 100;
+      
+      return {
+        name: balance.asset,
+        size: value,
+        color: ASSETS[balance.asset]?.theme?.[currentTheme] || '#888888',
+        formattedValue: `€${value.toLocaleString(undefined, { 
+          minimumFractionDigits: 2, 
+          maximumFractionDigits: 2 
+        })}`,
+        percentage: percentage.toFixed(1)
+      };
+    });
   }, [balancesWithPrices, currentTheme]);
 
   // Custom Treemap content component with white text
   const CustomTreemapContent = (props: any) => {
-    const { x, y, width, height, name, formattedValue, color } = props;
+    const { x, y, width, height, name, percentage, color } = props;
     
-    // Only show text if rectangle is big enough
-    if (width < 60 || height < 40) return (
+    // Only show text if rectangle is big enough - reduced threshold to show more text
+    if (width < 40 || height < 30) return (
       <g>
         <rect
           x={x}
@@ -498,7 +506,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           fontSize={13}
           style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.7)' }}
         >
-          {formattedValue}
+          {percentage}%
         </text>
       </g>
     );
@@ -733,9 +741,9 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                         return (
                           <div className="bg-background p-2 border border-border rounded-md shadow-md">
                             <p className="font-bold">{data.name}</p>
-                            <p>{data.formattedValue}</p>
+                            <p className="text-lg font-semibold">{data.percentage}%</p>
                             <p className="text-xs text-muted-foreground">
-                              {((data.size / treemapData.reduce((sum, item) => sum + item.size, 0)) * 100).toFixed(1)}% of portfolio
+                              {data.formattedValue}
                             </p>
                           </div>
                         );
