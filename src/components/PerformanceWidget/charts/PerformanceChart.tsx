@@ -211,6 +211,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(propViewMode);
   const [hoverValues, setHoverValues] = useState<{ index: number; values: { [key: string]: number }; activeLine?: string } | null>(null);
   const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
+  const [hoveredAsset, setHoveredAsset] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync with prop changes
   useEffect(() => {
@@ -464,14 +466,24 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                         }}
                         onClick={() => toggleAssetVisibility(asset)}
                         onMouseEnter={(e) => {
+                          if (hoverTimeoutRef.current) {
+                            clearTimeout(hoverTimeoutRef.current);
+                            hoverTimeoutRef.current = null;
+                          }
                           const target = e.currentTarget;
                           target.style.backgroundColor = assetColor;
                           target.style.color = 'hsl(var(--color-widget-bg))';
+                          setHoveredAsset(asset);
                         }}
                         onMouseLeave={(e) => {
                           const target = e.currentTarget;
                           target.style.backgroundColor = `${assetColor}14`;
                           target.style.color = assetColor;
+                          
+                          // Delay clearing the hover state
+                          hoverTimeoutRef.current = setTimeout(() => {
+                            setHoveredAsset(null);
+                          }, 150); // 150ms delay matches the transition duration
                         }}
                         onMouseDown={(e) => {
                           if (e.detail > 1) {
@@ -632,7 +644,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           isAnimationActive={true}
                           animationDuration={1000}
                           animationBegin={0}
-                          strokeOpacity={hoverValues ? (hoverValues.activeLine === asset ? 1 : 0.3) : 1}
+                          strokeOpacity={hoverValues ? 
+                            (hoverValues.activeLine === asset ? 1 : 0.3) : 
+                            hoveredAsset ? 
+                              (hoveredAsset === asset ? 1 : 0.3) : 
+                              1}
+                          className="transition-[stroke-opacity] duration-150 ease-out"
                           connectNulls={true}
                         />
                       </>
