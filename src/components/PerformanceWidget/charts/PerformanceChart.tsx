@@ -67,6 +67,7 @@ interface BalanceDetails {
 
 interface BalanceDataPoint {
   timestamp: string;
+  date: string;
   [key: string]: number | string;
 }
 
@@ -210,7 +211,8 @@ function generateSampleData(currentBalances: Record<string, number>, pointCount:
     
     // Format date to include year for proper month transitions
     const dataPoint: BalanceDataPoint = {
-      timestamp: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      date: date.toISOString() // Add the full date for tooltip use
     };
 
     Object.entries(currentBalances).forEach(([asset, currentValue]) => {
@@ -471,6 +473,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       const total = assets.reduce((sum, asset) => sum + (point[asset] as number || 0), 0);
       return {
         timestamp: point.timestamp,
+        date: point.date,
         total
       };
     });
@@ -980,13 +983,13 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => {
-                const [month, day, year] = value.split(' ');
+                const [month, year] = value.split(' ');
                 
                 if (month !== lastShownDate.current.month || year !== lastShownDate.current.year) {
                   // Show year if this is the first month we're seeing in a new year
                   const showYear = year !== lastShownDate.current.year;
                   lastShownDate.current = { month, year };
-                  return showYear ? `${month} ${day}'${year.slice(-2)}` : `${month} ${day}`;
+                  return showYear ? `${month}'${year.slice(-2)}` : month;
                 }
                 return '';
               }}

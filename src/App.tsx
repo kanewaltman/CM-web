@@ -23,16 +23,21 @@ import { getThemeValues } from '@/lib/utils';
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
   className?: string;
+  widgetId?: string;
 }
 
 interface RemovableWidgetProps extends BaseWidgetProps {
   onRemove?: () => void;
 }
 
-interface PerformanceWidgetProps extends RemovableWidgetProps {
+interface PerformanceWidgetProps extends BaseWidgetProps {
+  defaultVariant?: ChartVariant;
+  defaultViewMode?: 'split' | 'cumulative';
+  onVariantChange?: (variant: ChartVariant) => void;
+  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+  onTitleChange?: (title: string) => void;
+  onRemove?: () => void;
   headerControls?: boolean;
-  defaultVariant?: 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades';
-  onVariantChange?: (variant: 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades') => void;
 }
 
 interface WidgetConfig {
@@ -40,6 +45,7 @@ interface WidgetConfig {
   title: string;
   component: React.FC<RemovableWidgetProps | PerformanceWidgetProps>;
   defaultSize: { w: number; h: number };
+  minSize: { w: number; h: number };
 }
 
 export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
@@ -47,43 +53,50 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     id: 'market',
     title: 'Market Overview',
     component: MarketOverview,
-    defaultSize: { w: 12, h: 4 }
+    defaultSize: { w: 12, h: 4 },
+    minSize: { w: 6, h: 3 }
   },
   'order-book': {
     id: 'orderbook',
     title: 'Order Book',
     component: OrderBook,
-    defaultSize: { w: 4, h: 6 }
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 3, h: 4 }
   },
   'recent-trades': {
     id: 'trades',
     title: 'Recent Trades',
     component: RecentTrades,
-    defaultSize: { w: 12, h: 2 }
+    defaultSize: { w: 12, h: 2 },
+    minSize: { w: 4, h: 2 }
   },
   'trading-view-chart': {
     id: 'chart',
     title: 'BTC/USDT',
     component: TradingViewChart,
-    defaultSize: { w: 8, h: 6 }
+    defaultSize: { w: 8, h: 6 },
+    minSize: { w: 6, h: 4 }
   },
   'trade-form': {
     id: 'tradeform',
     title: 'Trade',
     component: TradeForm,
-    defaultSize: { w: 3, h: 4 }
+    defaultSize: { w: 3, h: 4 },
+    minSize: { w: 3, h: 4 }
   },
   'balances': {
     id: 'balances',
     title: 'Balances',
     component: BalancesWidget,
-    defaultSize: { w: 4, h: 4 }
+    defaultSize: { w: 4, h: 4 },
+    minSize: { w: 3, h: 3 }
   },
   'performance': {
     id: 'performance',
     title: 'Performance',
     component: PerformanceWidget,
-    defaultSize: { w: 8, h: 6 }
+    defaultSize: { w: 8, h: 6 },
+    minSize: { w: 4, h: 4 }
   }
 } as const;
 
@@ -114,19 +127,45 @@ const widgetTitles: Record<string, string> = Object.fromEntries(
   Object.entries(WIDGET_REGISTRY).map(([key, config]) => [key, config.title])
 );
 
-// Default layout is now generated from registry
+interface WidgetViewState {
+  chartVariant: ChartVariant;
+  viewMode: 'split' | 'cumulative';
+}
+
+interface BaseLayoutItem {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+}
+
+interface PerformanceLayoutItem extends BaseLayoutItem {
+  viewState: WidgetViewState;
+}
+
+type LayoutItem = BaseLayoutItem | PerformanceLayoutItem;
+
+// Helper type guard for PerformanceLayoutItem
+const isPerformanceLayoutItem = (item: LayoutItem): item is PerformanceLayoutItem => {
+  return 'viewState' in item && item.id.startsWith('performance-');
+};
+
+// Update the generateDefaultLayout function
 const generateDefaultLayout = () => [
   { 
     id: 'performance', 
     x: 7, 
     y: 0, 
     w: 5, 
-    h: 6, 
-    minW: 2, 
-    minH: 2, 
+    h: 6,
+    minW: 2,
+    minH: 2,
     viewState: { 
-      chartVariant: 'revenue',
-      viewMode: 'split'
+      chartVariant: 'revenue' as ChartVariant,
+      viewMode: 'split' as const
     } 
   },
   { 
@@ -134,60 +173,60 @@ const generateDefaultLayout = () => [
     x: 0, 
     y: 6, 
     w: 12, 
-    h: 5, 
-    minW: 2, 
-    minH: 2 
+    h: 5,
+    minW: 2,
+    minH: 2
   },
   { 
     id: 'performance-1741826205331', 
     x: 0, 
     y: 0, 
     w: 7, 
-    h: 6, 
-    minW: 2, 
-    minH: 2, 
+    h: 6,
+    minW: 2,
+    minH: 2,
     viewState: { 
-      chartVariant: 'revenue',
-      viewMode: 'cumulative'
+      chartVariant: 'revenue' as ChartVariant,
+      viewMode: 'cumulative' as const
     } 
   }
-];
+] as LayoutItem[];
 
 const defaultLayout = generateDefaultLayout();
 
 // Default desktop layout configuration for different pages
 const dashboardLayout = [
-  { x: 8, y: 0, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 4, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 },
-  { x: 4, y: 0, w: 4, h: 4, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 0, y: 0, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 8, y: 0, w: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 0, y: 4, w: Math.max(12, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(2, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 4, y: 0, w: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 0, y: 0, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 const spotLayout = [
-  { x: 0, y: 0, w: 6, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 6, y: 0, w: 3, h: 6, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 9, y: 0, w: 3, h: 4, id: 'tradeform', minW: 2, minH: 2 },
-  { x: 9, y: 4, w: 3, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 9, h: 2, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 8, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 0, y: 0, w: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.h), id: 'chart', minW: WIDGET_REGISTRY['trading-view-chart'].minSize.w, minH: WIDGET_REGISTRY['trading-view-chart'].minSize.h },
+  { x: 6, y: 0, w: Math.max(3, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 9, y: 0, w: Math.max(3, WIDGET_REGISTRY['trade-form'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.h), id: 'tradeform', minW: WIDGET_REGISTRY['trade-form'].minSize.w, minH: WIDGET_REGISTRY['trade-form'].minSize.h },
+  { x: 9, y: 4, w: Math.max(3, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 0, y: 6, w: Math.max(9, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(2, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 0, y: 8, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 const marginLayout = [
-  { x: 0, y: 0, w: 8, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 8, y: 0, w: 4, h: 6, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 4, h: 4, id: 'tradeform', minW: 2, minH: 2 },
-  { x: 4, y: 6, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 8, y: 6, w: 4, h: 4, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 10, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 0, y: 0, w: Math.max(8, WIDGET_REGISTRY['trading-view-chart'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.h), id: 'chart', minW: WIDGET_REGISTRY['trading-view-chart'].minSize.w, minH: WIDGET_REGISTRY['trading-view-chart'].minSize.h },
+  { x: 8, y: 0, w: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 0, y: 6, w: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.h), id: 'tradeform', minW: WIDGET_REGISTRY['trade-form'].minSize.w, minH: WIDGET_REGISTRY['trade-form'].minSize.h },
+  { x: 4, y: 6, w: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 8, y: 6, w: Math.max(4, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 0, y: 10, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 const stakeLayout = [
-  { x: 0, y: 0, w: 12, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 4, h: 4, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 4, y: 6, w: 4, h: 4, id: 'tradeform', minW: 2, minH: 2 },
-  { x: 8, y: 6, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 10, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 12, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 0, y: 0, w: Math.max(12, WIDGET_REGISTRY['trading-view-chart'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.h), id: 'chart', minW: WIDGET_REGISTRY['trading-view-chart'].minSize.w, minH: WIDGET_REGISTRY['trading-view-chart'].minSize.h },
+  { x: 0, y: 6, w: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 4, y: 6, w: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.h), id: 'tradeform', minW: WIDGET_REGISTRY['trade-form'].minSize.w, minH: WIDGET_REGISTRY['trade-form'].minSize.h },
+  { x: 8, y: 6, w: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 0, y: 10, w: Math.max(12, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(2, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 0, y: 12, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 // Mobile layout configuration (single column)
@@ -438,14 +477,14 @@ function AppContent() {
   }, [handleRemoveWidget]);
 
   // Now define createWidget which uses handleRemoveWidgetRef
-  const createWidget = useCallback(({ widgetType, widgetId, x, y, w = 3, h = 4, minW = 2, minH = 2 }: CreateWidgetParams) => {
+  const createWidget = useCallback(({ widgetType, widgetId, x, y, w, h }: CreateWidgetParams) => {
     if (!widgetType || !widgetId) {
       console.error('Invalid widget parameters:', { widgetType, widgetId });
       return null;
     }
 
-    const WidgetComponent = widgetComponents[widgetType];
-    if (!WidgetComponent) {
+    const widgetConfig = WIDGET_REGISTRY[widgetType];
+    if (!widgetConfig) {
       console.error('Unknown widget type:', widgetType);
       return null;
     }
@@ -454,14 +493,14 @@ function AppContent() {
     const widgetElement = document.createElement('div');
     widgetElement.className = 'grid-stack-item';
     
-    // Set grid attributes
+    // Set grid attributes with minimum sizes from registry
     widgetElement.setAttribute('gs-id', widgetId);
     widgetElement.setAttribute('gs-x', String(x));
     widgetElement.setAttribute('gs-y', String(y));
-    widgetElement.setAttribute('gs-w', String(w));
-    widgetElement.setAttribute('gs-h', String(h));
-    widgetElement.setAttribute('gs-min-w', String(minW));
-    widgetElement.setAttribute('gs-min-h', String(minH));
+    widgetElement.setAttribute('gs-w', String(w ?? widgetConfig.defaultSize.w));
+    widgetElement.setAttribute('gs-h', String(h ?? widgetConfig.defaultSize.h));
+    widgetElement.setAttribute('gs-min-w', String(widgetConfig.minSize.w));
+    widgetElement.setAttribute('gs-min-h', String(widgetConfig.minSize.h));
 
     // Create the content wrapper
     const contentElement = document.createElement('div');
@@ -512,187 +551,43 @@ function AppContent() {
           widgetStateRegistry.set(widgetId, widgetState);
         }
 
-        const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
-          const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
-          const [title, setTitle] = useState(widgetState.title);
-          const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(widgetState.viewMode);
-
-          useEffect(() => {
-            // Initial state sync
-            setVariant(widgetState.variant);
-            setTitle(widgetState.title);
-            setViewMode(widgetState.viewMode);
-
-            // Subscribe to state changes
-            const unsubscribe = widgetState.subscribe(() => {
-              setVariant(widgetState.variant);
-              setTitle(widgetState.title);
-              setViewMode(widgetState.viewMode);
-            });
-
-            return unsubscribe;
-          }, []);
-
-          const handleVariantChange = useCallback((newVariant: ChartVariant) => {
-            if (!newVariant) return;
-            
-            // Get new title first
-            const newTitle = getPerformanceTitle(newVariant);
-
-            // Force immediate re-render of the container by updating state first
-            setVariant(newVariant);
-            setTitle(newTitle);
-            
-            // Update shared state
-            widgetState.setVariant(newVariant);
-            widgetState.setTitle(newTitle);
-
-            // Force a re-render of the widget container
-            const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
-            if (widgetContainer) {
-              const root = (widgetContainer as any)._reactRoot;
-              if (root) {
-                root.render(
-                  <React.StrictMode>
-                    <DataSourceProvider>
-                      <WidgetContainer
-                        key={newTitle} // Force re-render with new title
-                        title={newTitle}
-                        onRemove={() => {
-                          if (gridRef.current) {
-                            const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                            if (widget) {
-                              const reactRoot = (widget as any)._reactRoot;
-                              if (reactRoot) {
-                                reactRoot.unmount();
-                              }
-                              // Clean up widget state
-                              widgetStateRegistry.delete(widgetId);
-                              gridRef.current.removeWidget(widget, false);
-                              widget.remove();
-                            }
-                          }
-                        }}
-                        headerControls={<PerformanceWidgetWrapper isHeader />}
-                      >
-                        <PerformanceWidgetWrapper />
-                      </WidgetContainer>
-                    </DataSourceProvider>
-                  </React.StrictMode>
-                );
-              }
-            }
-
-            // Save to layout data
-            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-            if (savedLayout) {
-              try {
-                const layout = JSON.parse(savedLayout);
-                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-                if (widgetIndex !== -1) {
-                  layout[widgetIndex] = {
-                    ...layout[widgetIndex],
-                    viewState: {
-                      ...layout[widgetIndex].viewState,
-                      chartVariant: newVariant
-                    }
-                  };
-                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-                }
-              } catch (error) {
-                console.error('Failed to save widget view state:', error);
-              }
-            }
-          }, []);
-
-          const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative') => {
-            widgetState.setViewMode(newViewMode);
-
-            // Save to layout data
-            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-            if (savedLayout) {
-              try {
-                const layout = JSON.parse(savedLayout);
-                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-                if (widgetIndex !== -1) {
-                  layout[widgetIndex] = {
-                    ...layout[widgetIndex],
-                    viewState: {
-                      ...layout[widgetIndex].viewState,
-                      chartVariant: widgetState.variant,
-                      viewMode: newViewMode
-                    }
-                  };
-                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-                }
-              } catch (error) {
-                console.error('Failed to save widget view state:', error);
-              }
-            }
-          }, []);
-
-          return (
-            <WidgetComponent
-              widgetId={widgetId}
-              headerControls={isHeader}
-              defaultVariant={variant}
-              defaultViewMode={viewMode}
-              onVariantChange={handleVariantChange}
-              onViewModeChange={handleViewModeChange}
-            />
-          );
-        };
-
         root.render(
           <React.StrictMode>
             <DataSourceProvider>
               <WidgetContainer
-                key={widgetState.title}
                 title={widgetState.title}
-                onRemove={() => {
-                  if (gridRef.current) {
-                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                    if (widget) {
-                      const reactRoot = (widget as any)._reactRoot;
-                      if (reactRoot) {
-                        reactRoot.unmount();
-                      }
-                      // Clean up widget state
-                      widgetStateRegistry.delete(widgetId);
-                      gridRef.current.removeWidget(widget, false);
-                      widget.remove();
-                    }
-                  }
-                }}
-                headerControls={<PerformanceWidgetWrapper isHeader />}
+                onRemove={() => handleRemoveWidget(widgetId)}
+                headerControls={true}
               >
-                <PerformanceWidgetWrapper />
+                <widgetConfig.component
+                  key={widgetId}
+                  widgetId={widgetId}
+                  defaultVariant={widgetState.variant}
+                  defaultViewMode={widgetState.viewMode}
+                  onVariantChange={(variant) => {
+                    widgetState?.setVariant(variant);
+                    widgetState?.setTitle(getPerformanceTitle(variant));
+                  }}
+                  onViewModeChange={(mode) => {
+                    widgetState?.setViewMode(mode);
+                  }}
+                  onTitleChange={(title) => {
+                    widgetState?.setTitle(title);
+                  }}
+                />
               </WidgetContainer>
             </DataSourceProvider>
           </React.StrictMode>
         );
       } else {
-        // Regular widget rendering
         root.render(
           <React.StrictMode>
             <DataSourceProvider>
               <WidgetContainer
                 title={widgetTitles[widgetType]}
-                onRemove={() => {
-                  if (gridRef.current) {
-                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                    if (widget) {
-                      const reactRoot = (widget as any)._reactRoot;
-                      if (reactRoot) {
-                        reactRoot.unmount();
-                      }
-                      gridRef.current.removeWidget(widget, false);
-                      widget.remove();
-                    }
-                  }
-                }}
+                onRemove={() => handleRemoveWidget(widgetId)}
               >
-                <WidgetComponent widgetId={widgetId} />
+                <widgetConfig.component key={widgetId} widgetId={widgetId} />
               </WidgetContainer>
             </DataSourceProvider>
           </React.StrictMode>
@@ -701,13 +596,11 @@ function AppContent() {
 
       return widgetElement;
     } catch (error) {
-      console.error('Error creating widget:', error);
-      // Clean up on error
+      console.error('Failed to render widget:', error);
       root.unmount();
-      widgetElement.remove();
       return null;
     }
-  }, []);
+  }, [handleRemoveWidget]);
 
   // Check for ad blocker on mount
   useEffect(() => {
@@ -782,7 +675,8 @@ function AppContent() {
       
       // Now add all widgets from the appropriate layout
       layoutToApply.forEach(node => {
-        const widgetType = widgetTypes[node.id.split('-')[0]];
+        const baseWidgetId = node.id.split('-')[0];
+        const widgetType = widgetTypes[baseWidgetId];
         
         if (!widgetComponents[widgetType]) {
           console.warn('❌ Unknown widget type:', widgetType);
@@ -790,39 +684,76 @@ function AppContent() {
         }
 
         try {
+          // Get widget configuration to enforce minimum sizes
+          const widgetConfig = WIDGET_REGISTRY[widgetType];
+          if (!widgetConfig) {
+            console.warn('❌ Missing widget configuration for:', widgetType);
+            return;
+          }
+
+          // Enforce minimum sizes from registry
+          const width = Math.max(node.w, widgetConfig.minSize.w);
+          const height = Math.max(node.h, widgetConfig.minSize.h);
+
           const widgetElement = createWidget({
             widgetType,
             widgetId: node.id,
             x: node.x,
             y: node.y,
-            w: node.w,
-            h: node.h,
-            minW: node.minW,
-            minH: node.minH
+            w: width,
+            h: height,
+            minW: widgetConfig.minSize.w,
+            minH: widgetConfig.minSize.h
           });
 
           if (widgetElement) {
+            // Add widget with enforced minimum sizes
             grid.addWidget({
               el: widgetElement,
               id: node.id,
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH,
+              w: width,
+              h: height,
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h,
               autoPosition: false,
               noMove: isMobile || currentPage !== 'dashboard',
               noResize: isMobile || currentPage !== 'dashboard',
               locked: isMobile || currentPage !== 'dashboard'
             } as ExtendedGridStackWidget);
 
-            // Update widget state if it exists
-            if (node.viewState) {
-              const widgetState = widgetStateRegistry.get(node.id);
-              if (widgetState) {
-                widgetState.setVariant(node.viewState.chartVariant as ChartVariant);
-              }
+            // Add resize event listener to enforce minimum sizes
+            if (!isMobile && currentPage === 'dashboard') {
+              const resizeHandler = (event: Event, el: GridStackNode) => {
+                if (el.id === node.id && el.el) {
+                  const config = WIDGET_REGISTRY[widgetType];
+                  if (config) {
+                    const minW = config.minSize.w;
+                    const minH = config.minSize.h;
+                    
+                    // Enforce minimum sizes during resize
+                    if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
+                      grid.update(el.el, {
+                        w: Math.max(el.w || minW, minW),
+                        h: Math.max(el.h || minH, minH),
+                        autoPosition: false
+                      });
+                    }
+
+                    // Update visual feedback
+                    const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
+                    if (isAtMinSize) {
+                      el.el.classList.add('min-size');
+                    } else {
+                      el.el.classList.remove('min-size');
+                    }
+                  }
+                }
+              };
+
+              // Remove any existing resize handler and add the new one
+              grid.off('resize').on('resize', resizeHandler);
             }
           }
         } catch (error) {
@@ -839,17 +770,25 @@ function AppContent() {
           grid.batchUpdate();
           try {
             grid.compact();
-            // Verify final positions
+            // Verify final positions and sizes
             layoutToApply.forEach(node => {
               const widget = grid.getGridItems().find(w => w.gridstackNode?.id === node.id);
-              if (widget) {
-                grid.update(widget, {
-                  x: node.x,
-                  y: node.y,
-                  w: node.w,
-                  h: node.h,
-                  autoPosition: false
-                });
+              if (widget && widget.gridstackNode) {
+                const baseWidgetId = node.id.split('-')[0];
+                const widgetType = widgetTypes[baseWidgetId];
+                const widgetConfig = WIDGET_REGISTRY[widgetType];
+                
+                if (widgetConfig) {
+                  grid.update(widget, {
+                    x: node.x,
+                    y: node.y,
+                    w: Math.max(node.w, widgetConfig.minSize.w),
+                    h: Math.max(node.h, widgetConfig.minSize.h),
+                    minW: widgetConfig.minSize.w,
+                    minH: widgetConfig.minSize.h,
+                    autoPosition: false
+                  });
+                }
               }
             });
           } finally {
@@ -861,7 +800,7 @@ function AppContent() {
       grid.commit();
     }
     console.log('✅ Reset layout completed');
-  }, [grid, createWidget, isMobile]);
+  }, [grid, createWidget, isMobile, currentPage]);
 
   const handleCopyLayout = useCallback(() => {
     if (!grid) return '';
@@ -874,8 +813,9 @@ function AppContent() {
         
         // Get the base widget type from the ID
         const baseId = node.id.split('-')[0];
-        const defaultWidget = defaultLayout.find(w => w.id === baseId);
-        if (!defaultWidget) return null;
+        const widgetType = widgetTypes[baseId];
+        const widgetConfig = WIDGET_REGISTRY[widgetType];
+        if (!widgetConfig) return null;
 
         // Get widget state if it exists
         const widgetState = widgetStateRegistry.get(node.id);
@@ -889,10 +829,10 @@ function AppContent() {
           baseId,
           x: node.x ?? 0,
           y: node.y ?? 0,
-          w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
-          h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
-          minW: defaultWidget.minW ?? 2,
-          minH: defaultWidget.minH ?? 2,
+          w: Math.max(node.w ?? 2, widgetConfig.minSize.w),
+          h: Math.max(node.h ?? 2, widgetConfig.minSize.h),
+          minW: widgetConfig.minSize.w,
+          minH: widgetConfig.minSize.h,
           viewState
         };
       })
@@ -918,11 +858,16 @@ function AppContent() {
       // Ensure all widgets in the layout exist in defaultLayout
       const validLayout = layout.every(widget => {
         const baseId = widget.baseId || widget.id.split('-')[0];
-        return defaultLayout.some(defaultWidget => defaultWidget.id === baseId);
+        const widgetType = widgetTypes[baseId];
+        const widgetConfig = WIDGET_REGISTRY[widgetType];
+        if (!widgetConfig) return false;
+
+        // Validate minimum sizes
+        return widget.w >= widgetConfig.minSize.w && widget.h >= widgetConfig.minSize.h;
       });
 
       if (!validLayout) {
-        throw new Error('Layout contains invalid widgets');
+        throw new Error('Layout contains invalid widgets or sizes');
       }
 
       grid.batchUpdate();
@@ -952,18 +897,26 @@ function AppContent() {
         // First update existing widgets
         layout.forEach(node => {
           const baseId = node.baseId || node.id.split('-')[0];
+          const widgetType = widgetTypes[baseId];
+          const widgetConfig = WIDGET_REGISTRY[widgetType];
+          
+          if (!widgetConfig) {
+            console.warn('❌ Unknown widget type:', widgetType);
+            return;
+          }
+
           const existingWidgets = currentWidgetsMap.get(baseId) || [];
           const existingWidget = existingWidgets.find((w: ExtendedGridStackWidget) => w.gridstackNode?.id === node.id) || existingWidgets[0];
           
           if (existingWidget) {
-            // Update position and size of existing widget
+            // Update position and size of existing widget, enforcing minimum sizes
             grid.update(existingWidget, {
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH,
+              w: Math.max(node.w, widgetConfig.minSize.w),
+              h: Math.max(node.h, widgetConfig.minSize.h),
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h,
               autoPosition: false
             });
 
@@ -987,23 +940,16 @@ function AppContent() {
             }
           } else {
             // Create new widget if it doesn't exist
-            const widgetType = widgetTypes[baseId];
-            
-            if (!widgetComponents[widgetType]) {
-              console.warn('❌ Unknown widget type:', widgetType);
-              return;
-            }
-
             try {
               const widgetElement = createWidget({
                 widgetType,
                 widgetId: node.id,
                 x: node.x,
                 y: node.y,
-                w: node.w,
-                h: node.h,
-                minW: node.minW,
-                minH: node.minH
+                w: Math.max(node.w, widgetConfig.minSize.w),
+                h: Math.max(node.h, widgetConfig.minSize.h),
+                minW: widgetConfig.minSize.w,
+                minH: widgetConfig.minSize.h
               });
 
               if (widgetElement) {
@@ -1012,10 +958,10 @@ function AppContent() {
                   id: node.id,
                   x: node.x,
                   y: node.y,
-                  w: node.w,
-                  h: node.h,
-                  minW: node.minW,
-                  minH: node.minH,
+                  w: Math.max(node.w, widgetConfig.minSize.w),
+                  h: Math.max(node.h, widgetConfig.minSize.h),
+                  minW: widgetConfig.minSize.w,
+                  minH: widgetConfig.minSize.h,
                   autoPosition: false,
                   noMove: isMobile || currentPage !== 'dashboard',
                   noResize: isMobile || currentPage !== 'dashboard',
@@ -1048,6 +994,38 @@ function AppContent() {
             grid.removeWidget(widget, false);
           }
         });
+
+        // Add resize event listeners to enforce minimum sizes
+        if (!isMobile && currentPage === 'dashboard') {
+          grid.off('resize').on('resize', (event: Event, el: GridStackNode) => {
+            if (el.id && el.el) {
+              const baseId = el.id.split('-')[0];
+              const widgetType = widgetTypes[baseId];
+              const config = WIDGET_REGISTRY[widgetType];
+              if (config) {
+                const minW = config.minSize.w;
+                const minH = config.minSize.h;
+                
+                // Enforce minimum sizes during resize
+                if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
+                  grid.update(el.el, {
+                    w: Math.max(el.w || minW, minW),
+                    h: Math.max(el.h || minH, minH),
+                    autoPosition: false
+                  });
+                }
+
+                // Update visual feedback
+                const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
+                if (isAtMinSize) {
+                  el.el.classList.add('min-size');
+                } else {
+                  el.el.classList.remove('min-size');
+                }
+              }
+            }
+          });
+        }
       } finally {
         grid.commit();
         console.log('✅ Paste layout completed');
@@ -1055,7 +1033,7 @@ function AppContent() {
     } catch (error) {
       console.error('Failed to paste layout:', error);
     }
-  }, [grid]);
+  }, [grid, createWidget, isMobile, currentPage]);
 
   const handlePageChange = useCallback((page: 'dashboard' | 'spot' | 'margin' | 'stake') => {
     console.log('🔄 Page change requested:', { from: currentPage, to: page, hasGrid: !!grid, isMobile });
@@ -1150,7 +1128,9 @@ function AppContent() {
         acceptWidgets: !isMobile,
         removable: false,
         swap: !isMobile,
-        swapScroll: !isMobile
+        swapScroll: !isMobile,
+        minWidth: 2,
+        minHeight: 2
       } as GridStackOptions, gridElementRef.current);
 
       // Track drag state and original positions
@@ -1458,33 +1438,74 @@ function AppContent() {
           }
 
           try {
+            // Get widget configuration to enforce minimum sizes
+            const widgetConfig = WIDGET_REGISTRY[widgetType];
+            if (!widgetConfig) {
+              console.warn('❌ Missing widget configuration for:', widgetType);
+              return;
+            }
+
+            // Enforce minimum sizes from registry
+            const width = Math.max(node.w, widgetConfig.minSize.w);
+            const height = Math.max(node.h, widgetConfig.minSize.h);
+
             // Create widget element with the exact ID from the layout
             const widgetElement = createWidget({
               widgetType,
               widgetId: node.id,
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH
+              w: width,
+              h: height,
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h
             });
 
-            // Add widget to grid with exact position
+            // Add widget to grid with exact position and enforced minimum sizes
             g.addWidget({
               el: widgetElement,
               id: node.id,
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH,
+              w: width,
+              h: height,
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h,
               autoPosition: false,
               noMove: isMobile || currentPage !== 'dashboard',
               noResize: isMobile || currentPage !== 'dashboard',
               locked: isMobile || currentPage !== 'dashboard'
             } as ExtendedGridStackWidget);
+
+            // Add resize event listener to enforce minimum sizes
+            if (!isMobile && currentPage === 'dashboard') {
+              g.on('resize', (event: Event, el: GridStackNode) => {
+                if (el.id && el.el) {
+                  const baseId = el.id.split('-')[0];
+                  const config = WIDGET_REGISTRY[widgetTypes[baseId]];
+                  if (config) {
+                    const minW = config.minSize.w;
+                    const minH = config.minSize.h;
+                    const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
+                    
+                    // Add or remove min-size class based on current size
+                    if (isAtMinSize) {
+                      el.el.classList.add('min-size');
+                    } else {
+                      el.el.classList.remove('min-size');
+                    }
+
+                    // Enforce minimum sizes
+                    if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
+                      g.update(el.el, {
+                        w: Math.max(el.w || minW, minW),
+                        h: Math.max(el.h || minH, minH)
+                      });
+                    }
+                  }
+                }
+              });
+            }
           } catch (error) {
             console.error('Failed to create widget:', node.id, error);
           }
@@ -1558,302 +1579,179 @@ function AppContent() {
     };
   }, [isMobile, currentPage, handleResize]);
 
-  const isValidLayout = (layout: unknown): layout is LayoutWidget[] => {
+  // Update the type guard function
+  const isValidLayout = (layout: (LayoutItem | null)[]): layout is LayoutItem[] => {
     if (!Array.isArray(layout)) {
-      console.warn('Layout is not an array');
       return false;
     }
     
-    // Get all valid base widget IDs
-    const validBaseIds = Object.values(widgetIds);
-    
-    // Verify each widget has valid properties and minimum sizes
-    return layout.every(widget => {
-      // Get base widget type from ID (handle both default and dynamic IDs)
-      const baseId = widget.id?.split('-')[0];
-      const isValidBaseType = baseId && validBaseIds.includes(baseId);
+    // Filter out null values and verify all required widgets are present with valid sizes
+    return layout.every(item => {
+      if (!item) return false;
       
-      // Check if viewState is valid for performance widgets
-      const hasValidViewState = baseId === 'performance' 
-        ? widget.viewState && 
-          typeof widget.viewState.chartVariant === 'string' &&
-          (!widget.viewState.viewMode || ['split', 'cumulative'].includes(widget.viewState.viewMode))
-        : true;
+      const widgetType = widgetTypes[item.id.split('-')[0]];
+      if (!widgetType) return false;
+      
+      const widgetConfig = WIDGET_REGISTRY[widgetType];
+      if (!widgetConfig) return false;
 
-      const isValid = (
-        typeof widget === 'object' &&
-        widget !== null &&
-        typeof widget.id === 'string' &&
-        typeof widget.x === 'number' &&
-        typeof widget.y === 'number' &&
-        typeof widget.w === 'number' &&
-        typeof widget.h === 'number' &&
-        widget.w >= (widget.minW ?? 2) &&
-        widget.h >= (widget.minH ?? 2) &&
-        isValidBaseType &&
-        hasValidViewState
-      );
-
-      if (!isValid) {
-        console.warn('Invalid widget in layout:', widget, { baseId, isValidBaseType, hasValidViewState });
-      }
-      return isValid;
+      return (item.w ?? 0) >= widgetConfig.minSize.w && 
+             (item.h ?? 0) >= widgetConfig.minSize.h;
     });
   };
 
-  useEffect(() => {
-    const gridElement = document.querySelector('.grid-stack');
-    if (!gridElement) return;
-
-    let previewX = 0;
-    let previewY = 0;
-
-    // Add drop event handlers with proper types
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer!.dropEffect = 'copy';
-
-      // Check if we're over the dropdown menu
-      const dropdownMenu = document.querySelector('[role="menu"]');
-      if (dropdownMenu && dropdownMenu.contains(e.target as Node)) {
-        cleanupPreview();
-        return;
-      }
-
-      // Calculate grid position
-      const rect = gridElement.getBoundingClientRect();
-      previewX = Math.floor((e.clientX - rect.left) / (rect.width / 12));
-      previewY = Math.floor((e.clientY - rect.top) / 150);
-
-      // Create or update preview element
-      let previewElement = document.querySelector('.widget-drag-preview');
-      if (!previewElement) {
-        previewElement = document.createElement('div');
-        previewElement.className = 'widget-drag-preview grid-stack-item';
-        previewElement.setAttribute('gs-w', '3');
-        previewElement.setAttribute('gs-h', '4');
-        previewElement.setAttribute('gs-no-resize', 'true');
-        previewElement.setAttribute('gs-no-move', 'true');
-        
-        const content = document.createElement('div');
-        content.className = 'grid-stack-item-content';
-        previewElement.appendChild(content);
-        
-        // Add the preview to the grid
-        gridElement.appendChild(previewElement);
-        
-        // Initialize it as a grid item with specific coordinates
-        if (gridRef.current) {
-          gridRef.current.addWidget({
-            el: previewElement as HTMLElement,
-            x: previewX,
-            y: previewY,
-            w: 3,
-            h: 4,
-            autoPosition: false,
-            noResize: true,
-            noMove: true
-          } as ExtendedGridStackWidget);
-        }
-      } else {
-        // Update position through GridStack
-        if (gridRef.current) {
-          gridRef.current.update(previewElement as HTMLElement, {
-            x: previewX,
-            y: previewY
-          });
-        }
-      }
-    };
-
-    const cleanupPreview = () => {
-      const previewElement = document.querySelector('.widget-drag-preview');
-      if (previewElement && gridRef.current) {
-        // Add removing class to trigger transition
-        previewElement.classList.add('removing');
-        
-        // Remove from grid immediately to prevent layout issues
-        gridRef.current.removeWidget(previewElement as HTMLElement, false);
-        
-        // Wait for transition to complete before removing from DOM
-        setTimeout(() => {
-          if (previewElement.parentNode) {
-            previewElement.remove();
-          }
-          // Ensure grid is properly updated
-          gridRef.current?.compact();
-        }, 200); // Match this with the CSS transition duration
-      }
-    };
-
-    const handleDragLeave = (e: DragEvent) => {
-      // Check if we're entering the dropdown menu
-      const dropdownMenu = document.querySelector('[role="menu"]');
-      if (dropdownMenu && dropdownMenu.contains(e.relatedTarget as Node)) {
-        cleanupPreview();
-        return;
-      }
-
-      // Only remove if we're actually leaving the grid area
-      const rect = gridElement.getBoundingClientRect();
-      const x = e.clientX;
-      const y = e.clientY;
-      
-      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-        cleanupPreview();
-      }
-    };
-
-    const handleDragEnd = () => {
-      cleanupPreview();
-    };
-
-    const handleDrop = (e: DragEvent) => {
-      e.preventDefault();
-      
-      const widgetType = e.dataTransfer?.getData('widget/type') || '';
-      if (!widgetType || !gridRef.current || !widgetComponents[widgetType]) {
-        return;
-      }
-
-      const grid = gridRef.current;
-      
-      // Store original grid settings
-      const prevAnimate = grid.opts.animate;
-      
-      // Disable animations temporarily
-      grid.setAnimation(false);
-      grid.setStatic(true);
-      grid.float(true);
-      
-      grid.batchUpdate();
-      try {
-        // Clean up preview first, but keep its position
-        const previewElement = document.querySelector('.widget-drag-preview');
-        const previewX = previewElement ? parseInt(previewElement.getAttribute('gs-x') || '0') : 0;
-        const previewY = previewElement ? parseInt(previewElement.getAttribute('gs-y') || '0') : 0;
-        
-        if (previewElement) {
-          grid.removeWidget(previewElement as HTMLElement, false);
-          previewElement.remove();
-        }
-
-        const baseWidgetId = widgetIds[widgetType];
-        const widgetId = `${baseWidgetId}-${Date.now()}`;
-        
-        const widgetElement = createWidget({
-          widgetType,
-          widgetId,
-          x: previewX,
-          y: previewY
-        });
-
-        // Add widget with consistent settings
-        grid.addWidget({
-          el: widgetElement,
-          x: previewX,
-          y: previewY,
-          w: 3,
-          h: 4,
-          minW: 2,
-          minH: 2,
-          id: widgetId,
-          autoPosition: false,
-          noMove: isMobile || currentPage !== 'dashboard',
-          noResize: isMobile || currentPage !== 'dashboard',
-          locked: isMobile || currentPage !== 'dashboard'
-        } as ExtendedGridStackWidget);
-
-        // Save updated layout
-        const items = grid.getGridItems();
-        const serializedLayout = items
-          .map(item => {
-            const node = item.gridstackNode;
-            if (!node || typeof node.id !== 'string') return null;
-            return {
-              id: node.id,
-              x: node.x ?? 0,
-              y: node.y ?? 0,
-              w: node.w ?? 2,
-              h: node.h ?? 2,
-              minW: node.minW ?? 2,
-              minH: node.minH ?? 2
-            };
-          })
-          .filter((item): item is LayoutWidget => item !== null);
-
-        if (isValidLayout(serializedLayout)) {
-          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
-          console.log('✅ Saved layout after drop:', serializedLayout);
-        }
-      } finally {
-        grid.commit();
-        
-        // Restore grid settings with a slight delay
-        requestAnimationFrame(() => {
-          grid.setAnimation(prevAnimate);
-          grid.setStatic(false);
-          grid.float(false); // Ensure float is disabled after drop
-          grid.compact(); // Force compaction after drop
-        });
-      }
-    };
-
-    // Add event listeners with proper type casting
-    gridElement.addEventListener('dragover', handleDragOver as unknown as EventListener);
-    gridElement.addEventListener('dragleave', handleDragLeave as unknown as EventListener);
-    gridElement.addEventListener('dragend', handleDragEnd);
-    gridElement.addEventListener('drop', handleDrop as unknown as EventListener);
-
-    return () => {
-      gridElement.removeEventListener('dragover', handleDragOver as unknown as EventListener);
-      gridElement.removeEventListener('dragleave', handleDragLeave as unknown as EventListener);
-      gridElement.removeEventListener('dragend', handleDragEnd);
-      gridElement.removeEventListener('drop', handleDrop as unknown as EventListener);
-      cleanupPreview();
-    };
-  }, []);
-
-  // Add handleAddWidget function
-  const handleAddWidget = useCallback((widgetType: string) => {
+  const saveLayout = () => {
     if (!grid) return;
     
-    const widgetId = `${widgetType}-${Date.now()}`;
-    const widgetConfig = WIDGET_REGISTRY[widgetType];
+    const items = grid.getGridItems();
+    const serializedLayout = items
+      .map(item => {
+        const node = item.gridstackNode;
+        if (!node?.id) return null;
+        
+        const baseId = node.id.split('-')[0];
+        const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
+        const viewState = widgetState ? { 
+          chartVariant: widgetState.variant,
+          viewMode: widgetState.viewMode 
+        } : undefined;
+
+        const layoutItem: BaseLayoutItem = {
+          id: node.id,
+          x: node.x ?? 0,
+          y: node.y ?? 0,
+          w: node.w ?? 2,
+          h: node.h ?? 2,
+          minW: node.minW,
+          minH: node.minH
+        };
+
+        if (widgetState) {
+          return {
+            ...layoutItem,
+            viewState: {
+              chartVariant: widgetState.variant,
+              viewMode: widgetState.viewMode
+            }
+          } as PerformanceLayoutItem;
+        }
+
+        return layoutItem;
+      })
+      .filter((item): item is LayoutItem => item !== null);
+
+    if (isValidLayout(serializedLayout)) {
+      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+    }
+  };
+
+  const applyLayout = (layout: LayoutItem[]) => {
+    if (!grid) return;
     
+    grid.batchUpdate();
+    try {
+      layout.forEach(item => {
+        const widgetType = widgetTypes[item.id.split('-')[0]];
+        if (!widgetType) return;
+
+        const widgetConfig = WIDGET_REGISTRY[widgetType];
+        if (!widgetConfig) return;
+
+        // Initialize widget state for performance widgets
+        if (isPerformanceLayoutItem(item) && widgetType === 'performance') {
+          const widgetState = new WidgetState(
+            item.viewState.chartVariant,
+            getPerformanceTitle(item.viewState.chartVariant),
+            item.viewState.viewMode
+          );
+          widgetStateRegistry.set(item.id, widgetState);
+        }
+
+        const widgetElement = createWidget({
+          widgetType,
+          widgetId: item.id,
+          x: item.x,
+          y: item.y,
+          w: Math.max(item.w, widgetConfig.minSize.w),
+          h: Math.max(item.h, widgetConfig.minSize.h),
+          minW: item.minW,
+          minH: item.minH
+        });
+
+        if (widgetElement && grid) {
+          grid.addWidget({
+            el: widgetElement,
+            x: item.x,
+            y: item.y,
+            w: Math.max(item.w, widgetConfig.minSize.w),
+            h: Math.max(item.h, widgetConfig.minSize.h),
+            id: item.id,
+            autoPosition: false,
+            noMove: isMobile || currentPage !== 'dashboard',
+            noResize: isMobile || currentPage !== 'dashboard',
+            locked: isMobile || currentPage !== 'dashboard'
+          } as ExtendedGridStackWidget);
+        }
+      });
+    } finally {
+      if (grid) {
+        grid.commit();
+      }
+    }
+  };
+
+  const handleAddWidget = useCallback((widgetType: string) => {
+    console.log('handleAddWidget called with:', widgetType);
+    if (!grid || !widgetType) {
+      console.error('No grid or widget type:', { grid: !!grid, widgetType });
+      return;
+    }
+
+    const widgetConfig = WIDGET_REGISTRY[widgetType];
     if (!widgetConfig) {
       console.error('Unknown widget type:', widgetType);
       return;
     }
 
-    // Initialize widget state if it's a performance widget
-    if (widgetType === 'performance') {
-      const initialVariant: ChartVariant = 'revenue';
-      const initialTitle = getPerformanceTitle(initialVariant);
-      const initialViewMode: 'split' | 'cumulative' = 'split';
-      const widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode);
-      widgetStateRegistry.set(widgetId, widgetState);
-    }
+    // Generate a unique ID for the new widget
+    const timestamp = Date.now();
+    const widgetId = `${widgetConfig.id}-${timestamp}`;
+    console.log('Creating widget with ID:', widgetId);
 
-    // Create widget at the front (top-left)
-    const newWidget = createWidget({
+    // Create the widget element
+    const widgetElement = createWidget({
       widgetType,
       widgetId,
       x: 0,
       y: 0,
       w: widgetConfig.defaultSize.w,
       h: widgetConfig.defaultSize.h,
-      minW: 2,
-      minH: 2
+      minW: widgetConfig.minSize.w,
+      minH: widgetConfig.minSize.h
     });
 
-    if (newWidget) {
-      // Add to grid
-      grid.addWidget(newWidget);
-      
-      // Compact the grid to fill gaps
-      grid.compact();
-      
+    if (widgetElement) {
+      console.log('Widget element created, adding to grid');
+      // Add the widget to the grid with auto-positioning
+      grid.addWidget({
+        el: widgetElement,
+        id: widgetId,
+        w: Math.max(widgetConfig.defaultSize.w, widgetConfig.minSize.w),
+        h: Math.max(widgetConfig.defaultSize.h, widgetConfig.minSize.h),
+        minW: widgetConfig.minSize.w,
+        minH: widgetConfig.minSize.h,
+        autoPosition: true,
+        noMove: isMobile || currentPage !== 'dashboard',
+        noResize: isMobile || currentPage !== 'dashboard',
+        locked: isMobile || currentPage !== 'dashboard'
+      } as ExtendedGridStackWidget);
+
+      // Initialize widget state for performance widgets
+      if (widgetType === 'performance') {
+        const widgetState = new WidgetState();
+        widgetStateRegistry.set(widgetId, widgetState);
+      }
+
       // Save the updated layout
       const items = grid.getGridItems();
       const serializedLayout = items
@@ -1861,12 +1759,11 @@ function AppContent() {
           const node = item.gridstackNode;
           if (!node?.id) return null;
           
-          // Get widget state if it's a performance widget
           const baseId = node.id.split('-')[0];
           const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
           const viewState = widgetState ? { 
             chartVariant: widgetState.variant,
-            viewMode: widgetState.viewMode
+            viewMode: widgetState.viewMode 
           } : undefined;
 
           return {
@@ -1880,13 +1777,16 @@ function AppContent() {
             viewState
           };
         })
-        .filter((item): item is LayoutWidget => item !== null);
+        .filter((item): item is LayoutItem => item !== null);
 
       if (isValidLayout(serializedLayout)) {
         localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+        console.log('✅ Saved layout after adding widget:', serializedLayout);
       }
+    } else {
+      console.error('Failed to create widget element');
     }
-  }, [grid]);
+  }, [grid, isMobile, currentPage, createWidget]);
 
   // Render error state if there's an error
   if (error) {

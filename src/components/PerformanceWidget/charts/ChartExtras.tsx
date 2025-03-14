@@ -15,12 +15,30 @@ export function CustomTooltipContent({
   label,
   colorMap = {},
   labelMap = {},
-  dataKeys, // If provided, will be used to order the items
+  dataKeys,
   valueFormatter = (value) => `$${value.toLocaleString()}`,
 }: CustomTooltipContentProps) {
   if (!active || !payload || !payload.length) {
     return null;
   }
+
+  // Format the label to show the full date
+  const formattedLabel = (() => {
+    try {
+      // Get the date from the first payload item's payload
+      const date = payload[0]?.payload?.date;
+      if (date) {
+        return new Date(date).toLocaleDateString('en-US', { 
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+      return label;
+    } catch (e) {
+      return label;
+    }
+  })();
 
   // Create a map of payload items by dataKey for easy lookup
   const payloadMap = payload.reduce(
@@ -35,22 +53,20 @@ export function CustomTooltipContent({
   // Otherwise, use the original payload order
   const orderedPayload = dataKeys
     ? dataKeys
-        .filter((key) => payloadMap[key]) // Only include keys that exist in the payload
+        .filter((key) => payloadMap[key])
         .map((key) => payloadMap[key])
     : payload;
 
   return (
     <div className="bg-popover text-popover-foreground grid min-w-32 items-start gap-1.5 rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs shadow-lg">
-      <div className="font-medium text-foreground">{label}</div>
+      <div className="font-medium text-foreground">{formattedLabel}</div>
       <div className="grid gap-1.5">
         {orderedPayload.map((entry, index) => {
-          // Skip undefined entries
           if (!entry) return null;
 
           const name = entry.dataKey as string;
           const value = entry.value as number;
 
-          // Get color and label from maps, with fallbacks
           const color = colorMap[name] || "var(--chart-1)";
           const displayLabel = labelMap[name] || name;
 
