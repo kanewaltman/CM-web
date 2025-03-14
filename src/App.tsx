@@ -111,6 +111,9 @@ interface WidgetComponentProps {
   onRemove?: () => void;
   defaultVariant?: ChartVariant;
   onVariantChange?: (variant: ChartVariant) => void;
+  defaultViewMode?: 'split' | 'cumulative';
+  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+  onTitleChange?: (title: string) => void;
 }
 
 // Update the widgetComponents type to include the widgetId prop
@@ -161,7 +164,43 @@ const generateDefaultLayout = () => [
   }
 ];
 
-const defaultLayout = generateDefaultLayout();
+const defaultLayout: LayoutWidget[] = [
+  { 
+    id: 'performance', 
+    x: 7, 
+    y: 0, 
+    w: 5, 
+    h: 6, 
+    minW: 2, 
+    minH: 2, 
+    viewState: { 
+      chartVariant: 'revenue' as ChartVariant,
+      viewMode: 'split'
+    } 
+  },
+  { 
+    id: 'balances', 
+    x: 0, 
+    y: 6, 
+    w: 12, 
+    h: 5, 
+    minW: 2, 
+    minH: 2 
+  },
+  { 
+    id: 'performance-1741826205331', 
+    x: 0, 
+    y: 0, 
+    w: 7, 
+    h: 6, 
+    minW: 2, 
+    minH: 2, 
+    viewState: { 
+      chartVariant: 'revenue' as ChartVariant,
+      viewMode: 'cumulative'
+    } 
+  }
+];
 
 // Default desktop layout configuration for different pages
 const dashboardLayout = [
@@ -217,7 +256,7 @@ interface LayoutWidget {
   minW?: number;
   minH?: number;
   viewState?: {
-    chartVariant?: ChartVariant;
+    chartVariant: ChartVariant;
     viewMode?: 'split' | 'cumulative';
   };
 }
@@ -647,6 +686,9 @@ function AppContent() {
               defaultViewMode={viewMode}
               onVariantChange={handleVariantChange}
               onViewModeChange={handleViewModeChange}
+              onTitleChange={(newTitle) => {
+                widgetState.setTitle(newTitle);
+              }}
             />
           );
         };
@@ -922,7 +964,7 @@ function AppContent() {
     
     const items = grid.getGridItems();
     const serializedLayout = items
-      .map<SerializedLayoutWidget | null>(item => {
+      .map((item): SerializedLayoutWidget | null => {
         const node = item.gridstackNode;
         if (!node || !node.id) return null;
         
@@ -1162,9 +1204,9 @@ function AppContent() {
       try {
         const items = grid.getGridItems();
         const serializedLayout = items
-          .map(item => {
+          .map((item): LayoutWidget | null => {
             const node = item.gridstackNode;
-            if (!node || !node.id) return null;
+            if (!node?.id) return null;
             
             // Get widget state if it's a performance widget
             const baseId = node.id.split('-')[0];
@@ -1330,9 +1372,9 @@ function AppContent() {
         if (currentPage === 'dashboard') {
           const items = g.getGridItems();
           const serializedLayout = items
-            .map(item => {
+            .map((item): LayoutWidget | null => {
               const node = item.gridstackNode;
-              if (!node || !node.id) return null;
+              if (!node?.id) return null;
               
               // Get widget state if it's a performance widget
               const baseId = node.id.split('-')[0];
@@ -1724,6 +1766,8 @@ function AppContent() {
         typeof widget.y === 'number' &&
         typeof widget.w === 'number' &&
         typeof widget.h === 'number' &&
+        (!widget.minW || typeof widget.minW === 'number') &&
+        (!widget.minH || typeof widget.minH === 'number') &&
         widget.w >= (widget.minW ?? 2) &&
         widget.h >= (widget.minH ?? 2) &&
         isValidBaseType &&
@@ -1993,7 +2037,7 @@ function AppContent() {
       // Save the updated layout
       const items = grid.getGridItems();
       const serializedLayout = items
-        .map(item => {
+        .map((item): LayoutWidget | null => {
           const node = item.gridstackNode;
           if (!node?.id) return null;
           
@@ -2091,6 +2135,9 @@ function AppContent() {
                                   }}
                                   onViewModeChange={(mode: 'split' | 'cumulative') => {
                                     widgetState.setViewMode(mode);
+                                  }}
+                                  onTitleChange={(newTitle) => {
+                                    widgetState.setTitle(newTitle);
                                   }}
                                 />
                               );
