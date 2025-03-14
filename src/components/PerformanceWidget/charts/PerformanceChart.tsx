@@ -531,8 +531,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                   const currentValue = isActive ? hoverValues?.values[asset] : undefined;
                   const previousIndex = hoverValues?.index ? hoverValues.index - 1 : 0;
                   const previousValue = previousIndex >= 0 ? balanceData[previousIndex]?.[asset] : undefined;
-                  const change = typeof currentValue === 'number' && typeof previousValue === 'number' ? 
-                    ((currentValue - previousValue) / previousValue * 100) : 0;
+                  const change = typeof currentValue === 'number' && typeof previousValue === 'number' && previousValue !== 0
+                    ? ((currentValue - previousValue) / previousValue * 100)
+                    : 0;
                   return (
                     <button 
                       key={asset}

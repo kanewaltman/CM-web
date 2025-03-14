@@ -282,10 +282,8 @@ export function ControlBar({
 
   const handleWidgetClick = (widgetType: string) => {
     if (onAddWidget) {
-      console.log('Adding widget:', widgetType);
       onAddWidget(widgetType);
-      setIsOpen(false);
-      toast.success(`Added ${WIDGET_REGISTRY[widgetType].title} widget`);
+      setIsOpen(false); // Close dropdown after adding
     }
   };
 
@@ -383,7 +381,7 @@ export function ControlBar({
               <DropdownMenuSeparator />
               <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
               <div className="px-1 py-1 pb-2">
-                {(Object.entries(WIDGET_REGISTRY))
+                {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
                   .filter(([type]) => type === 'balances' || type === 'performance')
                   .map(([type, config]) => (
                   <div
