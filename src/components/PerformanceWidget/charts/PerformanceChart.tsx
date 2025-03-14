@@ -473,6 +473,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       const total = assets.reduce((sum, asset) => sum + (point[asset] as number || 0), 0);
       return {
         timestamp: point.timestamp,
+        date: point.date,
         total
       };
     });
