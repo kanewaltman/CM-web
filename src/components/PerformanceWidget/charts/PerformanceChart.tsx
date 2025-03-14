@@ -12,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { CustomTooltipContent } from "./ChartExtras";
 import { Badge } from "@/components/ui/badge";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
@@ -515,116 +514,80 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="flex-none">
-        <div className="flex items-center justify-between gap-2">
-          <div className="space-y-0.5">
-            <CardTitle>
-              {propViewMode === 'split' ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  {visibleAssets.map((asset: AssetTicker) => {
-                    const assetConfig = ASSETS[asset];
-                    const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
-                    const isHidden = hiddenAssets.has(asset);
-                    const isTruncated = truncatedAssets.includes(asset);
-                    const isEnabled = !isTruncated || enabledTruncatedAssets.has(asset);
-                    const isActive = hoverValues?.activeLine === asset;
-                    const currentValue = isActive ? hoverValues?.values[asset] : undefined;
-                    const previousIndex = hoverValues?.index ? hoverValues.index - 1 : 0;
-                    const previousValue = previousIndex >= 0 ? balanceData[previousIndex]?.[asset] : undefined;
-                    const change = typeof currentValue === 'number' && typeof previousValue === 'number' ? 
-                      ((currentValue - previousValue) / previousValue * 100) : 0;
-                    return (
-                      <button 
-                        key={asset}
+        <div className="w-full flex flex-col gap-2">
+          <CardTitle className="w-full">
+            {propViewMode === 'split' ? (
+              <div className="flex items-center gap-2 flex-wrap w-full">
+                {visibleAssets.map((asset: AssetTicker) => {
+                  const assetConfig = ASSETS[asset];
+                  const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                  const isHidden = hiddenAssets.has(asset);
+                  const isTruncated = truncatedAssets.includes(asset);
+                  const isEnabled = !isTruncated || enabledTruncatedAssets.has(asset);
+                  const isActive = hoverValues?.activeLine === asset;
+                  const currentValue = isActive ? hoverValues?.values[asset] : undefined;
+                  const previousIndex = hoverValues?.index ? hoverValues.index - 1 : 0;
+                  const previousValue = previousIndex >= 0 ? balanceData[previousIndex]?.[asset] : undefined;
+                  const change = typeof currentValue === 'number' && typeof previousValue === 'number' ? 
+                    ((currentValue - previousValue) / previousValue * 100) : 0;
+                  return (
+                    <button 
+                      key={asset}
+                      type="button"
+                      className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
+                      style={{ 
+                        color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
+                        backgroundColor: isActive ? assetColor : `${assetColor}14`,
+                        cursor: 'pointer',
+                        WebkitTouchCallout: 'none',
+                        WebkitUserSelect: 'text',
+                        userSelect: 'text',
+                        opacity: isHidden ? 0.5 : 1
+                      }}
+                      onClick={() => toggleAssetVisibility(asset)}
+                      onMouseEnter={(e) => {
+                        if (hoverTimeoutRef.current) {
+                          clearTimeout(hoverTimeoutRef.current);
+                          hoverTimeoutRef.current = null;
+                        }
+                        const target = e.currentTarget;
+                        target.style.backgroundColor = assetColor;
+                        target.style.color = 'hsl(var(--color-widget-bg))';
+                        setHoveredAsset(asset);
+                      }}
+                      onMouseLeave={(e) => {
+                        const target = e.currentTarget;
+                        if (!isActive) {
+                          target.style.backgroundColor = `${assetColor}14`;
+                          target.style.color = assetColor;
+                        }
+                        
+                        hoverTimeoutRef.current = setTimeout(() => {
+                          setHoveredAsset(null);
+                        }, 150);
+                      }}
+                      onMouseDown={(e) => {
+                        if (e.detail > 1) {
+                          e.preventDefault();
+                        }
+                      }}
+                    >
+                      {assetConfig.name}
+                    </button>
+                  );
+                })}
+                {truncatedAssets.length > 0 && (
+                  <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
                         type="button"
-                        className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
-                        style={{ 
-                          color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
-                          backgroundColor: isActive ? assetColor : `${assetColor}14`,
-                          cursor: 'pointer',
-                          WebkitTouchCallout: 'none',
-                          WebkitUserSelect: 'text',
-                          userSelect: 'text',
-                          opacity: isHidden ? 0.5 : 1
-                        }}
-                        onClick={() => toggleAssetVisibility(asset)}
-                        onMouseEnter={(e) => {
-                          if (hoverTimeoutRef.current) {
-                            clearTimeout(hoverTimeoutRef.current);
-                            hoverTimeoutRef.current = null;
-                          }
-                          const target = e.currentTarget;
-                          target.style.backgroundColor = assetColor;
-                          target.style.color = 'hsl(var(--color-widget-bg))';
-                          setHoveredAsset(asset);
-                        }}
-                        onMouseLeave={(e) => {
-                          const target = e.currentTarget;
-                          if (!isActive) {
-                            target.style.backgroundColor = `${assetColor}14`;
-                            target.style.color = assetColor;
-                          }
-                          
-                          // Delay clearing the hover state
-                          hoverTimeoutRef.current = setTimeout(() => {
-                            setHoveredAsset(null);
-                          }, 150); // 150ms delay matches the transition duration
-                        }}
-                        onMouseDown={(e) => {
-                          if (e.detail > 1) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        {assetConfig.name}
-                      </button>
-                    );
-                  })}
-                  {truncatedAssets.length > 0 && (
-                    <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="font-jakarta font-bold text-sm rounded-md px-2 h-5 transition-all duration-150 flex items-center gap-1 bg-muted hover:bg-muted/80"
-                          onMouseEnter={() => {
-                            if (popoverTimeoutRef.current) {
-                              clearTimeout(popoverTimeoutRef.current);
-                              popoverTimeoutRef.current = null;
-                            }
-                            setIsPopoverOpen(true);
-                          }}
-                          onMouseLeave={() => {
-                            popoverTimeoutRef.current = setTimeout(() => {
-                              setIsPopoverOpen(false);
-                            }, 150);
-                          }}
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                          {enabledTruncatedAssets.size > 0 && (
-                            <div className="flex -space-x-0.5">
-                              {Array.from(enabledTruncatedAssets).map((asset, index) => {
-                                const assetConfig = ASSETS[asset as AssetTicker];
-                                const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
-                                return (
-                                  <div
-                                    key={asset}
-                                    className="w-1.5 h-1.5 rounded-full"
-                                    style={{ backgroundColor: assetColor }}
-                                  />
-                                );
-                              })}
-                            </div>
-                          )}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-auto p-2"
-                        sideOffset={4}
-                        align="start"
+                        className="font-jakarta font-bold text-sm rounded-md px-2 h-5 transition-all duration-150 flex items-center gap-1 bg-muted hover:bg-muted/80"
                         onMouseEnter={() => {
                           if (popoverTimeoutRef.current) {
                             clearTimeout(popoverTimeoutRef.current);
                             popoverTimeoutRef.current = null;
                           }
+                          setIsPopoverOpen(true);
                         }}
                         onMouseLeave={() => {
                           popoverTimeoutRef.current = setTimeout(() => {
@@ -632,72 +595,107 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           }, 150);
                         }}
                       >
-                        <div className="flex flex-col gap-1">
-                          {truncatedAssets.map((asset: AssetTicker) => {
-                            const assetConfig = ASSETS[asset];
-                            const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
-                            const isEnabled = enabledTruncatedAssets.has(asset);
-                            const isActive = hoverValues?.activeLine === asset;
-                            return (
-                              <button
-                                key={asset}
-                                type="button"
-                                className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
-                                style={{ 
-                                  color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
-                                  backgroundColor: isActive ? assetColor : `${assetColor}14`,
-                                  cursor: 'pointer',
-                                  WebkitTouchCallout: 'none',
-                                  WebkitUserSelect: 'text',
-                                  userSelect: 'text',
-                                  opacity: isEnabled ? 1 : 0.5
-                                }}
-                                onClick={() => toggleTruncatedAsset(asset)}
-                                onMouseEnter={(e) => {
-                                  if (hoverTimeoutRef.current) {
-                                    clearTimeout(hoverTimeoutRef.current);
-                                    hoverTimeoutRef.current = null;
-                                  }
-                                  const target = e.currentTarget;
-                                  target.style.backgroundColor = assetColor;
-                                  target.style.color = 'hsl(var(--color-widget-bg))';
-                                  setHoveredAsset(asset);
-                                }}
-                                onMouseLeave={(e) => {
-                                  const target = e.currentTarget;
-                                  if (!isActive) {
-                                    target.style.backgroundColor = `${assetColor}14`;
-                                    target.style.color = assetColor;
-                                  }
-                                  
-                                  hoverTimeoutRef.current = setTimeout(() => {
-                                    setHoveredAsset(null);
-                                  }, 150);
-                                }}
-                              >
-                                {assetConfig.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center">
-                  <div className="font-jakarta font-bold text-sm rounded-md px-1">Portfolio</div>
-                </div>
-              )}
-            </CardTitle>
-            <div className="flex items-baseline gap-2 min-h-[2rem]">
+                        <MoreHorizontal className="w-4 h-4" />
+                        {enabledTruncatedAssets.size > 0 && (
+                          <div className="flex -space-x-0.5">
+                            {Array.from(enabledTruncatedAssets).map((asset, index) => {
+                              const assetConfig = ASSETS[asset as AssetTicker];
+                              const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                              return (
+                                <div
+                                  key={asset}
+                                  className="w-1.5 h-1.5 rounded-full"
+                                  style={{ backgroundColor: assetColor }}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      className="w-auto p-2"
+                      sideOffset={4}
+                      align="start"
+                      onMouseEnter={() => {
+                        if (popoverTimeoutRef.current) {
+                          clearTimeout(popoverTimeoutRef.current);
+                          popoverTimeoutRef.current = null;
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        popoverTimeoutRef.current = setTimeout(() => {
+                          setIsPopoverOpen(false);
+                        }, 150);
+                      }}
+                    >
+                      <div className="flex flex-col gap-1">
+                        {truncatedAssets.map((asset: AssetTicker) => {
+                          const assetConfig = ASSETS[asset];
+                          const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                          const isEnabled = enabledTruncatedAssets.has(asset);
+                          const isActive = hoverValues?.activeLine === asset;
+                          return (
+                            <button
+                              key={asset}
+                              type="button"
+                              className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
+                              style={{ 
+                                color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
+                                backgroundColor: isActive ? assetColor : `${assetColor}14`,
+                                cursor: 'pointer',
+                                WebkitTouchCallout: 'none',
+                                WebkitUserSelect: 'text',
+                                userSelect: 'text',
+                                opacity: isEnabled ? 1 : 0.5
+                              }}
+                              onClick={() => toggleTruncatedAsset(asset)}
+                              onMouseEnter={(e) => {
+                                if (hoverTimeoutRef.current) {
+                                  clearTimeout(hoverTimeoutRef.current);
+                                  hoverTimeoutRef.current = null;
+                                }
+                                const target = e.currentTarget;
+                                target.style.backgroundColor = assetColor;
+                                target.style.color = 'hsl(var(--color-widget-bg))';
+                                setHoveredAsset(asset);
+                              }}
+                              onMouseLeave={(e) => {
+                                const target = e.currentTarget;
+                                if (!isActive) {
+                                  target.style.backgroundColor = `${assetColor}14`;
+                                  target.style.color = assetColor;
+                                }
+                                
+                                hoverTimeoutRef.current = setTimeout(() => {
+                                  setHoveredAsset(null);
+                                }, 150);
+                              }}
+                            >
+                              {assetConfig.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <div className="font-jakarta font-bold text-sm rounded-md px-1">Portfolio</div>
+              </div>
+            )}
+          </CardTitle>
+          <div className="flex items-center justify-between w-full gap-2 min-h-[2rem]">
+            <div className="flex items-baseline gap-2">
               <div className="font-semibold text-2xl leading-none">
                 €{(propViewMode === 'split' && hoverValues?.activeLine ? 
                   hoverValues.values[hoverValues.activeLine] :
                   hoverValues?.values.total ?? totalValue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </div>
               <div className="flex-none h-5">
-                {((propViewMode === 'cumulative' && !hoverValues) || (propViewMode === 'split' && hoverValues?.activeLine) || (propViewMode === 'cumulative' && hoverValues)) && (
+                {((propViewMode === 'cumulative' && !hoverValues) || (propViewMode === 'split' && hoverValues?.activeLine) || (propViewMode === 'cumulative' && hoverValues)) ? (
                   <Badge variant="outline" className={cn(
                     "flex items-center h-5 translate-y-[-2px]",
                     (() => {
@@ -753,28 +751,40 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                       }
                     })()}
                   </Badge>
+                ) : (
+                  <Badge variant="outline" className="invisible flex items-center h-5 translate-y-[-2px] bg-muted/10 text-muted-foreground">
+                    +0.00%
+                  </Badge>
                 )}
               </div>
             </div>
+            <div className="flex items-center rounded-md bg-muted p-0.5 text-muted-foreground">
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  propViewMode === 'split' 
+                    ? "bg-background text-foreground shadow-sm" 
+                    : "hover:text-foreground hover:bg-background/50"
+                )}
+                onClick={() => onViewModeChange?.('split')}
+              >
+                Split
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  propViewMode === 'cumulative' 
+                    ? "bg-background text-foreground shadow-sm" 
+                    : "hover:text-foreground hover:bg-background/50"
+                )}
+                onClick={() => onViewModeChange?.('cumulative')}
+              >
+                Combined
+              </button>
+            </div>
           </div>
-          <RadioGroup
-            defaultValue={propViewMode}
-            value={propViewMode}
-            onValueChange={(value) => {
-              const newMode = value as 'split' | 'cumulative';
-              onViewModeChange?.(newMode);
-            }}
-            className="flex items-center space-x-2"
-          >
-            <div className="flex items-center space-x-1">
-              <RadioGroupItem value="split" id="split" />
-              <label htmlFor="split" className="text-sm">Split</label>
-            </div>
-            <div className="flex items-center space-x-1">
-              <RadioGroupItem value="cumulative" id="cumulative" />
-              <label htmlFor="cumulative" className="text-sm">Combined</label>
-            </div>
-          </RadioGroup>
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0">
