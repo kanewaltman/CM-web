@@ -642,7 +642,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                               <button
                                 key={asset}
                                 type="button"
-                                className="font-jakarta font-bold text-sm rounded-md px-2 py-1 transition-all duration-150 flex items-center gap-2"
+                                className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
                                 style={{ 
                                   color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
                                   backgroundColor: isActive ? assetColor : `${assetColor}14`,
@@ -675,13 +675,6 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                                   }, 150);
                                 }}
                               >
-                                <div className="w-4 h-4 rounded-full overflow-hidden">
-                                  <img
-                                    src={assetConfig.icon}
-                                    alt={asset}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
                                 {assetConfig.name}
                               </button>
                             );
