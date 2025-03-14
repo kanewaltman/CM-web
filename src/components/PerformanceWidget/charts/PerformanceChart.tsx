@@ -20,6 +20,50 @@ import { cn } from '@/lib/utils';
 import { useDataSource } from '@/lib/DataSourceContext';
 import React from "react";
 
+// Import sample balances from BalancesWidget
+const SAMPLE_BALANCES = {
+  "BTC": {
+    "BTC": "1.23456789",
+    "EUR": "45678.90"
+  },
+  "ETH": {
+    "ETH": "15.432109",
+    "EUR": "28901.23"
+  },
+  "DOT": {
+    "DOT": "1234.5678",
+    "EUR": "12345.67"
+  },
+  "USDT": {
+    "USDT": "50000.00",
+    "EUR": "45678.90"
+  },
+  "DOGE": {
+    "DOGE": "100000.00",
+    "EUR": "1234.56"
+  },
+  "XCM": {
+    "XCM": "5000.00",
+    "EUR": "2500.00"
+  },
+  "SOL": {
+    "SOL": "100.00",
+    "EUR": "8500.00"
+  },
+  "ADA": {
+    "ADA": "50000.00",
+    "EUR": "15000.00"
+  },
+  "HBAR": {
+    "HBAR": "25000.00",
+    "EUR": "1250.00"
+  }
+} as const;
+
+interface BalanceDetails {
+  [key: string]: string;
+}
+
 interface BalanceDataPoint {
   timestamp: string;
   [key: string]: number | string;
@@ -294,13 +338,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
         setIsLoading(true);
 
         if (dataSource === 'sample') {
-          // Use hardcoded sample balances that match the demo values
-          const sampleBalances = {
-            'BTC': 45678.90,
-            'ETH': 28901.23,
-            'DOT': 12345.67,
-            'USDT': 45678.90
-          };
+          // Use sample balances from the BalancesWidget
+          const sampleBalances = Object.fromEntries(
+            Object.entries(SAMPLE_BALANCES)
+              .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
+              .map(([asset, details]) => [asset, parseFloat((details as BalanceDetails).EUR || '0')])
+          );
           
           const validAssets = Object.keys(sampleBalances) as AssetTicker[];
           setAssets(validAssets);
@@ -360,7 +403,14 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   // Create chart configuration based on assets
   const chartConfig = useMemo(() => {
     const config: ChartConfig = {};
-    assets.forEach(asset => {
+    // Sort assets by their current value in descending order
+    const sortedAssets = [...assets].sort((a, b) => {
+      const aValue = balanceData[balanceData.length - 1]?.[a] as number || 0;
+      const bValue = balanceData[balanceData.length - 1]?.[b] as number || 0;
+      return bValue - aValue;
+    });
+    
+    sortedAssets.forEach(asset => {
       const assetConfig = ASSETS[asset];
       config[asset] = {
         label: assetConfig.name,
@@ -368,7 +418,16 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       };
     });
     return config;
-  }, [assets, resolvedTheme]);
+  }, [assets, resolvedTheme, balanceData]);
+
+  // Get sorted assets for consistent ordering
+  const sortedAssets = useMemo(() => {
+    return [...assets].sort((a, b) => {
+      const aValue = balanceData[balanceData.length - 1]?.[a] as number || 0;
+      const bValue = balanceData[balanceData.length - 1]?.[b] as number || 0;
+      return bValue - aValue;
+    });
+  }, [assets, balanceData]);
 
   // Calculate total value and 24h change
   const { totalValue, totalChange } = useMemo(() => {
@@ -440,7 +499,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             <CardTitle>
               {propViewMode === 'split' ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  {assets.map((asset: AssetTicker) => {
+                  {sortedAssets.map((asset: AssetTicker) => {
                     const assetConfig = ASSETS[asset];
                     const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
                     const isHidden = hiddenAssets.has(asset);
@@ -675,10 +734,15 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           type="linear"
                           dataKey={asset}
                           stroke="rgba(0,0,0,0)"
-                          strokeWidth={20}
+                          strokeWidth={40}
                           dot={false}
                           isAnimationActive={false}
-                          style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                          style={{ 
+                            cursor: 'pointer', 
+                            pointerEvents: 'all',
+                            zIndex: hoveredAsset === asset ? 2 : 
+                                   hoverValues?.activeLine === asset ? 2 : 1
+                          }}
                           connectNulls={true}
                           onMouseMove={() => {
                             if (hoverValues) {
@@ -707,6 +771,10 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                               1}
                           className="transition-[stroke-opacity] duration-150 ease-out"
                           connectNulls={true}
+                          style={{
+                            zIndex: hoveredAsset === asset ? 2 : 
+                                   hoverValues?.activeLine === asset ? 2 : 1
+                          }}
                         />
                       </>
                     )}
@@ -732,10 +800,15 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                     type="linear"
                     dataKey="total"
                     stroke="rgba(0,0,0,0)"
-                    strokeWidth={20}
+                    strokeWidth={40}
                     dot={false}
                     isAnimationActive={false}
-                    style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                    style={{ 
+                      cursor: 'pointer', 
+                      pointerEvents: 'all',
+                      zIndex: hoveredAsset === 'total' ? 2 : 
+                             hoverValues?.activeLine === 'total' ? 2 : 1
+                    }}
                     connectNulls={true}
                     onMouseMove={() => {
                       if (hoverValues) {
@@ -801,15 +874,15 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                 propViewMode === 'split' ? (
                   <CustomTooltipContent
                     colorMap={Object.fromEntries(
-                      assets.map(asset => [
+                      sortedAssets.map(asset => [
                         asset,
                         resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light
                       ])
                     )}
                     labelMap={Object.fromEntries(
-                      assets.map(asset => [asset, ASSETS[asset].name])
+                      sortedAssets.map(asset => [asset, ASSETS[asset].name])
                     )}
-                    dataKeys={assets}
+                    dataKeys={sortedAssets}
                     valueFormatter={(value) => `€${value.toLocaleString()}`}
                   />
                 ) : (

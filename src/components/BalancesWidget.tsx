@@ -95,6 +95,9 @@ interface BalancesWidgetProps {
   compact?: boolean;
 }
 
+type SortField = 'asset' | 'balance' | 'value' | 'change24h' | 'available';
+type SortDirection = 'asc' | 'desc';
+
 const HeaderDivider: React.FC = () => {
   return (
     <div className="w-full sticky z-10" style={{ top: '33px' }}>
@@ -120,6 +123,26 @@ const SAMPLE_BALANCES = {
   "USDT": {
     "USDT": "50000.00",
     "EUR": "45678.90"
+  },
+  "DOGE": {
+    "DOGE": "100000.00",
+    "EUR": "1234.56"
+  },
+  "XCM": {
+    "XCM": "5000.00",
+    "EUR": "2500.00"
+  },
+  "SOL": {
+    "SOL": "100.00",
+    "EUR": "8500.00"
+  },
+  "ADA": {
+    "ADA": "50000.00",
+    "EUR": "15000.00"
+  },
+  "HBAR": {
+    "HBAR": "25000.00",
+    "EUR": "1250.00"
   }
 };
 
@@ -127,7 +150,12 @@ const SAMPLE_PRICES = {
   "BTCEUR": { price: 37000.50, change24h: 2.5 },
   "ETHEUR": { price: 1875.25, change24h: -1.2 },
   "DOTEUR": { price: 10.05, change24h: 0.8 },
-  "USDTEUR": { price: 0.91, change24h: -0.1 }
+  "USDTEUR": { price: 0.91, change24h: -0.1 },
+  "DOGEEUR": { price: 0.012345, change24h: 1.5 },
+  "XCMEUR": { price: 0.50, change24h: -0.8 },
+  "SOLEUR": { price: 85.00, change24h: 3.2 },
+  "ADAEUR": { price: 0.30, change24h: 0.5 },
+  "HBAREUR": { price: 0.05, change24h: -1.0 }
 };
 
 export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compact = false }) => {
@@ -140,9 +168,50 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('value');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const containerRef = useRef<HTMLDivElement>(null);
   const textMeasureRef = useRef<HTMLDivElement>(null);
-  const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150); // Default width
+  const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150);
+
+  // Handle sort
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Sort balances
+  const sortedBalances = useMemo(() => {
+    return [...balances].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case 'asset':
+          comparison = ASSETS[a.asset].name.localeCompare(ASSETS[b.asset].name);
+          break;
+        case 'balance':
+          comparison = parseFloat(a.balance) - parseFloat(b.balance);
+          break;
+        case 'value':
+          comparison = parseFloat(a.valueInEuro) - parseFloat(b.valueInEuro);
+          break;
+        case 'change24h':
+          comparison = parseFloat(a.change24h) - parseFloat(b.change24h);
+          break;
+        case 'available':
+          comparison = parseFloat(a.availablePercentage) - parseFloat(b.availablePercentage);
+          break;
+        default:
+          comparison = 0;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [balances, sortField, sortDirection]);
 
   // Check for container width to determine compact mode
   useEffect(() => {
@@ -532,12 +601,52 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                   <div className="relative z-10 px-0 py-1">Asset</div>
                 </div>
               </TableHead>
-              <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Balance</TableHead>
+              <TableHead 
+                className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                onClick={() => handleSort('balance')}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Balance
+                  {sortField === 'balance' && (
+                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </div>
+              </TableHead>
               {!isCompact && (
                 <>
-                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Value (EUR)</TableHead>
-                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">24h Change</TableHead>
-                  <TableHead className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap">Available</TableHead>
+                  <TableHead 
+                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                    onClick={() => handleSort('value')}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      Value (EUR)
+                      {sortField === 'value' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                    onClick={() => handleSort('change24h')}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      24h Change
+                      {sortField === 'change24h' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                    onClick={() => handleSort('available')}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      Available
+                      {sortField === 'available' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </TableHead>
                 </>
               )}
             </TableRow>
@@ -558,7 +667,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
             </div>
           ) : (
             <TableBody>
-              {balancesWithPrices.map((balance) => {
+              {sortedBalances.map((balance) => {
                 const assetConfig = ASSETS[balance.asset];
                 const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
                 return (
@@ -580,15 +689,35 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <span
+                          <button 
+                            type="button"
                             className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
                             style={{ 
                               color: assetColor,
-                              backgroundColor: `${assetColor}14`
+                              backgroundColor: `${assetColor}14`,
+                              cursor: 'pointer',
+                              WebkitTouchCallout: 'none',
+                              WebkitUserSelect: 'text',
+                              userSelect: 'text'
+                            }}
+                            onMouseEnter={(e) => {
+                              const target = e.currentTarget;
+                              target.style.backgroundColor = assetColor;
+                              target.style.color = 'hsl(var(--color-widget-bg))';
+                            }}
+                            onMouseLeave={(e) => {
+                              const target = e.currentTarget;
+                              target.style.backgroundColor = `${assetColor}14`;
+                              target.style.color = assetColor;
+                            }}
+                            onMouseDown={(e) => {
+                              if (e.detail > 1) {
+                                e.preventDefault();
+                              }
                             }}
                           >
                             {assetConfig.name}
-                          </span>
+                          </button>
                         </div>
                       </div>
                     </TableCell>
