@@ -142,7 +142,7 @@ const ChartTooltipContent = React.forwardRef<
       }
 
       const [item] = payload;
-      const key = `${labelKey || item.dataKey || item.name || 'value'}`;
+      const key = `${labelKey || item?.dataKey || item?.name || 'value'}`;
       const itemConfig = getPayloadConfigFromPayload(config, item, key);
       const value =
         !labelKey && typeof label === 'string'
@@ -159,6 +159,20 @@ const ChartTooltipContent = React.forwardRef<
 
       if (!value) {
         return null;
+      }
+
+      // If the value is a date string, format it to show the full date
+      try {
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) {
+          return (
+            <div className={cn('font-medium', labelClassName)}>
+              {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
+          );
+        }
+      } catch (e) {
+        // If parsing fails, fall back to the original value
       }
 
       return <div className={cn('font-medium', labelClassName)}>{value}</div>;

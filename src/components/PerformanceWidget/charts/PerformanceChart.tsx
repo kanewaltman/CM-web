@@ -67,6 +67,7 @@ interface BalanceDetails {
 
 interface BalanceDataPoint {
   timestamp: string;
+  date: string;
   [key: string]: number | string;
 }
 
@@ -210,7 +211,8 @@ function generateSampleData(currentBalances: Record<string, number>, pointCount:
     
     // Format date to include year for proper month transitions
     const dataPoint: BalanceDataPoint = {
-      timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      date: date.toISOString() // Add the full date for tooltip use
     };
 
     Object.entries(currentBalances).forEach(([asset, currentValue]) => {
