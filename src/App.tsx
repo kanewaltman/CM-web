@@ -196,37 +196,37 @@ const defaultLayout = generateDefaultLayout();
 
 // Default desktop layout configuration for different pages
 const dashboardLayout = [
-  { x: 8, y: 0, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 4, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 },
-  { x: 4, y: 0, w: 4, h: 4, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 0, y: 0, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 8, y: 0, w: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 0, y: 4, w: Math.max(12, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(2, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 4, y: 0, w: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 0, y: 0, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 const spotLayout = [
-  { x: 0, y: 0, w: 6, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 6, y: 0, w: 3, h: 6, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 9, y: 0, w: 3, h: 4, id: 'tradeform', minW: 2, minH: 2 },
-  { x: 9, y: 4, w: 3, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 9, h: 2, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 8, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 0, y: 0, w: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.h), id: 'chart', minW: WIDGET_REGISTRY['trading-view-chart'].minSize.w, minH: WIDGET_REGISTRY['trading-view-chart'].minSize.h },
+  { x: 6, y: 0, w: Math.max(3, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 9, y: 0, w: Math.max(3, WIDGET_REGISTRY['trade-form'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.h), id: 'tradeform', minW: WIDGET_REGISTRY['trade-form'].minSize.w, minH: WIDGET_REGISTRY['trade-form'].minSize.h },
+  { x: 9, y: 4, w: Math.max(3, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 0, y: 6, w: Math.max(9, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(2, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 0, y: 8, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 const marginLayout = [
-  { x: 0, y: 0, w: 8, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 8, y: 0, w: 4, h: 6, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 4, h: 4, id: 'tradeform', minW: 2, minH: 2 },
-  { x: 4, y: 6, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 8, y: 6, w: 4, h: 4, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 10, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 0, y: 0, w: Math.max(8, WIDGET_REGISTRY['trading-view-chart'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.h), id: 'chart', minW: WIDGET_REGISTRY['trading-view-chart'].minSize.w, minH: WIDGET_REGISTRY['trading-view-chart'].minSize.h },
+  { x: 8, y: 0, w: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 0, y: 6, w: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.h), id: 'tradeform', minW: WIDGET_REGISTRY['trade-form'].minSize.w, minH: WIDGET_REGISTRY['trade-form'].minSize.h },
+  { x: 4, y: 6, w: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 8, y: 6, w: Math.max(4, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 0, y: 10, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 const stakeLayout = [
-  { x: 0, y: 0, w: 12, h: 6, id: 'chart', minW: 2, minH: 2 },
-  { x: 0, y: 6, w: 4, h: 4, id: 'orderbook', minW: 2, minH: 2 },
-  { x: 4, y: 6, w: 4, h: 4, id: 'tradeform', minW: 2, minH: 2 },
-  { x: 8, y: 6, w: 4, h: 4, id: 'market', minW: 2, minH: 2 },
-  { x: 0, y: 10, w: 12, h: 2, id: 'trades', minW: 2, minH: 2 },
-  { x: 0, y: 12, w: 4, h: 4, id: 'balances', minW: 2, minH: 2 }
+  { x: 0, y: 0, w: Math.max(12, WIDGET_REGISTRY['trading-view-chart'].minSize.w), h: Math.max(6, WIDGET_REGISTRY['trading-view-chart'].minSize.h), id: 'chart', minW: WIDGET_REGISTRY['trading-view-chart'].minSize.w, minH: WIDGET_REGISTRY['trading-view-chart'].minSize.h },
+  { x: 0, y: 6, w: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['order-book'].minSize.h), id: 'orderbook', minW: WIDGET_REGISTRY['order-book'].minSize.w, minH: WIDGET_REGISTRY['order-book'].minSize.h },
+  { x: 4, y: 6, w: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['trade-form'].minSize.h), id: 'tradeform', minW: WIDGET_REGISTRY['trade-form'].minSize.w, minH: WIDGET_REGISTRY['trade-form'].minSize.h },
+  { x: 8, y: 6, w: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['market-overview'].minSize.h), id: 'market', minW: WIDGET_REGISTRY['market-overview'].minSize.w, minH: WIDGET_REGISTRY['market-overview'].minSize.h },
+  { x: 0, y: 10, w: Math.max(12, WIDGET_REGISTRY['recent-trades'].minSize.w), h: Math.max(2, WIDGET_REGISTRY['recent-trades'].minSize.h), id: 'trades', minW: WIDGET_REGISTRY['recent-trades'].minSize.w, minH: WIDGET_REGISTRY['recent-trades'].minSize.h },
+  { x: 0, y: 12, w: Math.max(4, WIDGET_REGISTRY['balances'].minSize.w), h: Math.max(4, WIDGET_REGISTRY['balances'].minSize.h), id: 'balances', minW: WIDGET_REGISTRY['balances'].minSize.w, minH: WIDGET_REGISTRY['balances'].minSize.h }
 ];
 
 // Mobile layout configuration (single column)
@@ -675,7 +675,8 @@ function AppContent() {
       
       // Now add all widgets from the appropriate layout
       layoutToApply.forEach(node => {
-        const widgetType = widgetTypes[node.id.split('-')[0]];
+        const baseWidgetId = node.id.split('-')[0];
+        const widgetType = widgetTypes[baseWidgetId];
         
         if (!widgetComponents[widgetType]) {
           console.warn('❌ Unknown widget type:', widgetType);
@@ -683,39 +684,76 @@ function AppContent() {
         }
 
         try {
+          // Get widget configuration to enforce minimum sizes
+          const widgetConfig = WIDGET_REGISTRY[widgetType];
+          if (!widgetConfig) {
+            console.warn('❌ Missing widget configuration for:', widgetType);
+            return;
+          }
+
+          // Enforce minimum sizes from registry
+          const width = Math.max(node.w, widgetConfig.minSize.w);
+          const height = Math.max(node.h, widgetConfig.minSize.h);
+
           const widgetElement = createWidget({
             widgetType,
             widgetId: node.id,
             x: node.x,
             y: node.y,
-            w: node.w,
-            h: node.h,
-            minW: node.minW,
-            minH: node.minH
+            w: width,
+            h: height,
+            minW: widgetConfig.minSize.w,
+            minH: widgetConfig.minSize.h
           });
 
           if (widgetElement) {
+            // Add widget with enforced minimum sizes
             grid.addWidget({
               el: widgetElement,
               id: node.id,
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH,
+              w: width,
+              h: height,
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h,
               autoPosition: false,
               noMove: isMobile || currentPage !== 'dashboard',
               noResize: isMobile || currentPage !== 'dashboard',
               locked: isMobile || currentPage !== 'dashboard'
             } as ExtendedGridStackWidget);
 
-            // Update widget state if it exists
-            if (node.viewState) {
-              const widgetState = widgetStateRegistry.get(node.id);
-              if (widgetState) {
-                widgetState.setVariant(node.viewState.chartVariant as ChartVariant);
-              }
+            // Add resize event listener to enforce minimum sizes
+            if (!isMobile && currentPage === 'dashboard') {
+              const resizeHandler = (event: Event, el: GridStackNode) => {
+                if (el.id === node.id && el.el) {
+                  const config = WIDGET_REGISTRY[widgetType];
+                  if (config) {
+                    const minW = config.minSize.w;
+                    const minH = config.minSize.h;
+                    
+                    // Enforce minimum sizes during resize
+                    if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
+                      grid.update(el.el, {
+                        w: Math.max(el.w || minW, minW),
+                        h: Math.max(el.h || minH, minH),
+                        autoPosition: false
+                      });
+                    }
+
+                    // Update visual feedback
+                    const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
+                    if (isAtMinSize) {
+                      el.el.classList.add('min-size');
+                    } else {
+                      el.el.classList.remove('min-size');
+                    }
+                  }
+                }
+              };
+
+              // Remove any existing resize handler and add the new one
+              grid.off('resize').on('resize', resizeHandler);
             }
           }
         } catch (error) {
@@ -732,17 +770,25 @@ function AppContent() {
           grid.batchUpdate();
           try {
             grid.compact();
-            // Verify final positions
+            // Verify final positions and sizes
             layoutToApply.forEach(node => {
               const widget = grid.getGridItems().find(w => w.gridstackNode?.id === node.id);
-              if (widget) {
-                grid.update(widget, {
-                  x: node.x,
-                  y: node.y,
-                  w: node.w,
-                  h: node.h,
-                  autoPosition: false
-                });
+              if (widget && widget.gridstackNode) {
+                const baseWidgetId = node.id.split('-')[0];
+                const widgetType = widgetTypes[baseWidgetId];
+                const widgetConfig = WIDGET_REGISTRY[widgetType];
+                
+                if (widgetConfig) {
+                  grid.update(widget, {
+                    x: node.x,
+                    y: node.y,
+                    w: Math.max(node.w, widgetConfig.minSize.w),
+                    h: Math.max(node.h, widgetConfig.minSize.h),
+                    minW: widgetConfig.minSize.w,
+                    minH: widgetConfig.minSize.h,
+                    autoPosition: false
+                  });
+                }
               }
             });
           } finally {
@@ -754,7 +800,7 @@ function AppContent() {
       grid.commit();
     }
     console.log('✅ Reset layout completed');
-  }, [grid, createWidget, isMobile]);
+  }, [grid, createWidget, isMobile, currentPage]);
 
   const handleCopyLayout = useCallback(() => {
     if (!grid) return '';
@@ -767,8 +813,9 @@ function AppContent() {
         
         // Get the base widget type from the ID
         const baseId = node.id.split('-')[0];
-        const defaultWidget = defaultLayout.find(w => w.id === baseId);
-        if (!defaultWidget) return null;
+        const widgetType = widgetTypes[baseId];
+        const widgetConfig = WIDGET_REGISTRY[widgetType];
+        if (!widgetConfig) return null;
 
         // Get widget state if it exists
         const widgetState = widgetStateRegistry.get(node.id);
@@ -782,10 +829,10 @@ function AppContent() {
           baseId,
           x: node.x ?? 0,
           y: node.y ?? 0,
-          w: Math.max(node.w ?? 2, defaultWidget.minW ?? 2),
-          h: Math.max(node.h ?? 2, defaultWidget.minH ?? 2),
-          minW: defaultWidget.minW ?? 2,
-          minH: defaultWidget.minH ?? 2,
+          w: Math.max(node.w ?? 2, widgetConfig.minSize.w),
+          h: Math.max(node.h ?? 2, widgetConfig.minSize.h),
+          minW: widgetConfig.minSize.w,
+          minH: widgetConfig.minSize.h,
           viewState
         };
       })
@@ -811,11 +858,16 @@ function AppContent() {
       // Ensure all widgets in the layout exist in defaultLayout
       const validLayout = layout.every(widget => {
         const baseId = widget.baseId || widget.id.split('-')[0];
-        return defaultLayout.some(defaultWidget => defaultWidget.id === baseId);
+        const widgetType = widgetTypes[baseId];
+        const widgetConfig = WIDGET_REGISTRY[widgetType];
+        if (!widgetConfig) return false;
+
+        // Validate minimum sizes
+        return widget.w >= widgetConfig.minSize.w && widget.h >= widgetConfig.minSize.h;
       });
 
       if (!validLayout) {
-        throw new Error('Layout contains invalid widgets');
+        throw new Error('Layout contains invalid widgets or sizes');
       }
 
       grid.batchUpdate();
@@ -845,18 +897,26 @@ function AppContent() {
         // First update existing widgets
         layout.forEach(node => {
           const baseId = node.baseId || node.id.split('-')[0];
+          const widgetType = widgetTypes[baseId];
+          const widgetConfig = WIDGET_REGISTRY[widgetType];
+          
+          if (!widgetConfig) {
+            console.warn('❌ Unknown widget type:', widgetType);
+            return;
+          }
+
           const existingWidgets = currentWidgetsMap.get(baseId) || [];
           const existingWidget = existingWidgets.find((w: ExtendedGridStackWidget) => w.gridstackNode?.id === node.id) || existingWidgets[0];
           
           if (existingWidget) {
-            // Update position and size of existing widget
+            // Update position and size of existing widget, enforcing minimum sizes
             grid.update(existingWidget, {
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH,
+              w: Math.max(node.w, widgetConfig.minSize.w),
+              h: Math.max(node.h, widgetConfig.minSize.h),
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h,
               autoPosition: false
             });
 
@@ -880,23 +940,16 @@ function AppContent() {
             }
           } else {
             // Create new widget if it doesn't exist
-            const widgetType = widgetTypes[baseId];
-            
-            if (!widgetComponents[widgetType]) {
-              console.warn('❌ Unknown widget type:', widgetType);
-              return;
-            }
-
             try {
               const widgetElement = createWidget({
                 widgetType,
                 widgetId: node.id,
                 x: node.x,
                 y: node.y,
-                w: node.w,
-                h: node.h,
-                minW: node.minW,
-                minH: node.minH
+                w: Math.max(node.w, widgetConfig.minSize.w),
+                h: Math.max(node.h, widgetConfig.minSize.h),
+                minW: widgetConfig.minSize.w,
+                minH: widgetConfig.minSize.h
               });
 
               if (widgetElement) {
@@ -905,10 +958,10 @@ function AppContent() {
                   id: node.id,
                   x: node.x,
                   y: node.y,
-                  w: node.w,
-                  h: node.h,
-                  minW: node.minW,
-                  minH: node.minH,
+                  w: Math.max(node.w, widgetConfig.minSize.w),
+                  h: Math.max(node.h, widgetConfig.minSize.h),
+                  minW: widgetConfig.minSize.w,
+                  minH: widgetConfig.minSize.h,
                   autoPosition: false,
                   noMove: isMobile || currentPage !== 'dashboard',
                   noResize: isMobile || currentPage !== 'dashboard',
@@ -941,6 +994,38 @@ function AppContent() {
             grid.removeWidget(widget, false);
           }
         });
+
+        // Add resize event listeners to enforce minimum sizes
+        if (!isMobile && currentPage === 'dashboard') {
+          grid.off('resize').on('resize', (event: Event, el: GridStackNode) => {
+            if (el.id && el.el) {
+              const baseId = el.id.split('-')[0];
+              const widgetType = widgetTypes[baseId];
+              const config = WIDGET_REGISTRY[widgetType];
+              if (config) {
+                const minW = config.minSize.w;
+                const minH = config.minSize.h;
+                
+                // Enforce minimum sizes during resize
+                if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
+                  grid.update(el.el, {
+                    w: Math.max(el.w || minW, minW),
+                    h: Math.max(el.h || minH, minH),
+                    autoPosition: false
+                  });
+                }
+
+                // Update visual feedback
+                const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
+                if (isAtMinSize) {
+                  el.el.classList.add('min-size');
+                } else {
+                  el.el.classList.remove('min-size');
+                }
+              }
+            }
+          });
+        }
       } finally {
         grid.commit();
         console.log('✅ Paste layout completed');
@@ -948,7 +1033,7 @@ function AppContent() {
     } catch (error) {
       console.error('Failed to paste layout:', error);
     }
-  }, [grid]);
+  }, [grid, createWidget, isMobile, currentPage]);
 
   const handlePageChange = useCallback((page: 'dashboard' | 'spot' | 'margin' | 'stake') => {
     console.log('🔄 Page change requested:', { from: currentPage, to: page, hasGrid: !!grid, isMobile });
@@ -1043,7 +1128,9 @@ function AppContent() {
         acceptWidgets: !isMobile,
         removable: false,
         swap: !isMobile,
-        swapScroll: !isMobile
+        swapScroll: !isMobile,
+        minWidth: 2,
+        minHeight: 2
       } as GridStackOptions, gridElementRef.current);
 
       // Track drag state and original positions
@@ -1351,33 +1438,74 @@ function AppContent() {
           }
 
           try {
+            // Get widget configuration to enforce minimum sizes
+            const widgetConfig = WIDGET_REGISTRY[widgetType];
+            if (!widgetConfig) {
+              console.warn('❌ Missing widget configuration for:', widgetType);
+              return;
+            }
+
+            // Enforce minimum sizes from registry
+            const width = Math.max(node.w, widgetConfig.minSize.w);
+            const height = Math.max(node.h, widgetConfig.minSize.h);
+
             // Create widget element with the exact ID from the layout
             const widgetElement = createWidget({
               widgetType,
               widgetId: node.id,
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH
+              w: width,
+              h: height,
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h
             });
 
-            // Add widget to grid with exact position
+            // Add widget to grid with exact position and enforced minimum sizes
             g.addWidget({
               el: widgetElement,
               id: node.id,
               x: node.x,
               y: node.y,
-              w: node.w,
-              h: node.h,
-              minW: node.minW,
-              minH: node.minH,
+              w: width,
+              h: height,
+              minW: widgetConfig.minSize.w,
+              minH: widgetConfig.minSize.h,
               autoPosition: false,
               noMove: isMobile || currentPage !== 'dashboard',
               noResize: isMobile || currentPage !== 'dashboard',
               locked: isMobile || currentPage !== 'dashboard'
             } as ExtendedGridStackWidget);
+
+            // Add resize event listener to enforce minimum sizes
+            if (!isMobile && currentPage === 'dashboard') {
+              g.on('resize', (event: Event, el: GridStackNode) => {
+                if (el.id && el.el) {
+                  const baseId = el.id.split('-')[0];
+                  const config = WIDGET_REGISTRY[widgetTypes[baseId]];
+                  if (config) {
+                    const minW = config.minSize.w;
+                    const minH = config.minSize.h;
+                    const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
+                    
+                    // Add or remove min-size class based on current size
+                    if (isAtMinSize) {
+                      el.el.classList.add('min-size');
+                    } else {
+                      el.el.classList.remove('min-size');
+                    }
+
+                    // Enforce minimum sizes
+                    if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
+                      g.update(el.el, {
+                        w: Math.max(el.w || minW, minW),
+                        h: Math.max(el.h || minH, minH)
+                      });
+                    }
+                  }
+                }
+              });
+            }
           } catch (error) {
             console.error('Failed to create widget:', node.id, error);
           }
@@ -1608,8 +1736,8 @@ function AppContent() {
       grid.addWidget({
         el: widgetElement,
         id: widgetId,
-        w: widgetConfig.defaultSize.w,
-        h: widgetConfig.defaultSize.h,
+        w: Math.max(widgetConfig.defaultSize.w, widgetConfig.minSize.w),
+        h: Math.max(widgetConfig.defaultSize.h, widgetConfig.minSize.h),
         minW: widgetConfig.minSize.w,
         minH: widgetConfig.minSize.h,
         autoPosition: true,
