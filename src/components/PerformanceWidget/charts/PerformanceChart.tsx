@@ -19,6 +19,8 @@ import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useDataSource } from '@/lib/DataSourceContext';
 import React from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MoreHorizontal } from "lucide-react";
 
 // Import sample balances from BalancesWidget
 const SAMPLE_BALANCES = {
@@ -254,11 +256,26 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const [error, setError] = useState<string | null>(null);
   const [hoverValues, setHoverValues] = useState<{ index: number; values: { [key: string]: number }; activeLine?: string } | null>(null);
   const [hiddenAssets, setHiddenAssets] = useState<Set<string>>(new Set());
+  const [enabledTruncatedAssets, setEnabledTruncatedAssets] = useState<Set<string>>(new Set());
   const [hoveredAsset, setHoveredAsset] = useState<string | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const popoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const toggleAssetVisibility = (asset: string) => {
     setHiddenAssets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(asset)) {
+        newSet.delete(asset);
+      } else {
+        newSet.add(asset);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleTruncatedAsset = (asset: string) => {
+    setEnabledTruncatedAssets(prev => {
       const newSet = new Set(prev);
       if (newSet.has(asset)) {
         newSet.delete(asset);
@@ -481,6 +498,10 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     return transitions;
   }, [balanceData, cumulativeData, propViewMode]);
 
+  // Get visible and hidden assets
+  const visibleAssets = useMemo(() => sortedAssets.slice(0, 5), [sortedAssets]);
+  const truncatedAssets = useMemo(() => sortedAssets.slice(5), [sortedAssets]);
+
   if (error) {
     return (
       <Card className="h-full flex flex-col">
@@ -499,10 +520,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             <CardTitle>
               {propViewMode === 'split' ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  {sortedAssets.map((asset: AssetTicker) => {
+                  {visibleAssets.map((asset: AssetTicker) => {
                     const assetConfig = ASSETS[asset];
                     const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
                     const isHidden = hiddenAssets.has(asset);
+                    const isTruncated = truncatedAssets.includes(asset);
+                    const isEnabled = !isTruncated || enabledTruncatedAssets.has(asset);
                     const isActive = hoverValues?.activeLine === asset;
                     const currentValue = isActive ? hoverValues?.values[asset] : undefined;
                     const previousIndex = hoverValues?.index ? hoverValues.index - 1 : 0;
@@ -556,6 +579,117 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                       </button>
                     );
                   })}
+                  {truncatedAssets.length > 0 && (
+                    <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="font-jakarta font-bold text-sm rounded-md px-2 h-5 transition-all duration-150 flex items-center gap-1 bg-muted hover:bg-muted/80"
+                          onMouseEnter={() => {
+                            if (popoverTimeoutRef.current) {
+                              clearTimeout(popoverTimeoutRef.current);
+                              popoverTimeoutRef.current = null;
+                            }
+                            setIsPopoverOpen(true);
+                          }}
+                          onMouseLeave={() => {
+                            popoverTimeoutRef.current = setTimeout(() => {
+                              setIsPopoverOpen(false);
+                            }, 150);
+                          }}
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                          {enabledTruncatedAssets.size > 0 && (
+                            <div className="flex -space-x-0.5">
+                              {Array.from(enabledTruncatedAssets).map((asset, index) => {
+                                const assetConfig = ASSETS[asset as AssetTicker];
+                                const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                                return (
+                                  <div
+                                    key={asset}
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ backgroundColor: assetColor }}
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent 
+                        className="w-auto p-2"
+                        sideOffset={4}
+                        align="start"
+                        onMouseEnter={() => {
+                          if (popoverTimeoutRef.current) {
+                            clearTimeout(popoverTimeoutRef.current);
+                            popoverTimeoutRef.current = null;
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          popoverTimeoutRef.current = setTimeout(() => {
+                            setIsPopoverOpen(false);
+                          }, 150);
+                        }}
+                      >
+                        <div className="flex flex-col gap-1">
+                          {truncatedAssets.map((asset: AssetTicker) => {
+                            const assetConfig = ASSETS[asset];
+                            const assetColor = resolvedTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                            const isEnabled = enabledTruncatedAssets.has(asset);
+                            const isActive = hoverValues?.activeLine === asset;
+                            return (
+                              <button
+                                key={asset}
+                                type="button"
+                                className="font-jakarta font-bold text-sm rounded-md px-2 py-1 transition-all duration-150 flex items-center gap-2"
+                                style={{ 
+                                  color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
+                                  backgroundColor: isActive ? assetColor : `${assetColor}14`,
+                                  cursor: 'pointer',
+                                  WebkitTouchCallout: 'none',
+                                  WebkitUserSelect: 'text',
+                                  userSelect: 'text',
+                                  opacity: isEnabled ? 1 : 0.5
+                                }}
+                                onClick={() => toggleTruncatedAsset(asset)}
+                                onMouseEnter={(e) => {
+                                  if (hoverTimeoutRef.current) {
+                                    clearTimeout(hoverTimeoutRef.current);
+                                    hoverTimeoutRef.current = null;
+                                  }
+                                  const target = e.currentTarget;
+                                  target.style.backgroundColor = assetColor;
+                                  target.style.color = 'hsl(var(--color-widget-bg))';
+                                  setHoveredAsset(asset);
+                                }}
+                                onMouseLeave={(e) => {
+                                  const target = e.currentTarget;
+                                  if (!isActive) {
+                                    target.style.backgroundColor = `${assetColor}14`;
+                                    target.style.color = assetColor;
+                                  }
+                                  
+                                  hoverTimeoutRef.current = setTimeout(() => {
+                                    setHoveredAsset(null);
+                                  }, 150);
+                                }}
+                              >
+                                <div className="w-4 h-4 rounded-full overflow-hidden">
+                                  <img
+                                    src={assetConfig.icon}
+                                    alt={asset}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                {assetConfig.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center">
@@ -711,10 +845,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             {propViewMode === 'split' ? 
               assets.map(asset => {
                 const isHidden = hiddenAssets.has(asset);
+                const isTruncated = truncatedAssets.includes(asset);
+                const isEnabled = !isTruncated || enabledTruncatedAssets.has(asset);
                 const assetColor = resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light;
                 return (
                   <React.Fragment key={asset}>
-                    {!isHidden && (
+                    {isEnabled && !isHidden && (
                       <>
                         <ReferenceLine
                           key={`value-${asset}`}
