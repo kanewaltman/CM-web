@@ -237,6 +237,7 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   console.log(`generateSampleData: Generating data for ${days} days`);
   
   // Use a fixed number of data points based on container width and date range
+  // Use consistent data point count for smoother animations
   let dataPoints = Math.min(156, Math.max(20, Math.floor(days / 2))); // Base number
   
   if (containerWidth >= 480) dataPoints = Math.min(180, Math.max(20, Math.floor(days / 1.75)));
@@ -286,16 +287,21 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
       if (i === dataPoints - 1) {
         dataPoint[asset] = currentValue;
       } else {
-        // Use seeded random for consistent variations
-        const seed = i * 1000 + Object.keys(currentBalances).indexOf(asset);
+        // Use a more consistent seeded random for smoother transitions
+        // Seed based on asset and relative position in date range for consistency
+        const daysSinceEpoch = Math.floor(date.getTime() / (24 * 60 * 60 * 1000));
+        const seed = daysSinceEpoch * 100 + Object.keys(currentBalances).indexOf(asset);
+        
         const baseValue = currentValue * (1 + (seededRandom(seed) * 2 - 1) * profile.variation);
         
+        // Make variation more consistent between date range changes
         const variation = () => {
+          const relativePosition = progress; // 0 to 1
           const marketInfluence = (
-            Math.sin((i / dataPoints) * Math.PI * 2) * profile.trend + 
-            Math.sin((i / dataPoints) * Math.PI * 6) * profile.volatility
+            Math.sin(relativePosition * Math.PI * 2) * profile.trend + 
+            Math.sin(relativePosition * Math.PI * 6) * profile.volatility
           ) * profile.marketBeta;
-          const noise = (seededRandom(seed + 1) - 0.5) * profile.noise;
+          const noise = (seededRandom(seed + daysSinceEpoch) - 0.5) * profile.noise;
           return 1 + marketInfluence + noise;
         };
 
@@ -355,6 +361,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   // Store the current date range for comparison
   const prevDateRangeRef = useRef<{ from?: Date; to?: Date; instanceId?: number }>({});
 
+  // Track the last shown date for year/month labels
+  const lastShownDate = useRef<{ month: string; year: string }>({ month: '', year: '' });
+
   const toggleAssetVisibility = (asset: string) => {
     setHiddenAssets(prev => {
       const newSet = new Set(prev);
@@ -399,9 +408,6 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Track the last shown date to prevent repetition
-  const lastShownDate = useRef<{ month: string; year: string }>({ month: '', year: '' });
-
   // Fetch balance data - defined as a memoized callback to avoid recreation on each render
   const fetchBalanceData = useCallback(async () => {
     if (!dateRange?.from || !dateRange?.to) {
@@ -438,7 +444,22 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           }
         });
         
-        setFullBalanceData(newData);
+        // Using a smoother state update that allows for animation
+        setFullBalanceData(prevData => {
+          // If there's no previous data, just return the new data
+          if (prevData.length === 0) return newData;
+          
+          // If there is previous data, check if the new data has the same length
+          // Having the same length helps with smoother transitions
+          if (prevData.length === newData.length) {
+            console.log('Same number of data points, animation should be smooth');
+          } else {
+            console.log('Different number of data points, may affect animation');
+          }
+          
+          return newData;
+        });
+        
         setError(null);
       } else {
         const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
@@ -483,7 +504,16 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             }
           });
           
-          setFullBalanceData(newData);
+          // Similar smooth state update for API data
+          setFullBalanceData(prevData => {
+            if (prevData.length === 0) return newData;
+            if (prevData.length === newData.length) {
+              console.log('Same number of data points, animation should be smooth');
+            } else {
+              console.log('Different number of data points, may affect animation');
+            }
+            return newData;
+          });
         }
 
         setError(null);
@@ -496,7 +526,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     }
   }, [dataSource, dateRange, containerWidth, componentId]);
 
-  // Effect to handle date range changes
+  // Update the effect to handle date range changes more carefully
   useEffect(() => {
     if (!dateRange?.from || !dateRange?.to) return;
     
@@ -529,8 +559,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
         instanceId: instanceRef.current
       };
       
-      // Trigger regeneration of data
-      fetchBalanceData();
+      // Use a small delay to ensure animations work properly
+      // This allows React to register the change before fetching new data
+      setTimeout(() => {
+        // Trigger regeneration of data
+        fetchBalanceData();
+      }, 10);
     } else {
       console.log(`PerformanceChart [${componentId}:${instanceRef.current}] dateRange unchanged, skipping data regeneration`);
     }
@@ -587,6 +621,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       } : 'none'
     });
   }, [balanceData, dateRange, componentId]);
+
+  // Reset lastShownDate when date range changes
+  useEffect(() => {
+    // Reset the last shown date tracking when the date range changes
+    lastShownDate.current = { month: '', year: '' };
+  }, [dateRange]);
 
   // Calculate responsive chart parameters
   const chartParams = useMemo(() => {
@@ -696,7 +736,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     });
   }, [balanceData, assets]);
 
-  // Find year transition points in the visible data
+  // Update the yearTransitions calculation to more effectively identify and mark year boundaries
   const yearTransitions = useMemo(() => {
     if (balanceData.length === 0) return [];
     
@@ -707,15 +747,43 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     const visibleData = propViewMode === 'split' ? balanceData : cumulativeData;
     
     visibleData.forEach((point, index) => {
-      const [, year] = point.timestamp.split(' ');
-      if (lastYear !== null && year !== lastYear) {
+      const date = new Date(point.date);
+      const year = date.getFullYear().toString();
+      
+      // Check if this is a new year or the first data point
+      if ((lastYear !== null && year !== lastYear) || (index === 0 && dateRange?.from)) {
         transitions.push({ index, year });
       }
       lastYear = year;
     });
     
+    // Make sure we have year markers at reasonable intervals
+    // If we have multiple years but no transitions detected
+    if (transitions.length === 0 && dateRange?.from && dateRange?.to) {
+      const startYear = dateRange.from.getFullYear();
+      const endYear = dateRange.to.getFullYear();
+      
+      if (endYear > startYear) {
+        // Add year transitions at estimated positions
+        for (let year = startYear + 1; year <= endYear; year++) {
+          // Try to find the closest point to January 1st of this year
+          const jan1 = new Date(year, 0, 1);
+          const jan1Time = jan1.getTime();
+          
+          // Find the closest index in the data
+          const totalDuration = dateRange.to.getTime() - dateRange.from.getTime();
+          const yearProgress = (jan1Time - dateRange.from.getTime()) / totalDuration;
+          const estimatedIndex = Math.floor(yearProgress * visibleData.length);
+          
+          // Ensure the index is valid
+          const safeIndex = Math.max(0, Math.min(estimatedIndex, visibleData.length - 1));
+          transitions.push({ index: safeIndex, year: year.toString() });
+        }
+      }
+    }
+    
     return transitions;
-  }, [balanceData, cumulativeData, propViewMode]);
+  }, [balanceData, cumulativeData, propViewMode, dateRange]);
 
   // Get visible and hidden assets
   const visibleAssets = useMemo(() => sortedAssets.slice(0, 5), [sortedAssets]);
@@ -1096,7 +1164,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           stroke="rgba(0,0,0,0)"
                           strokeWidth={40}
                           dot={false}
-                          isAnimationActive={false}
+                          isAnimationActive={true}
                           style={{ 
                             cursor: 'pointer', 
                             pointerEvents: 'all',
@@ -1121,7 +1189,10 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           stroke={assetColor}
                           strokeWidth={2}
                           dot={false}
-                          isAnimationActive={false}
+                          isAnimationActive={true}
+                          animationDuration={1000}
+                          animationEasing="ease-out"
+                          animationBegin={0}
                           strokeOpacity={hoverValues ? 
                             (hoverValues.activeLine === asset ? 1 : 0.3) : 
                             hoveredAsset ? 
@@ -1160,7 +1231,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                     stroke="rgba(0,0,0,0)"
                     strokeWidth={40}
                     dot={false}
-                    isAnimationActive={false}
+                    isAnimationActive={true}
                     style={{ 
                       cursor: 'pointer', 
                       pointerEvents: 'all',
@@ -1185,7 +1256,10 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                     stroke="hsl(var(--foreground))"
                     strokeWidth={2}
                     dot={false}
-                    isAnimationActive={false}
+                    isAnimationActive={true}
+                    animationDuration={1000}
+                    animationEasing="ease-out"
+                    animationBegin={0}
                     strokeOpacity={1}
                     className="transition-[stroke-opacity] duration-150 ease-out"
                     connectNulls={true}
@@ -1207,12 +1281,34 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                 } else if (value.match(/\d{1,2},/)) {
                   // Format for medium date ranges (≤ 60 days) with day numbers
                   const parts = value.split(' ');
+                  
+                  // For multi-year data, include the year if different from last shown
+                  if (parts.length >= 3 && yearTransitions.length > 1) {
+                    const date = new Date(value);
+                    const year = date.getFullYear().toString();
+                    
+                    // Check if this year is different from the last shown
+                    if (lastShownDate.current.year !== year) {
+                      lastShownDate.current.year = year;
+                      lastShownDate.current.month = parts[0];
+                      // Return month and year
+                      return `${parts[0]}'${year.slice(-2)}`;
+                    }
+                  }
+                  
                   // Return format like "Jan 15"
                   return `${parts[0]} ${parts[1].replace(',', '')}`;
                 } else {
                   // Format for longer date ranges - month and year
                   const [month, year] = value.split(' ');
-                  return `${month}'${year.slice(-2)}`;
+                  
+                  // Always include year for multi-year data
+                  if (yearTransitions.length > 1 || (dateRange?.from && dateRange?.to && 
+                      dateRange.from.getFullYear() !== dateRange.to.getFullYear())) {
+                    return `${month}'${year.slice(-2)}`;
+                  }
+                  
+                  return month;
                 }
               }}
               stroke="hsl(var(--color-border-muted))"

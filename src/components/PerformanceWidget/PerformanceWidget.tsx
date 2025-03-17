@@ -27,6 +27,7 @@ import {
   subYears,
   format,
   isSameDay,
+  isEqual,
 } from 'date-fns';
 import { Card } from '@/components/ui/card';
 import { KeyedPerformanceChart } from './KeyedPerformanceChart';
@@ -90,7 +91,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   headerControls,
   onDateRangeChange,
   dateRange: propDateRange,
-}) => {
+}: PerformanceWidgetProps): React.ReactNode => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const [viewMode, setViewMode] = useState<WidgetViewMode>(defaultViewMode);
   const today = new Date();
@@ -134,6 +135,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   // Set initial state to last 7 days or use prop date range if provided
   const [date, setDate] = useState<DateRange | undefined>(propDateRange || last7Days);
   const [month, setMonth] = useState(today);
+  const [activePreset, setActivePreset] = useState<string>('Last 7 Days');
   
   // Keep track of render count to debug re-rendering issues
   const renderCount = useRef(0);
@@ -237,13 +239,40 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   };
 
   // Date range buttons
-  const handleYesterday = () => handleDateRangeChange(yesterday);
-  const handleLast7Days = () => handleDateRangeChange(last7Days);
-  const handleLast30Days = () => handleDateRangeChange(last30Days);
-  const handleMonthToDate = () => handleDateRangeChange(monthToDate);
-  const handleLastMonth = () => handleDateRangeChange(lastMonth);
-  const handleYearToDate = () => handleDateRangeChange(yearToDate);
-  const handleLastYear = () => handleDateRangeChange(lastYear);
+  const handleYesterday = () => {
+    setActivePreset('Yesterday');
+    handleDateRangeChange(yesterday);
+  };
+
+  const handleLast7Days = () => {
+    setActivePreset('Last 7 Days');
+    handleDateRangeChange(last7Days);
+  };
+
+  const handleLast30Days = () => {
+    setActivePreset('Last 30 Days');
+    handleDateRangeChange(last30Days);
+  };
+
+  const handleMonthToDate = () => {
+    setActivePreset('Month to Date');
+    handleDateRangeChange(monthToDate);
+  };
+
+  const handleLastMonth = () => {
+    setActivePreset('Last Month');
+    handleDateRangeChange(lastMonth);
+  };
+
+  const handleYearToDate = () => {
+    setActivePreset('Year to Date');
+    handleDateRangeChange(yearToDate);
+  };
+
+  const handleLastYear = () => {
+    setActivePreset('Last Year');
+    handleDateRangeChange(lastYear);
+  };
 
   // Calendar
   const handleCalendarSelect = (range: DayPickerDateRange | undefined) => {
@@ -255,7 +284,33 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       to: range.to || range.from
     };
     
+    // Check if the new range matches any preset
+    if (isDateRangeEqual(newDateRange, yesterday)) {
+      setActivePreset('Yesterday');
+    } else if (isDateRangeEqual(newDateRange, last7Days)) {
+      setActivePreset('Last 7 Days');
+    } else if (isDateRangeEqual(newDateRange, last30Days)) {
+      setActivePreset('Last 30 Days');
+    } else if (isDateRangeEqual(newDateRange, monthToDate)) {
+      setActivePreset('Month to Date');
+    } else if (isDateRangeEqual(newDateRange, lastMonth)) {
+      setActivePreset('Last Month');
+    } else if (isDateRangeEqual(newDateRange, yearToDate)) {
+      setActivePreset('Year to Date');
+    } else if (isDateRangeEqual(newDateRange, lastYear)) {
+      setActivePreset('Last Year');
+    } else {
+      // For custom date range, set a formatted date string
+      setActivePreset(formatDateRange(newDateRange));
+    }
+    
     handleDateRangeChange(newDateRange);
+  };
+
+  // Helper function to compare date ranges
+  const isDateRangeEqual = (range1: DateRange, range2: DateRange): boolean => {
+    return isEqual(new Date(range1.from), new Date(range2.from)) && 
+           isEqual(new Date(range1.to), new Date(range2.to));
   };
 
   // Chart components for each variant
@@ -305,28 +360,74 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     return result;
   }, [date]);
 
-  // Add a key generator that updates when date changes
-  const getChartKey = () => {
-    if (!date?.from || !date?.to) return `chart-${selectedVariant}-no-date-${Date.now()}`;
-    return `chart-${selectedVariant}-${date.from.getTime()}-${date.to.getTime()}-${Date.now()}`;
+  // Add a key generator that updates when date changes but allows for animation
+  const getChartKey = (variant: ChartVariant) => {
+    if (!date?.from || !date?.to) return `chart-${variant}-no-date`;
+    return `chart-${variant}-${date.from.getTime()}-${date.to.getTime()}`;
   };
 
   // Log each render with date information
   console.log('PerformanceWidget rendering with date range:', dateRangeProp ? {
     from: dateRangeProp.from.toISOString(),
     to: dateRangeProp.to.toISOString(),
-    key: getChartKey()
+    key: getChartKey(selectedVariant)
   } : 'undefined');
 
   const ChartComponent = MemoizedCharts[selectedVariant];
 
+  // Update the formatDateRange function to provide different formats based on context
   const formatDateRange = (range: DateRange | undefined) => {
     if (!range?.from) return 'Date Range';
     if (!range.to) return format(range.from, 'MMM d, yyyy');
+    
+    // For same day selections
     if (isSameDay(range.from, range.to)) {
       return format(range.from, 'MMM d, yyyy');
     }
-    return `${format(range.from, 'MMM d')} - ${format(range.to, 'MMM d, yyyy')}`;
+    
+    // For same month and year selections
+    if (range.from.getMonth() === range.to.getMonth() && 
+        range.from.getFullYear() === range.to.getFullYear()) {
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'd, yyyy')}`;
+    }
+    
+    // For same year but different month selections
+    if (range.from.getFullYear() === range.to.getFullYear()) {
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'MMM d, yyyy')}`;
+    }
+    
+    // For different year selections
+    return `${format(range.from, 'MMM d, yyyy')}-${format(range.to, 'MMM d, yyyy')}`;
+  };
+
+  // Update the formatCompactDateRange function to handle cross-year formatting better
+  const formatCompactDateRange = (range: DateRange | undefined) => {
+    if (!range?.from) return 'Date';
+    if (!range.to) return format(range.from, 'MMM d, yyyy');
+    
+    // For same day selections
+    if (isSameDay(range.from, range.to)) {
+      return format(range.from, 'MMM d, yyyy');
+    }
+    
+    // For same month and same year
+    if (range.from.getMonth() === range.to.getMonth() && 
+        range.from.getFullYear() === range.to.getFullYear()) {
+      // Format as "Mar 3-17, 2025" for same month/year
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'd, yyyy')}`;
+    }
+    
+    // For same year
+    if (range.from.getFullYear() === range.to.getFullYear()) {
+      // Format as "Mar 3-Apr 17, 2025" for different months in same year
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'MMM d, yyyy')}`;
+    }
+    
+    // For different years, use a more compact format that clearly shows both years
+    // Format as "Nov'23-Mar'25" for different years
+    const fromYear = range.from.getFullYear().toString().slice(-2);
+    const toYear = range.to.getFullYear().toString().slice(-2);
+    return `${format(range.from, 'MMM d')}'${fromYear}-${format(range.to, 'MMM d')}'${toYear}`;
   };
 
   // Create compact header controls that will be returned when onRemove is provided
@@ -335,12 +436,17 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       {/* Date range selector */}
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-            <CalendarIcon className="mr-1 h-3 w-3" />
-            {date?.from && date?.to ? 
-              format(date.from, 'MM/dd') + '-' + format(date.to, 'MM/dd') : 
-              'Date'
-            }
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs max-w-[180px] whitespace-nowrap">
+            <CalendarIcon className="mr-1 h-3 w-3 flex-shrink-0" />
+            <span className="truncate leading-none">
+              {date?.from && date?.to ? 
+                // If it's one of the standard presets, show the name, otherwise show compact date format
+                (['Yesterday', 'Last 7 Days', 'Last 30 Days', 'Month to Date', 'Last Month', 'Year to Date', 'Last Year'].includes(activePreset) 
+                  ? activePreset 
+                  : formatCompactDateRange(date)) 
+                : 'Date Range'
+              }
+            </span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="end">
@@ -362,7 +468,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     className="w-full justify-start"
                     onClick={handleLast7Days}
                   >
-                    7 Days
+                    Last 7 Days
                   </Button>
                   <Button 
                     variant="ghost"
@@ -370,7 +476,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     className="w-full justify-start"
                     onClick={handleLast30Days}
                   >
-                    30 Days
+                    Last 30 Days
                   </Button>
                   <Button 
                     variant="ghost"
@@ -419,7 +525,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       {/* Variant selector dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs ml-1">
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap ml-1">
             Views
           </Button>
         </DropdownMenuTrigger>
@@ -455,12 +561,12 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           <KeyedPerformanceChart
             viewMode={viewMode}
             onViewModeChange={handleChartViewModeChange}
-            dateRange={date}
+            dateRange={dateRangeProp}
           />
         ) : (
           <ChartComponent 
             dateRange={dateRangeProp}
-            key={`${selectedVariant}-${Date.now()}`}
+            key={getChartKey(selectedVariant)}
           />
         )}
       </div>

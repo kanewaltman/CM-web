@@ -13,21 +13,20 @@ type KeyedPerformanceChartProps = {
 /**
  * KeyedPerformanceChart component
  * 
- * Wraps the PerformanceChart with a unique key generation mechanism
- * to ensure the component re-renders when the date range changes.
+ * Wraps the PerformanceChart with a key generation mechanism
+ * to ensure the component re-renders when the date range changes,
+ * but still allows for proper animations.
  */
 export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }: KeyedPerformanceChartProps) {
-  // Generate a unique chart key that changes when the date range changes
+  // Generate a unique chart key that changes ONLY when the date range changes
   const chartKey = useMemo(() => {
-    // Include timestamp to guarantee uniqueness on every render
-    const timestamp = Date.now();
-    
     if (!dateRange?.from || !dateRange?.to) {
-      return `chart-default-${timestamp}`;
+      return 'chart-default';
     }
     
-    // Create a key based on date range timestamps
-    return `chart-${dateRange.from.getTime()}-${dateRange.to.getTime()}-${timestamp}`;
+    // Create a key based on date range timestamps only
+    // Removing the timestamp allows the chart to animate properly
+    return `chart-${dateRange.from.getTime()}-${dateRange.to.getTime()}`;
   }, [dateRange]);
   
   // Create a fresh copy of the date range to break reference equality
