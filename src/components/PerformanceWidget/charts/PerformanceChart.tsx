@@ -204,10 +204,18 @@ function getAssetProfile(asset: AssetTicker) {
 }
 
 // Add sample data that reflects portfolio value history
-function generateSampleData(currentBalances: Record<string, number>, pointCount: number) {
-  return Array.from({ length: pointCount }).map((_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (pointCount - 1 - i) * 7);
+function generateSampleData(currentBalances: Record<string, number>, dateRange?: { from: Date; to: Date }) {
+  // If no date range provided, generate 156 weeks of data (3 years)
+  const startDate = dateRange?.from || new Date(new Date().setDate(new Date().getDate() - 156 * 7));
+  const endDate = dateRange?.to || new Date();
+  
+  // Calculate number of days between dates
+  const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+  
+  // Generate daily data points
+  return Array.from({ length: days + 1 }).map((_, i) => {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + i);
     
     // Format date to include year for proper month transitions
     const dataPoint: BalanceDataPoint = {
@@ -218,7 +226,7 @@ function generateSampleData(currentBalances: Record<string, number>, pointCount:
     Object.entries(currentBalances).forEach(([asset, currentValue]) => {
       const profile = getAssetProfile(asset as AssetTicker);
       
-      if (i === pointCount - 1) {
+      if (i === days) {
         // For the last data point, use exact current balance
         dataPoint[asset] = currentValue;
       } else {
@@ -226,7 +234,7 @@ function generateSampleData(currentBalances: Record<string, number>, pointCount:
         
         const variation = () => {
           // Market influence based on asset's beta
-          const marketInfluence = (Math.sin((i / pointCount) * Math.PI * 2) * profile.trend + Math.sin((i / pointCount) * Math.PI * 6) * profile.volatility) * profile.marketBeta;
+          const marketInfluence = (Math.sin((i / days) * Math.PI * 2) * profile.trend + Math.sin((i / days) * Math.PI * 6) * profile.volatility) * profile.marketBeta;
           // Asset-specific noise
           const noise = (Math.random() - 0.5) * profile.noise;
           return 1 + marketInfluence + noise;
@@ -243,9 +251,10 @@ function generateSampleData(currentBalances: Record<string, number>, pointCount:
 export interface PerformanceChartProps {
   viewMode?: 'split' | 'cumulative';
   onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+  dateRange?: { from: Date; to: Date };
 }
 
-export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeChange }: PerformanceChartProps) {
+export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeChange, dateRange }: PerformanceChartProps) {
   const id = useId();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -310,44 +319,34 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   // Track the last shown date to prevent repetition
   const lastShownDate = useRef<{ month: string; year: string }>({ month: '', year: '' });
 
-  // Calculate responsive chart parameters
-  const chartParams = useMemo(() => {
-    // Default values for narrow screens (< 480px)
-    let interval = Math.floor(26 / 6); // Show ~6 labels
-    let visiblePoints = 26;
-
-    // Adjust based on container width
-    if (containerWidth >= 480) {
-      interval = Math.floor(39 / 7); // Show ~7 labels
-      visiblePoints = 39;
-    }
-    if (containerWidth >= 768) {
-      interval = Math.floor(52 / 8); // Show ~8 labels
-      visiblePoints = 52;
-    }
-    if (containerWidth >= 1024) {
-      interval = Math.floor(104 / 10); // Show ~10 labels
-      visiblePoints = 104;
-    }
-    if (containerWidth >= 1280) {
-      interval = Math.floor(156 / 12); // Show ~12 labels
-      visiblePoints = 156;
-    }
-    if (containerWidth >= 1536) {
-      interval = Math.floor(156 / 13); // Show ~13 labels
-      visiblePoints = 156;
-    }
-
-    return { interval, visiblePoints };
-  }, [containerWidth]);
-
-  // Get visible data based on screen width
+  // Get visible data based on screen width and date range
   const balanceData = useMemo(() => {
     if (fullBalanceData.length === 0) return [];
     
-    // Always show the most recent data points based on visiblePoints
-    return fullBalanceData.slice(-chartParams.visiblePoints);
-  }, [fullBalanceData, chartParams.visiblePoints]);
+    let filteredData = fullBalanceData;
+    
+    // Filter data based on date range if provided
+    if (dateRange?.from && dateRange?.to) {
+      filteredData = fullBalanceData.filter(point => {
+        const pointDate = new Date(point.date);
+        // Set time to midnight for consistent date comparison
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        return pointDate >= fromDate && pointDate <= toDate;
+      });
+    }
+    
+    // If no data points after filtering, return empty array
+    if (filteredData.length === 0) return [];
+    
+    // Sort data by date to ensure correct order
+    filteredData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Return all filtered data points
+    return filteredData;
+  }, [fullBalanceData, dateRange]);
 
   // Fetch balance data
   useEffect(() => {
@@ -365,8 +364,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           
           const validAssets = Object.keys(sampleBalances) as AssetTicker[];
           setAssets(validAssets);
-          // Generate maximum number of data points once
-          setFullBalanceData(generateSampleData(sampleBalances, 156));
+          
+          // Generate data for the exact date range
+          setFullBalanceData(generateSampleData(sampleBalances, dateRange));
           setError(null);
         } else {
           const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
@@ -401,8 +401,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               validAssets.map(asset => [asset, parseFloat(data[asset].EUR || '0')])
             );
 
-            // Generate maximum number of data points once
-            setFullBalanceData(generateSampleData(currentBalances, 156));
+            // Generate data points based on date range
+            setFullBalanceData(generateSampleData(currentBalances, dateRange));
           }
 
           setError(null);
@@ -416,7 +416,37 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     };
 
     fetchBalanceData();
-  }, [dataSource]); // Remove chartParams.dataPoints dependency
+  }, [dataSource, dateRange]);
+
+  // Calculate responsive chart parameters
+  const chartParams = useMemo(() => {
+    // Default values for narrow screens (< 480px)
+    let interval = Math.floor(26 / 6); // Show ~6 labels
+
+    // Adjust based on container width
+    if (containerWidth >= 480) {
+      interval = Math.floor(39 / 7); // Show ~7 labels
+    }
+    if (containerWidth >= 768) {
+      interval = Math.floor(52 / 8); // Show ~8 labels
+    }
+    if (containerWidth >= 1024) {
+      interval = Math.floor(104 / 10); // Show ~10 labels
+    }
+    if (containerWidth >= 1280) {
+      interval = Math.floor(156 / 12); // Show ~12 labels
+    }
+    if (containerWidth >= 1536) {
+      interval = Math.floor(156 / 13); // Show ~13 labels
+    }
+
+    // Adjust interval based on the number of data points
+    if (balanceData.length > 0) {
+      interval = Math.max(1, Math.floor(balanceData.length / 10)); // Show ~10 labels
+    }
+
+    return { interval };
+  }, [containerWidth, balanceData.length]);
 
   // Create chart configuration based on assets
   const chartConfig = useMemo(() => {

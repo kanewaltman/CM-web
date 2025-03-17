@@ -312,7 +312,8 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       {selectedVariant === 'revenue' ? (
         <PerformanceChart 
           viewMode={viewMode} 
-          onViewModeChange={handleViewModeChange} 
+          onViewModeChange={handleViewModeChange}
+          dateRange={date?.from && date?.to ? { from: date.from, to: date.to } : undefined}
         />
       ) : (
         <ChartComponent />
