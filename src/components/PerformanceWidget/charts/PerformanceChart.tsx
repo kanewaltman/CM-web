@@ -1,4 +1,4 @@
-import { useId, useState, useEffect, useMemo, useRef } from "react";
+import { useId, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   CartesianGrid,
   Line,
@@ -68,6 +68,7 @@ interface BalanceDetails {
 interface BalanceDataPoint {
   timestamp: string;
   date: string;
+  dayIndex: number;
   [key: string]: number | string;
 }
 
@@ -205,59 +206,96 @@ function getAssetProfile(asset: AssetTicker) {
 
 // Add sample data that reflects portfolio value history
 function generateSampleData(currentBalances: Record<string, number>, dateRange?: { from: Date; to: Date }, containerWidth: number = 0) {
-  // If no date range provided, generate 156 weeks of data (3 years)
-  const startDate = dateRange?.from || new Date(new Date().setDate(new Date().getDate() - 156 * 7));
-  const endDate = dateRange?.to || new Date();
+  // Ensure the date range is valid
+  if (!dateRange?.from || !dateRange?.to) {
+    console.log('generateSampleData: Using default date range (last 156 weeks)');
+    // Default to 156 weeks (3 years) if no date range provided
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 156 * 7);
+    dateRange = { from: startDate, to: endDate };
+  } else {
+    console.log('generateSampleData: Using provided date range:', {
+      from: dateRange.from.toISOString(),
+      to: dateRange.to.toISOString()
+    });
+  }
+  
+  // Ensure the start date is before the end date
+  const startDate = new Date(dateRange.from);
+  const endDate = new Date(dateRange.to);
+  
+  if (startDate > endDate) {
+    console.warn('generateSampleData: Start date is after end date, swapping dates');
+    const temp = startDate;
+    startDate.setTime(endDate.getTime());
+    endDate.setTime(temp.getTime());
+  }
   
   // Calculate number of days between dates
   const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+  console.log(`generateSampleData: Generating data for ${days} days`);
   
-  // Adjust number of data points based on container width
-  let dataPoints = days + 1;
-  if (containerWidth >= 480) {
-    dataPoints = Math.floor(days * 1.5) + 1; // 50% more points
+  // Use a fixed number of data points based on container width and date range
+  let dataPoints = Math.min(156, Math.max(20, Math.floor(days / 2))); // Base number
+  
+  if (containerWidth >= 480) dataPoints = Math.min(180, Math.max(20, Math.floor(days / 1.75)));
+  if (containerWidth >= 768) dataPoints = Math.min(200, Math.max(20, Math.floor(days / 1.5)));
+  if (containerWidth >= 1024) dataPoints = Math.min(220, Math.max(20, Math.floor(days / 1.25)));
+  if (containerWidth >= 1280) dataPoints = Math.min(240, Math.max(20, Math.floor(days)));
+  if (containerWidth >= 1536) dataPoints = Math.min(260, Math.max(20, Math.floor(days)));
+  
+  console.log(`generateSampleData: Using ${dataPoints} data points for ${days} days`);
+  
+  // Use consistent seed for random number generation
+  const seededRandom = (seed: number) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+  
+  // Determine the appropriate date format based on the date range
+  let dateFormat: Intl.DateTimeFormatOptions = { month: 'short', year: 'numeric' };
+  
+  // For shorter date ranges (≤ 60 days), include the day in the format
+  if (days <= 60) {
+    dateFormat = { month: 'short', day: 'numeric', year: 'numeric' };
   }
-  if (containerWidth >= 768) {
-    dataPoints = days * 2 + 1; // Double points
-  }
-  if (containerWidth >= 1024) {
-    dataPoints = Math.floor(days * 2.5) + 1; // 150% more points
-  }
-  if (containerWidth >= 1280) {
-    dataPoints = days * 3 + 1; // Triple points
-  }
-  if (containerWidth >= 1536) {
-    dataPoints = Math.floor(days * 3.5) + 1; // 250% more points
+  // For very short ranges (≤ 7 days), show more detailed info
+  else if (days <= 7) {
+    dateFormat = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit' };
   }
   
   // Generate data points
   return Array.from({ length: dataPoints }).map((_, i) => {
     const date = new Date(startDate);
-    // Interpolate the date based on the index
     const progress = i / (dataPoints - 1);
-    const totalDays = days;
-    date.setDate(date.getDate() + Math.floor(progress * totalDays));
+    date.setTime(startDate.getTime() + progress * (endDate.getTime() - startDate.getTime()));
     
-    // Format date to include year for proper month transitions
     const dataPoint: BalanceDataPoint = {
-      timestamp: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-      date: date.toISOString() // Add the full date for tooltip use
+      // Store formatted date string for display
+      timestamp: date.toLocaleDateString('en-US', dateFormat),
+      // Store actual date for calculations
+      date: date.toISOString(),
+      // Store the number of days from start for x-axis calculations
+      dayIndex: Math.floor((date.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000))
     };
 
     Object.entries(currentBalances).forEach(([asset, currentValue]) => {
       const profile = getAssetProfile(asset as AssetTicker);
       
       if (i === dataPoints - 1) {
-        // For the last data point, use exact current balance
         dataPoint[asset] = currentValue;
       } else {
-        const baseValue = currentValue * (1 + (Math.random() * 2 - 1) * profile.variation);
+        // Use seeded random for consistent variations
+        const seed = i * 1000 + Object.keys(currentBalances).indexOf(asset);
+        const baseValue = currentValue * (1 + (seededRandom(seed) * 2 - 1) * profile.variation);
         
         const variation = () => {
-          // Market influence based on asset's beta
-          const marketInfluence = (Math.sin((i / dataPoints) * Math.PI * 2) * profile.trend + Math.sin((i / dataPoints) * Math.PI * 6) * profile.volatility) * profile.marketBeta;
-          // Asset-specific noise
-          const noise = (Math.random() - 0.5) * profile.noise;
+          const marketInfluence = (
+            Math.sin((i / dataPoints) * Math.PI * 2) * profile.trend + 
+            Math.sin((i / dataPoints) * Math.PI * 6) * profile.volatility
+          ) * profile.marketBeta;
+          const noise = (seededRandom(seed + 1) - 0.5) * profile.noise;
           return 1 + marketInfluence + noise;
         };
 
@@ -276,7 +314,28 @@ export interface PerformanceChartProps {
 }
 
 export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeChange, dateRange }: PerformanceChartProps) {
-  const id = useId();
+  // Create component ID for debugging and instance tracking
+  const componentId = useId();
+  const instanceRef = useRef(Date.now());
+  
+  // Improved logging of received dateRange
+  useEffect(() => {
+    if (dateRange) {
+      console.log(`PerformanceChart [${componentId}] received dateRange:`, {
+        from: dateRange.from.toISOString(),
+        to: dateRange.to.toISOString(),
+        instance: instanceRef.current
+      });
+    } else {
+      console.log(`PerformanceChart [${componentId}] received no dateRange`);
+    }
+  }, [dateRange, componentId]);
+  
+  // Track render count for debugging re-renders
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+  console.log(`PerformanceChart [${componentId}] render #${renderCount.current}`);
+  
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const { resolvedTheme } = useTheme();
@@ -292,6 +351,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const popoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Store the current date range for comparison
+  const prevDateRangeRef = useRef<{ from?: Date; to?: Date; instanceId?: number }>({});
 
   const toggleAssetVisibility = (asset: string) => {
     setHiddenAssets(prev => {
@@ -340,136 +402,238 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   // Track the last shown date to prevent repetition
   const lastShownDate = useRef<{ month: string; year: string }>({ month: '', year: '' });
 
+  // Fetch balance data - defined as a memoized callback to avoid recreation on each render
+  const fetchBalanceData = useCallback(async () => {
+    if (!dateRange?.from || !dateRange?.to) {
+      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] cannot fetch data without dateRange`);
+      return;
+    }
+    
+    console.log(`PerformanceChart [${componentId}:${instanceRef.current}] fetchBalanceData called with dateRange:`, {
+      from: dateRange.from.toISOString(),
+      to: dateRange.to.toISOString()
+    });
+    
+    try {
+      setIsLoading(true);
+
+      if (dataSource === 'sample') {
+        // Use sample balances from the BalancesWidget
+        const sampleBalances = Object.fromEntries(
+          Object.entries(SAMPLE_BALANCES)
+            .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
+            .map(([asset, details]) => [asset, parseFloat((details as BalanceDetails).EUR || '0')])
+        );
+        
+        const validAssets = Object.keys(sampleBalances) as AssetTicker[];
+        setAssets(validAssets);
+        
+        // Generate data for the exact date range with container width
+        const newData = generateSampleData(sampleBalances, dateRange, containerWidth);
+        console.log(`PerformanceChart [${componentId}:${instanceRef.current}] generated sample data:`, {
+          dataPoints: newData.length,
+          dateRange: {
+            from: dateRange.from.toISOString(),
+            to: dateRange.to.toISOString()
+          }
+        });
+        
+        setFullBalanceData(newData);
+        setError(null);
+      } else {
+        const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
+        const tokenData = await tokenResponse.json();
+        
+        if (!tokenData.token) {
+          throw new Error('Failed to get demo token');
+        }
+
+        const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
+          headers: {
+            'Authorization': `Bearer ${tokenData.token}`
+          }
+        });
+        
+        if (!balancesResponse.ok) {
+          throw new Error(`Balances request failed with status ${balancesResponse.status}`);
+        }
+        
+        const data = await balancesResponse.json();
+
+        // Process balances and create mock historical data
+        if (data && typeof data === 'object') {
+          const validAssets = Object.entries(data)
+            .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
+            .map(([asset]) => asset as AssetTicker);
+
+          setAssets(validAssets);
+
+          // Create current balances object
+          const currentBalances = Object.fromEntries(
+            validAssets.map(asset => [asset, parseFloat(data[asset].EUR || '0')])
+          );
+
+          // Generate data points based on date range with container width
+          const newData = generateSampleData(currentBalances, dateRange, containerWidth);
+          console.log(`PerformanceChart [${componentId}:${instanceRef.current}] generated data for date range:`, {
+            dataPoints: newData.length,
+            dateRange: {
+              from: dateRange.from.toISOString(),
+              to: dateRange.to.toISOString()
+            }
+          });
+          
+          setFullBalanceData(newData);
+        }
+
+        setError(null);
+      }
+    } catch (err) {
+      console.error('Error fetching balances:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch balances');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dataSource, dateRange, containerWidth, componentId]);
+
+  // Effect to handle date range changes
+  useEffect(() => {
+    if (!dateRange?.from || !dateRange?.to) return;
+    
+    // Check if this is the first render or if the date range has changed
+    const isNewInstance = !prevDateRangeRef.current.instanceId || 
+                          prevDateRangeRef.current.instanceId !== instanceRef.current;
+    
+    const dateRangeChanged = isNewInstance || 
+                           !prevDateRangeRef.current.from || 
+                           !prevDateRangeRef.current.to || 
+                           prevDateRangeRef.current.from.getTime() !== dateRange.from.getTime() || 
+                           prevDateRangeRef.current.to.getTime() !== dateRange.to.getTime();
+    
+    // Only regenerate data if this is a new instance or the date range has changed
+    if (dateRangeChanged) {
+      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] dateRange ${isNewInstance ? 'new instance' : 'changed'}, regenerating data:`, {
+        from: dateRange.from.toISOString(),
+        to: dateRange.to.toISOString(),
+        renderCount: renderCount.current,
+        prev: prevDateRangeRef.current.from ? {
+          from: prevDateRangeRef.current.from.toISOString(),
+          to: prevDateRangeRef.current.to?.toISOString()
+        } : 'none'
+      });
+      
+      // Store current date range for future reference
+      prevDateRangeRef.current = { 
+        from: new Date(dateRange.from), 
+        to: new Date(dateRange.to),
+        instanceId: instanceRef.current
+      };
+      
+      // Trigger regeneration of data
+      fetchBalanceData();
+    } else {
+      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] dateRange unchanged, skipping data regeneration`);
+    }
+  }, [dateRange, fetchBalanceData, componentId]);
+
   // Get visible data based on screen width and date range
   const balanceData = useMemo(() => {
-    if (fullBalanceData.length === 0) return [];
+    if (fullBalanceData.length === 0) {
+      return [];
+    }
     
-    let filteredData = fullBalanceData;
+    let filteredData = [...fullBalanceData]; // Create a copy to avoid modifying the original
     
-    // Filter data based on date range if provided
     if (dateRange?.from && dateRange?.to) {
-      filteredData = fullBalanceData.filter(point => {
+      const beforeFilterCount = filteredData.length;
+      
+      const fromTimeMs = dateRange.from.getTime();
+      const toTimeMs = dateRange.to.getTime();
+      
+      filteredData = filteredData.filter(point => {
         const pointDate = new Date(point.date);
-        // Set time to midnight for consistent date comparison
-        const fromDate = new Date(dateRange.from);
-        fromDate.setHours(0, 0, 0, 0);
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        return pointDate >= fromDate && pointDate <= toDate;
+        const pointTimeMs = pointDate.getTime();
+        return pointTimeMs >= fromTimeMs && pointTimeMs <= toTimeMs;
+      });
+      
+      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] filtered data for date range:`, {
+        dateRange: {
+          from: dateRange.from.toISOString(),
+          to: dateRange.to.toISOString()
+        },
+        beforeCount: beforeFilterCount,
+        afterCount: filteredData.length
       });
     }
     
     // If no data points after filtering, return empty array
-    if (filteredData.length === 0) return [];
+    if (filteredData.length === 0) {
+      return [];
+    }
     
     // Sort data by date to ensure correct order
     filteredData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
-    // Return all filtered data points
     return filteredData;
-  }, [fullBalanceData, dateRange]);
+  }, [fullBalanceData, dateRange, componentId]);
 
-  // Fetch balance data
+  // Update balanceData logging to be more concise
   useEffect(() => {
-    const fetchBalanceData = async () => {
-      try {
-        setIsLoading(true);
-
-        if (dataSource === 'sample') {
-          // Use sample balances from the BalancesWidget
-          const sampleBalances = Object.fromEntries(
-            Object.entries(SAMPLE_BALANCES)
-              .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
-              .map(([asset, details]) => [asset, parseFloat((details as BalanceDetails).EUR || '0')])
-          );
-          
-          const validAssets = Object.keys(sampleBalances) as AssetTicker[];
-          setAssets(validAssets);
-          
-          // Generate data for the exact date range with container width
-          setFullBalanceData(generateSampleData(sampleBalances, dateRange, containerWidth));
-          setError(null);
-        } else {
-          const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
-          const tokenData = await tokenResponse.json();
-          
-          if (!tokenData.token) {
-            throw new Error('Failed to get demo token');
-          }
-
-          const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
-            headers: {
-              'Authorization': `Bearer ${tokenData.token}`
-            }
-          });
-          
-          if (!balancesResponse.ok) {
-            throw new Error(`Balances request failed with status ${balancesResponse.status}`);
-          }
-          
-          const data = await balancesResponse.json();
-
-          // Process balances and create mock historical data
-          if (data && typeof data === 'object') {
-            const validAssets = Object.entries(data)
-              .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
-              .map(([asset]) => asset as AssetTicker);
-
-            setAssets(validAssets);
-
-            // Create current balances object
-            const currentBalances = Object.fromEntries(
-              validAssets.map(asset => [asset, parseFloat(data[asset].EUR || '0')])
-            );
-
-            // Generate data points based on date range with container width
-            setFullBalanceData(generateSampleData(currentBalances, dateRange, containerWidth));
-          }
-
-          setError(null);
-        }
-      } catch (err) {
-        console.error('Error fetching balances:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch balances');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchBalanceData();
-  }, [dataSource, dateRange, containerWidth]);
+    console.log(`PerformanceChart [${componentId}:${instanceRef.current}] balanceData updated:`, {
+      count: balanceData.length,
+      dateRange: dateRange ? {
+        from: dateRange.from.toISOString(),
+        to: dateRange.to.toISOString()
+      } : 'none'
+    });
+  }, [balanceData, dateRange, componentId]);
 
   // Calculate responsive chart parameters
   const chartParams = useMemo(() => {
-    // Default values for narrow screens (< 480px)
-    let interval = Math.floor(26 / 6); // Show ~6 labels
-
-    // Adjust based on container width
-    if (containerWidth >= 480) {
-      interval = Math.floor(39 / 7); // Show ~7 labels
+    // Calculate date range in days
+    let daysInRange = 0;
+    
+    // First try to get days from balance data
+    if (balanceData.length > 0 && 'dayIndex' in balanceData[balanceData.length - 1]) {
+      const lastItem = balanceData[balanceData.length - 1];
+      daysInRange = (lastItem.dayIndex as number) || 0;
+    } 
+    // Otherwise calculate from dateRange prop
+    else if (dateRange?.from && dateRange?.to) {
+      daysInRange = Math.ceil(
+        (dateRange.to.getTime() - dateRange.from.getTime()) / 
+        (24 * 60 * 60 * 1000)
+      );
     }
-    if (containerWidth >= 768) {
-      interval = Math.floor(52 / 8); // Show ~8 labels
+    
+    // Base number of labels on container width
+    let targetLabels = 6; // Default for small screens
+    
+    if (containerWidth >= 480) targetLabels = 7;
+    if (containerWidth >= 768) targetLabels = 8;
+    if (containerWidth >= 1024) targetLabels = 10;
+    if (containerWidth >= 1280) targetLabels = 12;
+    if (containerWidth >= 1536) targetLabels = 13;
+    
+    // Adjust based on date range
+    if (daysInRange <= 7) {
+      // For very short ranges (week or less), show more labels
+      targetLabels = Math.min(daysInRange + 1, targetLabels + 2);
+    } else if (daysInRange <= 30) {
+      // For month range, keep standard labels
+      // no adjustment needed
+    } else if (daysInRange > 90) {
+      // For longer ranges, reduce label density
+      targetLabels = Math.max(6, targetLabels - 2);
     }
-    if (containerWidth >= 1024) {
-      interval = Math.floor(104 / 10); // Show ~10 labels
-    }
-    if (containerWidth >= 1280) {
-      interval = Math.floor(156 / 12); // Show ~12 labels
-    }
-    if (containerWidth >= 1536) {
-      interval = Math.floor(156 / 13); // Show ~13 labels
-    }
-
-    // Adjust interval based on the number of data points, but don't override the width-based interval
-    if (balanceData.length > 0) {
-      const dataBasedInterval = Math.max(1, Math.floor(balanceData.length / 10)); // Show ~10 labels
-      // Use the larger interval to ensure we don't show too many labels
-      interval = Math.max(interval, dataBasedInterval);
-    }
-
+    
+    // Calculate interval based on data points and target labels
+    const interval = Math.max(1, Math.floor(balanceData.length / targetLabels));
+    
+    console.log(`Chart params: ${balanceData.length} points, ${daysInRange} days, ${targetLabels} labels, interval ${interval}`);
+    
     return { interval };
-  }, [containerWidth, balanceData.length]);
+  }, [containerWidth, balanceData.length, dateRange]);
 
   // Create chart configuration based on assets
   const chartConfig = useMemo(() => {
@@ -957,9 +1121,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           stroke={assetColor}
                           strokeWidth={2}
                           dot={false}
-                          isAnimationActive={true}
-                          animationDuration={1000}
-                          animationBegin={0}
+                          isAnimationActive={false}
                           strokeOpacity={hoverValues ? 
                             (hoverValues.activeLine === asset ? 1 : 0.3) : 
                             hoveredAsset ? 
@@ -1023,9 +1185,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                     stroke="hsl(var(--foreground))"
                     strokeWidth={2}
                     dot={false}
-                    isAnimationActive={true}
-                    animationDuration={1000}
-                    animationBegin={0}
+                    isAnimationActive={false}
+                    strokeOpacity={1}
+                    className="transition-[stroke-opacity] duration-150 ease-out"
                     connectNulls={true}
                   />
                 </React.Fragment>
@@ -1037,9 +1199,21 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => {
-                const [month, year] = value.split(' ');
-                // Always show the month
-                return `${month}'${year.slice(-2)}`;
+                // Parse the timestamp based on its format
+                if (value.includes(':')) {
+                  // Format for very short date ranges (≤ 7 days) with hours
+                  const [datePart, timePart] = value.split(', ');
+                  return `${datePart.split(' ')[1]} ${timePart.split(':')[0]}h`;
+                } else if (value.match(/\d{1,2},/)) {
+                  // Format for medium date ranges (≤ 60 days) with day numbers
+                  const parts = value.split(' ');
+                  // Return format like "Jan 15"
+                  return `${parts[0]} ${parts[1].replace(',', '')}`;
+                } else {
+                  // Format for longer date ranges - month and year
+                  const [month, year] = value.split(' ');
+                  return `${month}'${year.slice(-2)}`;
+                }
               }}
               stroke="hsl(var(--color-border-muted))"
               interval={chartParams.interval}

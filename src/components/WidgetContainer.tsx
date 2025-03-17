@@ -92,7 +92,7 @@ export const WidgetContainer = memo(function WidgetContainer({
 
   return (
     <div ref={containerRef} className="grid-stack-item-content">
-      <div className="widget-inner-container">
+      <div className="widget-inner-container flex flex-col h-full">
         {/* Header */}
         <div className={cn(
           "widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0",
@@ -133,7 +133,7 @@ export const WidgetContainer = memo(function WidgetContainer({
         </div>
 
         {/* Content wrapper */}
-        <div className="widget-content flex-1 min-h-0 overflow-hidden">
+        <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1">
           {children}
         </div>
       </div>

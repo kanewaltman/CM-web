@@ -114,6 +114,8 @@ interface WidgetComponentProps {
   defaultViewMode?: 'split' | 'cumulative';
   onViewModeChange?: (mode: 'split' | 'cumulative') => void;
   onTitleChange?: (title: string) => void;
+  onDateRangeChange?: (dateRange: { from: Date; to: Date } | undefined) => void;
+  dateRange?: { from: Date; to: Date };
 }
 
 // Update the widgetComponents type to include the widgetId prop
@@ -295,11 +297,24 @@ class WidgetState {
   private _variant: ChartVariant;
   private _title: string;
   private _viewMode: 'split' | 'cumulative';
+  private _dateRange: { from: Date; to: Date };
 
-  constructor(initialVariant: ChartVariant = 'revenue', initialTitle: string = 'Performance', initialViewMode: 'split' | 'cumulative' = 'split') {
+  constructor(
+    initialVariant: ChartVariant = 'revenue', 
+    initialTitle: string = 'Performance', 
+    initialViewMode: 'split' | 'cumulative' = 'split',
+    initialDateRange?: { from: Date; to: Date }
+  ) {
     this._variant = initialVariant;
     this._title = initialTitle;
     this._viewMode = initialViewMode;
+    
+    // Set default date range to last 7 days if not provided
+    const today = new Date();
+    this._dateRange = initialDateRange || {
+      from: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
+      to: today
+    };
   }
 
   get variant(): ChartVariant {
@@ -312,6 +327,13 @@ class WidgetState {
 
   get viewMode(): 'split' | 'cumulative' {
     return this._viewMode;
+  }
+  
+  get dateRange(): { from: Date; to: Date } {
+    return { 
+      from: new Date(this._dateRange.from),
+      to: new Date(this._dateRange.to)
+    };
   }
 
   setVariant(newVariant: ChartVariant) {
@@ -329,6 +351,15 @@ class WidgetState {
   setViewMode(newViewMode: 'split' | 'cumulative') {
     if (!newViewMode) return;
     this._viewMode = newViewMode;
+    this.notifyListeners();
+  }
+  
+  setDateRange(newRange: { from: Date; to: Date }) {
+    if (!newRange?.from || !newRange?.to) return;
+    this._dateRange = {
+      from: new Date(newRange.from),
+      to: new Date(newRange.to)
+    };
     this.notifyListeners();
   }
 
@@ -525,12 +556,21 @@ function AppContent() {
         let initialVariant: ChartVariant = 'revenue';
         let initialTitle = getPerformanceTitle('revenue');
         let initialViewMode: 'split' | 'cumulative' = 'split';
+        
+        // Default date range (last 7 days)
+        const today = new Date();
+        let initialDateRange = {
+          from: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
+          to: today
+        };
+        
         const existingState = widgetStateRegistry.get(widgetId);
         
         if (existingState) {
           initialVariant = existingState.variant;
           initialTitle = existingState.title;
           initialViewMode = existingState.viewMode;
+          initialDateRange = existingState.dateRange; // Get dateRange from existing state
         } else {
           const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
           if (savedLayout) {
@@ -545,6 +585,21 @@ function AppContent() {
                 if (widgetData.viewState.viewMode) {
                   initialViewMode = widgetData.viewState.viewMode;
                 }
+                // Try to load date range from saved layout
+                if (widgetData.viewState.dateRange) {
+                  try {
+                    initialDateRange = {
+                      from: new Date(widgetData.viewState.dateRange.from),
+                      to: new Date(widgetData.viewState.dateRange.to)
+                    };
+                    console.log(`Loaded date range from layout for ${widgetId}:`, {
+                      from: initialDateRange.from.toISOString(),
+                      to: initialDateRange.to.toISOString()
+                    });
+                  } catch (error) {
+                    console.error('Failed to parse date range from layout:', error);
+                  }
+                }
               }
             } catch (error) {
               console.error('Failed to load widget view state:', error);
@@ -555,7 +610,7 @@ function AppContent() {
         // Create or get shared state
         let widgetState = widgetStateRegistry.get(widgetId);
         if (!widgetState) {
-          widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode);
+          widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode, initialDateRange);
           widgetStateRegistry.set(widgetId, widgetState);
         }
 
@@ -563,18 +618,21 @@ function AppContent() {
           const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
           const [title, setTitle] = useState(widgetState.title);
           const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(widgetState.viewMode);
+          const [dateRange, setDateRange] = useState(widgetState.dateRange);
 
           useEffect(() => {
             // Initial state sync
             setVariant(widgetState.variant);
             setTitle(widgetState.title);
             setViewMode(widgetState.viewMode);
+            setDateRange(widgetState.dateRange);
 
             // Subscribe to state changes
             const unsubscribe = widgetState.subscribe(() => {
               setVariant(widgetState.variant);
               setTitle(widgetState.title);
               setViewMode(widgetState.viewMode);
+              setDateRange(widgetState.dateRange);
             });
 
             return unsubscribe;
@@ -678,6 +736,49 @@ function AppContent() {
             }
           }, []);
 
+          const handleDateRangeChange = useCallback((newDateRange: { from: Date; to: Date } | undefined) => {
+            if (!newDateRange?.from || !newDateRange?.to) return;
+            
+            console.log(`PerformanceWidgetWrapper: Date range changed to:`, {
+              from: newDateRange.from.toISOString(),
+              to: newDateRange.to.toISOString(),
+              widgetId,
+              isHeader
+            });
+            
+            // Update local state first for immediate UI update
+            setDateRange(newDateRange);
+            
+            // Update shared state
+            widgetState.setDateRange(newDateRange);
+            
+            // Save to layout data
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              try {
+                const layout = JSON.parse(savedLayout);
+                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+                if (widgetIndex !== -1) {
+                  layout[widgetIndex] = {
+                    ...layout[widgetIndex],
+                    viewState: {
+                      ...layout[widgetIndex].viewState,
+                      chartVariant: widgetState.variant,
+                      viewMode: widgetState.viewMode,
+                      dateRange: {
+                        from: newDateRange.from.toISOString(),
+                        to: newDateRange.to.toISOString()
+                      }
+                    }
+                  };
+                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                }
+              } catch (error) {
+                console.error('Failed to save widget date range state:', error);
+              }
+            }
+          }, [isHeader, widgetId]);
+
           return (
             <WidgetComponent
               widgetId={widgetId}
@@ -686,6 +787,8 @@ function AppContent() {
               defaultViewMode={viewMode}
               onVariantChange={handleVariantChange}
               onViewModeChange={handleViewModeChange}
+              onDateRangeChange={handleDateRangeChange}
+              dateRange={dateRange}
               onTitleChange={(newTitle) => {
                 widgetState.setTitle(newTitle);
               }}
@@ -1541,10 +1644,17 @@ function AppContent() {
                   const initialTitle = getPerformanceTitle(initialVariant);
                   const initialViewMode = node.viewState?.viewMode || 'split';
                   
+                  // Default date range (last 7 days)
+                  const today = new Date();
+                  let initialDateRange = {
+                    from: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
+                    to: today
+                  };
+                  
                   // Create or update widget state
                   let widgetState = widgetStateRegistry.get(node.id);
                   if (!widgetState) {
-                    widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode);
+                    widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode, initialDateRange);
                     widgetStateRegistry.set(node.id, widgetState);
                   } else {
                     widgetState.setVariant(initialVariant);
@@ -2011,7 +2121,15 @@ function AppContent() {
       const initialVariant: ChartVariant = 'revenue';
       const initialTitle = getPerformanceTitle(initialVariant);
       const initialViewMode: 'split' | 'cumulative' = 'split';
-      const widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode);
+      
+      // Default date range (last 7 days)
+      const today = new Date();
+      const initialDateRange = {
+        from: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
+        to: today
+      };
+      
+      const widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode, initialDateRange);
       widgetStateRegistry.set(widgetId, widgetState);
     }
 
