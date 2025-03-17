@@ -2089,8 +2089,8 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
-      <div className="main-content h-[calc(100vh-4rem)] overflow-y-auto">
-        <div className="main-content-inner">
+      <div className="main-content h-[calc(100vh-4rem)] overflow-y-auto bg-[hsl(var(--color-bg-base))]">
+        <div className="main-content-inner h-full relative">
           <ControlBar 
             onResetLayout={handleResetLayout}
             onCopyLayout={handleCopyLayout}
@@ -2180,7 +2180,16 @@ function AppContent() {
               }
             }}
           />
-          <div ref={gridElementRef} className="grid-stack" />
+          <div 
+            ref={gridElementRef} 
+            className="grid-stack w-full h-[calc(100%-4rem)] p-4 bg-[hsl(var(--color-bg-base))] overflow-hidden"
+            style={{ 
+              minHeight: '500px',
+              position: 'relative',
+              '--grid-columns': '12',
+              '--grid-row-height': '50px'
+            } as React.CSSProperties}
+          />
         </div>
       </div>
       <Toaster 
