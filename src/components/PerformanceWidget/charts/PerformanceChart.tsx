@@ -204,7 +204,7 @@ function getAssetProfile(asset: AssetTicker) {
 }
 
 // Add sample data that reflects portfolio value history
-function generateSampleData(currentBalances: Record<string, number>, dateRange?: { from: Date; to: Date }) {
+function generateSampleData(currentBalances: Record<string, number>, dateRange?: { from: Date; to: Date }, containerWidth: number = 0) {
   // If no date range provided, generate 156 weeks of data (3 years)
   const startDate = dateRange?.from || new Date(new Date().setDate(new Date().getDate() - 156 * 7));
   const endDate = dateRange?.to || new Date();
@@ -212,10 +212,31 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   // Calculate number of days between dates
   const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
   
-  // Generate daily data points
-  return Array.from({ length: days + 1 }).map((_, i) => {
+  // Adjust number of data points based on container width
+  let dataPoints = days + 1;
+  if (containerWidth >= 480) {
+    dataPoints = Math.floor(days * 1.5) + 1; // 50% more points
+  }
+  if (containerWidth >= 768) {
+    dataPoints = days * 2 + 1; // Double points
+  }
+  if (containerWidth >= 1024) {
+    dataPoints = Math.floor(days * 2.5) + 1; // 150% more points
+  }
+  if (containerWidth >= 1280) {
+    dataPoints = days * 3 + 1; // Triple points
+  }
+  if (containerWidth >= 1536) {
+    dataPoints = Math.floor(days * 3.5) + 1; // 250% more points
+  }
+  
+  // Generate data points
+  return Array.from({ length: dataPoints }).map((_, i) => {
     const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
+    // Interpolate the date based on the index
+    const progress = i / (dataPoints - 1);
+    const totalDays = days;
+    date.setDate(date.getDate() + Math.floor(progress * totalDays));
     
     // Format date to include year for proper month transitions
     const dataPoint: BalanceDataPoint = {
@@ -226,7 +247,7 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
     Object.entries(currentBalances).forEach(([asset, currentValue]) => {
       const profile = getAssetProfile(asset as AssetTicker);
       
-      if (i === days) {
+      if (i === dataPoints - 1) {
         // For the last data point, use exact current balance
         dataPoint[asset] = currentValue;
       } else {
@@ -234,7 +255,7 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
         
         const variation = () => {
           // Market influence based on asset's beta
-          const marketInfluence = (Math.sin((i / days) * Math.PI * 2) * profile.trend + Math.sin((i / days) * Math.PI * 6) * profile.volatility) * profile.marketBeta;
+          const marketInfluence = (Math.sin((i / dataPoints) * Math.PI * 2) * profile.trend + Math.sin((i / dataPoints) * Math.PI * 6) * profile.volatility) * profile.marketBeta;
           // Asset-specific noise
           const noise = (Math.random() - 0.5) * profile.noise;
           return 1 + marketInfluence + noise;
@@ -365,8 +386,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           const validAssets = Object.keys(sampleBalances) as AssetTicker[];
           setAssets(validAssets);
           
-          // Generate data for the exact date range
-          setFullBalanceData(generateSampleData(sampleBalances, dateRange));
+          // Generate data for the exact date range with container width
+          setFullBalanceData(generateSampleData(sampleBalances, dateRange, containerWidth));
           setError(null);
         } else {
           const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
@@ -401,8 +422,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               validAssets.map(asset => [asset, parseFloat(data[asset].EUR || '0')])
             );
 
-            // Generate data points based on date range
-            setFullBalanceData(generateSampleData(currentBalances, dateRange));
+            // Generate data points based on date range with container width
+            setFullBalanceData(generateSampleData(currentBalances, dateRange, containerWidth));
           }
 
           setError(null);
@@ -416,7 +437,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     };
 
     fetchBalanceData();
-  }, [dataSource, dateRange]);
+  }, [dataSource, dateRange, containerWidth]);
 
   // Calculate responsive chart parameters
   const chartParams = useMemo(() => {
@@ -440,9 +461,11 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       interval = Math.floor(156 / 13); // Show ~13 labels
     }
 
-    // Adjust interval based on the number of data points
+    // Adjust interval based on the number of data points, but don't override the width-based interval
     if (balanceData.length > 0) {
-      interval = Math.max(1, Math.floor(balanceData.length / 10)); // Show ~10 labels
+      const dataBasedInterval = Math.max(1, Math.floor(balanceData.length / 10)); // Show ~10 labels
+      // Use the larger interval to ensure we don't show too many labels
+      interval = Math.max(interval, dataBasedInterval);
     }
 
     return { interval };
@@ -1015,14 +1038,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               tickMargin={12}
               tickFormatter={(value) => {
                 const [month, year] = value.split(' ');
-                
-                if (month !== lastShownDate.current.month || year !== lastShownDate.current.year) {
-                  // Show year if this is the first month we're seeing in a new year
-                  const showYear = year !== lastShownDate.current.year;
-                  lastShownDate.current = { month, year };
-                  return showYear ? `${month}'${year.slice(-2)}` : month;
-                }
-                return '';
+                // Always show the month
+                return `${month}'${year.slice(-2)}`;
               }}
               stroke="hsl(var(--color-border-muted))"
               interval={chartParams.interval}
