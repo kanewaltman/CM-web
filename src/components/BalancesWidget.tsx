@@ -15,6 +15,7 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { getCurrentPrice, getMultiplePrices } from '@/lib/api-coingecko';
+import throttle from 'lodash/throttle';
 
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
@@ -175,6 +176,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const containerRef = useRef<HTMLDivElement>(null);
   const textMeasureRef = useRef<HTMLDivElement>(null);
   const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150);
+  const fetchInProgressRef = useRef<boolean>(false);
 
   // Handle sort
   const handleSort = (field: SortField) => {
@@ -417,209 +419,148 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   }, [dataSource]); // Add dataSource as dependency
 
   // Memoize the fetch prices function to prevent recreating it on every render
-  const fetchPrices = useCallback(async () => {
-    if (dataSource === 'sample') {
-      setPrices(SAMPLE_PRICES);
-      return;
-    } else if (dataSource === 'coingecko') {
+  // Use throttle to limit how often this function can be called
+  const fetchPrices = useCallback(
+    throttle(async () => {
+      // Prevent duplicate API calls if already updating
+      if (fetchInProgressRef.current) {
+        return;
+      }
+
+      fetchInProgressRef.current = true;
+
+      if (dataSource === 'sample') {
+        setPrices(SAMPLE_PRICES);
+        fetchInProgressRef.current = false;
+        return;
+      } else if (dataSource === 'coingecko') {
+        try {
+          setIsUpdating(true);
+          
+          // Get asset tickers from balances
+          const assetTickers = balances.map(balance => balance.asset);
+          
+          if (assetTickers.length === 0) {
+            setIsUpdating(false);
+            fetchInProgressRef.current = false;
+            return;
+          }
+          
+          // Get current prices for all assets
+          const priceData = await getMultiplePrices(assetTickers, 'eur');
+          
+          // Create the appropriate price data structure
+          const enrichedPrices: PriceData = {};
+          
+          for (const ticker of assetTickers) {
+            const currentPrice = priceData[ticker];
+            
+            if (currentPrice) {
+              // For demo purposes, generate a random 24h change between -5% and +5%
+              // In a real implementation, we would fetch the actual change from CoinGecko
+              const randomChange = (Math.random() * 10) - 5;
+              
+              // Calculate the price 24h ago based on the random change
+              const previousPrice = currentPrice / (1 + randomChange / 100);
+              
+              enrichedPrices[`${ticker}EUR`] = {
+                price: currentPrice,
+                change24h: randomChange,
+                lastDayPrice: previousPrice
+              };
+              
+              // Also update the balance's valueInEuro with the real price
+              setBalances(prevBalances => 
+                prevBalances.map(balance => {
+                  if (balance.asset === ticker) {
+                    const assetBalance = parseFloat(balance.balance);
+                    const valueInEuro = (assetBalance * currentPrice).toFixed(2);
+                    return {
+                      ...balance,
+                      valueInEuro
+                    };
+                  }
+                  return balance;
+                })
+              );
+            }
+          }
+          
+          // Add EUR with no change
+          enrichedPrices['EUREUR'] = {
+            price: 1,
+            change24h: 0,
+            lastDayPrice: 1
+          };
+          
+          setPrices(enrichedPrices);
+        } catch (err) {
+          console.error('Error fetching CoinGecko prices:', err);
+        } finally {
+          setIsUpdating(false);
+          fetchInProgressRef.current = false;
+        }
+        return;
+      }
+
+      // API data source
       try {
         setIsUpdating(true);
         
-        // Get asset tickers from balances
-        const assetTickers = balances.map(balance => balance.asset);
-        
-        if (assetTickers.length === 0) {
-          return;
+        const pricesResponse = await fetch(getApiUrl('open/exchange/prices'));
+        if (!pricesResponse.ok) {
+          throw new Error(`Prices request failed with status ${pricesResponse.status}`);
         }
+        const rawPriceData = await pricesResponse.json();
         
-        // Get current prices for all assets
-        const priceData = await getMultiplePrices(assetTickers, 'eur');
+        // Process latest prices into a more usable format
+        const currentPrices: Record<string, any> = {};
         
-        // Get prices from yesterday for 24h change calculation
-        // This is a simplified approach for demo purposes
-        // In production, we would use the CoinGecko market_chart endpoint 
-        // to get proper 24h change data
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        // Create the appropriate price data structure
-        const enrichedPrices: PriceData = {};
-        
-        for (const ticker of assetTickers) {
-          const currentPrice = priceData[ticker];
-          
-          if (currentPrice) {
-            // For demo purposes, generate a random 24h change between -5% and +5%
-            // In a real implementation, we would fetch the actual change from CoinGecko
-            const randomChange = (Math.random() * 10) - 5;
-            
-            // Calculate the price 24h ago based on the random change
-            const previousPrice = currentPrice / (1 + randomChange / 100);
-            
-            enrichedPrices[`${ticker}EUR`] = {
-              price: currentPrice,
-              change24h: randomChange,
-              lastDayPrice: previousPrice
-            };
-            
-            // Also update the balance's valueInEuro with the real price
-            setBalances(prevBalances => 
-              prevBalances.map(balance => {
-                if (balance.asset === ticker) {
-                  const assetBalance = parseFloat(balance.balance);
-                  const valueInEuro = (assetBalance * currentPrice).toFixed(2);
-                  return {
-                    ...balance,
-                    valueInEuro
-                  };
-                }
-                return balance;
-              })
-            );
-          }
+        // First, process latest prices
+        rawPriceData.latestPrices.forEach((price: any) => {
+          currentPrices[price.pair] = {
+            price: parseFloat(price.price),
+            change24h: 0
+          };
+        });
+
+        // Calculate 24h changes
+        if (rawPriceData['24hInfo']) {
+          rawPriceData['24hInfo'].forEach((info: any) => {
+            if (currentPrices[info.pair]) {
+              // Use the delta value directly (it's already in percentage form)
+              const change = info.delta * 100; // Convert to percentage
+              currentPrices[info.pair].change24h = change;
+            }
+          });
         }
-        
-        // Add EUR with no change
-        enrichedPrices['EUREUR'] = {
-          price: 1,
-          change24h: 0,
-          lastDayPrice: 1
-        };
-        
-        console.log('💰 CoinGecko enriched prices:', enrichedPrices);
-        
-        setPrices(enrichedPrices);
+
+        setPrices(currentPrices);
       } catch (err) {
-        console.error('Error fetching CoinGecko prices:', err);
+        console.error('Error fetching prices:', err);
       } finally {
         setIsUpdating(false);
+        fetchInProgressRef.current = false;
       }
-      return;
-    }
+    }, 5000), // Throttle to once every 5 seconds
+    [dataSource, balances]
+  );
 
-    try {
-      setIsUpdating(true);
-      
-      const pricesResponse = await fetch(getApiUrl('open/exchange/prices'));
-      if (!pricesResponse.ok) {
-        throw new Error(`Prices request failed with status ${pricesResponse.status}`);
-      }
-      const rawPriceData = await pricesResponse.json();
-      
-      console.log('📊 Raw prices data received:', {
-        timestamp: new Date().toISOString(),
-        latestPrices: rawPriceData.latestPrices?.length,
-        info24h: rawPriceData['24hInfo']?.length,
-        data: rawPriceData
-      });
-
-      // Process latest prices into a more usable format
-      const currentPrices: Record<string, any> = {};
-      
-      // First, process latest prices
-      rawPriceData.latestPrices.forEach((price: any) => {
-        currentPrices[price.pair] = {
-          price: parseFloat(price.price),
-          change24h: 0
-        };
-      });
-
-      console.log('📈 Current prices before 24h calculation:', currentPrices);
-
-      // Calculate 24h changes
-      if (rawPriceData['24hInfo']) {
-        rawPriceData['24hInfo'].forEach((info: any) => {
-          if (currentPrices[info.pair]) {
-            // Log the full info object to see its structure
-            console.log(`📊 24h info for ${info.pair}:`, info);
-            
-            // Use the delta value directly (it's already in percentage form)
-            const change = info.delta * 100; // Convert to percentage
-            currentPrices[info.pair].change24h = change;
-            console.log(`✅ Set 24h change for ${info.pair}: ${change}%`);
-          }
-        });
-      }
-
-      // Get unique pairs from balances, excluding EUR/EUR
-      const pairs = balances
-        .map(balance => `${balance.asset}EUR`)
-        .filter((value, index, self) => 
-          self.indexOf(value) === index && 
-          !value.startsWith('EUR')
-        );
-
-      console.log('🔍 Pairs from balances:', pairs);
-
-      // Initialize enriched prices with current data
-      const enrichedPrices: PriceData = {};
-      
-      // Add all pairs with current price data
-      pairs.forEach(pair => {
-        const baseAsset = pair.replace('EUR', '');
-        const alternativePairs = [
-          { pair: `${baseAsset}EUR`, type: 'EUR' },
-          { pair: `${baseAsset}USD`, type: 'USD' },
-          { pair: `${baseAsset}USDT`, type: 'USDT' },
-          { pair: `${baseAsset}USDC`, type: 'USDC' }
-        ];
-        
-        console.log(`🔎 Looking for price data for ${baseAsset}:`, {
-          availablePairs: alternativePairs.map(p => ({
-            pair: p.pair,
-            hasData: !!currentPrices[p.pair],
-            change: currentPrices[p.pair]?.change24h
-          }))
-        });
-
-        // Find the best price data (prioritize non-zero changes)
-        let bestPriceData = null;
-        for (const { pair: pairName } of alternativePairs) {
-          if (currentPrices[pairName]) {
-            const priceData = currentPrices[pairName];
-            // If we don't have any data yet, or if this pair has a non-zero change
-            if (!bestPriceData || (priceData.change24h !== 0 && bestPriceData.change24h === 0)) {
-              bestPriceData = priceData;
-              console.log(`📈 Found better price data for ${baseAsset} from ${pairName}:`, priceData);
-            }
-          }
-        }
-
-        if (bestPriceData) {
-          enrichedPrices[pair] = {
-            price: bestPriceData.price,
-            change24h: bestPriceData.change24h
-          };
-          console.log(`💹 Added price data for ${pair}:`, enrichedPrices[pair]);
-        } else {
-          console.log(`⚠️ No price data found for ${baseAsset} in any pair`);
-        }
-      });
-
-      // Add EUR with no change
-      enrichedPrices['EUREUR'] = {
-        price: 1,
-        change24h: 0,
-        lastDayPrice: 1
-      };
-
-      console.log('💰 Final enriched prices:', enrichedPrices);
-
-      setPrices(enrichedPrices);
-
-    } catch (err) {
-      console.error('Error fetching prices:', err);
-    } finally {
-      setIsUpdating(false);
-    }
-  }, [dataSource, balances]);
-
-  // Update prices periodically
+  // Update prices periodically - use a longer interval to avoid excessive calls
   useEffect(() => {
+    // Initial fetch
     fetchPrices();
-    const interval = setInterval(fetchPrices, 30000); // Update every 30 seconds
-    return () => clearInterval(interval);
+    
+    // Set up periodic updates with a much longer interval
+    const interval = setInterval(() => {
+      fetchPrices();
+    }, 300000); // Update every 5 minutes (300000ms)
+    
+    return () => {
+      clearInterval(interval);
+      // Ensure we clean up properly if component unmounts during a fetch
+      fetchInProgressRef.current = false;
+    };
   }, [fetchPrices]);
 
   // Update price-dependent values when prices change
