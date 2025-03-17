@@ -452,7 +452,7 @@ function AppContent() {
             minW: node.minW ?? 2,
             minH: node.minH ?? 2,
             viewState
-          };
+          } as LayoutWidget;
         })
         .filter((item): item is LayoutWidget => item !== null);
 
@@ -1958,7 +1958,7 @@ function AppContent() {
               h: node.h ?? 2,
               minW: node.minW ?? 2,
               minH: node.minH ?? 2
-            };
+            } as LayoutWidget;
           })
           .filter((item): item is LayoutWidget => item !== null);
 
