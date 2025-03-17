@@ -1,14 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { PerformanceChart } from './charts/PerformanceChart';
 
-type KeyedPerformanceChartProps = {
-  dateRange?: {
-    from: Date;
-    to: Date;
-  };
-  viewMode?: 'split' | 'stacked' | 'line' | 'cumulative';
-  onViewModeChange?: (mode: 'split' | 'stacked' | 'line' | 'cumulative') => void;
-};
+interface KeyedPerformanceChartProps {
+  viewMode?: 'split' | 'cumulative';
+  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+  dateRange?: { from: Date; to: Date };
+  autoScale?: boolean;
+  onAutoScaleChange?: (autoScale: boolean) => void;
+  percentageMode?: boolean;
+  onPercentageModeChange?: (percentageMode: boolean) => void;
+}
 
 /**
  * KeyedPerformanceChart component
@@ -17,18 +18,42 @@ type KeyedPerformanceChartProps = {
  * to ensure the component re-renders when the date range changes,
  * but still allows for proper animations.
  */
-export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }: KeyedPerformanceChartProps) {
-  // Generate a unique chart key that changes ONLY when the date range changes
-  const chartKey = useMemo(() => {
-    if (!dateRange?.from || !dateRange?.to) {
-      return 'chart-default';
+export function KeyedPerformanceChart({
+  viewMode = 'split',
+  onViewModeChange,
+  dateRange,
+  autoScale = true,
+  onAutoScaleChange,
+  percentageMode = false,
+  onPercentageModeChange
+}: KeyedPerformanceChartProps) {
+  // Add local state for the new options if they're not controlled
+  const [localAutoScale, setLocalAutoScale] = useState(autoScale);
+  const [localPercentageMode, setLocalPercentageMode] = useState(percentageMode);
+
+  // Handle changes for the charts
+  const handleAutoScaleChange = (newValue: boolean) => {
+    if (onAutoScaleChange) {
+      onAutoScaleChange(newValue);
+    } else {
+      setLocalAutoScale(newValue);
     }
-    
-    // Create a key based on date range timestamps only
-    // Removing the timestamp allows the chart to animate properly
+  };
+
+  const handlePercentageModeChange = (newValue: boolean) => {
+    if (onPercentageModeChange) {
+      onPercentageModeChange(newValue);
+    } else {
+      setLocalPercentageMode(newValue);
+    }
+  };
+
+  // Generate a unique key based on the date range
+  const getChartKey = () => {
+    if (!dateRange?.from || !dateRange?.to) return 'no-date-range';
     return `chart-${dateRange.from.getTime()}-${dateRange.to.getTime()}`;
-  }, [dateRange]);
-  
+  };
+
   // Create a fresh copy of the date range to break reference equality
   const dateRangeProp = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return undefined;
@@ -52,7 +77,7 @@ export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }:
   
   // Log the current render for debugging
   console.log('KeyedPerformanceChart rendering with:', {
-    key: chartKey,
+    key: getChartKey(),
     originalViewMode: viewMode,
     mappedViewMode,
     dateRange: dateRangeProp ? {
@@ -71,10 +96,14 @@ export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }:
   
   return (
     <PerformanceChart
-      key={chartKey}
+      key={getChartKey()}
       viewMode={mappedViewMode}
       onViewModeChange={handleViewModeChange}
       dateRange={dateRangeProp}
+      autoScale={onAutoScaleChange ? autoScale : localAutoScale}
+      onAutoScaleChange={handleAutoScaleChange}
+      percentageMode={onPercentageModeChange ? percentageMode : localPercentageMode}
+      onPercentageModeChange={handlePercentageModeChange}
     />
   );
 } 

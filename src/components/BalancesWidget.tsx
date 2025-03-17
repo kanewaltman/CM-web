@@ -14,6 +14,7 @@ import { useTheme } from 'next-themes';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
+import { getCurrentPrice, getMultiplePrices } from '@/lib/api-coingecko';
 
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
@@ -146,6 +147,7 @@ const SAMPLE_BALANCES = {
   }
 };
 
+// Sample price data - this will be replaced with real data for coingecko source
 const SAMPLE_PRICES = {
   "BTCEUR": { price: 37000.50, change24h: 2.5 },
   "ETHEUR": { price: 1875.25, change24h: -1.2 },
@@ -317,6 +319,48 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
 
             setBalances(balancesArray);
             setError(null);
+        } else if (dataSource === 'coingecko') {
+          // Use CoinGecko data with sample balances
+          const balancesArray = Object.entries(SAMPLE_BALANCES)
+            .filter(([asset]) => asset !== 'TOTAL')
+            .map(([asset, details]: [string, any]) => ({
+              asset: asset as AssetTicker,
+              balance: details[asset]?.toString() || '0',
+              valueInEuro: '0', // Will be calculated after getting prices
+              change24h: '0',
+              availablePercentage: '100'
+            }))
+            .filter(balance => 
+              balance.asset in ASSETS && 
+              parseFloat(balance.balance) > 0
+            );
+
+          setBalances(balancesArray);
+          
+          // We'll update the valueInEuro when prices are fetched
+          try {
+            const assets = balancesArray.map(b => b.asset);
+            const priceData = await getMultiplePrices(assets, 'eur');
+            
+            // Update balances with real price data
+            const updatedBalances = balancesArray.map(balance => {
+              const asset = balance.asset;
+              const assetBalance = parseFloat(balance.balance);
+              const price = priceData[asset] || 0;
+              const valueInEuro = (assetBalance * price).toFixed(2);
+              
+              return {
+                ...balance,
+                valueInEuro
+              };
+            });
+            
+            setBalances(updatedBalances);
+          } catch (priceError) {
+            console.error('Error fetching prices from CoinGecko:', priceError);
+          }
+          
+          setError(null);
         } else {
           const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
           const tokenData = await tokenResponse.json();
@@ -376,6 +420,81 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   const fetchPrices = useCallback(async () => {
     if (dataSource === 'sample') {
       setPrices(SAMPLE_PRICES);
+      return;
+    } else if (dataSource === 'coingecko') {
+      try {
+        setIsUpdating(true);
+        
+        // Get asset tickers from balances
+        const assetTickers = balances.map(balance => balance.asset);
+        
+        if (assetTickers.length === 0) {
+          return;
+        }
+        
+        // Get current prices for all assets
+        const priceData = await getMultiplePrices(assetTickers, 'eur');
+        
+        // Get prices from yesterday for 24h change calculation
+        // This is a simplified approach for demo purposes
+        // In production, we would use the CoinGecko market_chart endpoint 
+        // to get proper 24h change data
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        // Create the appropriate price data structure
+        const enrichedPrices: PriceData = {};
+        
+        for (const ticker of assetTickers) {
+          const currentPrice = priceData[ticker];
+          
+          if (currentPrice) {
+            // For demo purposes, generate a random 24h change between -5% and +5%
+            // In a real implementation, we would fetch the actual change from CoinGecko
+            const randomChange = (Math.random() * 10) - 5;
+            
+            // Calculate the price 24h ago based on the random change
+            const previousPrice = currentPrice / (1 + randomChange / 100);
+            
+            enrichedPrices[`${ticker}EUR`] = {
+              price: currentPrice,
+              change24h: randomChange,
+              lastDayPrice: previousPrice
+            };
+            
+            // Also update the balance's valueInEuro with the real price
+            setBalances(prevBalances => 
+              prevBalances.map(balance => {
+                if (balance.asset === ticker) {
+                  const assetBalance = parseFloat(balance.balance);
+                  const valueInEuro = (assetBalance * currentPrice).toFixed(2);
+                  return {
+                    ...balance,
+                    valueInEuro
+                  };
+                }
+                return balance;
+              })
+            );
+          }
+        }
+        
+        // Add EUR with no change
+        enrichedPrices['EUREUR'] = {
+          price: 1,
+          change24h: 0,
+          lastDayPrice: 1
+        };
+        
+        console.log('💰 CoinGecko enriched prices:', enrichedPrices);
+        
+        setPrices(enrichedPrices);
+      } catch (err) {
+        console.error('Error fetching CoinGecko prices:', err);
+      } finally {
+        setIsUpdating(false);
+      }
       return;
     }
 

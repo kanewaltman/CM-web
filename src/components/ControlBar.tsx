@@ -48,8 +48,8 @@ interface ControlBarProps {
   // Add new prop for handling widget addition
   onAddWidget?: (widgetType: string) => void;
   // Add new prop for data source
-  dataSource: 'demo' | 'sample';
-  onDataSourceChange?: (source: 'demo' | 'sample') => void;
+  dataSource: 'demo' | 'sample' | 'coingecko';
+  onDataSourceChange?: (source: 'demo' | 'sample' | 'coingecko') => void;
 }
 
 export function ControlBar({ 
@@ -288,9 +288,14 @@ export function ControlBar({
   };
 
   // Handle data source change
-  const handleDataSourceChange = (source: 'demo' | 'sample') => {
+  const handleDataSourceChange = (source: 'demo' | 'sample' | 'coingecko') => {
     onDataSourceChange?.(source);
-    toast.success(`Switched to ${source === 'demo' ? 'Demo API' : 'Sample Data'}`);
+    const sourceLabels = {
+      'demo': 'Demo API',
+      'sample': 'Sample Data',
+      'coingecko': 'CoinGecko Data'
+    };
+    toast.success(`Switched to ${sourceLabels[source]}`);
   };
 
   return (
@@ -468,7 +473,14 @@ export function ControlBar({
                             className="flex-1 h-11"
                             onClick={() => handleDataSourceChange('sample')}
                           >
-                            <span>Sample Data</span>
+                            <span>Sample</span>
+                          </Button>
+                          <Button 
+                            variant={dataSource === 'coingecko' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => handleDataSourceChange('coingecko')}
+                          >
+                            <span>CoinGecko</span>
                           </Button>
                         </div>
                       </div>

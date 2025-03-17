@@ -66,8 +66,12 @@ interface PerformanceWidgetProps {
   className?: string;
   defaultVariant?: ChartVariant;
   defaultViewMode?: WidgetViewMode;
+  defaultAutoScale?: boolean;
+  defaultPercentageMode?: boolean;
   onVariantChange?: (variant: ChartVariant) => void;
   onViewModeChange?: (mode: WidgetViewMode) => void;
+  onAutoScaleChange?: (autoScale: boolean) => void;
+  onPercentageModeChange?: (percentageMode: boolean) => void;
   onTitleChange?: (title: string) => void;
   onRemove?: () => void;
   headerControls?: boolean;
@@ -84,8 +88,12 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   className,
   defaultVariant = 'revenue',
   defaultViewMode = 'split',
+  defaultAutoScale = true,
+  defaultPercentageMode = false,
   onVariantChange,
   onViewModeChange,
+  onAutoScaleChange,
+  onPercentageModeChange,
   onTitleChange,
   onRemove,
   headerControls,
@@ -94,6 +102,8 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 }: PerformanceWidgetProps): React.ReactNode => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const [viewMode, setViewMode] = useState<WidgetViewMode>(defaultViewMode);
+  const [autoScale, setAutoScale] = useState<boolean>(defaultAutoScale);
+  const [percentageMode, setPercentageMode] = useState<boolean>(defaultPercentageMode);
   const today = new Date();
   
   // Define date range presets
@@ -199,6 +209,17 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   const handleViewModeChange = (mode: WidgetViewMode) => {
     setViewMode(mode);
     onViewModeChange?.(mode);
+  };
+
+  // Add handlers for the new options
+  const handleAutoScaleChange = (value: boolean) => {
+    setAutoScale(value);
+    onAutoScaleChange?.(value);
+  };
+
+  const handlePercentageModeChange = (value: boolean) => {
+    setPercentageMode(value);
+    onPercentageModeChange?.(value);
   };
 
   // Handler for receiving chart view mode changes and mapping them to widget view modes
@@ -562,6 +583,10 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             viewMode={viewMode}
             onViewModeChange={handleChartViewModeChange}
             dateRange={dateRangeProp}
+            autoScale={autoScale}
+            onAutoScaleChange={handleAutoScaleChange}
+            percentageMode={percentageMode}
+            onPercentageModeChange={handlePercentageModeChange}
           />
         ) : (
           <ChartComponent 
