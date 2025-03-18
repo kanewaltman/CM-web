@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-type DataSource = 'demo' | 'sample';
+type DataSource = 'demo' | 'sample' | 'coingecko';
 
 interface DataSourceContextType {
   dataSource: DataSource;
@@ -17,7 +17,9 @@ interface DataSourceProviderProps {
 export function DataSourceProvider({ children, defaultDataSource }: DataSourceProviderProps) {
   const [dataSource, setDataSource] = useState<DataSource>(() => {
     const saved = localStorage.getItem('data-source');
-    return (saved === 'demo' || saved === 'sample') ? saved : (defaultDataSource || 'demo');
+    return (saved === 'demo' || saved === 'sample' || saved === 'coingecko') 
+      ? saved as DataSource 
+      : (defaultDataSource || 'demo');
   });
 
   useEffect(() => {

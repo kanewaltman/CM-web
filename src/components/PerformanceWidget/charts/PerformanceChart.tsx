@@ -20,6 +20,18 @@ import { useDataSource } from '@/lib/DataSourceContext';
 import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MoreHorizontal } from "lucide-react";
+import { getMultipleHistoricalData } from '@/lib/api-coingecko';
+
+// Add a formatMoney function at the top of the file
+const formatMoney = (value: number, currency = "€", compact = false): string => {
+  if (compact && value >= 1000000) {
+    return `${currency}${(value / 1000000).toFixed(1)}M`;
+  }
+  if (compact && value >= 1000) {
+    return `${currency}${(value / 1000).toFixed(1)}K`;
+  }
+  return `${currency}${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+};
 
 // Import sample balances from BalancesWidget
 const SAMPLE_BALANCES = {
@@ -313,13 +325,38 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   });
 }
 
+// Add a debounce function at the top of the file (after the imports)
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
 export interface PerformanceChartProps {
   viewMode?: 'split' | 'cumulative';
   onViewModeChange?: (mode: 'split' | 'cumulative') => void;
   dateRange?: { from: Date; to: Date };
+  autoScale?: boolean;
+  onAutoScaleChange?: (autoScale: boolean) => void;
+  percentageMode?: boolean;
+  onPercentageModeChange?: (percentageMode: boolean) => void;
 }
 
-export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeChange, dateRange }: PerformanceChartProps) {
+export function PerformanceChart({ 
+  viewMode: propViewMode = 'split', 
+  onViewModeChange, 
+  dateRange,
+  autoScale = true,
+  onAutoScaleChange,
+  percentageMode = false,
+  onPercentageModeChange
+}: PerformanceChartProps) {
   // Create component ID for debugging and instance tracking
   const componentId = useId();
   const instanceRef = useRef(Date.now());
@@ -363,6 +400,40 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
 
   // Track the last shown date for year/month labels
   const lastShownDate = useRef<{ month: string; year: string }>({ month: '', year: '' });
+
+  // Add state for these features if not controlled
+  const [localAutoScale, setLocalAutoScale] = useState(autoScale);
+  const [localPercentageMode, setLocalPercentageMode] = useState(percentageMode);
+  
+  // Use either controlled or local state
+  const effectiveAutoScale = onAutoScaleChange ? autoScale : localAutoScale;
+  const effectivePercentageMode = onPercentageModeChange ? percentageMode : localPercentageMode;
+
+  // Handle toggle changes
+  const handleAutoScaleChange = (newValue: boolean) => {
+    if (onAutoScaleChange) {
+      onAutoScaleChange(newValue);
+    } else {
+      setLocalAutoScale(newValue);
+    }
+  };
+
+  const handlePercentageModeChange = (newValue: boolean) => {
+    if (onPercentageModeChange) {
+      onPercentageModeChange(newValue);
+    } else {
+      setLocalPercentageMode(newValue);
+    }
+    
+    // Automatically set autoScale to true when switching to percentage mode
+    if (newValue === true) {
+      if (onAutoScaleChange) {
+        onAutoScaleChange(true);
+      } else {
+        setLocalAutoScale(true);
+      }
+    }
+  };
 
   const toggleAssetVisibility = (asset: string) => {
     setHiddenAssets(prev => {
@@ -461,6 +532,125 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
         });
         
         setError(null);
+      } else if (dataSource === 'coingecko') {
+        // Use CoinGecko data with sample balance quantities
+        try {
+          // Get balance quantities from sample data
+          const balanceQuantities = Object.fromEntries(
+            Object.entries(SAMPLE_BALANCES)
+              .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
+              .map(([asset, details]) => [asset, parseFloat((details as BalanceDetails)[asset] || '0')])
+          );
+          
+          const validAssets = Object.keys(balanceQuantities) as AssetTicker[];
+          setAssets(validAssets);
+          
+          // Fetch historical price data from CoinGecko for these assets
+          const historicalPriceData = await getMultipleHistoricalData(
+            validAssets, 
+            dateRange.from, 
+            dateRange.to,
+            'eur'
+          );
+          
+          console.log(`PerformanceChart [${componentId}:${instanceRef.current}] received CoinGecko historical data:`, {
+            assets: validAssets,
+            dataPoints: Object.values(historicalPriceData).map(data => data.length),
+            dateRange: {
+              from: dateRange.from.toISOString(),
+              to: dateRange.to.toISOString()
+            }
+          });
+          
+          // Process the data for the chart
+          // First, get all unique timestamps from all assets
+          const allTimestamps = new Set<number>();
+          
+          Object.values(historicalPriceData).forEach(priceData => {
+            priceData.forEach(([timestamp]) => {
+              allTimestamps.add(timestamp);
+            });
+          });
+          
+          // Sort timestamps chronologically
+          const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+          
+          // Create a price lookup function for each asset
+          const getPriceAtTimestamp = (asset: string, timestamp: number): number => {
+            const assetPriceData = historicalPriceData[asset] || [];
+            
+            if (assetPriceData.length === 0) return 0;
+            
+            // Find the price data point closest to the timestamp
+            let closestIndex = 0;
+            let closestDistance = Math.abs(assetPriceData[0][0] - timestamp);
+            
+            for (let i = 1; i < assetPriceData.length; i++) {
+              const distance = Math.abs(assetPriceData[i][0] - timestamp);
+              if (distance < closestDistance) {
+                closestDistance = distance;
+                closestIndex = i;
+              }
+            }
+            
+            return assetPriceData[closestIndex][1];
+          };
+          
+          // Generate data points based on the sorted timestamps
+          const newData: BalanceDataPoint[] = sortedTimestamps.map((timestamp, index) => {
+            const date = new Date(timestamp);
+            
+            const dataPoint: BalanceDataPoint = {
+              timestamp: date.toLocaleDateString('en-US'),
+              date: date.toISOString(),
+              dayIndex: Math.floor((date.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000))
+            };
+            
+            // For each asset, calculate the value at this timestamp
+            validAssets.forEach(asset => {
+              const assetQuantity = balanceQuantities[asset] || 0;
+              const assetPrice = getPriceAtTimestamp(asset, timestamp);
+              
+              // Store the EUR value of the asset at this timestamp
+              dataPoint[asset] = assetQuantity * assetPrice;
+            });
+            
+            return dataPoint;
+          });
+          
+          // Update the chart data
+          setFullBalanceData(prevData => {
+            // If there's no previous data, just return the new data
+            if (prevData.length === 0) return newData;
+            
+            // If there is previous data, check if the new data has the same length
+            if (prevData.length === newData.length) {
+              console.log('Same number of data points, animation should be smooth');
+            } else {
+              console.log('Different number of data points, may affect animation');
+            }
+            
+            return newData;
+          });
+          
+          setError(null);
+        } catch (error) {
+          console.error('Error fetching CoinGecko data:', error);
+          setError('Failed to fetch CoinGecko data. Using sample data instead.');
+          
+          // Fallback to sample data generation
+          const sampleBalances = Object.fromEntries(
+            Object.entries(SAMPLE_BALANCES)
+              .filter(([asset]) => asset !== 'TOTAL' && asset in ASSETS)
+              .map(([asset, details]) => [asset, parseFloat((details as BalanceDetails).EUR || '0')])
+          );
+          
+          const validAssets = Object.keys(sampleBalances) as AssetTicker[];
+          setAssets(validAssets);
+          
+          const newData = generateSampleData(sampleBalances, dateRange, containerWidth);
+          setFullBalanceData(newData);
+        }
       } else {
         const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
         const tokenData = await tokenResponse.json();
@@ -504,27 +694,17 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             }
           });
           
-          // Similar smooth state update for API data
-          setFullBalanceData(prevData => {
-            if (prevData.length === 0) return newData;
-            if (prevData.length === newData.length) {
-              console.log('Same number of data points, animation should be smooth');
-            } else {
-              console.log('Different number of data points, may affect animation');
-            }
-            return newData;
-          });
+          setFullBalanceData(newData);
+          setError(null);
         }
-
-        setError(null);
       }
     } catch (err) {
-      console.error('Error fetching balances:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch balances');
+      console.error(`PerformanceChart [${componentId}:${instanceRef.current}] error:`, err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
-  }, [dataSource, dateRange, containerWidth, componentId]);
+  }, [componentId, containerWidth, dataSource, dateRange]);
 
   // Update the effect to handle date range changes more carefully
   useEffect(() => {
@@ -727,12 +907,18 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   // Calculate cumulative data
   const cumulativeData = useMemo(() => {
     return balanceData.map(point => {
-      const total = assets.reduce((sum, asset) => sum + (point[asset] as number || 0), 0);
-      return {
-        timestamp: point.timestamp,
-        date: point.date,
-        total
-      };
+      const cumulative = { ...point };
+      
+      let total = 0;
+      assets.forEach(asset => {
+        const value = point[asset];
+        if (typeof value === 'number' && !isNaN(value)) {
+          total += value;
+        }
+      });
+      
+      cumulative.total = total;
+      return cumulative;
     });
   }, [balanceData, assets]);
 
@@ -789,6 +975,118 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const visibleAssets = useMemo(() => sortedAssets.slice(0, 5), [sortedAssets]);
   const truncatedAssets = useMemo(() => sortedAssets.slice(5), [sortedAssets]);
 
+  // Modify the data to show percentages if in percentage mode
+  const chartData = useMemo(() => {
+    if (!effectivePercentageMode || balanceData.length === 0) {
+      return balanceData;
+    }
+
+    // Get the initial values for each asset in the first data point
+    const initialValues: Record<string, number> = {};
+    const firstDataPoint = balanceData[0];
+    
+    visibleAssets.forEach(asset => {
+      initialValues[asset] = firstDataPoint[asset] as number || 0;
+    });
+
+    // Convert each data point to percentage change from initial value
+    return balanceData.map(dataPoint => {
+      const percentageDataPoint = { ...dataPoint };
+      
+      visibleAssets.forEach(asset => {
+        const currentValue = dataPoint[asset] as number || 0;
+        const initialValue = initialValues[asset];
+        
+        if (initialValue > 0) {
+          // Calculate percentage change: (current - initial) / initial * 100
+          percentageDataPoint[asset] = ((currentValue - initialValue) / initialValue) * 100;
+        } else {
+          percentageDataPoint[asset] = 0;
+        }
+      });
+      
+      return percentageDataPoint;
+    });
+  }, [balanceData, visibleAssets, effectivePercentageMode]);
+
+  // Modify the tickFormatter to show percentages when in percentage mode
+  const tickFormatter = (value: number) => {
+    if (effectivePercentageMode) {
+      return `${value.toFixed(1)}%`;
+    }
+    return value >= 1000 
+      ? `${Math.round(value / 1000)}k` 
+      : value.toFixed(0);
+  };
+
+  // Update the tooltip content to show percentages when in percentage mode
+  const renderTooltipContent = useCallback((data: any) => {
+    if (!data.payload || data.payload.length === 0) return null;
+    
+    const { payload } = data;
+    const dataPoint = payload[0].payload;
+    
+    const visiblePayloads = payload
+      .filter((p: any) => !hiddenAssets.has(p.dataKey))
+      .sort((a: any, b: any) => {
+        const valueA = typeof a.value === 'number' ? a.value : 0;
+        const valueB = typeof b.value === 'number' ? b.value : 0;
+        return valueB - valueA;
+      });
+
+    return (
+      <div className="bg-popover border border-border rounded-md overflow-hidden p-0">
+        <div className="bg-muted/50 px-3 py-1.5 border-b border-border">
+          <span className="text-sm font-medium">
+            {dataPoint.timestamp}
+          </span>
+        </div>
+        <div className="p-2 space-y-1.5">
+          {visiblePayloads.map((p: any) => {
+            const asset = p.dataKey as AssetTicker;
+            const assetConfig = ASSETS[asset];
+            if (!assetConfig) return null;
+            
+            // Ensure value is a number
+            const value = typeof p.value === 'number' ? p.value : 0;
+            let formattedValue: string;
+            
+            if (effectivePercentageMode) {
+              formattedValue = `${value.toFixed(2)}%`;
+            } else {
+              formattedValue = formatMoney(value);
+            }
+            
+            return (
+              <div key={p.dataKey} className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }}></div>
+                  <span className="text-sm">{assetConfig.name}</span>
+                </div>
+                <span className="text-sm font-mono tabular-nums">
+                  {formattedValue}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }, [hiddenAssets, effectivePercentageMode]);
+
+  // When switching to Combined mode, ensure we're in Value mode
+  const handleViewModeChange = (mode: 'split' | 'cumulative') => {
+    if (mode === 'cumulative') {
+      // Reset to Value mode when switching to Combined
+      if (onPercentageModeChange) {
+        onPercentageModeChange(false);
+      } else {
+        setLocalPercentageMode(false);
+      }
+    }
+    onViewModeChange?.(mode);
+  };
+
   if (error) {
     return (
       <Card className="h-full flex flex-col">
@@ -817,7 +1115,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                   const previousIndex = hoverValues?.index ? hoverValues.index - 1 : 0;
                   const previousValue = previousIndex >= 0 ? balanceData[previousIndex]?.[asset] : undefined;
                   const change = typeof currentValue === 'number' && typeof previousValue === 'number' && previousValue !== 0
-                    ? ((currentValue - previousValue) / previousValue * 100)
+                    ? ((currentValue - previousValue) / (previousValue || 1)) * 100
                     : 0;
                   return (
                     <button 
@@ -1047,31 +1345,87 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                 )}
               </div>
             </div>
-            <div className="flex items-center rounded-md bg-muted p-0.5 text-muted-foreground">
-              <button
-                type="button"
-                className={cn(
-                  "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  propViewMode === 'split' 
-                    ? "bg-background text-foreground shadow-sm" 
-                    : "hover:text-foreground hover:bg-background/50"
-                )}
-                onClick={() => onViewModeChange?.('split')}
-              >
-                Split
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  propViewMode === 'cumulative' 
-                    ? "bg-background text-foreground shadow-sm" 
-                    : "hover:text-foreground hover:bg-background/50"
-                )}
-                onClick={() => onViewModeChange?.('cumulative')}
-              >
-                Combined
-              </button>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+              <div className="flex items-center rounded-md bg-muted p-0.5 text-muted-foreground">
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    propViewMode === 'split' 
+                      ? "bg-background text-foreground shadow-sm" 
+                      : "hover:text-foreground hover:bg-background/50"
+                  )}
+                  onClick={() => handleViewModeChange('split')}
+                >
+                  Split
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    propViewMode === 'cumulative' 
+                      ? "bg-background text-foreground shadow-sm" 
+                      : "hover:text-foreground hover:bg-background/50"
+                  )}
+                  onClick={() => handleViewModeChange('cumulative')}
+                >
+                  Combined
+                </button>
+              </div>
+              {propViewMode === 'split' && (
+                <div className="flex items-center rounded-md bg-muted p-0.5 text-muted-foreground">
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      !effectivePercentageMode 
+                        ? "bg-background text-foreground shadow-sm" 
+                        : "hover:text-foreground hover:bg-background/50"
+                    )}
+                    onClick={() => handlePercentageModeChange(false)}
+                  >
+                    Value
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      effectivePercentageMode 
+                        ? "bg-background text-foreground shadow-sm" 
+                        : "hover:text-foreground hover:bg-background/50"
+                    )}
+                    onClick={() => handlePercentageModeChange(true)}
+                  >
+                    Percent %
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center rounded-md bg-muted p-0.5 text-muted-foreground">
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    effectiveAutoScale 
+                      ? "bg-background text-foreground shadow-sm" 
+                      : "hover:text-foreground hover:bg-background/50"
+                  )}
+                  onClick={() => handleAutoScaleChange(true)}
+                >
+                  Auto
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-sm px-2.5 py-0.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    !effectiveAutoScale 
+                      ? "bg-background text-foreground shadow-sm" 
+                      : "hover:text-foreground hover:bg-background/50"
+                  )}
+                  onClick={() => handleAutoScaleChange(false)}
+                >
+                  Zeroed
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1084,18 +1438,18 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
         >
           <LineChart
             accessibilityLayer
-            data={propViewMode === 'split' ? balanceData : cumulativeData}
+            data={propViewMode === 'split' ? chartData : cumulativeData}
             margin={{ left: -12, right: 12, top: 12 }}
-            onMouseMove={(e) => {
+            onMouseMove={(e: any) => {
               if (e?.activePayload?.[0] && e.activeTooltipIndex !== undefined) {
                 const values = Object.fromEntries(
-                  e.activePayload.map(entry => [entry.dataKey, entry.value])
+                  e.activePayload.map((entry: any) => [entry.dataKey, entry.value])
                 );
 
                 setHoverValues({ 
                   index: e.activeTooltipIndex, 
                   values,
-                  activeLine: hoverValues?.activeLine || e.activePayload[0].dataKey
+                  activeLine: e.activePayload[0].dataKey
                 });
               }
             }}
@@ -1144,63 +1498,37 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                   <React.Fragment key={asset}>
                     {isEnabled && !isHidden && (
                       <>
-                        <ReferenceLine
-                          key={`value-${asset}`}
-                          stroke={assetColor}
-                          strokeDasharray="2 2"
-                          opacity={hoverValues?.values[asset] ? 0.25 : 0}
-                          ifOverflow="hidden"
-                          position="middle"
-                          segment={[
-                            { x: 0, y: hoverValues?.values[asset] || 0 },
-                            { x: hoverValues?.index || 0, y: hoverValues?.values[asset] || 0 }
-                          ]}
-                        />
-                        {/* Invisible wider line for hover detection */}
-                        <Line
-                          key={`hover-${asset}`}
-                          type="linear"
-                          dataKey={asset}
-                          stroke="rgba(0,0,0,0)"
-                          strokeWidth={40}
-                          dot={false}
-                          isAnimationActive={true}
-                          style={{ 
-                            cursor: 'pointer', 
-                            pointerEvents: 'all',
-                            zIndex: hoveredAsset === asset ? 2 : 
-                                   hoverValues?.activeLine === asset ? 2 : 1
-                          }}
-                          connectNulls={true}
-                          onMouseMove={() => {
-                            if (hoverValues) {
-                              setHoverValues({
-                                ...hoverValues,
-                                activeLine: asset
-                              });
-                            }
-                          }}
-                          className="[&_path]:!pointer-events-auto"
-                        />
+                        {hoverValues?.values[asset] && (
+                          <ReferenceLine
+                            key={`value-${asset}`}
+                            stroke={assetColor}
+                            strokeDasharray="2 2"
+                            opacity={0.25}
+                            ifOverflow="hidden"
+                            position="middle"
+                            segment={[
+                              { x: 0, y: hoverValues.values[asset] || 0 },
+                              { x: hoverValues.index || 0, y: hoverValues.values[asset] || 0 }
+                            ]}
+                          />
+                        )}
                         <Line
                           key={`line-${asset}`}
-                          type="linear"
+                          type="monotone"
                           dataKey={asset}
                           stroke={assetColor}
                           strokeWidth={2}
                           dot={false}
-                          isAnimationActive={true}
-                          animationDuration={1000}
-                          animationEasing="ease-out"
-                          animationBegin={0}
+                          isAnimationActive={false}
                           strokeOpacity={hoverValues ? 
                             (hoverValues.activeLine === asset ? 1 : 0.3) : 
                             hoveredAsset ? 
                               (hoveredAsset === asset ? 1 : 0.3) : 
                               1}
-                          className="transition-[stroke-opacity] duration-150 ease-out"
+                          className="transition-[stroke-opacity] duration-75 ease-out"
                           connectNulls={true}
                           style={{
+                            cursor: 'pointer',
                             zIndex: hoveredAsset === asset ? 2 : 
                                    hoverValues?.activeLine === asset ? 2 : 1
                           }}
@@ -1211,58 +1539,32 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                 );
               }) : (
                 <React.Fragment>
-                  <ReferenceLine
-                    key="value-total"
-                    stroke="hsl(var(--foreground))"
-                    strokeDasharray="2 2"
-                    opacity={hoverValues?.values.total ? 0.25 : 0}
-                    ifOverflow="hidden"
-                    position="middle"
-                    segment={[
-                      { x: 0, y: hoverValues?.values.total || 0 },
-                      { x: hoverValues?.index || 0, y: hoverValues?.values.total || 0 }
-                    ]}
-                  />
-                  {/* Invisible wider line for hover detection */}
-                  <Line
-                    key="hover-total"
-                    type="linear"
-                    dataKey="total"
-                    stroke="rgba(0,0,0,0)"
-                    strokeWidth={40}
-                    dot={false}
-                    isAnimationActive={true}
-                    style={{ 
-                      cursor: 'pointer', 
-                      pointerEvents: 'all',
-                      zIndex: hoveredAsset === 'total' ? 2 : 
-                             hoverValues?.activeLine === 'total' ? 2 : 1
-                    }}
-                    connectNulls={true}
-                    onMouseMove={() => {
-                      if (hoverValues) {
-                        setHoverValues({
-                          ...hoverValues,
-                          activeLine: 'total'
-                        });
-                      }
-                    }}
-                    className="[&_path]:!pointer-events-auto"
-                  />
+                  {hoverValues?.values.total && (
+                    <ReferenceLine
+                      key="value-total"
+                      stroke="hsl(var(--foreground))"
+                      strokeDasharray="2 2"
+                      opacity={0.25}
+                      ifOverflow="hidden"
+                      position="middle"
+                      segment={[
+                        { x: 0, y: hoverValues.values.total || 0 },
+                        { x: hoverValues.index || 0, y: hoverValues.values.total || 0 }
+                      ]}
+                    />
+                  )}
                   <Line
                     key="line-total"
-                    type="linear"
+                    type="monotone"
                     dataKey="total"
                     stroke="hsl(var(--foreground))"
                     strokeWidth={2}
                     dot={false}
-                    isAnimationActive={true}
-                    animationDuration={1000}
-                    animationEasing="ease-out"
-                    animationBegin={0}
+                    isAnimationActive={false}
                     strokeOpacity={1}
-                    className="transition-[stroke-opacity] duration-150 ease-out"
+                    className="transition-[stroke-opacity] duration-75 ease-out"
                     connectNulls={true}
+                    style={{ cursor: 'pointer' }}
                   />
                 </React.Fragment>
               )
@@ -1273,41 +1575,27 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => {
-                // Parse the timestamp based on its format
                 if (value.includes(':')) {
-                  // Format for very short date ranges (≤ 7 days) with hours
                   const [datePart, timePart] = value.split(', ');
                   return `${datePart.split(' ')[1]} ${timePart.split(':')[0]}h`;
                 } else if (value.match(/\d{1,2},/)) {
-                  // Format for medium date ranges (≤ 60 days) with day numbers
                   const parts = value.split(' ');
-                  
-                  // For multi-year data, include the year if different from last shown
                   if (parts.length >= 3 && yearTransitions.length > 1) {
                     const date = new Date(value);
                     const year = date.getFullYear().toString();
-                    
-                    // Check if this year is different from the last shown
                     if (lastShownDate.current.year !== year) {
                       lastShownDate.current.year = year;
                       lastShownDate.current.month = parts[0];
-                      // Return month and year
                       return `${parts[0]}'${year.slice(-2)}`;
                     }
                   }
-                  
-                  // Return format like "Jan 15"
                   return `${parts[0]} ${parts[1].replace(',', '')}`;
                 } else {
-                  // Format for longer date ranges - month and year
                   const [month, year] = value.split(' ');
-                  
-                  // Always include year for multi-year data
                   if (yearTransitions.length > 1 || (dateRange?.from && dateRange?.to && 
                       dateRange.from.getFullYear() !== dateRange.to.getFullYear())) {
                     return `${month}'${year.slice(-2)}`;
                   }
-                  
                   return month;
                 }
               }}
@@ -1317,43 +1605,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
             <YAxis
               axisLine={false}
               tickLine={false}
-              tickFormatter={(value) => {
-                if (value === 0) return "0";
-                if (value >= 1000000) {
-                  return `${(value / 1000000).toFixed(1)}M`;
-                }
-                if (value >= 1000) {
-                  return `${(value / 1000).toFixed(1)}K`;
-                }
-                return value.toFixed(0);
-              }}
-              interval="preserveStartEnd"
+              tickFormatter={tickFormatter}
+              domain={effectiveAutoScale ? ['auto', 'auto'] : [0, 'auto']}
+              allowDataOverflow={!effectiveAutoScale}
             />
             <ChartTooltip
-              content={
-                propViewMode === 'split' ? (
-                  <CustomTooltipContent
-                    colorMap={Object.fromEntries(
-                      sortedAssets.map(asset => [
-                        asset,
-                        resolvedTheme === 'dark' ? ASSETS[asset].theme.dark : ASSETS[asset].theme.light
-                      ])
-                    )}
-                    labelMap={Object.fromEntries(
-                      sortedAssets.map(asset => [asset, ASSETS[asset].name])
-                    )}
-                    dataKeys={sortedAssets}
-                    valueFormatter={(value) => `€${value.toLocaleString()}`}
-                  />
-                ) : (
-                  <CustomTooltipContent
-                    colorMap={{ total: 'hsl(var(--foreground))' }}
-                    labelMap={{ total: 'Portfolio Total' }}
-                    dataKeys={['total']}
-                    valueFormatter={(value) => `€${value.toLocaleString()}`}
-                  />
-                )
-              }
+              content={renderTooltipContent}
               cursor={<CustomCursor fill="currentColor" />}
             />
           </LineChart>

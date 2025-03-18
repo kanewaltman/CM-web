@@ -405,8 +405,7 @@ const getPerformanceTitle = (variant: ChartVariant): string => {
   }
 };
 
-function AppContent() {
-  const { dataSource, setDataSource } = useDataSource();
+function AppContent({ dataSource, setDataSource }: { dataSource: 'demo' | 'sample' | 'coingecko'; setDataSource: (source: 'demo' | 'sample' | 'coingecko') => void }) {
   const { resolvedTheme } = useTheme();
   const { backgroundIntensity, widgetIntensity, borderIntensity } = useThemeIntensity();
   const colors = getThemeValues(resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity);
@@ -2215,88 +2214,7 @@ function AppContent() {
             onPasteLayout={handlePasteLayout}
             onAddWidget={handleAddWidget}
             dataSource={dataSource}
-            onDataSourceChange={(source) => {
-              setDataSource(source);
-              if (grid) {
-                const items = grid.getGridItems();
-                items.forEach(item => {
-                  const node = item.gridstackNode;
-                  if (!node?.id) return;
-                  
-                  const widgetContainer = document.querySelector(`[gs-id="${node.id}"]`);
-                  if (widgetContainer) {
-                    const root = (widgetContainer as any)._reactRoot;
-                    if (root) {
-                      const content = widgetContainer.querySelector('.grid-stack-item-content');
-                      if (content) {
-                        const baseId = node.id.split('-')[0];
-                        const widgetType = widgetTypes[baseId];
-                        const WidgetComponent = widgetComponents[widgetType];
-                        
-                        if (baseId === 'performance' || baseId === 'tradingview' || baseId === 'orderbook') {
-                          root.unmount();
-                          const newRoot = createRoot(content);
-                          (widgetContainer as any)._reactRoot = newRoot;
-                          
-                          if (baseId === 'performance') {
-                            const widgetState = widgetStateRegistry.get(node.id);
-                            if (widgetState) {
-                              const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
-                                <WidgetComponent
-                                  key={`${node.id}-${source}`}
-                                  widgetId={node.id}
-                                  headerControls={isHeader}
-                                  defaultVariant={widgetState.variant}
-                                  onVariantChange={(variant) => {
-                                    widgetState.setVariant(variant);
-                                    widgetState.setTitle(getPerformanceTitle(variant));
-                                  }}
-                                  onViewModeChange={(mode: 'split' | 'cumulative') => {
-                                    widgetState.setViewMode(mode);
-                                  }}
-                                  onTitleChange={(newTitle) => {
-                                    widgetState.setTitle(newTitle);
-                                  }}
-                                />
-                              );
-
-                              newRoot.render(
-                                <React.StrictMode>
-                                  <DataSourceProvider>
-                                    <WidgetContainer
-                                      key={`${widgetState.title}-${source}`}
-                                      title={widgetState.title}
-                                      onRemove={() => node.id && handleRemoveWidget(node.id)}
-                                      headerControls={<PerformanceWidgetWrapper isHeader />}
-                                    >
-                                      <PerformanceWidgetWrapper />
-                                    </WidgetContainer>
-                                  </DataSourceProvider>
-                                </React.StrictMode>
-                              );
-                            }
-                          } else {
-                            newRoot.render(
-                              <React.StrictMode>
-                                <DataSourceProvider>
-                                  <WidgetContainer
-                                    key={`${widgetType}-${source}`}
-                                    title={widgetTitles[widgetType]}
-                                    onRemove={() => node.id && handleRemoveWidget(node.id)}
-                                  >
-                                    <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
-                                  </WidgetContainer>
-                                </DataSourceProvider>
-                              </React.StrictMode>
-                            );
-                          }
-                        }
-                      }
-                    }
-                  }
-                });
-              }
-            }}
+            onDataSourceChange={setDataSource}
           />
           <div 
             ref={gridElementRef} 
@@ -2319,12 +2237,8 @@ function AppContent() {
   );
 }
 
-function App() {
-  return (
-    <DataSourceProvider>
-      <AppContent />
-    </DataSourceProvider>
-  );
+export default function App() {
+  const { theme, resolvedTheme } = useTheme();
+  const { dataSource, setDataSource } = useDataSource(); 
+  return <AppContent dataSource={dataSource} setDataSource={setDataSource} />;
 }
-
-export default App;
