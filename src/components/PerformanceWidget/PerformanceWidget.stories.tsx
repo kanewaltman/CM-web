@@ -152,24 +152,64 @@ type Story = StoryObj<typeof PerformanceWidget>;
 const BaseStory = (args: any) => {
   const [headerControls, setHeaderControls] = React.useState<React.ReactNode>(null);
   
+  // Initialize with last 7 days for better demo
+  const today = new Date();
+  const last7Days = {
+    from: new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000),
+    to: today
+  };
+  
+  const [dateRange, setDateRange] = React.useState<{ from: Date; to: Date }>(last7Days);
+  const [viewMode, setViewMode] = React.useState<'split' | 'cumulative'>(args.defaultViewMode || 'split');
+  const [variant, setVariant] = React.useState<ChartVariant>(args.defaultVariant || 'revenue');
+  
+  // Create a combined args object that includes our state
+  const headerArgs = {
+    ...args,
+    headerControls: true,
+    defaultVariant: variant,
+    defaultViewMode: viewMode,
+    dateRange: dateRange,
+  };
+  
+  const contentArgs = {
+    defaultVariant: variant,
+    defaultViewMode: viewMode,
+    dateRange: dateRange,
+    headerControls: false,
+  };
+  
   return (
     <DataSourceProvider defaultDataSource="sample">
       <WidgetContainer 
         title="Performance Metrics" 
         headerControls={
           <PerformanceWidget 
-            {...args} 
-            headerControls={true}
-            onVariantChange={(variant) => {
-              console.log('Variant changed to:', variant);
+            {...headerArgs}
+            onVariantChange={(newVariant) => {
+              console.log('Variant changed to:', newVariant);
+              setVariant(newVariant);
+            }}
+            onViewModeChange={(newMode) => {
+              console.log('View mode changed to:', newMode);
+              setViewMode(newMode);
+            }}
+            onDateRangeChange={(newRange) => {
+              console.log('Date range changed to:', newRange);
+              setDateRange(newRange || last7Days);
             }}
           />
         }
       >
         <PerformanceWidget 
-          {...args} 
-          onVariantChange={(variant) => {
-            console.log('Variant changed to:', variant);
+          {...contentArgs}
+          onVariantChange={(newVariant) => {
+            console.log('Variant changed to:', newVariant);
+            setVariant(newVariant);
+          }}
+          onViewModeChange={(newMode) => {
+            console.log('View mode changed to:', newMode);
+            setViewMode(newMode);
           }}
         />
       </WidgetContainer>
