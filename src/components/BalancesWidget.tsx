@@ -671,15 +671,13 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 const assetConfig = ASSETS[balance.asset];
                 const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
                 return (
-                  <TableRow key={balance.asset} className="group" isHeader={false}>
+                  <TableRow key={balance.asset} className="group hover:bg-[hsl(var(--color-widget-hover))]" isHeader={false}>
                     <TableCell 
-                      className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap"
+                      className="sticky left-0 z-10 whitespace-nowrap p-0 overflow-hidden"
                       style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
                     >
-                      <div className="relative">
-                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
-                        <div className="absolute inset-0 bg-[hsl(var(--color-widget-hover))] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="relative z-10 flex items-center gap-2">
+                      <div className="relative h-full bg-[hsl(var(--color-widget-header))] asset-cell-bg">
+                        <div className="p-2 relative z-10 flex items-center gap-2">
                           <div 
                             className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
                           >
@@ -691,7 +689,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                           </div>
                           <button 
                             type="button"
-                            className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
+                            className="font-jakarta font-bold text-sm rounded-md px-1"
                             style={{ 
                               color: assetColor,
                               backgroundColor: `${assetColor}14`,
@@ -721,122 +719,138 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
-                      {isCompact ? (
-                        <div className="flex flex-col items-end">
-                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                            €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                          <div className="text-muted-foreground">
-                            <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                              {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
-                            </span>
-                            <span className="font-jakarta font-bold text-sm leading-[150%] ml-1">
-                              {balance.asset}
-                            </span>
-                          </div>
+                    <TableCell className="text-right whitespace-nowrap p-0 overflow-hidden">
+                      <div className="relative h-full">
+                        <div className="p-2 relative z-10">
+                          {isCompact ? (
+                            <div className="flex flex-col items-end">
+                              <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                                €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              <div className="text-muted-foreground">
+                                <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                                  {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
+                                </span>
+                                <span className="font-jakarta font-bold text-sm leading-[150%] ml-1">
+                                  {balance.asset}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                                {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
+                              </span>
+                              <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground/80 ml-1">
+                                {balance.asset}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div>
-                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                            {formatBalance(parseFloat(balance.balance), assetConfig.decimalPlaces)}
-                          </span>
-                          <span className="font-jakarta font-bold text-sm leading-[150%] text-muted-foreground/80 ml-1">
-                            {balance.asset}
-                          </span>
-                        </div>
-                      )}
+                      </div>
                     </TableCell>
                     {!isCompact && (
                       <>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                            €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
+                        <TableCell className="text-right whitespace-nowrap p-0 overflow-hidden">
+                          <div className="relative h-full">
+                            <div className="p-2 relative z-10">
+                              <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                                €{parseFloat(balance.valueInEuro).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell className={cn(
                           "text-right whitespace-nowrap font-mono",
                           parseFloat(balance.change24h) > 0 ? "text-price-up" : parseFloat(balance.change24h) < 0 ? "text-price-down" : "text-muted-foreground/80"
                         )}>
-                          {balance.change24h}%
+                          <div className="relative h-full">
+                            <div className="p-2 relative z-10">
+                              {balance.change24h}%
+                            </div>
+                          </div>
                         </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <TooltipProvider delayDuration={0}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button 
-                                  type="button"
-                                  className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] hover:bg-white/[0.08] transition-colors duration-150 opacity-50 hover:opacity-100"
-                                  style={{
-                                    cursor: 'pointer',
-                                    WebkitTouchCallout: 'none',
-                                    WebkitUserSelect: 'text',
-                                    userSelect: 'text'
-                                  }}
-                                  onMouseDown={(e) => {
-                                    if (e.detail > 1) {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                >
-                                  {balance.availablePercentage}%
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent className="py-2 px-3 w-56 bg-background text-foreground border border-border">
-                                <div className="space-y-2">
-                                  <div className="text-[13px] font-medium text-left">Balances</div>
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <svg
-                                      width="8"
-                                      height="8"
-                                      fill="currentColor"
-                                      viewBox="0 0 8 8"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="shrink-0 text-green-500"
-                                      aria-hidden="true"
+                        <TableCell className="text-right whitespace-nowrap p-0 overflow-hidden">
+                          <div className="relative h-full">
+                            <div className="p-2 relative z-10">
+                              <TooltipProvider delayDuration={0}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button 
+                                      type="button"
+                                      className="font-jakarta font-bold text-sm rounded-md px-1 bg-white/[0.03] opacity-50 hover:opacity-100"
+                                      style={{
+                                        cursor: 'pointer',
+                                        WebkitTouchCallout: 'none',
+                                        WebkitUserSelect: 'text',
+                                        userSelect: 'text'
+                                      }}
+                                      onMouseDown={(e) => {
+                                        if (e.detail > 1) {
+                                          e.preventDefault();
+                                        }
+                                      }}
                                     >
-                                      <circle cx="4" cy="4" r="4"></circle>
-                                    </svg>
-                                    <span className="flex grow gap-2">
-                                      Available <span className="ml-auto">100%</span>
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <svg
-                                      width="8"
-                                      height="8"
-                                      fill="currentColor"
-                                      viewBox="0 0 8 8"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="shrink-0 text-muted-foreground/40"
-                                      aria-hidden="true"
-                                    >
-                                      <circle cx="4" cy="4" r="4"></circle>
-                                    </svg>
-                                    <span className="flex grow gap-2 text-muted-foreground/80">
-                                      Staked <span className="ml-auto">0%</span>
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <svg
-                                      width="8"
-                                      height="8"
-                                      fill="currentColor"
-                                      viewBox="0 0 8 8"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="shrink-0 text-muted-foreground/40"
-                                      aria-hidden="true"
-                                    >
-                                      <circle cx="4" cy="4" r="4"></circle>
-                                    </svg>
-                                    <span className="flex grow gap-2 text-muted-foreground/80">
-                                      In Exchange <span className="ml-auto">0%</span>
-                                    </span>
-                                  </div>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                                      {balance.availablePercentage}%
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="py-2 px-3 w-56 bg-background text-foreground border border-border">
+                                    <div className="space-y-2">
+                                      <div className="text-[13px] font-medium text-left">Balances</div>
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <svg
+                                          width="8"
+                                          height="8"
+                                          fill="currentColor"
+                                          viewBox="0 0 8 8"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          className="shrink-0 text-green-500"
+                                          aria-hidden="true"
+                                        >
+                                          <circle cx="4" cy="4" r="4"></circle>
+                                        </svg>
+                                        <span className="flex grow gap-2">
+                                          Available <span className="ml-auto">100%</span>
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <svg
+                                          width="8"
+                                          height="8"
+                                          fill="currentColor"
+                                          viewBox="0 0 8 8"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          className="shrink-0 text-muted-foreground/40"
+                                          aria-hidden="true"
+                                        >
+                                          <circle cx="4" cy="4" r="4"></circle>
+                                        </svg>
+                                        <span className="flex grow gap-2 text-muted-foreground/80">
+                                          Staked <span className="ml-auto">0%</span>
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <svg
+                                          width="8"
+                                          height="8"
+                                          fill="currentColor"
+                                          viewBox="0 0 8 8"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          className="shrink-0 text-muted-foreground/40"
+                                          aria-hidden="true"
+                                        >
+                                          <circle cx="4" cy="4" r="4"></circle>
+                                        </svg>
+                                        <span className="flex grow gap-2 text-muted-foreground/80">
+                                          In Exchange <span className="ml-auto">0%</span>
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </div>
                         </TableCell>
                       </>
                     )}
@@ -847,6 +861,11 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           )}
         </Table>
       </div>
+      <style jsx>{`
+        .group:hover .asset-cell-bg {
+          background-color: hsl(var(--color-widget-hover)) !important;
+        }
+      `}</style>
     </div>
   );
 };

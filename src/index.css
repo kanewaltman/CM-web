@@ -42,6 +42,7 @@
   --color-widget-content: 0 0% 100%;  /* Widget content area - White */
   --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
   --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
+  --color-widget-hover: 0 0% 94%;     /* Widget hover state - slightly darker than bg */
   
   /* Background Derivatives */
   --color-background-default: var(--color-bg-base);
@@ -130,6 +131,31 @@
   --scrollbar-track-color: transparent;
   --scrollbar-thumb-color: rgba(0, 0, 0, 0.15);
   --scrollbar-thumb-radius: var(--radius-full);
+
+  /* Global colors */
+  --pure-white: 0 0% 100%;
+  --black: 0 0% 0%;
+  
+  /* Light Theme Variables */
+  /* Core UI colors */
+  --color-bg: 0 0% 100%;                  /* Main background - white */
+  --color-bg-subtle: 0 0% 96%;            /* Subtle backgrounds - light gray */
+  --color-foreground: 0 0% 0%;            /* Main text - black */
+  --color-foreground-muted: 0 0% 40%;     /* Muted text - gray */
+  --color-accent-1: 206 100% 68%;         /* Primary accent color - blue*/
+  --color-accent-2: 152 52% 58%;          /* Secondary accent color - teal */
+  --color-success: 140 50% 40%;           /* Success indicators - green */
+  --color-warning: 33 100% 50%;           /* Warning indicators - orange */
+  --color-error: 0 88% 60%;               /* Error indicators - red */
+  --color-separator: 220 13% 91%;         /* Border separators - light gray */
+  
+  /* Widget theme */
+  --color-widget-bg: 0 0% 96%;       /* Widget background - #F5F5F5 */
+  --color-widget-header: 0 0% 100%;   /* Widget header - White */
+  --color-widget-content: 0 0% 100%;  /* Widget content area - White */
+  --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
+  --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
+  --color-widget-hover: 0 0% 94%;     /* Widget hover state - slightly darker than bg */
 }
 
 .dark {
@@ -215,6 +241,26 @@
   --border: var(--color-border-default);
   --input: var(--color-input-border);
   --ring: var(--color-focus-ring);
+
+  /* Core UI colors */
+  --color-bg: 0 0% 4%;                    /* Main background - very dark */
+  --color-bg-subtle: 0 0% 8%;             /* Subtle backgrounds - slightly lighter */
+  --color-foreground: 0 0% 100%;           /* Main text - white */
+  --color-foreground-muted: 0 0% 60%;      /* Muted text - light gray */
+  --color-accent-1: 206 100% 65%;          /* Primary accent color - blue*/
+  --color-accent-2: 152 52% 55%;           /* Secondary accent color - teal */
+  --color-success: 140 50% 45%;            /* Success indicators - green */
+  --color-warning: 33 100% 50%;            /* Warning indicators - orange */
+  --color-error: 0 88% 60%;                /* Error indicators - red */
+  --color-separator: 220 13% 15%;          /* Border separators - dark gray */
+  
+  /* Widget theme */
+  --color-widget-bg: 0 0% 6%;         /* Widget background - #0F0F0F */
+  --color-widget-header: 0 0% 8%;     /* Widget header - slightly elevated */
+  --color-widget-content: 0 0% 6%;    /* Widget content area */
+  --color-widget-inset: 0 0% 10%;     /* Widget inset areas (scrollable) */
+  --color-widget-inset-border: 0 0% 12% / 0.5;  /* Widget inset border color */
+  --color-widget-hover: 0 0% 12%;     /* Widget hover state - slightly lighter than bg */
 }
 
 /* Add GridStack specific styles */
