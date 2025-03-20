@@ -6,9 +6,74 @@ import { useTheme } from 'next-themes';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { getApiUrl } from '@/lib/api-config';
 import { ASSETS, isAssetTicker, AssetTicker } from '@/assets/AssetTicker';
+import { cn } from '@/lib/utils';
 
 // Default color for assets not found in ASSETS
 const DEFAULT_COLOR = '#4f46e5';
+
+// The skeleton loader component with better theme integration
+const TreeMapSkeleton = () => {
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === 'dark';
+  
+  // Define opacity classes that Tailwind can recognize
+  const opacityClasses = {
+    high: isDarkMode ? "bg-muted/70" : "bg-muted/80",
+    medium: isDarkMode ? "bg-muted/50" : "bg-muted/60",
+    low: isDarkMode ? "bg-muted/30" : "bg-muted/40",
+  };
+  
+  // Create a layout that fills the entire grid
+  // Total grid: 6x6 = 36 cells
+  const skeletonBlocks = [
+    { colSpan: 3, rowSpan: 3, opacity: opacityClasses.high },  // 9 cells
+    { colSpan: 3, rowSpan: 3, opacity: opacityClasses.high },  // 9 cells
+    { colSpan: 3, rowSpan: 2, opacity: opacityClasses.medium }, // 6 cells
+    { colSpan: 3, rowSpan: 1, opacity: opacityClasses.medium }, // 3 cells
+    { colSpan: 2, rowSpan: 1, opacity: opacityClasses.low },   // 2 cells
+    { colSpan: 1, rowSpan: 1, opacity: opacityClasses.low },   // 1 cell
+    { colSpan: 3, rowSpan: 1, opacity: opacityClasses.low },   // 3 cells
+    { colSpan: 3, rowSpan: 1, opacity: opacityClasses.low },   // 3 cells
+  ];
+  
+  return (
+    <div className="h-full w-full">
+      <div className="grid grid-cols-6 grid-rows-6 gap-1 h-full w-full p-1">
+        {skeletonBlocks.map((block, index) => {
+          // Create class strings that Tailwind can properly purge
+          let colSpanClass = "";
+          let rowSpanClass = "";
+          
+          switch (block.colSpan) {
+            case 1: colSpanClass = "col-span-1"; break;
+            case 2: colSpanClass = "col-span-2"; break;
+            case 3: colSpanClass = "col-span-3"; break;
+            default: colSpanClass = "col-span-1";
+          }
+          
+          switch (block.rowSpan) {
+            case 1: rowSpanClass = "row-span-1"; break;
+            case 2: rowSpanClass = "row-span-2"; break;
+            case 3: rowSpanClass = "row-span-3"; break;
+            default: rowSpanClass = "row-span-1";
+          }
+          
+          return (
+            <div 
+              key={index}
+              className={cn(
+                colSpanClass, 
+                rowSpanClass,
+                "rounded-md overflow-hidden relative animate-pulse",
+                block.opacity
+              )}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 // Wrapper component that forces a remount when theme changes
 export const TreeMapWidgetWrapper: React.FC<{
@@ -97,6 +162,10 @@ const TreeMapWidget: React.FC<{
   };
   
   // Custom render for treemap items with direct theme handling
+  // Handles rendering of both large and small treemap sections 
+  // - Ensures small portions are still visible with color
+  // - Only shows labels when there's enough space
+  // - Uses safe dimensions to prevent rendering issues
   const TreeMapItem = (props: any) => {
     const { x, y, width, height, index, root } = props;
     
@@ -105,7 +174,7 @@ const TreeMapWidget: React.FC<{
     
     const item = root.children?.[index];
     
-    if (!item || width < 20 || height < 20) {
+    if (!item) {
       return null;
     }
     
@@ -124,13 +193,17 @@ const TreeMapWidget: React.FC<{
       }
     }
     
+    // Ensure minimum dimensions for rendering (1px minimum)
+    const safeWidth = Math.max(1, width);
+    const safeHeight = Math.max(1, height);
+    
     return (
       <g>
         <rect
           x={x}
           y={y}
-          width={width}
-          height={height}
+          width={safeWidth}
+          height={safeHeight}
           style={{
             fill: fillColor,
             strokeWidth: 0,
@@ -260,11 +333,16 @@ const TreeMapWidget: React.FC<{
           return {
             name: asset,
             value: value,
-            size: value,
+            // Apply a minimum size floor to ensure small values are still visible
+            // This maintains the proportion for larger values while making smaller ones visible
+            size: Math.max(value, totalValue * 0.002), // 0.2% minimum visual size
+            originalValue: value, // Keep the original value for tooltip
             formattedPercentage: `${percentage.toFixed(2)}%`,
           };
         })
-        .filter(item => !isNaN(item.value) && item.value > 0); // Filter out zero values
+        .filter(item => !isNaN(item.value) && item.value > 0) // Filter out zero values
+        // Sort by value descending to help with rendering
+        .sort((a, b) => b.value - a.value);
       
       console.log(`TreeMapWidget: Processed ${processedData.length} items`);
       
@@ -287,8 +365,8 @@ const TreeMapWidget: React.FC<{
         title="Balance Distribution"
         onRemove={onRemove}
       >
-        <div className="flex items-center justify-center h-full">
-          <p className="text-muted-foreground">Loading balance data...</p>
+        <div className="h-full w-full rounded-xl bg-card overflow-hidden">
+          <TreeMapSkeleton />
         </div>
       </WidgetContainer>
     );
