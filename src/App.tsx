@@ -13,13 +13,13 @@ import { Toaster } from './components/ui/sonner';
 import { WidgetContainer } from './components/WidgetContainer';
 import { BalancesWidget } from './components/BalancesWidget';
 import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWidget';
-import { TreeMapWidgetWrapper as TreeMapWidget } from './components/TreeMapWidget';
 import { createRoot } from 'react-dom/client';
 import { ChartVariant } from './components/PerformanceWidget/PerformanceWidget';
 import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
 import { useThemeIntensity } from '@/contexts/ThemeContext';
 import { useTheme } from 'next-themes';
 import { getThemeValues } from '@/lib/utils';
+import { BreakdownWrapper as Breakdown } from './components/Breakdown';
 
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
@@ -96,8 +96,8 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
   },
   'treemap': {
     id: 'treemap',
-    title: 'Balance Distribution',
-    component: TreeMapWidget,
+    title: 'Breakdown',
+    component: Breakdown,
     defaultSize: { w: 6, h: 6 },
     minSize: { w: 4, h: 4 }
   }
