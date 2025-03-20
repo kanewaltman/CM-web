@@ -108,7 +108,7 @@ export function ControlBar({
       const gridElement = document.querySelector('.grid-stack') as HTMLElement;
       
       // Try to get grid instance from the element
-      let gridInstance = gridElement?.gridstack;
+      let gridInstance = (gridElement as any)?.gridstack;
       
       // If not found via element property, try accessing through window
       if (!gridInstance && (window as any).grid) {
@@ -382,7 +382,7 @@ export function ControlBar({
               <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
               <div className="px-1 py-1 pb-2">
                 {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
-                  .filter(([type]) => type === 'balances' || type === 'performance')
+                  .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap')
                   .map(([type, config]) => (
                   <div
                     key={type}
