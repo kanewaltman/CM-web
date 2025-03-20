@@ -794,3 +794,40 @@ button.font-bold,
     background-color: hsl(var(--color-price-unchanged) / 0.2);
   }
 }
+
+/* Ensure there are no gaps between table header cells */
+[data-slot="table-header"] {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: hsl(var(--color-widget-header));
+}
+
+[data-slot="table-header"] tr {
+  position: relative;
+  box-shadow: 0 0 0 1px hsl(var(--color-widget-header));
+}
+
+[data-slot="table-head"] {
+  position: relative;
+  border-collapse: collapse;
+  box-sizing: border-box;
+}
+
+/* Ensure sticky positioning within tables works correctly */
+[data-slot="table"] {
+  position: relative;
+}
+
+[data-slot="table-head"].sticky {
+  position: sticky;
+  z-index: 20;
+  background-color: hsl(var(--color-widget-header));
+}
+
+/* Override border radius with explicit props */
+[data-slot="table-cell"].rounded-l-lg,
+[data-slot="table-head"].rounded-tl-lg {
+  border-top-left-radius: 0.5rem;
+  border-bottom-left-radius: 0.5rem;
+}

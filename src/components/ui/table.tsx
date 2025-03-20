@@ -15,7 +15,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead data-slot="table-header" className={cn("bg-[hsl(var(--color-widget-header))]", className)} {...props} />;
+  return <thead data-slot="table-header" className={cn("bg-[hsl(var(--color-widget-header))] sticky top-0 z-20", className)} {...props} />;
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {

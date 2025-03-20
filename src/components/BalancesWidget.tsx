@@ -590,26 +590,26 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         {/* Hidden div for text measurement */}
         <div ref={textMeasureRef} className="absolute -left-[9999px] -top-[9999px]"></div>
         <Table>
-          <TableHeader>
-            <TableRow>
+          <TableHeader className="sticky top-0 z-20">
+            <TableRow className="bg-[hsl(var(--color-widget-header))]">
               <TableHead 
-                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap"
+                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap"
                 style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
               >
-                <div className="relative">
-                  <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
-                  <div className="relative z-10 px-0 py-1">Asset</div>
-                </div>
+                <div className="px-0 py-1">Asset</div>
               </TableHead>
               <TableHead 
                 className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                 onClick={() => handleSort('balance')}
               >
-                <div className="flex items-center justify-end gap-1">
-                  Balance
-                  {sortField === 'balance' && (
-                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  )}
+                <div className="relative">
+                  <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+                  <div className="relative z-10 flex items-center justify-end gap-1">
+                    Balance
+                    {sortField === 'balance' && (
+                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </div>
               </TableHead>
               {!isCompact && (
@@ -618,33 +618,42 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                     onClick={() => handleSort('value')}
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      Value (EUR)
-                      {sortField === 'value' && (
-                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                      )}
+                    <div className="relative">
+                      <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+                      <div className="relative z-10 flex items-center justify-end gap-1">
+                        Value (EUR)
+                        {sortField === 'value' && (
+                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead 
                     className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                     onClick={() => handleSort('change24h')}
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      24h Change
-                      {sortField === 'change24h' && (
-                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                      )}
+                    <div className="relative">
+                      <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+                      <div className="relative z-10 flex items-center justify-end gap-1">
+                        24h Change
+                        {sortField === 'change24h' && (
+                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead 
                     className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                     onClick={() => handleSort('available')}
                   >
-                    <div className="flex items-center justify-end gap-1">
-                      Available
-                      {sortField === 'available' && (
-                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                      )}
+                    <div className="relative">
+                      <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+                      <div className="relative z-10 flex items-center justify-end gap-1">
+                        Available
+                        {sortField === 'available' && (
+                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </div>
                     </div>
                   </TableHead>
                 </>
