@@ -13,6 +13,7 @@ import { Toaster } from './components/ui/sonner';
 import { WidgetContainer } from './components/WidgetContainer';
 import { BalancesWidget } from './components/BalancesWidget';
 import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWidget';
+import { TreeMapWidget } from './components/TreeMapWidget';
 import { createRoot } from 'react-dom/client';
 import { ChartVariant } from './components/PerformanceWidget/PerformanceWidget';
 import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
@@ -92,6 +93,13 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     component: PerformanceWidget,
     defaultSize: { w: 8, h: 6 },
     minSize: { w: 4, h: 4 }
+  },
+  'treemap': {
+    id: 'treemap',
+    title: 'Balance Distribution',
+    component: TreeMapWidget,
+    defaultSize: { w: 6, h: 6 },
+    minSize: { w: 4, h: 4 }
   }
 } as const;
 
@@ -163,6 +171,15 @@ const generateDefaultLayout = () => [
       chartVariant: 'revenue',
       viewMode: 'cumulative'
     } 
+  },
+  { 
+    id: 'treemap', 
+    x: 8, 
+    y: 6, 
+    w: 4, 
+    h: 4, 
+    minW: 2, 
+    minH: 2 
   }
 ];
 
