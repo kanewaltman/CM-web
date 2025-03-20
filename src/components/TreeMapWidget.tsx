@@ -1,127 +1,169 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Treemap, Tooltip, ResponsiveContainer } from 'recharts';
 import { WidgetContainer } from './WidgetContainer';
 import { SAMPLE_BALANCES } from './BalancesWidget';
 import { useTheme } from 'next-themes';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { getApiUrl } from '@/lib/api-config';
+import { ASSETS, isAssetTicker, AssetTicker } from '@/assets/AssetTicker';
 
-// Custom tooltip to show the asset name and percentage
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length > 0) {
-    const data = payload[0].payload;
-    return (
-      <div className="bg-card px-3 py-2 rounded-md shadow-md border text-sm">
-        <p className="font-semibold">{data.name}</p>
-        <p className="text-sm opacity-80">{data.formattedPercentage}</p>
-      </div>
-    );
-  }
-  return null;
-};
+// Default color for assets not found in ASSETS
+const DEFAULT_COLOR = '#4f46e5';
 
-// Hard-coded asset colors for the sample assets
-const ASSET_COLORS: Record<string, string> = {
-  BTC: "#F7931A",
-  ETH: "#627EEA",
-  DOT: "#E6007A",
-  USDT: "#26A17B",
-  DOGE: "#C2A633",
-  XCM: "#000000",
-  SOL: "#14F195",
-  ADA: "#0033AD",
-  HBAR: "#00BAFF"
-};
-
-interface TreeMapData {
-  name: string;
-  value: number;
-  size: number;
-  formattedPercentage: string;
-  fill: string;
-}
-
-interface BalanceData {
-  [key: string]: {
-    [key: string]: string;
-  };
-}
-
-interface TreeMapWidgetProps {
+// Wrapper component that forces a remount when theme changes
+export const TreeMapWidgetWrapper: React.FC<{
   className?: string;
   onRemove?: () => void;
-}
-
-// Custom render for treemap items
-const TreeMapItem = (props: any) => {
-  const { x, y, width, height, index, root } = props;
-  const item = root.children?.[index];
+}> = (props) => {
+  const { resolvedTheme } = useTheme();
+  const [key, setKey] = useState(Date.now());
+  const [forcedTheme, setForcedTheme] = useState<'light' | 'dark'>('light');
   
-  if (!item || width < 20 || height < 20) {
-    return null;
-  }
+  // Check theme directly from DOM
+  useEffect(() => {
+    const checkTheme = () => {
+      const isDarkMode = document.documentElement.classList.contains('dark');
+      const newTheme = isDarkMode ? 'dark' : 'light';
+      
+      // If theme detection methods don't match, log it
+      if ((resolvedTheme === 'dark') !== isDarkMode) {
+        console.log(`Theme detection mismatch:
+          - DOM check: ${newTheme}
+          - useTheme hook: ${resolvedTheme || 'undefined'}`);
+      }
+      
+      setForcedTheme(newTheme);
+      return newTheme;
+    };
+    
+    // Check theme immediately
+    const currentTheme = checkTheme();
+    
+    console.log(`TreeMapWidgetWrapper: Current theme is ${currentTheme}, setting new key: ${Date.now()}`);
+    setKey(Date.now());
+    
+    // Also listen for theme changes via class changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class' && 
+            mutation.target === document.documentElement) {
+          const newTheme = checkTheme();
+          console.log(`TreeMapWidgetWrapper: DOM class changed, theme is now ${newTheme}`);
+          setKey(Date.now());
+        }
+      });
+    });
+    
+    observer.observe(document.documentElement, { attributes: true });
+    
+    return () => observer.disconnect();
+  }, [resolvedTheme]);
   
-  // Dynamically adjust text size and visibility based on box size
-  const showLabel = width > 50 && height > 30;
-  const showPercentage = width > 60 && height > 40;
-  const fontSize = Math.min(12, Math.max(8, width / 10)); // Responsive font size
+  console.log(`TreeMapWidgetWrapper rendering with key: ${key}, forced theme: ${forcedTheme}`);
   
-  return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        style={{
-          fill: item.fill,
-          strokeWidth: 0,
-        }}
-      />
-      {showLabel && (
-        <>
-          <text
-            x={x + width / 2}
-            y={y + height / 2 - (showPercentage ? 8 : 0)}
-            textAnchor="middle"
-            fill="white"
-            fontSize={fontSize}
-            fontWeight="bold"
-          >
-            {item.name}
-          </text>
-          {showPercentage && (
-            <text
-              x={x + width / 2}
-              y={y + height / 2 + 10}
-              textAnchor="middle"
-              fill="white"
-              fontSize={fontSize - 1}
-            >
-              {item.formattedPercentage}
-            </text>
-          )}
-        </>
-      )}
-    </g>
-  );
+  return <TreeMapWidget key={key} forceTheme={forcedTheme} {...props} />;
 };
 
-export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemove }) => {
-  const { theme } = useTheme();
+// The actual implementation of TreeMapWidget stays focused on data
+const TreeMapWidget: React.FC<{
+  className?: string;
+  onRemove?: () => void;
+  forceTheme?: 'light' | 'dark';
+}> = ({ className, onRemove, forceTheme }) => {
+  const { resolvedTheme } = useTheme(); 
   const { dataSource } = useDataSource();
-  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
-  const [treeMapData, setTreeMapData] = useState<TreeMapData[]>([]);
+  const [treeMapData, setTreeMapData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [balances, setBalances] = useState<BalanceData>(SAMPLE_BALANCES);
+  const [balances, setBalances] = useState<any>(SAMPLE_BALANCES);
   const [error, setError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   
-  // Detect theme changes
-  useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark');
-    setCurrentTheme(isDark ? 'dark' : 'light');
-  }, [theme]);
+  // Use forced theme if provided
+  const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
+  
+  console.log(`TreeMapWidget: Using effective theme: ${effectiveTheme}`);
+  
+  // Custom tooltip to show the asset name and percentage
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length > 0) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-card px-3 py-2 rounded-md shadow-md border text-sm">
+          <p className="font-semibold">{data.name}</p>
+          <p className="text-sm opacity-80">{data.formattedPercentage}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+  
+  // Custom render for treemap items with direct theme handling
+  const TreeMapItem = (props: any) => {
+    const { x, y, width, height, index, root } = props;
+    
+    // Use effective theme passed down from parent
+    const currentTheme = effectiveTheme;
+    
+    const item = root.children?.[index];
+    
+    if (!item || width < 20 || height < 20) {
+      return null;
+    }
+    
+    // Dynamically adjust text size and visibility based on box size
+    const showLabel = width > 50 && height > 30;
+    const showPercentage = width > 60 && height > 40;
+    const fontSize = Math.min(12, Math.max(8, width / 10)); // Responsive font size
+    
+    // Get color directly based on asset and current theme
+    let fillColor = DEFAULT_COLOR;
+    if (isAssetTicker(item.name) && ASSETS[item.name]) {
+      fillColor = ASSETS[item.name].theme[currentTheme];
+      // Special log for XCM to debug
+      if (item.name === 'XCM') {
+        console.log(`XCM color for ${currentTheme} theme: ${fillColor}`);
+      }
+    }
+    
+    return (
+      <g>
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          style={{
+            fill: fillColor,
+            strokeWidth: 0,
+          }}
+        />
+        {showLabel && (
+          <>
+            <text
+              x={x + width / 2}
+              y={y + height / 2 - (showPercentage ? 8 : 0)}
+              textAnchor="middle"
+              fill="white"
+              fontSize={fontSize}
+              fontWeight="bold"
+            >
+              {item.name}
+            </text>
+            {showPercentage && (
+              <text
+                x={x + width / 2}
+                y={y + height / 2 + 10}
+                textAnchor="middle"
+                fill="white"
+                fontSize={fontSize - 1}
+              >
+                {item.formattedPercentage}
+              </text>
+            )}
+          </>
+        )}
+      </g>
+    );
+  };
   
   // Create a fetch function that can be called when needed
   const fetchBalances = useCallback(async () => {
@@ -182,28 +224,25 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
   
   // Fetch balances when data source changes
   useEffect(() => {
-    console.log(`[TreeMapWidget] Data source changed to: ${dataSource}. Component rendered with ID: ${Math.random().toString(36).substring(7)}`);
+    console.log('TreeMapWidget: Data source changed to:', dataSource);
     fetchBalances();
   }, [dataSource, fetchBalances]);
   
   // Process data for the treemap
   useEffect(() => {
-    // Skip if still loading
     if (isLoading) return;
     
-    console.log('TreeMapWidget: Processing balances data', balances);
+    console.log('TreeMapWidget: Processing balances data');
     
     try {
       // Calculate total value in EUR
       const totalValue = Object.entries(balances).reduce(
-        (sum, [_, balance]) => {
+        (sum, [_, balance]: [string, any]) => {
           const euroValue = parseFloat(balance.EUR || '0');
           return sum + (isNaN(euroValue) ? 0 : euroValue);
         },
         0
       );
-      
-      console.log('TreeMapWidget: Total portfolio value:', totalValue);
       
       if (totalValue === 0) {
         console.error("TreeMapWidget: Total portfolio value is 0, check balance data");
@@ -211,10 +250,10 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
         return;
       }
       
-      // Create data for the treemap
+      // Create data for the treemap without including fill color
       const processedData = Object.entries(balances)
         .filter(([asset]) => asset !== 'TOTAL') // Filter out total if present
-        .map(([asset, balance]) => {
+        .map(([asset, balance]: [string, any]) => {
           const value = parseFloat(balance.EUR || '0');
           const percentage = (value / totalValue) * 100;
           
@@ -223,12 +262,11 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
             value: value,
             size: value,
             formattedPercentage: `${percentage.toFixed(2)}%`,
-            fill: ASSET_COLORS[asset] || '#4f46e5'
           };
         })
         .filter(item => !isNaN(item.value) && item.value > 0); // Filter out zero values
       
-      console.log('TreeMapWidget: Processed data length:', processedData.length);
+      console.log(`TreeMapWidget: Processed ${processedData.length} items`);
       
       // Only update state if we have data
       if (processedData.length > 0) {
@@ -280,7 +318,7 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
       title="Balance Distribution"
       onRemove={onRemove}
     >
-      <div ref={containerRef} className="h-full w-full rounded-xl bg-card overflow-hidden">
+      <div className="h-full w-full rounded-xl bg-card overflow-hidden">
         <div className="h-full w-full">
           <ResponsiveContainer width="100%" height="100%">
             <Treemap

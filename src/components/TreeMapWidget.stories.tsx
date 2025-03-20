@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { TreeMapWidget } from './TreeMapWidget';
+import { TreeMapWidgetWrapper as TreeMapWidget } from './TreeMapWidget';
 
 const meta = {
   title: 'Components/TreeMapWidget',

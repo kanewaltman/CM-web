@@ -13,7 +13,7 @@ import { Toaster } from './components/ui/sonner';
 import { WidgetContainer } from './components/WidgetContainer';
 import { BalancesWidget } from './components/BalancesWidget';
 import { PerformanceWidget } from './components/PerformanceWidget/PerformanceWidget';
-import { TreeMapWidget } from './components/TreeMapWidget';
+import { TreeMapWidgetWrapper as TreeMapWidget } from './components/TreeMapWidget';
 import { createRoot } from 'react-dom/client';
 import { ChartVariant } from './components/PerformanceWidget/PerformanceWidget';
 import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
