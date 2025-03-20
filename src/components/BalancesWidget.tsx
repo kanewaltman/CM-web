@@ -107,7 +107,7 @@ const HeaderDivider: React.FC = () => {
 };
 
 // Add sample data
-const SAMPLE_BALANCES = {
+export const SAMPLE_BALANCES = {
   "BTC": {
     "BTC": "1.23456789",
     "EUR": "45678.90"
