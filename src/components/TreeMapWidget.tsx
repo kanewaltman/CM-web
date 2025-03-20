@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Treemap, Tooltip, ResponsiveContainer } from 'recharts';
-import { Card, CardContent } from './ui/card';
 import { WidgetContainer } from './WidgetContainer';
-import { cn } from '@/lib/utils';
 import { SAMPLE_BALANCES } from './BalancesWidget';
 import { useTheme } from 'next-themes';
-import { ChartContainer } from './ui/chart';
+import { useDataSource } from '@/lib/DataSourceContext';
+import { getApiUrl } from '@/lib/api-config';
 
 // Custom tooltip to show the asset name and percentage
 const CustomTooltip = ({ active, payload }: any) => {
@@ -40,6 +39,12 @@ interface TreeMapData {
   size: number;
   formattedPercentage: string;
   fill: string;
+}
+
+interface BalanceData {
+  [key: string]: {
+    [key: string]: string;
+  };
 }
 
 interface TreeMapWidgetProps {
@@ -104,8 +109,12 @@ const TreeMapItem = (props: any) => {
 
 export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemove }) => {
   const { theme } = useTheme();
+  const { dataSource } = useDataSource();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [treeMapData, setTreeMapData] = useState<TreeMapData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [balances, setBalances] = useState<BalanceData>(SAMPLE_BALANCES);
+  const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Detect theme changes
@@ -114,40 +123,127 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
     setCurrentTheme(isDark ? 'dark' : 'light');
   }, [theme]);
   
+  // Create a fetch function that can be called when needed
+  const fetchBalances = useCallback(async () => {
+    console.log('TreeMapWidget: Fetching balances with data source:', dataSource);
+    setIsLoading(true);
+    
+    try {
+      if (dataSource === 'sample') {
+        // Use sample data
+        console.log('TreeMapWidget: Using sample data');
+        setBalances(SAMPLE_BALANCES);
+        setError(null);
+      } else {
+        // Get a demo token first
+        console.log('TreeMapWidget: Fetching demo token');
+        const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
+        if (!tokenResponse.ok) {
+          throw new Error(`Token request failed with status ${tokenResponse.status}`);
+        }
+        
+        const tokenData = await tokenResponse.json();
+        if (!tokenData.token) {
+          throw new Error('Failed to get demo token');
+        }
+        
+        console.log('TreeMapWidget: Token received, fetching balances');
+        
+        // Now fetch balances with the token
+        const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
+          headers: {
+            'Authorization': `Bearer ${tokenData.token}`
+          }
+        });
+        
+        if (!balancesResponse.ok) {
+          throw new Error(`Balances request failed with status ${balancesResponse.status}`);
+        }
+        
+        const data = await balancesResponse.json();
+        console.log('TreeMapWidget: Balances data received:', data);
+        
+        if (data && typeof data === 'object') {
+          setBalances(data);
+          setError(null);
+        } else {
+          throw new Error('Invalid balance data format');
+        }
+      }
+    } catch (err) {
+      console.error('TreeMapWidget: Error fetching balances:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch balances');
+      // Fallback to sample data
+      setBalances(SAMPLE_BALANCES);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dataSource]);
+  
+  // Fetch balances when data source changes
+  useEffect(() => {
+    console.log('TreeMapWidget: Data source changed to', dataSource);
+    fetchBalances();
+  }, [dataSource, fetchBalances]);
+  
   // Process data for the treemap
   useEffect(() => {
-    // Calculate total value in EUR
-    const totalValue = Object.entries(SAMPLE_BALANCES).reduce(
-      (sum, [_, balance]) => sum + parseFloat(balance.EUR),
-      0
-    );
+    // Skip if still loading
+    if (isLoading) return;
     
-    if (totalValue === 0) {
-      console.error("Total portfolio value is 0, check SAMPLE_BALANCES data");
-      return;
-    }
+    console.log('TreeMapWidget: Processing balances data', balances);
     
-    // Create data for the treemap
-    const processedData = Object.entries(SAMPLE_BALANCES).map(([asset, balance]) => {
-      const value = parseFloat(balance.EUR);
-      const percentage = (value / totalValue) * 100;
+    try {
+      // Calculate total value in EUR
+      const totalValue = Object.entries(balances).reduce(
+        (sum, [_, balance]) => {
+          const euroValue = parseFloat(balance.EUR || '0');
+          return sum + (isNaN(euroValue) ? 0 : euroValue);
+        },
+        0
+      );
       
-      return {
-        name: asset,
-        value: value,
-        size: value,
-        formattedPercentage: `${percentage.toFixed(2)}%`,
-        fill: ASSET_COLORS[asset] || '#4f46e5'
-      };
-    });
-    
-    // Only update state if we have data
-    if (processedData.length > 0) {
-      setTreeMapData(processedData);
+      console.log('TreeMapWidget: Total portfolio value:', totalValue);
+      
+      if (totalValue === 0) {
+        console.error("TreeMapWidget: Total portfolio value is 0, check balance data");
+        setError("No balance data with value available");
+        return;
+      }
+      
+      // Create data for the treemap
+      const processedData = Object.entries(balances)
+        .filter(([asset]) => asset !== 'TOTAL') // Filter out total if present
+        .map(([asset, balance]) => {
+          const value = parseFloat(balance.EUR || '0');
+          const percentage = (value / totalValue) * 100;
+          
+          return {
+            name: asset,
+            value: value,
+            size: value,
+            formattedPercentage: `${percentage.toFixed(2)}%`,
+            fill: ASSET_COLORS[asset] || '#4f46e5'
+          };
+        })
+        .filter(item => !isNaN(item.value) && item.value > 0); // Filter out zero values
+      
+      console.log('TreeMapWidget: Processed data length:', processedData.length);
+      
+      // Only update state if we have data
+      if (processedData.length > 0) {
+        setTreeMapData(processedData);
+        setError(null);
+      } else {
+        setError("No valid balance data for visualization");
+      }
+    } catch (err) {
+      console.error('TreeMapWidget: Error processing data:', err);
+      setError("Error processing balance data");
     }
-  }, []);
+  }, [balances, isLoading]);
 
-  if (treeMapData.length === 0) {
+  if (isLoading) {
     return (
       <WidgetContainer 
         title="Balance Distribution"
@@ -155,6 +251,25 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
       >
         <div className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">Loading balance data...</p>
+        </div>
+      </WidgetContainer>
+    );
+  }
+  
+  if (error || treeMapData.length === 0) {
+    return (
+      <WidgetContainer 
+        title="Balance Distribution"
+        onRemove={onRemove}
+      >
+        <div className="flex items-center justify-center h-full flex-col">
+          <p className="text-muted-foreground">{error || "No balance data available"}</p>
+          <button 
+            onClick={fetchBalances}
+            className="mt-2 px-3 py-1 text-xs bg-muted rounded-md hover:bg-muted/80"
+          >
+            Refresh
+          </button>
         </div>
       </WidgetContainer>
     );
