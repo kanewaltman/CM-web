@@ -358,7 +358,7 @@ export const ASSETS: { [K in AssetTicker]: AssetConfig<K> } = {
     symbol: "BTC",
     type: ASSET_TYPE.Crypto,
     icon: iconBTC,
-    theme: { light: "#af5500", dark: "#FFA500" },
+    theme: { light: "#E68A00", dark: "#FFA500" },
     decimalPlaces: 6,
     multiplier: 1e8,
     networks: [{ type: ASSET_NETWORK.Bitcoin }],
