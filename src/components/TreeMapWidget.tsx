@@ -166,17 +166,40 @@ const TreeMapWidget: React.FC<{
   // - Ensures small portions are still visible with color
   // - Only shows labels when there's enough space
   // - Uses safe dimensions to prevent rendering issues
+  // - Adds 2px padding on each side to create 4px gaps between sections
   const TreeMapItem = (props: any) => {
-    const { x, y, width, height, index, root } = props;
+    const { x, y, width, height, index, root, depth } = props;
     
     // Use effective theme passed down from parent
     const currentTheme = effectiveTheme;
     
-    const item = root.children?.[index];
-    
-    if (!item) {
+    // Skip rendering the root node (depth 0)
+    if (depth === 0) {
       return null;
     }
+    
+    const item = root.children?.[index];
+    
+    // If there's no item or it's the root, don't render anything
+    if (!item || index === undefined) {
+      return null;
+    }
+    
+    // Add spacing between sections (2px on each side = 4px gap between sections)
+    const padding = 2;
+    
+    // Ensure minimum dimensions for rendering (1px minimum after padding)
+    const safeWidth = Math.max(1, width - padding * 2);
+    const safeHeight = Math.max(1, height - padding * 2);
+    
+    // Skip rendering extremely small sections that would be invisible after padding
+    if (safeWidth < 1 || safeHeight < 1) {
+      return null;
+    }
+    
+    // Adjust position to add padding
+    const safeX = x + padding;
+    const safeY = y + padding;
     
     // Dynamically adjust text size and visibility based on box size
     const showLabel = width > 50 && height > 30;
@@ -193,20 +216,17 @@ const TreeMapWidget: React.FC<{
       }
     }
     
-    // Ensure minimum dimensions for rendering (1px minimum)
-    const safeWidth = Math.max(1, width);
-    const safeHeight = Math.max(1, height);
-    
     return (
       <g>
         <rect
-          x={x}
-          y={y}
+          x={safeX}
+          y={safeY}
           width={safeWidth}
           height={safeHeight}
           style={{
             fill: fillColor,
             strokeWidth: 0,
+            rx: 2, // Add slight rounding to corners
           }}
         />
         {showLabel && (
@@ -324,13 +344,15 @@ const TreeMapWidget: React.FC<{
       }
       
       // Create data for the treemap without including fill color
-      const processedData = Object.entries(balances)
+      let processedData = Object.entries(balances)
         .filter(([asset]) => asset !== 'TOTAL') // Filter out total if present
         .map(([asset, balance]: [string, any]) => {
           const value = parseFloat(balance.EUR || '0');
           const percentage = (value / totalValue) * 100;
           
+          // Create a unique ID for each item to prevent naming conflicts
           return {
+            id: `${asset}-${Math.random().toString(36).substring(2, 9)}`, // Add unique ID
             name: asset,
             value: value,
             // Apply a minimum size floor to ensure small values are still visible
@@ -344,7 +366,18 @@ const TreeMapWidget: React.FC<{
         // Sort by value descending to help with rendering
         .sort((a, b) => b.value - a.value);
       
-      console.log(`TreeMapWidget: Processed ${processedData.length} items`);
+      // Check for and remove any duplicates before setting the data
+      const assetMap = new Map();
+      processedData = processedData.filter(item => {
+        if (assetMap.has(item.name)) {
+          console.warn(`TreeMapWidget: Duplicate asset found and removed: ${item.name}`);
+          return false;
+        }
+        assetMap.set(item.name, true);
+        return true;
+      });
+      
+      console.log(`TreeMapWidget: Processed ${processedData.length} items:`, processedData);
       
       // Only update state if we have data
       if (processedData.length > 0) {
@@ -403,12 +436,23 @@ const TreeMapWidget: React.FC<{
               data={treeMapData}
               dataKey="size"
               nameKey="name"
+              idKey="id"
               stroke="transparent"
               animationDuration={0}
               isAnimationActive={false}
               content={<TreeMapItem />}
+              aspectRatio={1}
+              colorPanel={[]} // Disable default coloring system
             >
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip 
+                content={<CustomTooltip />} 
+                cursor={false}
+                position={{ x: 'auto', y: 'auto' }}
+                wrapperStyle={{ transition: 'transform 0.2s ease-out, opacity 0.2s ease-out' }}
+                isAnimationActive={true}
+                animationDuration={200}
+                animationEasing="ease-out"
+              />
             </Treemap>
           </ResponsiveContainer>
         </div>
