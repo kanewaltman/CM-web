@@ -586,7 +586,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       ref={containerRef}
     >
       <div className="flex-1 min-h-0 relative">
-        <div className="absolute left-[8px] right-[8px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
+        <div className="absolute left-[8px] right-[16px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         {/* Hidden div for text measurement */}
         <div ref={textMeasureRef} className="absolute -left-[9999px] -top-[9999px]"></div>
         <Table>
@@ -602,7 +602,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 </div>
               </TableHead>
               <TableHead 
-                className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                 onClick={() => handleSort('balance')}
               >
                 <div className="flex items-center justify-end gap-1">
@@ -615,7 +615,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
               {!isCompact && (
                 <>
                   <TableHead 
-                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                     onClick={() => handleSort('value')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -626,7 +626,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     </div>
                   </TableHead>
                   <TableHead 
-                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                     onClick={() => handleSort('change24h')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -637,7 +637,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     </div>
                   </TableHead>
                   <TableHead 
-                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-10 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
                     onClick={() => handleSort('available')}
                   >
                     <div className="flex items-center justify-end gap-1">

@@ -42,7 +42,7 @@
   --color-widget-content: 0 0% 100%;  /* Widget content area - White */
   --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
   --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
-  --color-widget-hover: 0 0% 94%;     /* Widget hover state - slightly darker than bg */
+  --color-widget-hover: 0 0% 94%;     /* Widget hover state - neutral */
   
   /* Background Derivatives */
   --color-background-default: var(--color-bg-base);
@@ -155,7 +155,7 @@
   --color-widget-content: 0 0% 100%;  /* Widget content area - White */
   --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
   --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
-  --color-widget-hover: 0 0% 94%;     /* Widget hover state - slightly darker than bg */
+  --color-widget-hover: 0 0% 94%;     /* Widget hover state - neutral */
 }
 
 .dark {
@@ -260,7 +260,7 @@
   --color-widget-content: 0 0% 6%;    /* Widget content area */
   --color-widget-inset: 0 0% 10%;     /* Widget inset areas (scrollable) */
   --color-widget-inset-border: 0 0% 12% / 0.5;  /* Widget inset border color */
-  --color-widget-hover: 0 0% 12%;     /* Widget hover state - slightly lighter than bg */
+  --color-widget-hover: 0 0% 12%;     /* Widget hover state - neutral for dark theme */
 }
 
 /* Add GridStack specific styles */

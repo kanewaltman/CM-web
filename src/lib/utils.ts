@@ -55,6 +55,7 @@ type ThemeColors = {
     '--border': string;
     '--input': string;
     '--ring': string;
+    '--color-widget-hover': string;
   };
 };
 
@@ -197,15 +198,30 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
     );
   };
 
+  // Get widget hover color based on widget intensity
+  const getWidgetHoverColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '0 0% 8%',  // Darker hover for OLED
+        default: '0 0% 12%', // Default hover
+        backlit: '220 3% 19%' // Blueish hover for backlit
+      },
+      intensity
+    );
+  };
+
   // Get accent color based on intensity
   const accentBase = getInterpolatedValue(
     {
-      oled: '0 0% 15%',
+      oled: '0 0% 30%',
       default: '0 0% 20%',
-      backlit: '220 3% 25%'
+      backlit: '220 6% 25%'
     },
     widgetIntensity
   );
+
+  // Get widget hover color
+  const widgetHoverColor = getWidgetHoverColor(widgetIntensity);
 
   return {
     background: `bg-[${bgBase}]`,
@@ -228,6 +244,7 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
       '--color-widget-header': widgetBase,
       '--color-widget-content': widgetBase,
       '--color-widget-inset': getWidgetInsetColor(widgetIntensity),
+      '--color-widget-hover': widgetHoverColor,
       '--color-foreground-default': '0 0% 98%',
       '--color-foreground-muted': getInterpolatedValue(
         {
@@ -393,10 +410,25 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
     );
   };
 
+  // Get widget hover color based on widget intensity
+  const getWidgetHoverColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 94%', // Cooler hover for cool theme
+        default: '0 0% 94%',  // Neutral hover for default
+        backlit: '45 30% 94%' // Warmer hover for warm theme
+      },
+      intensity
+    );
+  };
+
   const foregroundColor = getForegroundColor(backgroundIntensity);
   const mutedForegroundColor = getMutedForegroundColor(backgroundIntensity);
   const buttonBgColor = getButtonBgColor(backgroundIntensity);
   const searchBgColor = getSearchBgColor(backgroundIntensity);
+  
+  // Use consistent theme for hover effect
+  const widgetHoverColor = getWidgetHoverColor(widgetIntensity);
 
   return {
     background: `bg-[${bgBase}]`,
@@ -419,6 +451,7 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
       '--color-widget-header': widgetBase,
       '--color-widget-content': widgetBase,
       '--color-widget-inset': getWidgetInsetColor(widgetIntensity),
+      '--color-widget-hover': widgetHoverColor,
       '--color-foreground-default': foregroundColor,
       '--color-foreground-muted': mutedForegroundColor,
       '--color-foreground-subtle': mutedForegroundColor,
