@@ -609,7 +609,12 @@ function AppContent() {
     }
   }, [dataSource, widgetComponents, widgetTitles, handleRemoveWidget, widgetStateRegistry]);
 
-  // Now define createWidget which uses renderWidgetComponent
+  // Keep the ref up to date
+  useEffect(() => {
+    handleRemoveWidgetRef.current = handleRemoveWidget;
+  }, [handleRemoveWidget]);
+
+  // Now define createWidget which uses handleRemoveWidgetRef
   const createWidget = useCallback(({ widgetType, widgetId, x, y, w = 3, h = 4, minW = 2, minH = 2 }: CreateWidgetParams) => {
     if (!widgetType || !widgetId) {
       console.error('Invalid widget parameters:', { widgetType, widgetId });
@@ -640,11 +645,321 @@ function AppContent() {
     contentElement.className = 'grid-stack-item-content';
     widgetElement.appendChild(contentElement);
 
-    // Use our new renderWidgetComponent function
-    renderWidgetComponent(contentElement, widgetId, widgetType);
+    const root = createRoot(contentElement);
+    (widgetElement as any)._reactRoot = root;
 
-    return widgetElement;
-  }, [widgetComponents]);
+    try {
+      // For Performance widget, create a shared state
+      if (baseWidgetId === 'performance') {
+        // Try to load initial variant from layout data or existing state
+        let initialVariant: ChartVariant = 'revenue';
+        let initialTitle = getPerformanceTitle('revenue');
+        let initialViewMode: 'split' | 'cumulative' = 'split';
+        
+        // Default date range (last 7 days)
+        const today = new Date();
+        let initialDateRange = {
+          from: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6),
+          to: today
+        };
+        
+        const existingState = widgetStateRegistry.get(widgetId);
+        
+        if (existingState) {
+          initialVariant = existingState.variant;
+          initialTitle = existingState.title;
+          initialViewMode = existingState.viewMode;
+          initialDateRange = existingState.dateRange; // Get dateRange from existing state
+        } else {
+          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          if (savedLayout) {
+            try {
+              const layout = JSON.parse(savedLayout);
+              const widgetData = layout.find((item: any) => item.id === widgetId);
+              if (widgetData?.viewState) {
+                if (widgetData.viewState.chartVariant) {
+                  initialVariant = widgetData.viewState.chartVariant;
+                  initialTitle = getPerformanceTitle(widgetData.viewState.chartVariant);
+                }
+                if (widgetData.viewState.viewMode) {
+                  initialViewMode = widgetData.viewState.viewMode;
+                }
+                // Try to load date range from saved layout
+                if (widgetData.viewState.dateRange) {
+                  try {
+                    initialDateRange = {
+                      from: new Date(widgetData.viewState.dateRange.from),
+                      to: new Date(widgetData.viewState.dateRange.to)
+                    };
+                    console.log(`Loaded date range from layout for ${widgetId}:`, {
+                      from: initialDateRange.from.toISOString(),
+                      to: initialDateRange.to.toISOString()
+                    });
+                  } catch (error) {
+                    console.error('Failed to parse date range from layout:', error);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Failed to load widget view state:', error);
+            }
+          }
+        }
+
+        // Create or get shared state
+        let widgetState = widgetStateRegistry.get(widgetId);
+        if (!widgetState) {
+          widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode, initialDateRange);
+          widgetStateRegistry.set(widgetId, widgetState);
+        }
+
+        const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
+          const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
+          const [title, setTitle] = useState(widgetState.title);
+          const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(widgetState.viewMode);
+          const [dateRange, setDateRange] = useState(widgetState.dateRange);
+
+          useEffect(() => {
+            // Initial state sync
+            setVariant(widgetState.variant);
+            setTitle(widgetState.title);
+            setViewMode(widgetState.viewMode);
+            setDateRange(widgetState.dateRange);
+
+            // Subscribe to state changes
+            const unsubscribe = widgetState.subscribe(() => {
+              setVariant(widgetState.variant);
+              setTitle(widgetState.title);
+              setViewMode(widgetState.viewMode);
+              setDateRange(widgetState.dateRange);
+            });
+
+            return unsubscribe;
+          }, []);
+
+          const handleVariantChange = useCallback((newVariant: ChartVariant) => {
+            if (!newVariant) return;
+            
+            // Get new title first
+            const newTitle = getPerformanceTitle(newVariant);
+    
+            // Force immediate re-render of the container by updating state first
+            setVariant(newVariant);
+            setTitle(newTitle);
+
+            // Update shared state
+            widgetState.setVariant(newVariant);
+            widgetState.setTitle(newTitle);
+      
+            // Force a re-render of the widget container
+            const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+            if (widgetContainer) {
+              const root = (widgetContainer as any)._reactRoot;
+              if (root) {
+                root.render(
+                  <React.StrictMode>
+                    <DataSourceProvider>
+                      <WidgetContainer
+                        key={newTitle} // Force re-render with new title
+                        title={newTitle}
+                        onRemove={() => {
+                          if (gridRef.current) {
+                            const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                            if (widget) {
+                              const reactRoot = (widget as any)._reactRoot;
+                              if (reactRoot) {
+                                reactRoot.unmount();
+                              }
+                              // Clean up widget state
+                              widgetStateRegistry.delete(widgetId);
+                              gridRef.current.removeWidget(widget, false);
+                              (widget as unknown as HTMLElement).remove();
+                            }
+                          }
+                        }}
+                        headerControls={<PerformanceWidgetWrapper isHeader />}
+                      >
+                        <PerformanceWidgetWrapper />
+                      </WidgetContainer>
+                    </DataSourceProvider>
+                  </React.StrictMode>
+                );
+              }
+            }
+
+            // Save to layout data
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              try {
+                const layout = JSON.parse(savedLayout);
+                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+                if (widgetIndex !== -1) {
+                  layout[widgetIndex] = {
+                    ...layout[widgetIndex],
+                    viewState: {
+                      ...layout[widgetIndex].viewState,
+                      chartVariant: newVariant
+                    }
+                  };
+                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                }
+              } catch (error) {
+                console.error('Failed to save widget view state:', error);
+              }
+            }
+          }, []);
+
+          const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative') => {
+            widgetState.setViewMode(newViewMode);
+
+            // Save to layout data
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              try {
+                const layout = JSON.parse(savedLayout);
+                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+                if (widgetIndex !== -1) {
+                  layout[widgetIndex] = {
+                    ...layout[widgetIndex],
+                    viewState: {
+                      ...layout[widgetIndex].viewState,
+                      chartVariant: widgetState.variant,
+                      viewMode: newViewMode
+                    }
+                  };
+                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                }
+              } catch (error) {
+                console.error('Failed to save widget view state:', error);
+              }
+            }
+          }, []);
+
+          const handleDateRangeChange = useCallback((newDateRange: { from: Date; to: Date } | undefined) => {
+            if (!newDateRange?.from || !newDateRange?.to) return;
+            
+            console.log(`PerformanceWidgetWrapper: Date range changed to:`, {
+              from: newDateRange.from.toISOString(),
+              to: newDateRange.to.toISOString(),
+              widgetId,
+              isHeader
+            });
+            
+            // Update local state first for immediate UI update
+            setDateRange(newDateRange);
+      
+            // Update shared state
+            widgetState.setDateRange(newDateRange);
+            
+            // Save to layout data
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              try {
+                const layout = JSON.parse(savedLayout);
+                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+                if (widgetIndex !== -1) {
+                  layout[widgetIndex] = {
+                    ...layout[widgetIndex],
+                    viewState: {
+                      ...layout[widgetIndex].viewState,
+                      chartVariant: widgetState.variant,
+                      viewMode: widgetState.viewMode,
+                      dateRange: {
+                        from: newDateRange.from.toISOString(),
+                        to: newDateRange.to.toISOString()
+                      }
+                    }
+                  };
+                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                }
+              } catch (error) {
+                console.error('Failed to save widget date range state:', error);
+              }
+            }
+          }, [isHeader, widgetId]);
+      
+          return (
+            <WidgetComponent
+              widgetId={widgetId}
+              headerControls={isHeader}
+              defaultVariant={variant}
+              defaultViewMode={viewMode}
+              onVariantChange={handleVariantChange}
+              onViewModeChange={handleViewModeChange}
+              onDateRangeChange={handleDateRangeChange}
+              dateRange={dateRange}
+              onTitleChange={(newTitle) => {
+                widgetState.setTitle(newTitle);
+              }}
+            />
+          );
+        };
+      
+        root.render(
+          <React.StrictMode>
+            <DataSourceProvider>
+              <WidgetContainer
+                key={widgetState.title}
+                title={widgetState.title}
+                onRemove={() => {
+                  if (gridRef.current) {
+                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                    if (widget) {
+                      const reactRoot = (widget as any)._reactRoot;
+                      if (reactRoot) {
+                        reactRoot.unmount();
+                      }
+                      // Clean up widget state
+                      widgetStateRegistry.delete(widgetId);
+                      gridRef.current.removeWidget(widget, false);
+                      (widget as unknown as HTMLElement).remove();
+                    }
+                  }
+                }}
+                headerControls={<PerformanceWidgetWrapper isHeader />}
+              >
+                <PerformanceWidgetWrapper />
+              </WidgetContainer>
+            </DataSourceProvider>
+          </React.StrictMode>
+        );
+      } else {
+        // Regular widget rendering
+        root.render(
+          <React.StrictMode>
+            <DataSourceProvider>
+              <WidgetContainer
+                title={widgetTitles[widgetType]}
+                onRemove={() => {
+                  if (gridRef.current) {
+                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+                    if (widget) {
+                      const reactRoot = (widget as any)._reactRoot;
+                      if (reactRoot) {
+                        reactRoot.unmount();
+                      }
+                      gridRef.current.removeWidget(widget, false);
+                      (widget as unknown as HTMLElement).remove();
+                    }
+                  }
+                }}
+              >
+                <WidgetComponent widgetId={widgetId} />
+              </WidgetContainer>
+            </DataSourceProvider>
+          </React.StrictMode>
+        );
+      }
+
+      return widgetElement;
+    } catch (error) {
+      console.error('Error creating widget:', error);
+      // Clean up on error
+      root.unmount();
+      widgetElement.remove();
+      return null;
+    }
+  }, []);
 
   // Check for ad blocker on mount
   useEffect(() => {
@@ -2000,17 +2315,13 @@ function AppContent() {
             onAddWidget={handleAddWidget}
             dataSource={dataSource}
             onDataSourceChange={(source) => {
-              console.log(`[App] DataSource changing to: ${source}. Updating widgets...`);
               setDataSource(source);
               if (grid) {
                 const items = grid.getGridItems();
-                console.log(`[App] Found ${items.length} widgets to potentially update`);
+
                 items.forEach(item => {
                   const node = item.gridstackNode;
                   if (!node?.id) return;
-                  
-                  const baseId = node.id.split('-')[0];
-                  console.log(`[App] Processing widget: ${node.id} (baseId: ${baseId})`);
                   
                   const widgetContainer = document.querySelector(`[gs-id="${node.id}"]`);
                   if (widgetContainer) {
@@ -2018,11 +2329,74 @@ function AppContent() {
                     if (root) {
                       const content = widgetContainer.querySelector('.grid-stack-item-content');
                       if (content) {
+                        const baseId = node.id.split('-')[0];
                         const widgetType = widgetTypes[baseId];
                         
-                        // Re-render the widget using our new function
-                        root.unmount();
-                        renderWidgetComponent(content, node.id, widgetType);
+                        if (baseId === 'performance' || baseId === 'tradingview' || baseId === 'orderbook') {
+                          root.unmount();
+                          const newRoot = createRoot(content as HTMLElement);
+                          (widgetContainer as any)._reactRoot = newRoot;
+                          
+                          if (baseId === 'performance') {
+                            const widgetState = widgetStateRegistry.get(node.id);
+                            if (widgetState) {
+                              const PerformanceComponent = widgetComponents[widgetType];
+                              const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
+                                <PerformanceComponent
+                                  key={`${node.id}-${source}`}
+                                  widgetId={node.id}
+                                  headerControls={isHeader}
+                                  defaultVariant={widgetState.variant}
+                                  defaultViewMode={widgetState.viewMode}
+                                  onVariantChange={(variant: ChartVariant) => {
+                                    widgetState.setVariant(variant);
+                                    widgetState.setTitle(getPerformanceTitle(variant));
+                                  }}
+                                  onViewModeChange={(mode: 'split' | 'cumulative') => {
+                                    widgetState.setViewMode(mode);
+                                  }}
+                                  dateRange={widgetState.dateRange}
+                                  onDateRangeChange={(newRange: { from: Date; to: Date } | undefined) => {
+                                    if (newRange) widgetState.setDateRange(newRange);
+                                  }}
+                                  onTitleChange={(newTitle: string) => {
+                                    widgetState.setTitle(newTitle);
+                                  }}
+                                />
+                              );
+
+                              newRoot.render(
+                                <React.StrictMode>
+                                  <DataSourceProvider>
+                                    <WidgetContainer
+                                      key={`${widgetState.title}-${source}`}
+                                      title={widgetState.title}
+                                      onRemove={() => node.id && handleRemoveWidget(node.id)}
+                                      headerControls={<PerformanceWidgetWrapper isHeader />}
+                                    >
+                                      <PerformanceWidgetWrapper />
+                                    </WidgetContainer>
+                                  </DataSourceProvider>
+                                </React.StrictMode>
+                              );
+                            }
+                          } else {
+                            const WidgetComponent = widgetComponents[widgetType];
+                            newRoot.render(
+                              <React.StrictMode>
+                                <DataSourceProvider>
+                                  <WidgetContainer
+                                    key={`${widgetType}-${source}`}
+                                    title={widgetTitles[widgetType]}
+                                    onRemove={() => node.id && handleRemoveWidget(node.id)}
+                                  >
+                                    <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
+                                  </WidgetContainer>
+                                </DataSourceProvider>
+                              </React.StrictMode>
+                            );
+                          }
+                        }
                       }
                     }
                   }
