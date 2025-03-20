@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Treemap, Tooltip } from 'recharts';
+import { Treemap, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent } from './ui/card';
 import { WidgetContainer } from './WidgetContainer';
 import { cn } from '@/lib/utils';
@@ -106,8 +106,7 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
   const { theme } = useTheme();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [treeMapData, setTreeMapData] = useState<TreeMapData[]>([]);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   // Detect theme changes
   useEffect(() => {
@@ -148,44 +147,6 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
     }
   }, []);
 
-  // Set up resize observer to update when GridStack changes the component size
-  useEffect(() => {
-    const updateSize = () => {
-      if (chartContainerRef.current) {
-        const { width, height } = chartContainerRef.current.getBoundingClientRect();
-        setContainerSize({ width, height });
-      }
-    };
-    
-    // Initial size calculation
-    updateSize();
-    
-    // Set up resize observer
-    const resizeObserver = new ResizeObserver(updateSize);
-    
-    if (chartContainerRef.current) {
-      resizeObserver.observe(chartContainerRef.current);
-    }
-    
-    const gridItem = chartContainerRef.current?.closest('.grid-stack-item');
-    if (gridItem) {
-      gridItem.addEventListener('resizestop', updateSize);
-      gridItem.addEventListener('dragstop', updateSize);
-    }
-    
-    // Clean up
-    return () => {
-      if (chartContainerRef.current) {
-        resizeObserver.unobserve(chartContainerRef.current);
-      }
-      
-      if (gridItem) {
-        gridItem.removeEventListener('resizestop', updateSize);
-        gridItem.removeEventListener('dragstop', updateSize);
-      }
-    };
-  }, []);
-
   if (treeMapData.length === 0) {
     return (
       <WidgetContainer 
@@ -199,26 +160,14 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
     );
   }
 
-  // Create a simple chart config for the ChartContainer
-  const chartConfig = {
-    balances: { 
-      label: 'Asset Allocation',
-      color: '#4f46e5'
-    }
-  };
-
   return (
     <WidgetContainer 
       title="Balance Distribution"
       onRemove={onRemove}
     >
-      <Card className="h-full rounded-xl border shadow-sm">
-        <CardContent className="p-0">
-          <ChartContainer
-            ref={chartContainerRef}
-            config={chartConfig}
-            className="h-full w-full"
-          >
+      <div ref={containerRef} className="h-full w-full rounded-xl bg-card overflow-hidden">
+        <div className="h-full w-full">
+          <ResponsiveContainer width="100%" height="100%">
             <Treemap
               data={treeMapData}
               dataKey="size"
@@ -230,9 +179,9 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
             >
               <Tooltip content={<CustomTooltip />} />
             </Treemap>
-          </ChartContainer>
-        </CardContent>
-      </Card>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </WidgetContainer>
   );
 }; 
