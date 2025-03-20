@@ -182,7 +182,7 @@ export const TreeMapWidget: React.FC<TreeMapWidgetProps> = ({ className, onRemov
   
   // Fetch balances when data source changes
   useEffect(() => {
-    console.log('TreeMapWidget: Data source changed to', dataSource);
+    console.log(`[TreeMapWidget] Data source changed to: ${dataSource}. Component rendered with ID: ${Math.random().toString(36).substring(7)}`);
     fetchBalances();
   }, [dataSource, fetchBalances]);
   

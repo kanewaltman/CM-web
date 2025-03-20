@@ -293,9 +293,10 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
     return () => observer.disconnect();
   }, []);
 
-  // Initial balance fetch
+  // Effect to load balances data
   useEffect(() => {
     const fetchInitialBalances = async () => {
+      console.log(`[BalancesWidget] Fetching balances with data source: ${dataSource}. Component ID: ${Math.random().toString(36).substring(7)}`);
       try {
         setIsInitialLoading(true);
 
