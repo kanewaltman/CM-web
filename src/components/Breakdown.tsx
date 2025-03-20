@@ -139,7 +139,7 @@ const TreeMapSkeleton = () => {
 };
 
 // Wrapper component that forces a remount when theme changes
-export const TreeMapWidgetWrapper: React.FC<{
+export const BreakdownWrapper: React.FC<{
   className?: string;
   onRemove?: () => void;
 }> = (props) => {
@@ -167,7 +167,7 @@ export const TreeMapWidgetWrapper: React.FC<{
     // Check theme immediately
     const currentTheme = checkTheme();
     
-    console.log(`TreeMapWidgetWrapper: Current theme is ${currentTheme}, setting new key: ${Date.now()}`);
+    console.log(`BreakdownWrapper: Current theme is ${currentTheme}, setting new key: ${Date.now()}`);
     setKey(Date.now());
     
     // Also listen for theme changes via class changes
@@ -176,7 +176,7 @@ export const TreeMapWidgetWrapper: React.FC<{
         if (mutation.attributeName === 'class' && 
             mutation.target === document.documentElement) {
           const newTheme = checkTheme();
-          console.log(`TreeMapWidgetWrapper: DOM class changed, theme is now ${newTheme}`);
+          console.log(`BreakdownWrapper: DOM class changed, theme is now ${newTheme}`);
           setKey(Date.now());
         }
       });
@@ -187,13 +187,13 @@ export const TreeMapWidgetWrapper: React.FC<{
     return () => observer.disconnect();
   }, [resolvedTheme]);
   
-  console.log(`TreeMapWidgetWrapper rendering with key: ${key}, forced theme: ${forcedTheme}`);
+  console.log(`BreakdownWrapper rendering with key: ${key}, forced theme: ${forcedTheme}`);
   
-  return <TreeMapWidget key={key} forceTheme={forcedTheme} {...props} />;
+  return <Breakdown key={key} forceTheme={forcedTheme} {...props} />;
 };
 
-// The actual implementation of TreeMapWidget stays focused on data
-const TreeMapWidget: React.FC<{
+// The actual implementation of Breakdown stays focused on data
+const Breakdown: React.FC<{
   className?: string;
   onRemove?: () => void;
   forceTheme?: 'light' | 'dark';
@@ -208,7 +208,7 @@ const TreeMapWidget: React.FC<{
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
   
-  console.log(`TreeMapWidget: Using effective theme: ${effectiveTheme}`);
+  console.log(`Breakdown: Using effective theme: ${effectiveTheme}`);
   
   // Custom tooltip to show the asset name and percentage
   const CustomTooltip = ({ active, payload }: any) => {
@@ -449,18 +449,18 @@ const TreeMapWidget: React.FC<{
   
   // Create a fetch function that can be called when needed
   const fetchBalances = useCallback(async () => {
-    console.log('TreeMapWidget: Fetching balances with data source:', dataSource);
+    console.log('Breakdown: Fetching balances with data source:', dataSource);
     setIsLoading(true);
     
     try {
       if (dataSource === 'sample') {
         // Use sample data
-        console.log('TreeMapWidget: Using sample data');
+        console.log('Breakdown: Using sample data');
         setBalances(SAMPLE_BALANCES);
         setError(null);
       } else {
         // Get a demo token first
-        console.log('TreeMapWidget: Fetching demo token');
+        console.log('Breakdown: Fetching demo token');
         const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
         if (!tokenResponse.ok) {
           throw new Error(`Token request failed with status ${tokenResponse.status}`);
@@ -471,7 +471,7 @@ const TreeMapWidget: React.FC<{
           throw new Error('Failed to get demo token');
         }
         
-        console.log('TreeMapWidget: Token received, fetching balances');
+        console.log('Breakdown: Token received, fetching balances');
         
         // Now fetch balances with the token
         const balancesResponse = await fetch(getApiUrl('open/users/balances'), {
@@ -485,7 +485,7 @@ const TreeMapWidget: React.FC<{
         }
         
         const data = await balancesResponse.json();
-        console.log('TreeMapWidget: Balances data received:', data);
+        console.log('Breakdown: Balances data received:', data);
         
         if (data && typeof data === 'object') {
           setBalances(data);
@@ -495,7 +495,7 @@ const TreeMapWidget: React.FC<{
         }
       }
     } catch (err) {
-      console.error('TreeMapWidget: Error fetching balances:', err);
+      console.error('Breakdown: Error fetching balances:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch balances');
       // Fallback to sample data
       setBalances(SAMPLE_BALANCES);
@@ -506,7 +506,7 @@ const TreeMapWidget: React.FC<{
   
   // Fetch balances when data source changes
   useEffect(() => {
-    console.log('TreeMapWidget: Data source changed to:', dataSource);
+    console.log('Breakdown: Data source changed to:', dataSource);
     fetchBalances();
   }, [dataSource, fetchBalances]);
   
@@ -514,7 +514,7 @@ const TreeMapWidget: React.FC<{
   useEffect(() => {
     if (isLoading) return;
     
-    console.log('TreeMapWidget: Processing balances data');
+    console.log('Breakdown: Processing balances data');
     
     try {
       // Calculate total value in EUR
@@ -527,7 +527,7 @@ const TreeMapWidget: React.FC<{
       );
       
       if (totalValue === 0) {
-        console.error("TreeMapWidget: Total portfolio value is 0, check balance data");
+        console.error("Breakdown: Total portfolio value is 0, check balance data");
         setError("No balance data with value available");
         return;
       }
@@ -559,14 +559,14 @@ const TreeMapWidget: React.FC<{
       const assetMap = new Map();
       processedData = processedData.filter(item => {
         if (assetMap.has(item.name)) {
-          console.warn(`TreeMapWidget: Duplicate asset found and removed: ${item.name}`);
+          console.warn(`Breakdown: Duplicate asset found and removed: ${item.name}`);
           return false;
         }
         assetMap.set(item.name, true);
         return true;
       });
       
-      console.log(`TreeMapWidget: Processed ${processedData.length} items:`, processedData);
+      console.log(`Breakdown: Processed ${processedData.length} items:`, processedData);
       
       // Only update state if we have data
       if (processedData.length > 0) {
@@ -576,7 +576,7 @@ const TreeMapWidget: React.FC<{
         setError("No valid balance data for visualization");
       }
     } catch (err) {
-      console.error('TreeMapWidget: Error processing data:', err);
+      console.error('Breakdown: Error processing data:', err);
       setError("Error processing balance data");
     }
   }, [balances, isLoading]);
@@ -584,7 +584,7 @@ const TreeMapWidget: React.FC<{
   if (isLoading) {
     return (
       <WidgetContainer 
-        title="Balance Distribution"
+        title="Breakdown"
         onRemove={onRemove}
       >
         <div className="h-full w-full rounded-xl bg-card overflow-hidden">
@@ -597,7 +597,7 @@ const TreeMapWidget: React.FC<{
   if (error || treeMapData.length === 0) {
     return (
       <WidgetContainer 
-        title="Balance Distribution"
+        title="Breakdown"
         onRemove={onRemove}
       >
         <div className="flex items-center justify-center h-full flex-col">
@@ -615,7 +615,7 @@ const TreeMapWidget: React.FC<{
 
   return (
     <WidgetContainer 
-      title="Balance Distribution"
+      title="Breakdown"
       onRemove={onRemove}
     >
       <div className="h-full w-full rounded-xl bg-card overflow-hidden">
@@ -648,4 +648,6 @@ const TreeMapWidget: React.FC<{
       </div>
     </WidgetContainer>
   );
-}; 
+};
+
+export default Breakdown; 

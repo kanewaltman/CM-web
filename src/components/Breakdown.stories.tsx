@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { TreeMapWidgetWrapper as TreeMapWidget } from './TreeMapWidget';
+import { BreakdownWrapper as Breakdown } from './Breakdown';
 
 const meta = {
-  title: 'Components/TreeMapWidget',
-  component: TreeMapWidget,
+  title: 'Components/Breakdown',
+  component: Breakdown,
   parameters: {
     layout: 'centered',
   },
@@ -15,7 +15,7 @@ const meta = {
       </div>
     ),
   ],
-} satisfies Meta<typeof TreeMapWidget>;
+} satisfies Meta<typeof Breakdown>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -26,6 +26,6 @@ export const Default: Story = {
 
 export const WithRemoveHandler: Story = {
   args: {
-    onRemove: () => alert('Remove TreeMap widget!'),
+    onRemove: () => alert('Remove Breakdown widget!'),
   },
 }; 
