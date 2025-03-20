@@ -11,6 +11,69 @@ import { cn } from '@/lib/utils';
 // Default color for assets not found in ASSETS
 const DEFAULT_COLOR = '#4f46e5';
 
+// Asset Button component to match the style in balances and performance widgets
+const AssetButton = ({ 
+  asset, 
+  assetColor, 
+  className, 
+  onMouseEnter, 
+  onMouseLeave, 
+  style,
+  fontSize = 12,
+  isActive = false
+}: { 
+  asset: string, 
+  assetColor: string, 
+  className?: string,
+  onMouseEnter?: React.MouseEventHandler,
+  onMouseLeave?: React.MouseEventHandler,
+  style?: React.CSSProperties,
+  fontSize?: number,
+  isActive?: boolean
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  
+  // Only show the button if we have a valid asset
+  if (!asset || !isAssetTicker(asset)) return null;
+  
+  const assetConfig = ASSETS[asset as AssetTicker];
+  if (!assetConfig) return null;
+  
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    setIsHovered(true);
+    if (onMouseEnter) onMouseEnter(e);
+  };
+  
+  const handleMouseLeave = (e: React.MouseEvent) => {
+    setIsHovered(false);
+    if (onMouseLeave) onMouseLeave(e);
+  };
+  
+  // Either the internal hover state or external active state can trigger the hover appearance
+  const showHoverState = isHovered || isActive;
+  
+  return (
+    <div
+      className={cn("font-jakarta font-bold rounded-md px-1 relative z-20", className)}
+      style={{ 
+        color: showHoverState ? 'hsl(var(--color-widget-bg))' : assetColor,
+        backgroundColor: showHoverState ? assetColor : `${assetColor}14`,
+        cursor: 'default',
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'text',
+        userSelect: 'text',
+        fontSize: `${fontSize}px`,
+        pointerEvents: 'auto',
+        ...style
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {asset}
+    </div>
+  );
+};
+
 // The skeleton loader component with better theme integration
 const TreeMapSkeleton = () => {
   const { resolvedTheme } = useTheme();
@@ -151,6 +214,17 @@ const TreeMapWidget: React.FC<{
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length > 0) {
       const data = payload[0].payload;
+      
+      // Only show tooltip for smaller sections where labels are hidden
+      // Use same thresholds as in TreeMapItem but in reverse
+      const width = data.width || 0;
+      const height = data.height || 0;
+      const isSmallSection = width <= 80 || height <= 50;
+      
+      if (!isSmallSection) {
+        return null; // Don't show tooltip for larger sections that already have visible labels
+      }
+      
       return (
         <div className="bg-card px-3 py-2 rounded-md shadow-md border text-sm">
           <p className="font-semibold">{data.name}</p>
@@ -167,8 +241,10 @@ const TreeMapWidget: React.FC<{
   // - Only shows labels when there's enough space
   // - Uses safe dimensions to prevent rendering issues
   // - Adds 2px padding on each side to create 4px gaps between sections
+  // - Applies border radius to portions at the container corners
   const TreeMapItem = (props: any) => {
     const { x, y, width, height, index, root, depth } = props;
+    const [isHovered, setIsHovered] = useState(false);
     
     // Use effective theme passed down from parent
     const currentTheme = effectiveTheme;
@@ -183,6 +259,12 @@ const TreeMapWidget: React.FC<{
     // If there's no item or it's the root, don't render anything
     if (!item || index === undefined) {
       return null;
+    }
+    
+    // Update the item payload with width and height for tooltip to use
+    if (item && typeof item === 'object') {
+      item.width = width;
+      item.height = height;
     }
     
     // Add spacing between sections (2px on each side = 4px gap between sections)
@@ -201,10 +283,22 @@ const TreeMapWidget: React.FC<{
     const safeX = x + padding;
     const safeY = y + padding;
     
-    // Dynamically adjust text size and visibility based on box size
-    const showLabel = width > 50 && height > 30;
-    const showPercentage = width > 60 && height > 40;
-    const fontSize = Math.min(12, Math.max(8, width / 10)); // Responsive font size
+    // Determine if this portion is at a corner of the container
+    // We need to check if it's at one of the edges of the root area
+    const isAtTopEdge = y <= padding * 2;
+    const isAtBottomEdge = y + height >= root.height - padding * 2;
+    const isAtLeftEdge = x <= padding * 2;
+    const isAtRightEdge = x + width >= root.width - padding * 2;
+    
+    // Determine which corner (if any) this portion is at
+    const isTopLeft = isAtTopEdge && isAtLeftEdge;
+    const isTopRight = isAtTopEdge && isAtRightEdge;
+    const isBottomLeft = isAtBottomEdge && isAtLeftEdge;
+    const isBottomRight = isAtBottomEdge && isAtRightEdge;
+    
+    // Container corner radius (matching rounded-xl)
+    const cornerRadius = 12;
+    const defaultRadius = 2;
     
     // Get color directly based on asset and current theme
     let fillColor = DEFAULT_COLOR;
@@ -216,43 +310,138 @@ const TreeMapWidget: React.FC<{
       }
     }
     
+    // Apply opacity only to the fill color, not to stroke or text
+    const adjustOpacity = (color: string, opacity: number) => {
+      // Parse the hex color and convert it to rgba
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    };
+    
+    // Get fill color with appropriate opacity based on theme
+    const getOpacity = () => {
+      if (currentTheme === 'dark') {
+        return isHovered ? 0.32 : 0.08; // Dark theme: 8% to 32%
+      } else {
+        return isHovered ? 1 : 0.32; // Light theme: 32% to 100%
+      }
+    };
+    
+    const fillOpacity = getOpacity();
+    const fillColorWithOpacity = adjustOpacity(fillColor, fillOpacity);
+    
+    // Dynamically adjust text size and visibility based on box size
+    const showLabel = width > 80 && height > 50; // Increased size threshold
+    const showPercentage = width > 80 && height > 50;
+    const showIcon = width > 30 && height > 30; // Only show icon if there's enough space
+    const fontSize = Math.min(12, Math.max(8, width / 10)); // Responsive font size
+    
+    // Calculate adaptive icon size based on available space
+    const iconSize = Math.min(
+      Math.max(24, Math.min(width, height) * 0.25), // At least 24px, at most 25% of smallest dimension
+      Math.min(64, width * 0.4, height * 0.4) // Upper limit of 64px or 40% of the dimension
+    );
+    
+    // Set specific corner radii
+    const topLeftRadius = isTopLeft ? cornerRadius : defaultRadius;
+    const topRightRadius = isTopRight ? cornerRadius : defaultRadius;
+    const bottomLeftRadius = isBottomLeft ? cornerRadius : defaultRadius;
+    const bottomRightRadius = isBottomRight ? cornerRadius : defaultRadius;
+    
+    // Create SVG path for rectangle with variable corner radii
+    const pathData = `
+      M ${safeX + topLeftRadius} ${safeY}
+      H ${safeX + safeWidth - topRightRadius}
+      Q ${safeX + safeWidth} ${safeY} ${safeX + safeWidth} ${safeY + topRightRadius}
+      V ${safeY + safeHeight - bottomRightRadius}
+      Q ${safeX + safeWidth} ${safeY + safeHeight} ${safeX + safeWidth - bottomRightRadius} ${safeY + safeHeight}
+      H ${safeX + bottomLeftRadius}
+      Q ${safeX} ${safeY + safeHeight} ${safeX} ${safeY + safeHeight - bottomLeftRadius}
+      V ${safeY + topLeftRadius}
+      Q ${safeX} ${safeY} ${safeX + topLeftRadius} ${safeY}
+      Z
+    `;
+    
+    // Create a unique id for this item to use with foreignObject
+    const foreignObjectId = `asset-button-${item.id || Math.random().toString(36).substring(2, 9)}`;
+    
     return (
-      <g>
-        <rect
-          x={safeX}
-          y={safeY}
-          width={safeWidth}
-          height={safeHeight}
+      <g
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <path 
+          d={pathData}
+          fill={fillColorWithOpacity}
+          stroke={fillColor}
+          strokeWidth={1}
           style={{
-            fill: fillColor,
-            strokeWidth: 0,
-            rx: 2, // Add slight rounding to corners
+            transition: 'fill 0.2s ease-out',
           }}
         />
-        {showLabel && (
-          <>
-            <text
-              x={x + width / 2}
-              y={y + height / 2 - (showPercentage ? 8 : 0)}
-              textAnchor="middle"
-              fill="white"
-              fontSize={fontSize}
-              fontWeight="bold"
+        
+        {/* Subtle asset icon in the top left corner with adaptive size */}
+        {showIcon && isAssetTicker(item.name) && ASSETS[item.name as AssetTicker]?.icon && (
+          <foreignObject
+            x={safeX + 6} // Position at top left with small padding
+            y={safeY + 6} 
+            width={iconSize}
+            height={iconSize}
+            className="pointer-events-none"
+          >
+            <div
+              xmlns="http://www.w3.org/1999/xhtml"
+              className="w-full h-full flex items-center justify-center"
             >
-              {item.name}
-            </text>
-            {showPercentage && (
-              <text
-                x={x + width / 2}
-                y={y + height / 2 + 10}
-                textAnchor="middle"
-                fill="white"
-                fontSize={fontSize - 1}
-              >
-                {item.formattedPercentage}
-              </text>
-            )}
-          </>
+              <img
+                src={ASSETS[item.name as AssetTicker].icon}
+                alt={item.name}
+                className="w-full h-full object-contain mix-blend-overlay"
+                style={{
+                  opacity: isHovered ? 1 : 0.1,
+                  filter: `grayscale(${isHovered ? '0%' : '50%'})`,
+                  transition: 'all 0.2s ease-out',
+                }}
+              />
+            </div>
+          </foreignObject>
+        )}
+        
+        {showLabel && (
+          <foreignObject
+            x={safeX + 8} // Left padding
+            y={safeY + safeHeight - 36} // Position at bottom with some padding
+            width={safeWidth - 16} // Allow space for padding on both sides
+            height={30} // Height for the row
+            className="overflow-visible pointer-events-none"
+          >
+            <div 
+              xmlns="http://www.w3.org/1999/xhtml"
+              className="flex items-center justify-between w-full h-full"
+            >
+              {/* Asset button at bottom left */}
+              <AssetButton
+                asset={item.name}
+                assetColor={fillColor}
+                fontSize={fontSize}
+                isActive={isHovered}
+              />
+              
+              {/* Percentage at bottom right */}
+              {showPercentage && (
+                <span 
+                  className="text-white font-semibold"
+                  style={{ 
+                    fontSize: `${fontSize - 1}px`,
+                    opacity: 0.9
+                  }}
+                >
+                  {item.formattedPercentage}
+                </span>
+              )}
+            </div>
+          </foreignObject>
         )}
       </g>
     );
