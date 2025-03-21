@@ -20,6 +20,7 @@ import { useThemeIntensity } from '@/contexts/ThemeContext';
 import { useTheme } from 'next-themes';
 import { getThemeValues } from '@/lib/utils';
 import { Breakdown } from './components/Breakdown';
+import MarketsWidget from './components/MarketsWidget';
 
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
