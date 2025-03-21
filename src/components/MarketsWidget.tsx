@@ -62,8 +62,13 @@ const SkeletonRow: React.FC<{ assetColumnWidth?: number }> = ({ assetColumnWidth
       <div className="relative">
         <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
         <div className="relative z-10 flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse" />
-          <div className="w-20 h-5 rounded-md bg-white/5 animate-pulse" />
+          <div className="relative flex">
+            {/* Base asset icon skeleton */}
+            <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse z-10" />
+            {/* Quote asset icon skeleton */}
+            <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse absolute -right-3 bottom-0 z-0" />
+          </div>
+          <div className="w-20 h-5 ml-2 rounded-md bg-white/5 animate-pulse" />
         </div>
       </div>
     </TableCell>
@@ -97,7 +102,9 @@ interface PriceData {
 }
 
 interface MarketData {
-  asset: AssetTicker;
+  pair: string;
+  baseAsset: AssetTicker;
+  quoteAsset: AssetTicker;
   price: number;
   change24h: number;
   change7d: number;
@@ -111,7 +118,7 @@ interface MarketsWidgetProps {
   compact?: boolean;
 }
 
-type SortField = 'asset' | 'rank' | 'price' | 'change24h' | 'change7d' | 'marketCap' | 'volume';
+type SortField = 'pair' | 'rank' | 'price' | 'change24h' | 'change7d' | 'marketCap' | 'volume';
 type SortDirection = 'asc' | 'desc';
 
 // Sample market data - in a real app, this would come from an API
@@ -123,26 +130,26 @@ const SAMPLE_MARKET_DATA: Record<string, {
   volume: number;
   rank: number;
 }> = {
-  "BTCEUR": { price: 37000.50, change24h: 2.5, change7d: 5.2, marketCap: 720000000000, volume: 25000000000, rank: 1 },
-  "ETHEUR": { price: 1875.25, change24h: -1.2, change7d: 3.4, marketCap: 225000000000, volume: 15000000000, rank: 2 },
-  "USDTEUR": { price: 0.91, change24h: -0.1, change7d: 0.2, marketCap: 95000000000, volume: 50000000000, rank: 3 },
-  "BNBEUR": { price: 260.50, change24h: 0.8, change7d: -2.1, marketCap: 39000000000, volume: 2000000000, rank: 4 },
-  "SOLEUR": { price: 85.00, change24h: 3.2, change7d: 10.5, marketCap: 36000000000, volume: 3000000000, rank: 5 },
-  "USDCEUR": { price: 0.91, change24h: -0.2, change7d: 0.1, marketCap: 28000000000, volume: 4000000000, rank: 6 },
-  "XRPEUR": { price: 0.45, change24h: 1.3, change7d: -0.8, marketCap: 24000000000, volume: 1500000000, rank: 7 },
-  "ADAEUR": { price: 0.30, change24h: 0.5, change7d: -1.2, marketCap: 10500000000, volume: 500000000, rank: 8 },
-  "DOGEEUR": { price: 0.012345, change24h: 1.5, change7d: 4.3, marketCap: 10000000000, volume: 900000000, rank: 9 },
-  "DOTEUR": { price: 10.05, change24h: 0.8, change7d: 2.1, marketCap: 8900000000, volume: 350000000, rank: 10 },
-  "TIAEUR": { price: 15.75, change24h: 4.2, change7d: 12.5, marketCap: 7500000000, volume: 850000000, rank: 11 },
-  "LTCEUR": { price: 65.40, change24h: -0.5, change7d: 1.2, marketCap: 4800000000, volume: 320000000, rank: 12 },
-  "MATICEUR": { price: 0.52, change24h: -1.8, change7d: -3.5, marketCap: 4300000000, volume: 280000000, rank: 13 },
-  "LINKEUR": { price: 13.20, change24h: 2.1, change7d: 5.8, marketCap: 7200000000, volume: 450000000, rank: 14 },
-  "ATOMEUR": { price: 7.85, change24h: -0.3, change7d: 1.9, marketCap: 2900000000, volume: 180000000, rank: 15 },
-  "XMREUR": { price: 145.60, change24h: 1.1, change7d: 3.7, marketCap: 2700000000, volume: 120000000, rank: 16 },
-  "APTEUR": { price: 6.75, change24h: 3.5, change7d: 8.2, marketCap: 2500000000, volume: 210000000, rank: 17 },
-  "XLMEUR": { price: 0.11, change24h: 0.2, change7d: -1.5, marketCap: 3100000000, volume: 140000000, rank: 18 },
-  "HBAREUR": { price: 0.05, change24h: -1.0, change7d: -2.4, marketCap: 1500000000, volume: 75000000, rank: 19 },
-  "XCMEUR": { price: 0.50, change24h: -0.8, change7d: 2.3, marketCap: 750000000, volume: 45000000, rank: 20 }
+  "BTC/EUR": { price: 37000.50, change24h: 2.5, change7d: 5.2, marketCap: 720000000000, volume: 25000000000, rank: 1 },
+  "ETH/EUR": { price: 1875.25, change24h: -1.2, change7d: 3.4, marketCap: 225000000000, volume: 15000000000, rank: 2 },
+  "BTC/USD": { price: 40100.75, change24h: 2.6, change7d: 5.3, marketCap: 720000000000, volume: 27000000000, rank: 3 },
+  "ETH/USD": { price: 2025.80, change24h: -1.1, change7d: 3.5, marketCap: 225000000000, volume: 17000000000, rank: 4 },
+  "USDT/EUR": { price: 0.91, change24h: -0.1, change7d: 0.2, marketCap: 95000000000, volume: 50000000000, rank: 5 },
+  "BNB/EUR": { price: 260.50, change24h: 0.8, change7d: -2.1, marketCap: 39000000000, volume: 2000000000, rank: 6 },
+  "SOL/EUR": { price: 85.00, change24h: 3.2, change7d: 10.5, marketCap: 36000000000, volume: 3000000000, rank: 7 },
+  "USDC/EUR": { price: 0.91, change24h: -0.2, change7d: 0.1, marketCap: 28000000000, volume: 4000000000, rank: 8 },
+  "XRP/EUR": { price: 0.45, change24h: 1.3, change7d: -0.8, marketCap: 24000000000, volume: 1500000000, rank: 9 },
+  "ADA/EUR": { price: 0.30, change24h: 0.5, change7d: -1.2, marketCap: 10500000000, volume: 500000000, rank: 10 },
+  "ETH/BTC": { price: 0.050632, change24h: -3.7, change7d: -1.8, marketCap: 0, volume: 8500000000, rank: 11 },
+  "SOL/BTC": { price: 0.002297, change24h: 0.7, change7d: 5.2, marketCap: 0, volume: 1200000000, rank: 12 },
+  "DOGE/EUR": { price: 0.012345, change24h: 1.5, change7d: 4.3, marketCap: 10000000000, volume: 900000000, rank: 13 },
+  "DOT/EUR": { price: 10.05, change24h: 0.8, change7d: 2.1, marketCap: 8900000000, volume: 350000000, rank: 14 },
+  "TIA/EUR": { price: 15.75, change24h: 4.2, change7d: 12.5, marketCap: 7500000000, volume: 850000000, rank: 15 },
+  "LTC/EUR": { price: 65.40, change24h: -0.5, change7d: 1.2, marketCap: 4800000000, volume: 320000000, rank: 16 },
+  "MATIC/EUR": { price: 0.52, change24h: -1.8, change7d: -3.5, marketCap: 4300000000, volume: 280000000, rank: 17 },
+  "LINK/EUR": { price: 13.20, change24h: 2.1, change7d: 5.8, marketCap: 7200000000, volume: 450000000, rank: 18 },
+  "ATOM/EUR": { price: 7.85, change24h: -0.3, change7d: 1.9, marketCap: 2900000000, volume: 180000000, rank: 19 },
+  "XMR/EUR": { price: 145.60, change24h: 1.1, change7d: 3.7, marketCap: 2700000000, volume: 120000000, rank: 20 }
 };
 
 export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact = false }) => {
@@ -168,7 +175,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
       setSortField(field);
       if (field === 'rank') {
         setSortDirection('asc');
-      } else if (field === 'asset') {
+      } else if (field === 'pair') {
         setSortDirection('asc');
       } else {
         setSortDirection('desc');
@@ -182,8 +189,8 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
       let comparison = 0;
       
       switch (sortField) {
-        case 'asset':
-          comparison = ASSETS[a.asset].name.localeCompare(ASSETS[b.asset].name);
+        case 'pair':
+          comparison = a.pair.localeCompare(b.pair);
           break;
         case 'rank':
           comparison = a.rank - b.rank;
@@ -286,13 +293,16 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
           // Use sample data
           const marketDataArray = Object.entries(SAMPLE_MARKET_DATA)
             .map(([pair, details]) => {
-              const asset = pair.replace('EUR', '') as AssetTicker;
-              if (!(asset in ASSETS)) {
+              const [baseAsset, quoteAsset] = pair.split('/') as [AssetTicker, AssetTicker];
+              
+              if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) {
                 return null;
               }
               
               return {
-                asset,
+                pair,
+                baseAsset,
+                quoteAsset,
                 price: details.price,
                 change24h: details.change24h,
                 change7d: details.change7d,
@@ -314,27 +324,73 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
               throw new Error('Failed to get demo token');
             }
 
-            // In a real implementation, you would fetch market data from an actual API
-            // For this example, we'll just use the sample data
-            const marketDataArray = Object.entries(SAMPLE_MARKET_DATA)
-              .map(([pair, details]) => {
-                const asset = pair.replace('EUR', '') as AssetTicker;
-                if (!(asset in ASSETS)) {
-                  return null;
-                }
+            // Use the CryptoCompare API to fetch market data for pairs
+            // Define our base assets (crypto) and quote assets (mainly fiat currencies)
+            const baseAssets = ['BTC', 'ETH', 'SOL', 'XRP', 'USDT', 'BNB', 'ADA', 'DOGE', 'MATIC', 'DOT', 'LTC', 'ATOM', 'LINK', 'XMR', 'TIA'];
+            const quoteAssets = ['EUR', 'USD', 'BTC']; // Including BTC as a quote asset for crypto/crypto pairs
+            
+            // Prepare the API request to CryptoCompare
+            const apiUrl = 'https://min-api.cryptocompare.com/data/pricemultifull';
+            const params = new URLSearchParams({
+              fsyms: baseAssets.join(','), // From symbols (base assets)
+              tsyms: quoteAssets.join(','), // To symbols (quote assets)
+              api_key: tokenData.token
+            });
+            
+            // Fetch data from CryptoCompare API
+            const response = await fetch(`${apiUrl}?${params}`);
+            
+            if (!response.ok) {
+              throw new Error(`API request failed with status ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data || !data.RAW) {
+              throw new Error('Invalid API response format');
+            }
+            
+            // Transform the API response into our MarketData format
+            const marketDataArray: MarketData[] = [];
+            let rank = 1;
+            
+            for (const baseAsset of baseAssets) {
+              if (!(baseAsset in data.RAW)) continue;
+              
+              for (const quoteAsset of quoteAssets) {
+                if (baseAsset === quoteAsset) continue; // Skip same asset pairs
+                if (quoteAsset === 'BTC' && baseAsset === 'BTC') continue; // Skip BTC/BTC
                 
-                return {
-                  asset,
-                  price: details.price,
-                  change24h: details.change24h,
-                  change7d: details.change7d,
-                  marketCap: details.marketCap,
-                  volume: details.volume,
-                  rank: details.rank
-                };
-              })
-              .filter(Boolean) as MarketData[];
-
+                if (quoteAsset in data.RAW[baseAsset]) {
+                  const pairData = data.RAW[baseAsset][quoteAsset];
+                  const pairDisplayData = data.DISPLAY?.[baseAsset]?.[quoteAsset] || {};
+                  
+                  // Skip if the base asset or quote asset isn't in our ASSETS lookup
+                  if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) continue;
+                  
+                  marketDataArray.push({
+                    pair: `${baseAsset}/${quoteAsset}`,
+                    baseAsset: baseAsset as AssetTicker,
+                    quoteAsset: quoteAsset as AssetTicker,
+                    price: pairData.PRICE || 0,
+                    change24h: pairData.CHANGEPCT24HOUR || 0,
+                    change7d: 0, // CryptoCompare doesn't provide 7d change in the basic API
+                    marketCap: pairData.MKTCAP || 0,
+                    volume: pairData.TOTALVOLUME24H || 0,
+                    rank: rank++
+                  });
+                }
+              }
+            }
+            
+            // Sort by market cap by default
+            marketDataArray.sort((a, b) => b.marketCap - a.marketCap);
+            
+            // Update rank based on sorted order
+            marketDataArray.forEach((item, index) => {
+              item.rank = index + 1;
+            });
+            
             setMarketData(marketDataArray);
             setError(null);
           } catch (error) {
@@ -363,16 +419,71 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
     try {
       setIsUpdating(true);
       
-      // In a real implementation, you would fetch updated market data
-      // For now, we'll just simulate a delay and reuse the sample data
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Fetch real-time prices from the CryptoCompare API
+      const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
+      const tokenData = await tokenResponse.json();
+      
+      if (!tokenData.token) {
+        throw new Error('Failed to get demo token');
+      }
+      
+      // Get current data to update
+      const baseAssets = [...new Set(marketData.map(item => item.baseAsset))];
+      const quoteAssets = [...new Set(marketData.map(item => item.quoteAsset))];
+      
+      if (baseAssets.length === 0 || quoteAssets.length === 0) {
+        return;
+      }
+      
+      // Prepare the API request to CryptoCompare for price updates
+      const apiUrl = 'https://min-api.cryptocompare.com/data/pricemultifull';
+      const params = new URLSearchParams({
+        fsyms: baseAssets.join(','),
+        tsyms: quoteAssets.join(','),
+        api_key: tokenData.token
+      });
+      
+      // Fetch updated prices
+      const response = await fetch(`${apiUrl}?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data || !data.RAW) {
+        throw new Error('Invalid API response format');
+      }
+      
+      // Update only the price and 24h change data
+      setMarketData(prevData => {
+        return prevData.map(market => {
+          const { baseAsset, quoteAsset } = market;
+          
+          if (
+            data.RAW[baseAsset] && 
+            data.RAW[baseAsset][quoteAsset]
+          ) {
+            const updatedData = data.RAW[baseAsset][quoteAsset];
+            return {
+              ...market,
+              price: updatedData.PRICE || market.price,
+              change24h: updatedData.CHANGEPCT24HOUR || market.change24h,
+              volume: updatedData.TOTALVOLUME24H || market.volume,
+              marketCap: updatedData.MKTCAP || market.marketCap
+            };
+          }
+          return market;
+        });
+      });
       
       setIsUpdating(false);
     } catch (err) {
       console.error('Error updating market data:', err);
       setIsUpdating(false);
     }
-  }, [dataSource]);
+  }, [dataSource, marketData]);
 
   // Update prices periodically
   useEffect(() => {
@@ -444,11 +555,11 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
               <TableHead 
                 className="sticky left-[60px] top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap cursor-pointer hover:text-foreground/80"
                 style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
-                onClick={() => handleSort('asset')}
+                onClick={() => handleSort('pair')}
               >
                 <div className="px-0 py-1 flex items-center gap-1">
-                  Asset
-                  {sortField === 'asset' && (
+                  Pair
+                  {sortField === 'pair' && (
                     <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                   )}
                 </div>
@@ -460,7 +571,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                 <div className="relative">
                   <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 flex items-center justify-end gap-1">
-                    Price (EUR)
+                    Price
                     {sortField === 'price' && (
                       <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
@@ -546,10 +657,17 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
           ) : (
             <TableBody>
               {sortedMarketData.map((market) => {
-                const assetConfig = ASSETS[market.asset];
-                const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+                const baseAssetConfig = ASSETS[market.baseAsset];
+                const quoteAssetConfig = ASSETS[market.quoteAsset];
+                const baseAssetColor = currentTheme === 'dark' ? baseAssetConfig.theme.dark : baseAssetConfig.theme.light;
+                
+                // Format price with appropriate currency symbol
+                const pricePrefix = market.quoteAsset === 'EUR' ? '€' : 
+                                   market.quoteAsset === 'USD' ? '$' :
+                                   market.quoteAsset === 'GBP' ? '£' : '';
+                
                 return (
-                  <TableRow key={market.asset} className="group hover:bg-[hsl(var(--color-widget-hover))]" isHeader={false}>
+                  <TableRow key={market.pair} className="group hover:bg-[hsl(var(--color-widget-hover))]" isHeader={false}>
                     <TableCell 
                       className="sticky left-0 z-10 whitespace-nowrap p-0 overflow-hidden text-center"
                       style={{ width: '60px', minWidth: '60px' }}
@@ -574,17 +692,30 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                         "group-hover:bg-[hsl(var(--color-widget-hover))]"
                       )}>
                         <div className="p-2 relative z-10 flex items-center gap-2">
-                          <div 
-                            className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
-                          >
-                            <img
-                              src={assetConfig.icon}
-                              alt={market.asset}
-                              className="w-full h-full object-cover"
-                            />
+                          <div className="relative flex">
+                            {/* Base asset icon */}
+                            <div 
+                              className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10"
+                            >
+                              <img
+                                src={baseAssetConfig.icon}
+                                alt={market.baseAsset}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            {/* Quote asset icon */}
+                            <div 
+                              className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border absolute -right-3 bottom-0 z-0"
+                            >
+                              <img
+                                src={quoteAssetConfig.icon}
+                                alt={market.quoteAsset}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                           </div>
-                          <span className="font-jakarta font-semibold text-sm">
-                            {assetConfig.name}
+                          <span className="font-jakarta font-semibold text-sm ml-2">
+                            {market.baseAsset}/{market.quoteAsset}
                           </span>
                         </div>
                       </div>
@@ -593,7 +724,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                       <div className="relative h-full">
                         <div className="p-2 relative z-10">
                           <span className="font-jakarta font-mono font-semibold text-sm leading-[150%]">
-                            €{formatPrice(market.price)}
+                            {pricePrefix}{formatPrice(market.price)}
                           </span>
                         </div>
                       </div>
@@ -624,7 +755,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                           <div className="relative h-full">
                             <div className="p-2 relative z-10">
                               <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                                €{formatLargeNumber(market.marketCap)}
+                                {market.marketCap > 0 ? `${pricePrefix}${formatLargeNumber(market.marketCap)}` : '-'}
                               </span>
                             </div>
                           </div>
@@ -633,7 +764,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                           <div className="relative h-full">
                             <div className="p-2 relative z-10">
                               <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                                €{formatLargeNumber(market.volume)}
+                                {pricePrefix}{formatLargeNumber(market.volume)}
                               </span>
                             </div>
                           </div>
