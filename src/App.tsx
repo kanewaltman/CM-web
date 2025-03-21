@@ -19,7 +19,7 @@ import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
 import { useThemeIntensity } from '@/contexts/ThemeContext';
 import { useTheme } from 'next-themes';
 import { getThemeValues } from '@/lib/utils';
-import { BreakdownWrapper as Breakdown } from './components/Breakdown';
+import { Breakdown } from './components/Breakdown';
 
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
@@ -101,7 +101,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     defaultSize: { w: 6, h: 6 },
     minSize: { w: 4, h: 4 }
   }
-} as const;
+};
 
 // Derive other mappings from registry
 const widgetIds: Record<string, string> = Object.fromEntries(
@@ -450,6 +450,7 @@ function AppContent() {
 
   // Define handleRemoveWidget first
   const handleRemoveWidget = useCallback((widgetId: string) => {
+    console.log('handleRemoveWidget called for widgetId:', widgetId, 'grid exists:', !!grid);
     if (!grid) return;
     
     const gridElement = document.querySelector('.grid-stack');
@@ -538,10 +539,25 @@ function AppContent() {
     let WidgetComponent = widgetComponents[widgetType];
     if (!WidgetComponent) return;
     
+    // Add specific debug for treemap widgets
+    if (widgetType === 'treemap') {
+      console.log('Rendering treemap widget with ID:', widgetId, 'and onRemove handler:', !!handleRemoveWidget);
+    }
+    
     const root = createRoot(el);
     (el.closest('.grid-stack-item') as any)._reactRoot = root;
 
     console.log(`[App] Rendering widget: ${widgetId} (type: ${widgetType}) with dataSource: ${dataSource}`);
+    
+    // Create a consistent removeHandler for all widget types
+    const removeHandler = () => {
+      console.log('Widget remove triggered for:', widgetId, 'type:', widgetType);
+      if (widgetType === 'treemap') {
+        console.log('Removing treemap widget with ID:', widgetId);
+      }
+      handleRemoveWidgetRef.current(widgetId);
+      return true; // Always return true to indicate success
+    };
       
     if (baseId === 'performance') {
       const widgetState = widgetStateRegistry.get(widgetId) || 
@@ -584,7 +600,7 @@ function AppContent() {
             <WidgetContainer
               key={`${widgetState.title}-${dataSource}`}
               title={widgetState.title}
-              onRemove={() => handleRemoveWidget(widgetId)}
+              onRemove={removeHandler}
               headerControls={options?.forHeader ? <PerformanceWidgetWrapper isHeader /> : undefined}
             >
               <PerformanceWidgetWrapper />
@@ -593,15 +609,20 @@ function AppContent() {
         </React.StrictMode>
       );
     } else {
+      // Normal widget rendering
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
             <WidgetContainer
               key={`${widgetType}-${dataSource}`}
               title={widgetTitles[widgetType]}
-              onRemove={() => handleRemoveWidget(widgetId)}
+              onRemove={removeHandler}
             >
-              <WidgetComponent key={`${widgetId}-${dataSource}`} widgetId={widgetId} />
+              <WidgetComponent 
+                key={`${widgetId}-${dataSource}`} 
+                widgetId={widgetId}
+                onRemove={removeHandler} 
+              />
             </WidgetContainer>
           </DataSourceProvider>
         </React.StrictMode>
@@ -649,7 +670,13 @@ function AppContent() {
     (widgetElement as any)._reactRoot = root;
 
     try {
-      // For Performance widget, create a shared state
+      // Create a direct removeHandler function that will be passed to all widgets
+      const removeHandler = () => {
+        console.log(`Widget removal triggered for: ${widgetId} (type: ${widgetType})`);
+        handleRemoveWidgetRef.current(widgetId);
+        return true; // Always return true to indicate success
+      };
+
       if (baseWidgetId === 'performance') {
         // Try to load initial variant from layout data or existing state
         let initialVariant: ChartVariant = 'revenue';
@@ -762,21 +789,7 @@ function AppContent() {
                       <WidgetContainer
                         key={newTitle} // Force re-render with new title
                         title={newTitle}
-                        onRemove={() => {
-                          if (gridRef.current) {
-                            const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                            if (widget) {
-                              const reactRoot = (widget as any)._reactRoot;
-                              if (reactRoot) {
-                                reactRoot.unmount();
-                              }
-                              // Clean up widget state
-                              widgetStateRegistry.delete(widgetId);
-                              gridRef.current.removeWidget(widget, false);
-                              (widget as unknown as HTMLElement).remove();
-                            }
-                          }
-                        }}
+                        onRemove={removeHandler}
                         headerControls={<PerformanceWidgetWrapper isHeader />}
                       >
                         <PerformanceWidgetWrapper />
@@ -879,8 +892,8 @@ function AppContent() {
           }, [isHeader, widgetId]);
       
           return (
-            <WidgetComponent
-              widgetId={widgetId}
+            <WidgetComponent 
+              widgetId={widgetId} 
               headerControls={isHeader}
               defaultVariant={variant}
               defaultViewMode={viewMode}
@@ -901,21 +914,7 @@ function AppContent() {
               <WidgetContainer
                 key={widgetState.title}
                 title={widgetState.title}
-                onRemove={() => {
-                  if (gridRef.current) {
-                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                    if (widget) {
-                      const reactRoot = (widget as any)._reactRoot;
-                      if (reactRoot) {
-                        reactRoot.unmount();
-                      }
-                      // Clean up widget state
-                      widgetStateRegistry.delete(widgetId);
-                      gridRef.current.removeWidget(widget, false);
-                      (widget as unknown as HTMLElement).remove();
-                    }
-                  }
-                }}
+                onRemove={removeHandler}
                 headerControls={<PerformanceWidgetWrapper isHeader />}
               >
                 <PerformanceWidgetWrapper />
@@ -924,27 +923,23 @@ function AppContent() {
           </React.StrictMode>
         );
       } else {
-        // Regular widget rendering
+        // Additional logging for treemap widget
+        if (widgetType === 'treemap') {
+          console.log(`Treemap widget ${widgetId} being created with onRemove:`, !!removeHandler);
+        }
+      
+        // Render component with onRemove passed correctly
         root.render(
           <React.StrictMode>
             <DataSourceProvider>
               <WidgetContainer
                 title={widgetTitles[widgetType]}
-                onRemove={() => {
-                  if (gridRef.current) {
-                    const widget = gridRef.current.getGridItems().find(w => w.gridstackNode?.id === widgetId);
-                    if (widget) {
-                      const reactRoot = (widget as any)._reactRoot;
-                      if (reactRoot) {
-                        reactRoot.unmount();
-                      }
-                      gridRef.current.removeWidget(widget, false);
-                      (widget as unknown as HTMLElement).remove();
-                    }
-                  }
-                }}
+                onRemove={removeHandler}
               >
-                <WidgetComponent widgetId={widgetId} />
+                <WidgetComponent 
+                  widgetId={widgetId} 
+                  onRemove={removeHandler}
+                />
               </WidgetContainer>
             </DataSourceProvider>
           </React.StrictMode>
@@ -959,7 +954,7 @@ function AppContent() {
       widgetElement.remove();
       return null;
     }
-  }, []);
+  }, [grid, handleRemoveWidgetRef, widgetComponents, widgetTitles]);
 
   // Check for ad blocker on mount
   useEffect(() => {
@@ -2325,77 +2320,100 @@ function AppContent() {
                   
                   const widgetContainer = document.querySelector(`[gs-id="${node.id}"]`);
                   if (widgetContainer) {
-                    const root = (widgetContainer as any)._reactRoot;
-                    if (root) {
-                      const content = widgetContainer.querySelector('.grid-stack-item-content');
-                      if (content) {
-                        const baseId = node.id.split('-')[0];
-                        const widgetType = widgetTypes[baseId];
+                    const contentElement = widgetContainer.querySelector('.grid-stack-item-content');
+                    if (contentElement) {
+                      const prevReactRoot = (widgetContainer as any)._reactRoot;
+                      
+                      if (prevReactRoot) {
+                        prevReactRoot.unmount();
+                      }
+                      
+                      const baseId = node.id.split('-')[0];
+                      const widgetType = widgetTypes[baseId];
+                      
+                      if (widgetType) {
+                        const newRoot = createRoot(contentElement);
+                        (widgetContainer as any)._reactRoot = newRoot;
                         
-                        if (baseId === 'performance' || baseId === 'tradingview' || baseId === 'orderbook') {
-                          root.unmount();
-                          const newRoot = createRoot(content as HTMLElement);
-                          (widgetContainer as any)._reactRoot = newRoot;
-                          
-                          if (baseId === 'performance') {
-                            const widgetState = widgetStateRegistry.get(node.id);
-                            if (widgetState) {
-                              const PerformanceComponent = widgetComponents[widgetType];
-                              const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
-                                <PerformanceComponent
-                                  key={`${node.id}-${source}`}
-                                  widgetId={node.id}
-                                  headerControls={isHeader}
-                                  defaultVariant={widgetState.variant}
-                                  defaultViewMode={widgetState.viewMode}
-                                  onVariantChange={(variant: ChartVariant) => {
-                                    widgetState.setVariant(variant);
-                                    widgetState.setTitle(getPerformanceTitle(variant));
-                                  }}
-                                  onViewModeChange={(mode: 'split' | 'cumulative') => {
-                                    widgetState.setViewMode(mode);
-                                  }}
-                                  dateRange={widgetState.dateRange}
-                                  onDateRangeChange={(newRange: { from: Date; to: Date } | undefined) => {
-                                    if (newRange) widgetState.setDateRange(newRange);
-                                  }}
-                                  onTitleChange={(newTitle: string) => {
-                                    widgetState.setTitle(newTitle);
-                                  }}
-                                />
-                              );
-
-                              newRoot.render(
-                                <React.StrictMode>
-                                  <DataSourceProvider>
-                                    <WidgetContainer
-                                      key={`${widgetState.title}-${source}`}
-                                      title={widgetState.title}
-                                      onRemove={() => node.id && handleRemoveWidget(node.id)}
-                                      headerControls={<PerformanceWidgetWrapper isHeader />}
-                                    >
-                                      <PerformanceWidgetWrapper />
-                                    </WidgetContainer>
-                                  </DataSourceProvider>
-                                </React.StrictMode>
-                              );
-                            }
-                          } else {
-                            const WidgetComponent = widgetComponents[widgetType];
-                            newRoot.render(
-                              <React.StrictMode>
-                                <DataSourceProvider>
-                                  <WidgetContainer
-                                    key={`${widgetType}-${source}`}
-                                    title={widgetTitles[widgetType]}
-                                    onRemove={() => node.id && handleRemoveWidget(node.id)}
-                                  >
-                                    <WidgetComponent key={`${node.id}-${source}`} widgetId={node.id} />
-                                  </WidgetContainer>
-                                </DataSourceProvider>
-                              </React.StrictMode>
-                            );
+                        // Create a consistent removeHandler for all widgets
+                        const removeHandler = () => {
+                          console.log('Widget remove triggered on data source change for:', node.id, 'type:', widgetType);
+                          if (node.id) {
+                            handleRemoveWidget(node.id);
                           }
+                          return true; // Always return true to indicate success
+                        };
+                        
+                        if (baseId === 'performance') {
+                          const widgetState = widgetStateRegistry.get(node.id) || 
+                            new WidgetState(
+                              'revenue',
+                              getPerformanceTitle('revenue'),
+                              'split',
+                              { from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), to: new Date() }
+                            );
+                          
+                          widgetStateRegistry.set(node.id, widgetState);
+                          const WidgetComponent = widgetComponents[widgetType];
+                          
+                          const PerformanceWidgetWrapper = ({ isHeader }: { isHeader?: boolean }) => (
+                            <WidgetComponent
+                              key={`${node.id}-${source}`}
+                              widgetId={node.id}
+                              headerControls={isHeader}
+                              defaultVariant={widgetState.variant}
+                              onVariantChange={(variant) => {
+                                widgetState.setVariant(variant);
+                                widgetState.setTitle(getPerformanceTitle(variant));
+                              }}
+                              defaultViewMode={widgetState.viewMode}
+                              onViewModeChange={(mode: 'split' | 'cumulative') => {
+                                widgetState.setViewMode(mode);
+                              }}
+                              onTitleChange={(newTitle) => {
+                                widgetState.setTitle(newTitle);
+                              }}
+                              dateRange={widgetState.dateRange}
+                              onDateRangeChange={(newRange) => {
+                                if (newRange) widgetState.setDateRange(newRange);
+                              }}
+                            />
+                          );
+                          
+                          newRoot.render(
+                            <React.StrictMode>
+                              <DataSourceProvider>
+                                <WidgetContainer
+                                  key={`${widgetState.title}-${source}`}
+                                  title={widgetState.title}
+                                  onRemove={removeHandler}
+                                  headerControls={<PerformanceWidgetWrapper isHeader />}
+                                >
+                                  <PerformanceWidgetWrapper />
+                                </WidgetContainer>
+                              </DataSourceProvider>
+                            </React.StrictMode>
+                          );
+                        } else {
+                          // Render all other widget types consistently
+                          const WidgetComponent = widgetComponents[widgetType];
+                          newRoot.render(
+                            <React.StrictMode>
+                              <DataSourceProvider>
+                                <WidgetContainer
+                                  key={`${widgetType}-${source}`}
+                                  title={widgetTitles[widgetType]}
+                                  onRemove={removeHandler}
+                                >
+                                  <WidgetComponent 
+                                    key={`${node.id}-${source}`} 
+                                    widgetId={node.id}
+                                    onRemove={removeHandler}
+                                  />
+                                </WidgetContainer>
+                              </DataSourceProvider>
+                            </React.StrictMode>
+                          );
                         }
                       }
                     }

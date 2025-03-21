@@ -72,7 +72,7 @@ const AssetButton = ({
       {asset}
     </div>
   );
-};
+}
 
 // The skeleton loader component with better theme integration
 const TreeMapSkeleton = () => {
@@ -147,6 +147,13 @@ export const BreakdownWrapper: React.FC<{
   const [key, setKey] = useState(Date.now());
   const [forcedTheme, setForcedTheme] = useState<'light' | 'dark'>('light');
   
+  // Debug onRemove prop with more details
+  console.log('BreakdownWrapper received props:', { 
+    hasOnRemove: !!props.onRemove,
+    onRemoveType: typeof props.onRemove, 
+    className: props.className 
+  });
+  
   // Check theme directly from DOM
   useEffect(() => {
     const checkTheme = () => {
@@ -187,9 +194,10 @@ export const BreakdownWrapper: React.FC<{
     return () => observer.disconnect();
   }, [resolvedTheme]);
   
-  console.log(`BreakdownWrapper rendering with key: ${key}, forced theme: ${forcedTheme}`);
+  console.log(`BreakdownWrapper rendering with key: ${key}, forced theme: ${forcedTheme}, onRemove available: ${!!props.onRemove}`);
   
-  return <Breakdown key={key} forceTheme={forcedTheme} {...props} />;
+  // Pass the onRemove directly to Breakdown
+  return <Breakdown key={key} forceTheme={forcedTheme} className={props.className} onRemove={props.onRemove} />;
 };
 
 // The actual implementation of Breakdown stays focused on data
@@ -198,6 +206,13 @@ const Breakdown: React.FC<{
   onRemove?: () => void;
   forceTheme?: 'light' | 'dark';
 }> = ({ className, onRemove, forceTheme }) => {
+  // Add debug logging
+  console.log('Breakdown component received props:', {
+    hasOnRemove: !!onRemove,
+    onRemoveType: typeof onRemove,
+    forceTheme
+  });
+  
   const { resolvedTheme } = useTheme(); 
   const { dataSource } = useDataSource();
   const [treeMapData, setTreeMapData] = useState<any[]>([]);
@@ -207,8 +222,6 @@ const Breakdown: React.FC<{
   
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
-  
-  console.log(`Breakdown: Using effective theme: ${effectiveTheme}`);
   
   // Custom tooltip to show the asset name and percentage
   const CustomTooltip = ({ active, payload }: any) => {
@@ -304,10 +317,6 @@ const Breakdown: React.FC<{
     let fillColor = DEFAULT_COLOR;
     if (isAssetTicker(item.name) && ASSETS[item.name]) {
       fillColor = ASSETS[item.name].theme[currentTheme];
-      // Special log for XCM to debug
-      if (item.name === 'XCM') {
-        console.log(`XCM color for ${currentTheme} theme: ${fillColor}`);
-      }
     }
     
     // Apply opacity only to the fill color, not to stroke or text
@@ -585,7 +594,15 @@ const Breakdown: React.FC<{
     return (
       <WidgetContainer 
         title="Breakdown"
-        onRemove={onRemove}
+        onRemove={() => {
+          console.log('Breakdown: onRemove called directly');
+          if (onRemove) {
+            const result = onRemove();
+            console.log('Breakdown: onRemove result:', result);
+            return result;
+          }
+          return true;
+        }}
       >
         <div className="h-full w-full rounded-xl bg-card overflow-hidden">
           <TreeMapSkeleton />
@@ -598,7 +615,15 @@ const Breakdown: React.FC<{
     return (
       <WidgetContainer 
         title="Breakdown"
-        onRemove={onRemove}
+        onRemove={() => {
+          console.log('Breakdown: onRemove called directly');
+          if (onRemove) {
+            const result = onRemove();
+            console.log('Breakdown: onRemove result:', result);
+            return result;
+          }
+          return true;
+        }}
       >
         <div className="flex items-center justify-center h-full flex-col">
           <p className="text-muted-foreground">{error || "No balance data available"}</p>
@@ -616,7 +641,15 @@ const Breakdown: React.FC<{
   return (
     <WidgetContainer 
       title="Breakdown"
-      onRemove={onRemove}
+      onRemove={() => {
+        console.log('Breakdown: onRemove called directly');
+        if (onRemove) {
+          const result = onRemove();
+          console.log('Breakdown: onRemove result:', result);
+          return result;
+        }
+        return true;
+      }}
     >
       <div className="h-full w-full rounded-xl bg-card overflow-hidden">
         <div className="h-full w-full">
@@ -650,4 +683,6 @@ const Breakdown: React.FC<{
   );
 };
 
-export default Breakdown; 
+// Export both as named exports for consistency
+export { Breakdown };
+export default BreakdownWrapper; 
