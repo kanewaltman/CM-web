@@ -20,6 +20,7 @@ import { useThemeIntensity } from '@/contexts/ThemeContext';
 import { useTheme } from 'next-themes';
 import { getThemeValues } from '@/lib/utils';
 import { BreakdownWrapper as Breakdown } from './components/Breakdown';
+import MarketsWidget from './components/MarketsWidget';
 
 // Widget Registry - Single source of truth for widget configuration
 interface BaseWidgetProps {
@@ -86,6 +87,13 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     component: BalancesWidget,
     defaultSize: { w: 4, h: 4 },
     minSize: { w: 3, h: 3 }
+  },
+  'markets': {
+    id: 'markets',
+    title: 'Markets',
+    component: MarketsWidget,
+    defaultSize: { w: 8, h: 4 },
+    minSize: { w: 4, h: 3 }
   },
   'performance': {
     id: 'performance',

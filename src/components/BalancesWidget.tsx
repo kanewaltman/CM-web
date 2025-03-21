@@ -686,7 +686,10 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                       className="sticky left-0 z-10 whitespace-nowrap p-0 overflow-hidden"
                       style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
                     >
-                      <div className="relative h-full bg-[hsl(var(--color-widget-header))] asset-cell-bg">
+                      <div className={cn(
+                        "relative h-full bg-[hsl(var(--color-widget-header))]",
+                        "group-hover:bg-[hsl(var(--color-widget-hover))]"
+                      )}>
                         <div className="p-2 relative z-10 flex items-center gap-2">
                           <div 
                             className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
@@ -871,11 +874,6 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           )}
         </Table>
       </div>
-      <style jsx>{`
-        .group:hover .asset-cell-bg {
-          background-color: hsl(var(--color-widget-hover)) !important;
-        }
-      `}</style>
     </div>
   );
 };

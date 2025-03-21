@@ -382,7 +382,7 @@ export function ControlBar({
               <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
               <div className="px-1 py-1 pb-2">
                 {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
-                  .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap')
+                  .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets')
                   .map(([type, config]) => (
                   <div
                     key={type}
