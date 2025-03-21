@@ -450,56 +450,71 @@ function AppContent() {
 
   // Define handleRemoveWidget first
   const handleRemoveWidget = useCallback((widgetId: string) => {
+    if (!grid) {
+      console.error('Cannot remove widget: no grid instance');
+      return;
+    }
+    
     console.log('handleRemoveWidget called for widgetId:', widgetId, 'grid exists:', !!grid);
-    if (!grid) return;
     
-    const gridElement = document.querySelector('.grid-stack');
-    if (!gridElement) return;
+    const widget = grid.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+    if (!widget) {
+      console.error('Widget not found for removal:', widgetId);
+      return;
+    }
 
-    // Store original grid settings
+    // Store the previous grid state for animations and float
     const prevAnimate = grid.opts.animate;
+    const prevFloat = grid.opts.float;
     
-    // Temporarily disable animations and enable float for smooth removal
-    grid.setAnimation(false);
-    grid.float(true);
-    
+    // Temporarily disable animations and float for reliable compaction
     grid.batchUpdate();
     try {
-      // Find the widget element with proper typing for both GridStack and DOM operations
-      const widgetElement = gridElement.querySelector(`[gs-id="${widgetId}"]`) as HTMLElement;
-      if (!widgetElement) return;
-
-      // Unmount React component first
-      const reactRoot = (widgetElement as any)._reactRoot;
+      // Disable animations during removal for smoother operation
+      grid.setAnimation(false);
+      grid.float(false);
+      
+      // Remove the specific widget
+      grid.removeWidget(widget, false);
+      
+      // Unmount React component if it exists
+      const reactRoot = (widget as any)._reactRoot;
       if (reactRoot) {
         reactRoot.unmount();
       }
-
-      // Remove widget from grid
-      grid.removeWidget(widgetElement as GridStackElement, false);
-      // Remove the DOM element
-      widgetElement.remove();
-
-      // Save updated layout after removal
+      
+      // Clean up widget state for performance widgets
+      widgetStateRegistry.delete(widgetId);
+      
+      // Remove the DOM element to ensure clean removal
+      (widget as unknown as HTMLElement).remove();
+      
+      // Compact the grid to fill gaps
+      grid.compact();
+      
+      // Save the updated layout
       const items = grid.getGridItems();
       const serializedLayout = items
-        .map(item => {
+        .map((item): LayoutWidget | null => {
           const node = item.gridstackNode;
           if (!node?.id) return null;
           
-          // Get widget state if it's a performance widget
           const baseId = node.id.split('-')[0];
-          const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
-          const viewState = widgetState ? { chartVariant: widgetState.variant } : undefined;
+          const widgetType = widgetTypes[baseId];
+          const widgetConfig = WIDGET_REGISTRY[widgetType];
+          const viewState = widgetStateRegistry.get(node.id) ? {
+            chartVariant: widgetStateRegistry.get(node.id)!.variant,
+            viewMode: widgetStateRegistry.get(node.id)!.viewMode
+          } : undefined;
 
           return {
             id: node.id,
             x: node.x ?? 0,
             y: node.y ?? 0,
-            w: node.w ?? 2,
-            h: node.h ?? 2,
-            minW: node.minW ?? 2,
-            minH: node.minH ?? 2,
+            w: Math.max(node.w ?? 2, widgetConfig?.minSize.w || 2),
+            h: Math.max(node.h ?? 2, widgetConfig?.minSize.h || 2),
+            minW: widgetConfig?.minSize.w || 2,
+            minH: widgetConfig?.minSize.h || 2,
             viewState
           } as LayoutWidget;
         })
@@ -512,18 +527,16 @@ function AppContent() {
     } finally {
       grid.commit();
       
-      // Re-enable animations and compact with a slight delay for smooth transition
-      requestAnimationFrame(() => {
+      // Re-enable animations and restore float settings with a slight delay for smooth transition
+      setTimeout(() => {
         grid.setAnimation(prevAnimate);
+        grid.float(prevFloat === undefined ? false : prevFloat);
         
-        // Compact the grid to fill gaps
+        // Compact the grid to fill any gaps cleanly
         grid.compact();
-        
-        // Keep float enabled for consistent behavior
-        grid.float(true);
-      });
+      }, 50);
     }
-  }, [grid]);
+  }, [grid, widgetStateRegistry, widgetTypes]);
 
   // Create ref after the function is defined
   const handleRemoveWidgetRef = useRef(handleRemoveWidget);
@@ -648,18 +661,34 @@ function AppContent() {
       return null;
     }
 
+    // Get the widget config
+    const widgetConfig = WIDGET_REGISTRY[widgetType];
+    // Ensure we're using configuration-defined minimum sizes
+    const effectiveMinW = widgetConfig ? widgetConfig.minSize.w : minW;
+    const effectiveMinH = widgetConfig ? widgetConfig.minSize.h : minH;
+
+    // Debug logging for the treemap widget
+    if (widgetType === 'treemap') {
+      console.log('Creating treemap widget:', { 
+        id: widgetId, 
+        size: { w, h }, 
+        minSize: { w: effectiveMinW, h: effectiveMinH },
+        configMinSize: widgetConfig ? widgetConfig.minSize : 'not found'
+      });
+    }
+
     const baseWidgetId = widgetId.split('-')[0];
     const widgetElement = document.createElement('div');
     widgetElement.className = 'grid-stack-item';
     
-    // Set grid attributes
+    // Set grid attributes with effective minimum sizes
     widgetElement.setAttribute('gs-id', widgetId);
     widgetElement.setAttribute('gs-x', String(x));
     widgetElement.setAttribute('gs-y', String(y));
     widgetElement.setAttribute('gs-w', String(w));
     widgetElement.setAttribute('gs-h', String(h));
-    widgetElement.setAttribute('gs-min-w', String(minW));
-    widgetElement.setAttribute('gs-min-h', String(minH));
+    widgetElement.setAttribute('gs-min-w', String(effectiveMinW));
+    widgetElement.setAttribute('gs-min-h', String(effectiveMinH));
 
     // Create the content wrapper
     const contentElement = document.createElement('div');
@@ -738,6 +767,9 @@ function AppContent() {
         if (!widgetState) {
           widgetState = new WidgetState(initialVariant, initialTitle, initialViewMode, initialDateRange);
           widgetStateRegistry.set(widgetId, widgetState);
+        } else {
+          widgetState.setVariant(initialVariant);
+          widgetState.setViewMode(initialViewMode);
         }
 
         const PerformanceWidgetWrapper: React.FC<{ isHeader?: boolean }> = ({ isHeader }) => {
@@ -1478,7 +1510,7 @@ function AppContent() {
         staticGrid: isMobile || currentPage !== 'dashboard',
         minRow: 1,
         alwaysShowResizeHandle: false,
-        float: false,
+        float: false, // Ensure float is false for proper compaction
         acceptWidgets: !isMobile,
         removable: false,
         swap: !isMobile,
@@ -1486,6 +1518,51 @@ function AppContent() {
         minWidth: 2,
         minHeight: 2
       } as GridStackOptions, gridElementRef.current);
+
+      // Add a dedicated resize handler to enforce minimum sizes
+      g.on('resize', (event: Event, el: GridStackNode) => {
+        if (el.id && el.el) {
+          const baseId = el.id.split('-')[0];
+          const widgetType = widgetTypes[baseId];
+          const config = WIDGET_REGISTRY[widgetType];
+          
+          if (config) {
+            const minW = config.minSize.w;
+            const minH = config.minSize.h;
+            
+            // Special logging for treemap widget
+            if (widgetType === 'treemap') {
+              console.log('Resizing treemap widget:', {
+                id: el.id,
+                currentSize: { w: el.w, h: el.h },
+                minSize: { w: minW, h: minH }
+              });
+            }
+            
+            // Enforce minimum sizes
+            if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
+              console.log(`Enforcing minimum size for ${widgetType} widget:`, { 
+                id: el.id, 
+                newSize: { w: Math.max(el.w || minW, minW), h: Math.max(el.h || minH, minH) } 
+              });
+              
+              g.update(el.el, {
+                w: Math.max(el.w || minW, minW),
+                h: Math.max(el.h || minH, minH),
+                autoPosition: false
+              });
+            }
+            
+            // Add visual feedback
+            const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
+            if (isAtMinSize) {
+              el.el.classList.add('min-size');
+            } else {
+              el.el.classList.remove('min-size');
+            }
+          }
+        }
+      });
 
       // Track drag state and original positions
       let isDragging = false;
@@ -1843,13 +1920,24 @@ function AppContent() {
               g.on('resize', (event: Event, el: GridStackNode) => {
                 if (el.id && el.el) {
                   const baseId = el.id.split('-')[0];
-                  const config = WIDGET_REGISTRY[widgetTypes[baseId]];
+                  const widgetType = widgetTypes[baseId];
+                  const config = WIDGET_REGISTRY[widgetType];
+                  
                   if (config) {
                     const minW = config.minSize.w;
                     const minH = config.minSize.h;
-                    const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
                     
-                    // Add or remove min-size class based on current size
+                    // Special logging for treemap widget
+                    if (widgetType === 'treemap') {
+                      console.log('Resizing treemap widget:', {
+                        id: el.id,
+                        currentSize: { w: el.w, h: el.h },
+                        minSize: { w: minW, h: minH }
+                      });
+                    }
+                    
+                    // Update visual feedback
+                    const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
                     if (isAtMinSize) {
                       el.el.classList.add('min-size');
                     } else {
@@ -1860,7 +1948,8 @@ function AppContent() {
                     if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
                       g.update(el.el, {
                         w: Math.max(el.w || minW, minW),
-                        h: Math.max(el.h || minH, minH)
+                        h: Math.max(el.h || minH, minH),
+                        autoPosition: false
                       });
                     }
                   }
@@ -2227,6 +2316,11 @@ function AppContent() {
       widgetStateRegistry.set(widgetId, widgetState);
     }
 
+    // Log for debugging treemap widget
+    if (widgetType === 'treemap') {
+      console.log('Adding treemap widget with config:', widgetConfig);
+    }
+
     // Create widget at the front (top-left)
     const newWidget = createWidget({
       widgetType,
@@ -2235,50 +2329,104 @@ function AppContent() {
       y: 0,
       w: widgetConfig.defaultSize.w,
       h: widgetConfig.defaultSize.h,
-      minW: 2,
-      minH: 2
+      minW: widgetConfig.minSize.w,
+      minH: widgetConfig.minSize.h
     });
 
     if (newWidget) {
-      // Add to grid
-      grid.addWidget(newWidget);
+      // Temporarily disable animations for smoother addition
+      const prevAnimate = grid.opts.animate;
+      const prevFloat = grid.opts.float;
       
-      // Compact the grid to fill gaps
-      grid.compact();
+      // Disable both animation and float for proper compaction
+      grid.setAnimation(false);
+      grid.float(false);
       
-      // Save the updated layout
-      const items = grid.getGridItems();
-      const serializedLayout = items
-        .map((item): LayoutWidget | null => {
-          const node = item.gridstackNode;
-          if (!node?.id) return null;
-          
-          // Get widget state if it's a performance widget
-          const baseId = node.id.split('-')[0];
-          const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
-          const viewState = widgetState ? { 
-            chartVariant: widgetState.variant,
-            viewMode: widgetState.viewMode
-          } : undefined;
-
-          return {
-            id: node.id,
-            x: node.x ?? 0,
-            y: node.y ?? 0,
-            w: node.w ?? 2,
-            h: node.h ?? 2,
-            minW: node.minW ?? 2,
-            minH: node.minH ?? 2,
-            viewState
-          };
-        })
-        .filter((item): item is LayoutWidget => item !== null);
-
-      if (isValidLayout(serializedLayout)) {
-        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+      grid.batchUpdate();
+      try {
+        // Add to grid with proper size constraints
+        grid.addWidget({
+          el: newWidget,
+          x: 0,
+          y: 0,
+          w: widgetConfig.defaultSize.w,
+          h: widgetConfig.defaultSize.h,
+          minW: widgetConfig.minSize.w,
+          minH: widgetConfig.minSize.h,
+          autoPosition: true
+        } as ExtendedGridStackWidget);
+        
+        // Force compact immediately while in batch mode
+        grid.compact();
+      } finally {
+        grid.commit();
       }
+      
+      // Restore previous settings with a delay to ensure UI is updated
+      setTimeout(() => {
+        grid.setAnimation(prevAnimate);
+        grid.float(prevFloat === undefined ? false : prevFloat);
+        
+        // Save the updated layout
+        const items = grid.getGridItems();
+        const serializedLayout = items
+          .map((item): LayoutWidget | null => {
+            const node = item.gridstackNode;
+            if (!node?.id) return null;
+            
+            // Get widget state if it's a performance widget
+            const baseId = node.id.split('-')[0];
+            const widgetType = widgetTypes[baseId];
+            const widgetConfig = WIDGET_REGISTRY[widgetType];
+            
+            const widgetState = baseId === 'performance' ? widgetStateRegistry.get(node.id) : undefined;
+            const viewState = widgetState ? { 
+              chartVariant: widgetState.variant,
+              viewMode: widgetState.viewMode
+            } : undefined;
+
+            return {
+              id: node.id,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              w: Math.max(node.w ?? 2, widgetConfig?.minSize.w || 2),
+              h: Math.max(node.h ?? 2, widgetConfig?.minSize.h || 2),
+              minW: widgetConfig?.minSize.w || 2,
+              minH: widgetConfig?.minSize.h || 2,
+              viewState
+            };
+          })
+          .filter((item): item is LayoutWidget => item !== null);
+
+        if (isValidLayout(serializedLayout)) {
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
+          console.log('✅ Saved layout after adding widget:', serializedLayout);
+        }
+        
+        // Double-check that all widgets respect minimum sizes
+        items.forEach(item => {
+          const node = item.gridstackNode;
+          if (!node?.id || !node.el) return;
+          
+          const baseId = node.id.split('-')[0];
+          const widgetType = widgetTypes[baseId];
+          const config = WIDGET_REGISTRY[widgetType];
+          
+          if (config) {
+            const minW = config.minSize.w;
+            const minH = config.minSize.h;
+            
+            if ((node.w && node.w < minW) || (node.h && node.h < minH)) {
+              grid.update(node.el, {
+                w: Math.max(node.w || minW, minW),
+                h: Math.max(node.h || minH, minH)
+              });
+            }
+          }
+        });
+      }, 100);
     }
-  }, [grid]);
+  }, [grid, createWidget, widgetStateRegistry, widgetTypes, isValidLayout]);
 
   // Render error state if there's an error
   if (error) {
