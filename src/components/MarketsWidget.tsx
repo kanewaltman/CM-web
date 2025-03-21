@@ -559,7 +559,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                         "group-hover:bg-[hsl(var(--color-widget-hover))]"
                       )}>
                         <div className="p-2 relative z-10 flex items-center justify-center">
-                          <span className="font-jakarta font-semibold text-sm leading-[150%]">
+                          <span className="font-jakarta font-semibold text-sm leading-[150%] text-muted-foreground">
                             {market.rank}
                           </span>
                         </div>
@@ -575,7 +575,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                       )}>
                         <div className="p-2 relative z-10 flex items-center gap-2">
                           <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden"
+                            className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden"
                           >
                             <img
                               src={assetConfig.icon}
@@ -583,35 +583,9 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <button 
-                            type="button"
-                            className="font-jakarta font-bold text-sm rounded-md px-1"
-                            style={{ 
-                              color: assetColor,
-                              backgroundColor: `${assetColor}14`,
-                              cursor: 'pointer',
-                              WebkitTouchCallout: 'none',
-                              WebkitUserSelect: 'text',
-                              userSelect: 'text'
-                            }}
-                            onMouseEnter={(e) => {
-                              const target = e.currentTarget;
-                              target.style.backgroundColor = assetColor;
-                              target.style.color = 'hsl(var(--color-widget-bg))';
-                            }}
-                            onMouseLeave={(e) => {
-                              const target = e.currentTarget;
-                              target.style.backgroundColor = `${assetColor}14`;
-                              target.style.color = assetColor;
-                            }}
-                            onMouseDown={(e) => {
-                              if (e.detail > 1) {
-                                e.preventDefault();
-                              }
-                            }}
-                          >
+                          <span className="font-jakarta font-semibold text-sm">
                             {assetConfig.name}
-                          </button>
+                          </span>
                         </div>
                       </div>
                     </TableCell>
