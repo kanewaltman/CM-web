@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { PerformanceChart } from './charts/PerformanceChart';
 
 type KeyedPerformanceChartProps = {
@@ -65,9 +65,34 @@ export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }:
   const handleViewModeChange = (mode: 'split' | 'cumulative' | 'combined') => {
     if (onViewModeChange) {
       console.log('KeyedPerformanceChart: view mode changed to', mode);
+      
+      // Immediate invocation of parent callback to ensure state is updated
       onViewModeChange(mode);
+      
+      // Also store the selection in localStorage to ensure persistence
+      try {
+        localStorage.setItem('performance_chart_view_mode', mode);
+      } catch (error) {
+        console.error('Failed to save view mode to localStorage:', error);
+      }
     }
   };
+  
+  // Effect to sync with localStorage on mount
+  useEffect(() => {
+    // If no viewMode is provided, try to get from localStorage
+    if (!viewMode) {
+      try {
+        const savedMode = localStorage.getItem('performance_chart_view_mode');
+        if (savedMode && (savedMode === 'split' || savedMode === 'cumulative' || savedMode === 'combined')) {
+          // If valid mode found in localStorage, update parent
+          onViewModeChange?.(savedMode as any);
+        }
+      } catch (error) {
+        console.error('Failed to retrieve view mode from localStorage:', error);
+      }
+    }
+  }, []);
   
   return (
     <PerformanceChart

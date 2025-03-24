@@ -189,6 +189,26 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       setViewMode(defaultViewMode);
     }
   }, [defaultViewMode, viewMode]);
+  
+  // Initialize view mode from localStorage if no default is provided
+  useEffect(() => {
+    // Only try to restore from localStorage if no default was provided
+    if (!defaultViewMode || defaultViewMode === 'split') {
+      try {
+        // Check widget-specific storage first
+        const storedMode = localStorage.getItem('performance_widget_view_mode');
+        if (storedMode && (storedMode === 'split' || storedMode === 'cumulative' || storedMode === 'combined')) {
+          console.log('PerformanceWidget: Restoring view mode from localStorage:', storedMode);
+          setViewMode(storedMode as WidgetViewMode);
+          
+          // Notify parent of the restored mode
+          onViewModeChange?.(storedMode as WidgetViewMode);
+        }
+      } catch (error) {
+        console.error('Error retrieving view mode from localStorage:', error);
+      }
+    }
+  }, []); // Run only on mount
 
   const handleVariantChange = (value: ChartVariant) => {
     console.log('Changing variant to', value);
@@ -203,20 +223,34 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
   // Handler for receiving chart view mode changes and mapping them to widget view modes
   const handleChartViewModeChange = (mode: ChartViewMode) => {
-    console.log('PerformanceWidget: Chart view mode changed to:', mode);
+    // Proper logging for debugging
+    console.log('PerformanceWidget: Chart view mode changed to:', mode, {
+      previousMode: viewMode,
+      timestamp: Date.now()
+    });
     
     // Map chart view modes to widget view modes
     const widgetMode: WidgetViewMode = mode === 'cumulative' || mode === 'split' || mode === 'combined'
       ? mode 
       : 'split'; // Default to split for other modes (stacked, line)
     
-    // Set the local state
+    // Set the local state first for immediate feedback
     setViewMode(widgetMode);
     
-    // Notify parent component
-    onViewModeChange?.(widgetMode);
-    
-    console.log('PerformanceWidget: Updated widget view mode to:', widgetMode);
+    // Notify parent component via callback
+    if (onViewModeChange) {
+      console.log('PerformanceWidget: Calling parent onViewModeChange with:', widgetMode);
+      onViewModeChange(widgetMode);
+    } else {
+      console.log('PerformanceWidget: No onViewModeChange handler provided');
+      
+      // If no parent handler, save locally as fallback
+      try {
+        localStorage.setItem('performance_widget_view_mode', widgetMode);
+      } catch (error) {
+        console.error('Failed to save view mode to localStorage:', error);
+      }
+    }
   };
 
   const handleDateRangeChange = (newDate: DateRange | undefined) => {

@@ -30,10 +30,28 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
         to: today
       };
       
+      // Try to restore view mode from localStorage
+      let initialViewMode: 'split' | 'cumulative' | 'combined' = 'split';
+      try {
+        // Check widget-specific key first
+        const storedWidgetMode = localStorage.getItem(`widget_${widgetId}_view_mode`);
+        if (storedWidgetMode && (storedWidgetMode === 'split' || storedWidgetMode === 'cumulative' || storedWidgetMode === 'combined')) {
+          initialViewMode = storedWidgetMode as 'split' | 'cumulative' | 'combined';
+        } else {
+          // Try generic key as fallback
+          const storedMode = localStorage.getItem('performance_chart_view_mode') || localStorage.getItem('performance_widget_view_mode');
+          if (storedMode && (storedMode === 'split' || storedMode === 'cumulative' || storedMode === 'combined')) {
+            initialViewMode = storedMode as 'split' | 'cumulative' | 'combined';
+          }
+        }
+      } catch (error) {
+        console.error('Error retrieving view mode from localStorage:', error);
+      }
+      
       widgetState = new WidgetState(
         'revenue',
         getPerformanceTitle('revenue'),
-        'split',
+        initialViewMode,
         initialDateRange
       );
       widgetStateRegistry.set(widgetId, widgetState);
@@ -141,6 +159,14 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
   }, [widgetId, onRemove, WidgetComponent]);
 
   const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative' | 'combined') => {
+    if (!newViewMode) return;
+    
+    console.log('PerformanceWidgetWrapper: view mode changing to:', newViewMode);
+    
+    // Update local state first for immediate UI feedback
+    setViewMode(newViewMode);
+    
+    // Then update the shared state
     widgetState.setViewMode(newViewMode);
 
     // Save to layout data
@@ -159,10 +185,18 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
             }
           };
           localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+          console.log('PerformanceWidgetWrapper: saved view mode to layout data:', newViewMode);
         }
       } catch (error) {
         console.error('Failed to save widget view state:', error);
       }
+    }
+    
+    // Also store in a simple localStorage key for redundancy
+    try {
+      localStorage.setItem(`widget_${widgetId}_view_mode`, newViewMode);
+    } catch (error) {
+      console.error('Failed to save view mode to localStorage:', error);
     }
   }, [widgetId, widgetState]);
 
