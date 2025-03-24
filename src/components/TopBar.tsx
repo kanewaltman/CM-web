@@ -77,7 +77,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
           {/* Logo and Brand */}
           <a 
             className="flex items-center space-x-2 shrink-0" 
-            href="#"
+            href="/"
             onClick={handlePageClick('dashboard')}
           >
             <CoinmetroLogo />
@@ -93,7 +93,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
                   ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )} 
-              href="#"
+              href="/spot"
               onClick={handlePageClick('spot')}
             >
               Spot
@@ -105,7 +105,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
                   ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )} 
-              href="#"
+              href="/margin"
               onClick={handlePageClick('margin')}
             >
               Margin
@@ -117,7 +117,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
                   ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )} 
-              href="#"
+              href="/stake"
               onClick={handlePageClick('stake')}
             >
               Stake
