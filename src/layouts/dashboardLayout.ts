@@ -95,7 +95,7 @@ export const mobileLayout: SerializedLayoutWidget[] = [
     "minH": 2,
     "viewState": {
       "chartVariant": "revenue" as ChartVariant,
-      "viewMode": "split" as "split"
+      "viewMode": "combined" as "combined"
     }
   },
   {
@@ -119,7 +119,7 @@ export const mobileLayout: SerializedLayoutWidget[] = [
     "minH": 2,
     "viewState": {
       "chartVariant": "revenue" as ChartVariant,
-      "viewMode": "combined" as "combined"
+      "viewMode": "cumulative" as "cumulative"
     }
   }
 ];
@@ -149,7 +149,7 @@ export const isValidLayout = (
     const hasValidViewState = baseId === 'performance' 
       ? widget.viewState && 
         typeof widget.viewState.chartVariant === 'string' &&
-        (!widget.viewState.viewMode || ['split', 'cumulative'].includes(widget.viewState.viewMode))
+        (!widget.viewState.viewMode || ['split', 'cumulative', 'combined'].includes(widget.viewState.viewMode))
       : true;
 
     const isValid = (

@@ -14,9 +14,9 @@ export interface PerformanceWidgetProps extends RemovableWidgetProps {
   widgetId?: string;
   headerControls?: boolean;
   defaultVariant?: ChartVariant;
-  defaultViewMode?: 'split' | 'cumulative';
+  defaultViewMode?: 'split' | 'cumulative' | 'combined';
   onVariantChange?: (variant: ChartVariant) => void;
-  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+  onViewModeChange?: (mode: 'split' | 'cumulative' | 'combined') => void;
   onTitleChange?: (title: string) => void;
   onDateRangeChange?: (dateRange: { from: Date; to: Date } | undefined) => void;
   dateRange?: { from: Date; to: Date };
@@ -38,8 +38,8 @@ export interface WidgetComponentProps {
   onRemove?: () => void;
   defaultVariant?: ChartVariant;
   onVariantChange?: (variant: ChartVariant) => void;
-  defaultViewMode?: 'split' | 'cumulative';
-  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+  defaultViewMode?: 'split' | 'cumulative' | 'combined';
+  onViewModeChange?: (mode: 'split' | 'cumulative' | 'combined') => void;
   onTitleChange?: (title: string) => void;
   onDateRangeChange?: (dateRange: { from: Date; to: Date } | undefined) => void;
   dateRange?: { from: Date; to: Date };
@@ -55,7 +55,7 @@ export interface LayoutWidget {
   minH?: number;
   viewState?: {
     chartVariant: ChartVariant;
-    viewMode?: 'split' | 'cumulative';
+    viewMode?: 'split' | 'cumulative' | 'combined';
   };
 }
 

@@ -6,8 +6,8 @@ type KeyedPerformanceChartProps = {
     from: Date;
     to: Date;
   };
-  viewMode?: 'split' | 'stacked' | 'line' | 'cumulative';
-  onViewModeChange?: (mode: 'split' | 'stacked' | 'line' | 'cumulative') => void;
+  viewMode?: 'split' | 'stacked' | 'line' | 'cumulative' | 'combined';
+  onViewModeChange?: (mode: 'split' | 'stacked' | 'line' | 'cumulative' | 'combined') => void;
 };
 
 /**
@@ -42,8 +42,8 @@ export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }:
   // Convert the viewMode for the PerformanceChart
   // 'cumulative' needs to be mapped correctly for the chart
   const mappedViewMode = useMemo(() => {
-    // The PerformanceChart expects 'split' or 'cumulative'
-    if (viewMode === 'split' || viewMode === 'cumulative') {
+    // The PerformanceChart expects 'split', 'cumulative', or 'combined'
+    if (viewMode === 'split' || viewMode === 'cumulative' || viewMode === 'combined') {
       return viewMode;
     }
     // Default to 'split' for any other mode
@@ -62,7 +62,7 @@ export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }:
   });
   
   // Handle view mode change from the PerformanceChart
-  const handleViewModeChange = (mode: 'split' | 'cumulative') => {
+  const handleViewModeChange = (mode: 'split' | 'cumulative' | 'combined') => {
     if (onViewModeChange) {
       console.log('KeyedPerformanceChart: view mode changed to', mode);
       onViewModeChange(mode);

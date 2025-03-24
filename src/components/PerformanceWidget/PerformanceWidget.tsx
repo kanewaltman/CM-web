@@ -59,8 +59,8 @@ const chartLabels: Record<ChartVariant, string> = {
 };
 
 // Define the view mode types
-export type WidgetViewMode = 'split' | 'cumulative';
-export type ChartViewMode = 'split' | 'stacked' | 'line' | 'cumulative';
+export type WidgetViewMode = 'split' | 'cumulative' | 'combined';
+export type ChartViewMode = 'split' | 'stacked' | 'line' | 'cumulative' | 'combined';
 
 interface PerformanceWidgetProps {
   className?: string;
@@ -206,7 +206,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     console.log('PerformanceWidget: Chart view mode changed to:', mode);
     
     // Map chart view modes to widget view modes
-    const widgetMode: WidgetViewMode = mode === 'cumulative' || mode === 'split' 
+    const widgetMode: WidgetViewMode = mode === 'cumulative' || mode === 'split' || mode === 'combined'
       ? mode 
       : 'split'; // Default to split for other modes (stacked, line)
     

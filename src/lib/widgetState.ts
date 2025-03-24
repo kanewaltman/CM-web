@@ -5,13 +5,13 @@ export class WidgetState {
   private listeners: Set<() => void> = new Set();
   private _variant: ChartVariant;
   private _title: string;
-  private _viewMode: 'split' | 'cumulative';
+  private _viewMode: 'split' | 'cumulative' | 'combined';
   private _dateRange: { from: Date; to: Date };
 
   constructor(
     initialVariant: ChartVariant = 'revenue', 
     initialTitle: string = 'Performance', 
-    initialViewMode: 'split' | 'cumulative' = 'split',
+    initialViewMode: 'split' | 'cumulative' | 'combined' = 'split',
     initialDateRange?: { from: Date; to: Date }
   ) {
     this._variant = initialVariant;
@@ -34,7 +34,7 @@ export class WidgetState {
     return this._title;
   }
 
-  get viewMode(): 'split' | 'cumulative' {
+  get viewMode(): 'split' | 'cumulative' | 'combined' {
     return this._viewMode;
   }
   
@@ -57,7 +57,7 @@ export class WidgetState {
     this.notifyListeners();
   }
 
-  setViewMode(newViewMode: 'split' | 'cumulative') {
+  setViewMode(newViewMode: 'split' | 'cumulative' | 'combined') {
     if (!newViewMode) return;
     this._viewMode = newViewMode;
     this.notifyListeners();
@@ -97,7 +97,7 @@ export const widgetStateRegistry = new Map<string, WidgetState>();
 // Create a default state for a widget
 export const createDefaultWidgetState = (
   variant: ChartVariant = 'revenue', 
-  viewMode: 'split' | 'cumulative' = 'split',
+  viewMode: 'split' | 'cumulative' | 'combined' = 'split',
   dateRange?: { from: Date; to: Date }
 ): WidgetState => {
   // Default date range (last 7 days)

@@ -44,26 +44,33 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
   const widgetState = getWidgetState();
   const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
   const [title, setTitle] = useState(widgetState.title);
-  const [viewMode, setViewMode] = useState<'split' | 'cumulative'>(widgetState.viewMode);
+  const [viewMode, setViewMode] = useState<'split' | 'cumulative' | 'combined'>(widgetState.viewMode);
   const [dateRange, setDateRange] = useState(widgetState.dateRange);
 
   // Subscribe to state changes
   useEffect(() => {
-    // Initial state sync
-    setVariant(widgetState.variant);
-    setTitle(widgetState.title);
-    setViewMode(widgetState.viewMode);
-    setDateRange(widgetState.dateRange);
-
-    // Subscribe to state changes
-    const unsubscribe = widgetState.subscribe(() => {
+    try {
+      // Initial state sync
       setVariant(widgetState.variant);
       setTitle(widgetState.title);
       setViewMode(widgetState.viewMode);
       setDateRange(widgetState.dateRange);
-    });
 
-    return unsubscribe;
+      // Subscribe to state changes, with safety checks
+      const unsubscribe = typeof widgetState.subscribe === 'function' 
+        ? widgetState.subscribe(() => {
+            setVariant(widgetState.variant);
+            setTitle(widgetState.title);
+            setViewMode(widgetState.viewMode);
+            setDateRange(widgetState.dateRange);
+          })
+        : () => {}; // No-op if subscribe doesn't exist
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up widget state subscription:', error);
+      return () => {}; // Return no-op cleanup function
+    }
   }, [widgetState]);
 
   const handleVariantChange = useCallback((newVariant: ChartVariant) => {
@@ -133,7 +140,7 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     }
   }, [widgetId, onRemove, WidgetComponent]);
 
-  const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative') => {
+  const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative' | 'combined') => {
     widgetState.setViewMode(newViewMode);
 
     // Save to layout data

@@ -6,6 +6,7 @@ import { widgetTypes, WIDGET_REGISTRY, widgetComponents } from '@/lib/widgetRegi
 import { createWidget } from '@/components/WidgetRenderer';
 import { defaultLayout, mobileLayout, isValidLayout } from '@/layouts/dashboardLayout';
 import { PageType, getLayoutForPage } from '@/layouts';
+import { getPerformanceTitle } from '@/lib/widgetState';
 
 interface UseGridStackOptions {
   isMobile: boolean;
@@ -198,10 +199,17 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     try {
       // Use the appropriate layout based on device type
       const layoutToApply = isMobile ? mobileLayout : defaultLayout;
+      console.log('🔄 Reset to layout:', { 
+        isMobile, 
+        type: isMobile ? 'mobile' : 'desktop',
+        layout: layoutToApply,
+        widgetCount: layoutToApply.length
+      });
       localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
       
       // First, remove all existing widgets and their DOM elements
       const currentWidgets = grid.getGridItems();
+      console.log('🧹 Removing existing widgets:', currentWidgets.length);
       currentWidgets.forEach(widget => {
         if (widget.gridstackNode?.id) {
           // Clean up widget state
@@ -254,6 +262,37 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           });
 
           if (widgetElement) {
+            console.log(`✅ Created widget element: ${node.id} (${widgetType}) at (${node.x},${node.y})`);
+            
+            // Apply viewState to widget state registry if it exists
+            if (node.viewState) {
+              const widgetState = widgetStateRegistry.get(node.id);
+              if (widgetState) {
+                console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
+                widgetState.setVariant(node.viewState.chartVariant);
+                if (node.viewState.viewMode) {
+                  widgetState.setViewMode(node.viewState.viewMode);
+                }
+              } else {
+                // If widget state doesn't exist yet, ensure we set it
+                console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
+                widgetStateRegistry.set(node.id, {
+                  variant: node.viewState.chartVariant,
+                  viewMode: node.viewState.viewMode || 'split',
+                  title: getPerformanceTitle(node.viewState.chartVariant),
+                  dateRange: {
+                    from: new Date(),
+                    to: new Date()
+                  },
+                  setVariant: () => {},  // Will be replaced when component mounts
+                  setViewMode: () => {},  // Will be replaced when component mounts
+                  setTitle: () => {},    // Will be replaced when component mounts
+                  setDateRange: () => {}, // Will be replaced when component mounts
+                  subscribe: () => { return () => {}; }  // Add placeholder subscribe method
+                });
+              }
+            }
+            
             // Add widget with enforced sizes
             grid.addWidget({
               el: widgetElement,
@@ -719,8 +758,13 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
         }
 
         // Apply the layout
-        g.batchUpdate();
+        if (!g) {
+          console.error('❌ Grid instance is undefined, cannot apply layout');
+          return;
+        }
+        
         try {
+          g.batchUpdate();
           console.log('🔄 Applying layout with widgets:', layoutToApply.length);
           
           // Create and add all widgets from the layout
@@ -732,6 +776,25 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             if (!widgetComponents[widgetType]) {
               console.warn('❌ Unknown widget type:', widgetType);
               return;
+            }
+
+            // Pre-register viewState in widget registry if it exists
+            if (node.viewState && baseWidgetId === 'performance') {
+              console.log(`🔄 Pre-registering viewState for ${node.id}:`, node.viewState);
+              widgetStateRegistry.set(node.id, {
+                variant: node.viewState.chartVariant,
+                viewMode: node.viewState.viewMode || 'split',
+                title: getPerformanceTitle(node.viewState.chartVariant),
+                dateRange: {
+                  from: new Date(),
+                  to: new Date()
+                },
+                setVariant: () => {},  // Will be replaced when component mounts
+                setViewMode: () => {},  // Will be replaced when component mounts
+                setTitle: () => {},    // Will be replaced when component mounts
+                setDateRange: () => {}, // Will be replaced when component mounts
+                subscribe: () => { return () => {}; }  // Add placeholder subscribe method
+              });
             }
 
             try {
@@ -761,6 +824,37 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
               });
 
               if (widgetElement) {
+                console.log(`✅ Created widget element: ${node.id} (${widgetType}) at (${node.x},${node.y})`);
+                
+                // Apply viewState to widget state registry if it exists
+                if (node.viewState) {
+                  const widgetState = widgetStateRegistry.get(node.id);
+                  if (widgetState) {
+                    console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
+                    widgetState.setVariant(node.viewState.chartVariant);
+                    if (node.viewState.viewMode) {
+                      widgetState.setViewMode(node.viewState.viewMode);
+                    }
+                  } else {
+                    // If widget state doesn't exist yet, ensure we set it
+                    console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
+                    widgetStateRegistry.set(node.id, {
+                      variant: node.viewState.chartVariant,
+                      viewMode: node.viewState.viewMode || 'split',
+                      title: getPerformanceTitle(node.viewState.chartVariant),
+                      dateRange: {
+                        from: new Date(),
+                        to: new Date()
+                      },
+                      setVariant: () => {},  // Placeholder - will be replaced by actual component
+                      setViewMode: () => {},  // Placeholder - will be replaced by actual component
+                      setTitle: () => {},    // Will be replaced when component mounts
+                      setDateRange: () => {}, // Will be replaced when component mounts
+                      subscribe: () => { return () => {}; }  // Add placeholder subscribe method
+                    });
+                  }
+                }
+                
                 // Add widget to grid with exact position and enforced minimum sizes
                 g.addWidget({
                   el: widgetElement,
@@ -771,6 +865,8 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   h: height,
                   minW: widgetConfig.minSize.w,
                   minH: widgetConfig.minSize.h,
+                  maxW: widgetConfig.maxSize.w,
+                  maxH: widgetConfig.maxSize.h,
                   autoPosition: false,
                   noMove: isMobile || currentPage !== 'dashboard',
                   noResize: isMobile || currentPage !== 'dashboard',

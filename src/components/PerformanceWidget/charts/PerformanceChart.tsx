@@ -314,8 +314,8 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
 }
 
 export interface PerformanceChartProps {
-  viewMode?: 'split' | 'cumulative';
-  onViewModeChange?: (mode: 'split' | 'cumulative') => void;
+  viewMode?: 'split' | 'cumulative' | 'combined';
+  onViewModeChange?: (mode: 'split' | 'cumulative' | 'combined') => void;
   dateRange?: { from: Date; to: Date };
 }
 
