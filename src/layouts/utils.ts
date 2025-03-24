@@ -1,5 +1,5 @@
 // Helper functions for layout management
-import { WidgetConfig } from '@/types/widget';
+import { WidgetConfig } from '@/types/widgets';
 
 /**
  * Utility function to create a layout widget with appropriate size constraints
