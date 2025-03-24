@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { ControlBar } from './ControlBar';
 import { Toaster } from './ui/sonner';
-import { WIDGET_REGISTRY } from '@/App';
+import { WIDGET_REGISTRY } from '@/lib/widgetRegistry';
 import { userEvent, waitFor, within } from '@storybook/test';
 import React, { useEffect } from 'react';
 import { ThemeProvider } from 'next-themes';

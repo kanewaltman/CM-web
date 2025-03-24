@@ -27,7 +27,7 @@ import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { WIDGET_REGISTRY } from '@/App';
+import { WIDGET_REGISTRY } from '@/lib/widgetRegistry';
 // Import GridStack directly
 import { GridStack } from 'gridstack';
 // Import Tauri API
