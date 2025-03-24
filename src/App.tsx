@@ -226,7 +226,7 @@ function AppContent() {
         // Initialize it as a grid item with specific coordinates
         if (gridRef.current) {
           gridRef.current.addWidget({
-            el: previewElement as HTMLElement,
+            content: previewElement.outerHTML,
             x: previewX,
             y: previewY,
             w: 3,
@@ -331,7 +331,7 @@ function AppContent() {
         if (widgetElement) {
           // Add widget with consistent settings
           grid.addWidget({
-            el: widgetElement,
+            content: widgetElement.outerHTML, // Convert HTMLElement to string
             x: previewX,
             y: previewY,
             w: 3,
