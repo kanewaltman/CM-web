@@ -43,6 +43,7 @@ interface WidgetConfig {
   component: React.FC<RemovableWidgetProps | PerformanceWidgetProps>;
   defaultSize: { w: number; h: number };
   minSize: { w: number; h: number };
+  maxSize: { w: number; h: number };
 }
 
 export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
@@ -51,63 +52,72 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     title: 'Market Overview',
     component: MarketOverview,
     defaultSize: { w: 12, h: 4 },
-    minSize: { w: 6, h: 6 }
+    minSize: { w: 6, h: 6 },
+    maxSize: { w: 12, h: 9 }
   },
   'order-book': {
     id: 'orderbook',
     title: 'Order Book',
     component: OrderBook,
     defaultSize: { w: 4, h: 6 },
-    minSize: { w: 4, h: 6 }
+    minSize: { w: 4, h: 6 },
+    maxSize: { w: 12, h: 9 }
   },
   'recent-trades': {
     id: 'trades',
     title: 'Recent Trades',
     component: RecentTrades,
     defaultSize: { w: 12, h: 2 },
-    minSize: { w: 6, h: 6 }
+    minSize: { w: 6, h: 6 },
+    maxSize: { w: 12, h: 9 }
   },
   'trading-view-chart': {
     id: 'chart',
     title: 'BTC/USDT',
     component: TradingViewChart,
     defaultSize: { w: 8, h: 6 },
-    minSize: { w: 6, h: 6 }
+    minSize: { w: 6, h: 6 },
+    maxSize: { w: 12, h: 9 }
   },
   'trade-form': {
     id: 'tradeform',
     title: 'Trade',
     component: TradeForm,
     defaultSize: { w: 3, h: 4 },
-    minSize: { w: 6, h: 6 }
+    minSize: { w: 6, h: 6 },
+    maxSize: { w: 12, h: 9 }
   },
   'balances': {
     id: 'balances',
     title: 'Balances',
     component: BalancesWidget,
     defaultSize: { w: 4, h: 4 },
-    minSize: { w: 3, h: 3 }
+    minSize: { w: 3, h: 3 },
+    maxSize: { w: 12, h: 9 }
   },
   'markets': {
     id: 'markets',
     title: 'Markets',
     component: MarketsWidget,
     defaultSize: { w: 8, h: 4 },
-    minSize: { w: 4, h: 3 }
+    minSize: { w: 4, h: 3 },
+    maxSize: { w: 12, h: 9 }
   },
   'performance': {
     id: 'performance',
     title: 'Performance',
     component: PerformanceWidget,
     defaultSize: { w: 8, h: 6 },
-    minSize: { w: 4, h: 4 }
+    minSize: { w: 4, h: 4 },
+    maxSize: { w: 12, h: 9 }
   },
   'treemap': {
     id: 'treemap',
     title: 'Breakdown',
     component: Breakdown,
     defaultSize: { w: 6, h: 6 },
-    minSize: { w: 4, h: 4 }
+    minSize: { w: 3, h: 2 },
+    maxSize: { w: 12, h: 9 }
   }
 };
 
@@ -671,9 +681,11 @@ function AppContent() {
 
     // Get the widget config
     const widgetConfig = WIDGET_REGISTRY[widgetType];
-    // Ensure we're using configuration-defined minimum sizes
+    // Ensure we're using configuration-defined minimum and maximum sizes
     const effectiveMinW = widgetConfig ? widgetConfig.minSize.w : minW;
     const effectiveMinH = widgetConfig ? widgetConfig.minSize.h : minH;
+    const effectiveMaxW = widgetConfig ? widgetConfig.maxSize.w : 12;
+    const effectiveMaxH = widgetConfig ? widgetConfig.maxSize.h : 8;
 
     // Debug logging for the treemap widget
     if (widgetType === 'treemap') {
@@ -681,7 +693,9 @@ function AppContent() {
         id: widgetId, 
         size: { w, h }, 
         minSize: { w: effectiveMinW, h: effectiveMinH },
-        configMinSize: widgetConfig ? widgetConfig.minSize : 'not found'
+        maxSize: { w: effectiveMaxW, h: effectiveMaxH },
+        configMinSize: widgetConfig ? widgetConfig.minSize : 'not found',
+        configMaxSize: widgetConfig ? widgetConfig.maxSize : 'not found'
       });
     }
 
@@ -689,14 +703,16 @@ function AppContent() {
     const widgetElement = document.createElement('div');
     widgetElement.className = 'grid-stack-item';
     
-    // Set grid attributes with effective minimum sizes
+    // Set grid attributes with effective minimum and maximum sizes
     widgetElement.setAttribute('gs-id', widgetId);
     widgetElement.setAttribute('gs-x', String(x));
     widgetElement.setAttribute('gs-y', String(y));
-    widgetElement.setAttribute('gs-w', String(w));
-    widgetElement.setAttribute('gs-h', String(h));
+    widgetElement.setAttribute('gs-w', String(Math.min(Math.max(w, effectiveMinW), effectiveMaxW)));
+    widgetElement.setAttribute('gs-h', String(Math.min(Math.max(h, effectiveMinH), effectiveMaxH)));
     widgetElement.setAttribute('gs-min-w', String(effectiveMinW));
     widgetElement.setAttribute('gs-min-h', String(effectiveMinH));
+    widgetElement.setAttribute('gs-max-w', String(effectiveMaxW));
+    widgetElement.setAttribute('gs-max-h', String(effectiveMaxH));
 
     // Create the content wrapper
     const contentElement = document.createElement('div');
@@ -1078,16 +1094,16 @@ function AppContent() {
         }
 
         try {
-          // Get widget configuration to enforce minimum sizes
+          // Get widget configuration to enforce minimum and maximum sizes
           const widgetConfig = WIDGET_REGISTRY[widgetType];
           if (!widgetConfig) {
             console.warn('❌ Missing widget configuration for:', widgetType);
             return;
           }
 
-          // Enforce minimum sizes from registry
-          const width = Math.max(node.w, widgetConfig.minSize.w);
-          const height = Math.max(node.h, widgetConfig.minSize.h);
+          // Enforce minimum and maximum sizes from registry
+          const width = Math.min(Math.max(node.w, widgetConfig.minSize.w), widgetConfig.maxSize.w);
+          const height = Math.min(Math.max(node.h, widgetConfig.minSize.h), widgetConfig.maxSize.h);
 
           const widgetElement = createWidget({
             widgetType,
@@ -1101,7 +1117,7 @@ function AppContent() {
           });
 
           if (widgetElement) {
-            // Add widget with enforced minimum sizes
+            // Add widget with enforced sizes
             grid.addWidget({
               el: widgetElement,
               id: node.id,
@@ -1111,44 +1127,13 @@ function AppContent() {
               h: height,
               minW: widgetConfig.minSize.w,
               minH: widgetConfig.minSize.h,
+              maxW: widgetConfig.maxSize.w,
+              maxH: widgetConfig.maxSize.h,
               autoPosition: false,
               noMove: isMobile || currentPage !== 'dashboard',
               noResize: isMobile || currentPage !== 'dashboard',
               locked: isMobile || currentPage !== 'dashboard'
             } as ExtendedGridStackWidget);
-
-            // Add resize event listener to enforce minimum sizes
-            if (!isMobile && currentPage === 'dashboard') {
-              const resizeHandler = (event: Event, el: GridStackNode) => {
-                if (el.id === node.id && el.el) {
-                  const config = WIDGET_REGISTRY[widgetType];
-                  if (config) {
-                    const minW = config.minSize.w;
-                    const minH = config.minSize.h;
-                    
-                    // Enforce minimum sizes during resize
-                    if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
-                      grid.update(el.el, {
-                        w: Math.max(el.w || minW, minW),
-                        h: Math.max(el.h || minH, minH),
-                        autoPosition: false
-                      });
-                    }
-
-                    // Update visual feedback
-                    const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
-                    if (isAtMinSize) {
-                      el.el.classList.add('min-size');
-                    } else {
-                      el.el.classList.remove('min-size');
-                    }
-                  }
-                }
-              };
-
-              // Remove any existing resize handler and add the new one
-              grid.off('resize').on('resize', resizeHandler);
-            }
           }
         } catch (error) {
           console.error('Failed to create widget:', node.id, error);
@@ -1537,36 +1522,35 @@ function AppContent() {
           if (config) {
             const minW = config.minSize.w;
             const minH = config.minSize.h;
+            const maxW = config.maxSize.w;
+            const maxH = config.maxSize.h;
             
             // Special logging for treemap widget
             if (widgetType === 'treemap') {
               console.log('Resizing treemap widget:', {
                 id: el.id,
                 currentSize: { w: el.w, h: el.h },
-                minSize: { w: minW, h: minH }
+                minSize: { w: minW, h: minH },
+                maxSize: { w: maxW, h: maxH }
               });
             }
             
-            // Enforce minimum sizes
-            if ((el.w && el.w < minW) || (el.h && el.h < minH)) {
-              console.log(`Enforcing minimum size for ${widgetType} widget:`, { 
-                id: el.id, 
-                newSize: { w: Math.max(el.w || minW, minW), h: Math.max(el.h || minH, minH) } 
-              });
-              
+            // Enforce minimum and maximum sizes
+            if ((el.w && (el.w < minW || el.w > maxW)) || (el.h && (el.h < minH || el.h > maxH))) {
               g.update(el.el, {
-                w: Math.max(el.w || minW, minW),
-                h: Math.max(el.h || minH, minH),
+                w: Math.min(Math.max(el.w || minW, minW), maxW),
+                h: Math.min(Math.max(el.h || minH, minH), maxH),
                 autoPosition: false
               });
             }
-            
-            // Add visual feedback
-            const isAtMinSize = (el.w && el.w <= minW) || (el.h && el.h <= minH);
-            if (isAtMinSize) {
-              el.el.classList.add('min-size');
+
+            // Update visual feedback for min/max size
+            const isAtLimit = (el.w && (el.w <= minW || el.w >= maxW)) || 
+                            (el.h && (el.h <= minH || el.h >= maxH));
+            if (isAtLimit) {
+              el.el.classList.add('size-limit');
             } else {
-              el.el.classList.remove('min-size');
+              el.el.classList.remove('size-limit');
             }
           }
         }
@@ -2046,18 +2030,39 @@ function AppContent() {
     // Get all valid base widget IDs
     const validBaseIds = Object.values(widgetIds);
     
-    // Verify each widget has valid properties and minimum sizes
+    // Verify each widget has valid properties and sizes
     return layout.every(widget => {
       // Get base widget type from ID (handle both default and dynamic IDs)
       const baseId = widget.id?.split('-')[0];
       const isValidBaseType = baseId && validBaseIds.includes(baseId);
       
+      if (!isValidBaseType) {
+        console.warn('Invalid widget type:', baseId);
+        return false;
+      }
+
+      const widgetType = widgetTypes[baseId];
+      const widgetConfig = WIDGET_REGISTRY[widgetType];
+      
+      if (!widgetConfig) {
+        console.warn('Missing widget configuration for:', widgetType);
+        return false;
+      }
+
       // Check if viewState is valid for performance widgets
       const hasValidViewState = baseId === 'performance' 
         ? widget.viewState && 
           typeof widget.viewState.chartVariant === 'string' &&
           (!widget.viewState.viewMode || ['split', 'cumulative'].includes(widget.viewState.viewMode))
         : true;
+
+      // Validate size constraints
+      const hasValidSize = (
+        widget.w >= widgetConfig.minSize.w &&
+        widget.h >= widgetConfig.minSize.h &&
+        widget.w <= widgetConfig.maxSize.w &&
+        widget.h <= widgetConfig.maxSize.h
+      );
 
       const isValid = (
         typeof widget === 'object' &&
@@ -2069,14 +2074,20 @@ function AppContent() {
         typeof widget.h === 'number' &&
         (!widget.minW || typeof widget.minW === 'number') &&
         (!widget.minH || typeof widget.minH === 'number') &&
-        widget.w >= (widget.minW ?? 2) &&
-        widget.h >= (widget.minH ?? 2) &&
-        isValidBaseType &&
+        hasValidSize &&
         hasValidViewState
       );
 
       if (!isValid) {
-        console.warn('Invalid widget in layout:', widget, { baseId, isValidBaseType, hasValidViewState });
+        console.warn('Invalid widget in layout:', widget, { 
+          baseId, 
+          isValidBaseType, 
+          hasValidViewState,
+          hasValidSize,
+          minSize: widgetConfig.minSize,
+          maxSize: widgetConfig.maxSize,
+          currentSize: { w: widget.w, h: widget.h }
+        });
       }
       return isValid;
     });
