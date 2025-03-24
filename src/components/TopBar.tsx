@@ -42,6 +42,12 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
 
   const handlePageClick = (page: 'dashboard' | 'spot' | 'margin' | 'stake') => (e: React.MouseEvent) => {
     e.preventDefault();
+    
+    if (page === currentPage) {
+      console.log('📌 Already on the current page:', page);
+      return;
+    }
+    
     console.log('🔄 Navigation clicked:', { from: currentPage, to: page });
     onPageChange(page);
   };

@@ -1417,9 +1417,22 @@ function AppContent() {
   const handlePageChange = useCallback((page: 'dashboard' | 'spot' | 'margin' | 'stake') => {
     console.log('🔄 Page change requested:', { from: currentPage, to: page, hasGrid: !!grid, isMobile });
     
+    if (page === currentPage) {
+      console.log('📌 Already on requested page, no change needed');
+      return;
+    }
+    
     // Update URL without page reload
     const newPath = page === 'dashboard' ? '/' : `/${page}`;
-    window.history.pushState({}, '', newPath);
+    
+    // Create a new history entry with the current state
+    window.history.pushState({ 
+      page,
+      timestamp: Date.now() // Add timestamp to ensure unique state objects
+    }, '', newPath);
+    
+    // Force state update to ensure component reflects the new page
+    setCurrentPage(page);
     
     // Save current layout if we're leaving dashboard
     if (currentPage === 'dashboard' && grid && grid.engine && grid.engine.nodes.length > 0) {
@@ -1459,8 +1472,6 @@ function AppContent() {
         console.warn('Failed to save dashboard layout:', error);
       }
     }
-
-    setCurrentPage(page);
   }, [grid, currentPage]);
 
   // Initialize grid when page changes
@@ -1993,17 +2004,48 @@ function AppContent() {
 
     // Set initial page and initialize grid based on URL
     const initialPage = getPageFromPath(window.location.pathname);
-    if (pageChangeRef.current) {
-      pageChangeRef.current(initialPage);
-    }
+    console.log('📍 Setting initial page based on URL:', { page: initialPage, path: window.location.pathname });
+    
+    // Initialize page state without using the handler to avoid unnecessary state changes
+    setCurrentPage(initialPage);
+    
+    // Add initial history state
+    window.history.replaceState({ 
+      page: initialPage,
+      timestamp: Date.now(),
+      initial: true
+    }, '', window.location.pathname);
 
     window.addEventListener('resize', handleResize);
 
     // Handle browser back/forward navigation
-    const handlePopState = () => {
-      const newPage = getPageFromPath(window.location.pathname);
-      if (newPage !== currentPage && pageChangeRef.current) {
-        pageChangeRef.current(newPage);
+    const handlePopState = (event: PopStateEvent) => {
+      console.log('🔄 PopState event triggered:', { 
+        state: event.state, 
+        pathname: window.location.pathname 
+      });
+      
+      // If we have state with a page property, use it directly
+      if (event.state && typeof event.state.page === 'string') {
+        const historyPage = event.state.page as 'dashboard' | 'spot' | 'margin' | 'stake';
+        if (historyPage !== currentPage) {
+          console.log('🔄 Navigation state from history:', { from: currentPage, to: historyPage });
+          setCurrentPage(historyPage);
+        }
+      } else {
+        // Fallback to path parsing if state is missing
+        const newPage = getPageFromPath(window.location.pathname);
+        if (newPage !== currentPage) {
+          console.log('🔄 Navigation state from URL path:', { from: currentPage, to: newPage });
+          setCurrentPage(newPage);
+          
+          // Restore proper state to allow forward navigation
+          window.history.replaceState({ 
+            page: newPage, 
+            timestamp: Date.now(),
+            restored: true
+          }, '', window.location.pathname);
+        }
       }
     };
 
