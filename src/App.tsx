@@ -11,7 +11,7 @@ import { getThemeValues } from './lib/utils';
 import { getLayoutForPage, PageType, getPageFromPath, navigateToPage } from './layouts';
 import { useGridStack } from './hooks/useGridStack';
 import { createWidget, updateWidgetsDataSource } from './components/WidgetRenderer';
-import { DASHBOARD_LAYOUT_KEY, MOBILE_BREAKPOINT, LayoutWidget } from './types/widgets';
+import { DASHBOARD_LAYOUT_KEY, MOBILE_BREAKPOINT, LayoutWidget, ExtendedGridStackWidget } from './types/widgets';
 import { WIDGET_REGISTRY, widgetIds, widgetTypes, widgetTitles } from './lib/widgetRegistry';
 import { isValidLayout } from './layouts/dashboardLayout';
 
@@ -226,7 +226,7 @@ function AppContent() {
         // Initialize it as a grid item with specific coordinates
         if (gridRef.current) {
           gridRef.current.addWidget({
-            content: previewElement.outerHTML,
+            el: previewElement as HTMLElement,
             x: previewX,
             y: previewY,
             w: 3,
@@ -234,7 +234,7 @@ function AppContent() {
             autoPosition: false,
             noResize: true,
             noMove: true
-          });
+          } as ExtendedGridStackWidget);
         }
       } else {
         // Update position through GridStack
@@ -331,7 +331,7 @@ function AppContent() {
         if (widgetElement) {
           // Add widget with consistent settings
           grid.addWidget({
-            content: widgetElement.outerHTML, // Convert HTMLElement to string
+            el: widgetElement, 
             x: previewX,
             y: previewY,
             w: 3,
@@ -343,7 +343,7 @@ function AppContent() {
             noMove: isMobile || currentPage !== 'dashboard',
             noResize: isMobile || currentPage !== 'dashboard',
             locked: isMobile || currentPage !== 'dashboard'
-          });
+          } as ExtendedGridStackWidget);
         }
       } finally {
         grid.commit();
