@@ -1,0 +1,1378 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global text rendering enhancements */
+* {
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 1px rgba(0,0,0,0.05);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Add smooth transitions for foreground colors */
+:root {
+  --transition-speed: 80ms;
+  --transition-timing: ease-out;
+  --current-foreground-opacity: 0.7;
+}
+
+/* Set transition properties for HSL colors */
+html {
+  transition: 
+    --color-foreground-default var(--transition-speed) var(--transition-timing),
+    --color-foreground-muted var(--transition-speed) var(--transition-timing),
+    --color-foreground-subtle var(--transition-speed) var(--transition-timing),
+    --current-foreground-opacity var(--transition-speed) var(--transition-timing);
+}
+
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+
+  /* Border Radius */
+  --radius-sm: 0.3rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.8rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Grid customization */
+  --grid-item-border-radius: 24px;
+  --grid-margin: 8px;
+
+  /* Background Elevation Levels */
+  --color-bg-base: 0 0% 96%;         /* Base background - #F5F5F5 */
+  --color-bg-subtle: 0 0% 92%;        /* Subtle background - slightly darker */
+  --color-bg-surface: 0 0% 96%;      /* Surface background - #F5F5F5 */
+  --color-bg-inset: 0 0% 92%;         /* Inset background - slightly darker */
+  --color-bg-elevated: 0 0% 100%;     /* Elevated background - White #FFFFFF */
+
+  /* Widget Specific */
+  --color-widget-bg: 0 0% 96%;       /* Widget background - #F5F5F5 */
+  --color-widget-header: 0 0% 100%;   /* Widget header - White */
+  --color-widget-content: 0 0% 100%;  /* Widget content area - White */
+  --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
+  --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
+  --color-widget-hover: 0 0% 94%;     /* Widget hover state - neutral */
+
+  /* Background Derivatives */
+  --color-background-default: var(--color-bg-base);
+  --color-background-subtle: var(--color-bg-subtle);
+  --color-background-surface: var(--color-bg-surface);
+  --color-background-inset: var(--color-bg-inset);
+  --color-background-elevated: var(--color-bg-elevated);
+  --color-background-overlay: var(--color-bg-elevated);
+
+  --color-foreground-default: 222.2 84% 4.9%;
+  --color-foreground-muted: 215.4 16.3% 46.9%;
+  --color-foreground-subtle: 0 0% 45%;
+
+  --color-border-default: 0 0% 50%;
+  --color-border-muted: 0 0% 85%;
+
+  --color-primary-default: 222.2 47.4% 11.2%;
+  --color-primary-foreground: 210 40% 98%;
+
+  --color-accent-default: 210 40% 96.1%;
+  --color-accent-foreground: 222.2 47.4% 11.2%;
+
+  --color-success-default: 142 72% 29%;
+  --color-success-foreground: 0 0% 98%;
+
+  --color-info-default: 199 89% 48%;
+  --color-info-foreground: 0 0% 98%;
+
+  --color-warning-default: 25 95% 53%;
+  --color-warning-foreground: 0 0% 98%;
+
+  --color-destructive-default: 0 84.2% 60.2%;
+  --color-destructive-foreground: 210 40% 98%;
+
+  /* Trading Colors */
+  --color-price-up: 34 197 94;      /* green-500 */
+  --color-price-down: 239 68 68;    /* red-500 */
+  --color-price-unchanged: 215.4 16.3% 46.9%;  /* text-muted-foreground */
+
+  /* Component Specific */
+  --color-input-background: var(--color-bg-inset);
+  --color-input-border: 214.3 31.8% 91.4%;
+  --color-input-ring: 222.2 84% 4.9%;
+
+  /* Focus & Interactive States */
+  --color-focus-ring: 222.2 84% 4.9%;
+  --color-hover-overlay: 0 0% 0%;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --background: var(--color-bg-base);
+  --foreground: var(--color-foreground-default);
+
+  --card: 0 0% 100%;  /* Keep cards white for contrast against the light gray background */
+  --card-foreground: var(--color-foreground-default);
+
+  --popover: var(--color-bg-elevated);
+  --popover-foreground: var(--color-foreground-default);
+
+  --primary: var(--color-primary-default);
+  --primary-foreground: var(--color-primary-foreground);
+
+  --secondary: var(--color-bg-subtle);
+  --secondary-foreground: var(--color-foreground-default);
+
+  --muted: var(--color-bg-subtle);
+  --muted-foreground: var(--color-foreground-muted);
+
+  --accent: var(--color-accent-default);
+  --accent-foreground: var(--color-accent-foreground);
+
+  --destructive: var(--color-destructive-default);
+  --destructive-foreground: var(--color-destructive-foreground);
+
+  --border: var(--color-border-default);
+  --input: var(--color-input-border);
+  --ring: var(--color-focus-ring);
+
+  --radius: var(--radius-md);
+
+  /* Scrollbar customization */
+  --scrollbar-size: 4px;
+  --scrollbar-track-color: transparent;
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-radius: var(--radius-full);
+
+  /* Global colors */
+  --pure-white: 0 0% 100%;
+  --black: 0 0% 0%;
+
+  /* Light Theme Variables */
+  /* Core UI colors */
+  --color-bg: 0 0% 100%;                  /* Main background - white */
+  --color-bg-subtle: 0 0% 96%;            /* Subtle backgrounds - light gray */
+  --color-foreground: 0 0% 0%;            /* Main text - black */
+  --color-foreground-muted: 0 0% 40%;     /* Muted text - gray */
+  --color-accent-1: 206 100% 68%;         /* Primary accent color - blue*/
+  --color-accent-2: 152 52% 58%;          /* Secondary accent color - teal */
+  --color-success: 140 50% 40%;           /* Success indicators - green */
+  --color-warning: 33 100% 50%;           /* Warning indicators - orange */
+  --color-error: 0 88% 60%;               /* Error indicators - red */
+  --color-separator: 220 13% 91%;         /* Border separators - light gray */
+
+  /* Widget theme */
+  --color-widget-bg: 0 0% 96%;       /* Widget background - #F5F5F5 */
+  --color-widget-header: 0 0% 100%;   /* Widget header - White */
+  --color-widget-content: 0 0% 100%;  /* Widget content area - White */
+  --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
+  --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
+  --color-widget-hover: 0 0% 94%;     /* Widget hover state - neutral */
+}
+
+.dark {
+  /* Background Elevation Levels - Proper contrast for hover effects */
+  --color-bg-base: 0 0% 4%;           /* Main app background */
+  --color-bg-surface: 0 0% 6%;        /* First level elevation */
+  --color-bg-surface-alt: 0 0% 8%;    /* Alternative surface color */
+  --color-bg-elevated: 0 0% 10%;      /* Elevated components */
+  --color-bg-inset: 0 0% 8%;          /* Inset areas */
+  --color-bg-subtle: 0 0% 6%;         /* Subtle backgrounds */
+
+  /* Widget Specific - Proper contrast */
+  --color-widget-bg: 0 0% 6%;         /* Widget background - #0F0F0F */
+  --color-widget-header: 0 0% 8%;     /* Widget header - slightly elevated */
+  --color-widget-content: 0 0% 6%;    /* Widget content area */
+  --color-widget-inset: 0 0% 10%;     /* Widget inset areas (scrollable) */
+
+  /* Explicitly set card variable for consistent dark mode */
+  --card: 0 0% 8%;
+
+  background-color: hsl(var(--color-bg-base));
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.15);
+
+  /* Theme Colors - Dark */
+  --color-background-main: var(--color-bg-base);
+  --color-background-elevated: var(--color-bg-elevated);
+  --color-background-subtle: var(--color-bg-subtle);
+  --color-background-overlay: var(--color-bg-elevated);
+
+  --color-foreground-default: 0 0% 98%;
+  --color-foreground-muted: 0 0% 64%;
+  --color-foreground-subtle: 0 0% 50%;
+
+  --color-border-default: 0 0% 8%;
+  --color-border-muted: 0 0% 20%;
+
+  --color-primary-default: 0 0% 98%;
+  --color-primary-foreground: 0 0% 9%;
+
+  --color-accent-default: 0 0% 20%;    /* Lighter accent for hover effect */
+  --color-accent-foreground: 0 0% 98%;
+
+  --color-success-default: 142 72% 29%;
+  --color-success-foreground: 0 0% 98%;
+
+  --color-warning-default: 38 92% 50%;
+  --color-warning-foreground: 0 0% 98%;
+
+  --color-destructive-default: 0 63% 31%;
+  --color-destructive-foreground: 0 0% 98%;
+
+  /* Trading Colors - Updated to match Tailwind colors */
+  --color-price-up: 34 197 94;      /* green-500 */
+  --color-price-down: 239 68 68;    /* red-500 */
+  --color-price-unchanged: 0 0% 64%; /* text-muted-foreground */
+
+  /* Component Specific */
+  --color-input-background: var(--color-bg-inset);
+  --color-input-border: 0 0% 15%;
+  --color-input-ring: 0 0% 83%;
+
+  /* Focus & Interactive States */
+  --color-focus-ring: 0 0% 83%;
+  --color-hover-overlay: 0 0% 100%;
+
+  /* Theme Variables */
+  --background: var(--color-bg-base);
+  --foreground: var(--color-foreground-default);
+  --card: 0 0% 8%;
+  --card-foreground: var(--color-foreground-default);
+  --popover: var(--color-bg-elevated);
+  --popover-foreground: var(--color-foreground-default);
+  --primary: var(--color-primary-default);
+  --primary-foreground: var(--color-primary-foreground);
+  --secondary: var(--color-bg-subtle);
+  --secondary-foreground: var(--color-foreground-default);
+  --muted: var(--color-bg-subtle);
+  --muted-foreground: var(--color-foreground-muted);
+  --accent: 0 0% 20%;                   /* Lighter accent for hover effect */
+  --accent-foreground: var(--color-accent-foreground);
+  --destructive: var(--color-destructive-default);
+  --destructive-foreground: var(--color-destructive-foreground);
+  --border: var(--color-border-default);
+  --input: var(--color-input-border);
+  --ring: var(--color-focus-ring);
+
+  /* Core UI colors */
+  --color-bg: 0 0% 4%;                    /* Main background - very dark */
+  --color-bg-subtle: 0 0% 8%;             /* Subtle backgrounds - slightly lighter */
+  --color-foreground: 0 0% 100%;           /* Main text - white */
+  --color-foreground-muted: 0 0% 60%;      /* Muted text - light gray */
+  --color-accent-1: 206 100% 65%;          /* Primary accent color - blue*/
+  --color-accent-2: 152 52% 55%;           /* Secondary accent color - teal */
+  --color-success: 140 50% 45%;            /* Success indicators - green */
+  --color-warning: 33 100% 50%;            /* Warning indicators - orange */
+  --color-error: 0 88% 60%;                /* Error indicators - red */
+  --color-separator: 220 13% 15%;          /* Border separators - dark gray */
+
+  /* Widget theme */
+  --color-widget-bg: 0 0% 6%;         /* Widget background - #0F0F0F */
+  --color-widget-header: 0 0% 8%;     /* Widget header - slightly elevated */
+  --color-widget-content: 0 0% 6%;    /* Widget content area */
+  --color-widget-inset: 0 0% 10%;     /* Widget inset areas (scrollable) */
+  --color-widget-inset-border: 0 0% 12% / 0.5;  /* Widget inset border color */
+  --color-widget-hover: 0 0% 12%;     /* Widget hover state - neutral for dark theme */
+}
+
+/* Add GridStack specific styles */
+.grid-stack {
+  background: transparent !important;
+  opacity: 1;
+  transition: opacity 300ms ease-in-out;
+  margin: var(--grid-margin) !important;
+}
+
+.grid-stack-item {
+  touch-action: pan-x pan-y;
+  transition: transform 300ms ease-in-out, opacity 300ms ease-in-out;
+}
+
+.grid-stack-item-content {
+  position: absolute;
+  inset: 0px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--grid-item-border-radius);
+  user-select: text; /* Allow text selection by default */
+}
+
+.grid-stack-item > .grid-stack-item-content {
+  width: auto;
+  z-index: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  user-select: text; /* Ensure text selection works */
+}
+
+/* Override scrolling behavior for preview */
+.widget-drag-preview > .grid-stack-item-content {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+.light .grid-stack-item-content {
+  background: white;
+  border: none;
+  outline: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0px 1px 2px hsla(var(--color-hover-overlay) / 0.05);
+  overflow: hidden; /* Prevent any overflow issues */
+}
+
+.dark .grid-stack-item-content {
+  background: hsl(var(--color-widget-bg));
+  border: none;
+  outline: 1px solid hsl(var(--border));
+  box-shadow: none;
+  overflow: hidden; /* Prevent any overflow issues */
+}
+
+/* Widget header styling */
+.widget-header {
+  cursor: move;
+  user-select: none; /* Prevent text selection only on header */
+  background: hsl(var(--color-widget-header));
+  z-index: 1;
+}
+
+.widget-content {
+  background: hsl(var(--color-widget-content));
+  user-select: text;
+}
+
+/* Dialog-specific styles for widgets */
+/* Target Radix elements directly with attribute selectors */
+div[role="dialog"] > div[data-radix-dialog-content],
+div[role="alertdialog"] > div[data-radix-alert-dialog-content] {
+  border-radius: var(--grid-item-border-radius);
+  overflow: hidden;
+}
+
+/* Base styles for dialog components */
+.DialogContent,
+.AlertDialogContent,
+[data-radix-dialog-content],
+[data-radix-alert-dialog-content] {
+  border-radius: var(--grid-item-border-radius);
+  overflow: hidden;
+}
+
+/* Dialog content adapts to the border radius of its container */
+[role="dialog"] .widget-header,
+[role="alertdialog"] .widget-header {
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 0px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 0px);
+  overflow: hidden;
+}
+
+[role="dialog"] .widget-content,
+[role="alertdialog"] .widget-content {
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 0px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 0px);
+  overflow: hidden;
+}
+
+/* Ensure widget content within dialogs adapts correctly */
+[role="dialog"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child,
+[role="alertdialog"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+  overflow: hidden;
+}
+
+/* Apply rounded corners to widget-inset elements when they are direct children of dialog content */
+[role="dialog"] .widget-content > .widget-inset,
+[role="alertdialog"] .widget-content > .widget-inset {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+  overflow: hidden;
+}
+
+/* Dialog styles based on grid style */
+/* Rounded style */
+:root[data-grid-style="rounded"] div[role="dialog"] > div[data-radix-dialog-content],
+:root[data-grid-style="rounded"] div[role="alertdialog"] > div[data-radix-alert-dialog-content] {
+  border-radius: var(--grid-item-border-radius);
+}
+
+:root[data-grid-style="rounded"] .DialogContent,
+:root[data-grid-style="rounded"] .AlertDialogContent,
+:root[data-grid-style="rounded"] [data-radix-dialog-content],
+:root[data-grid-style="rounded"] [data-radix-alert-dialog-content] {
+  border-radius: var(--grid-item-border-radius);
+}
+
+:root[data-grid-style="rounded"] [role="dialog"] .widget-header,
+:root[data-grid-style="rounded"] [role="alertdialog"] .widget-header {
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 0px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 0px);
+}
+
+:root[data-grid-style="rounded"] [role="dialog"] .widget-content,
+:root[data-grid-style="rounded"] [role="alertdialog"] .widget-content {
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 0px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 0px);
+}
+
+:root[data-grid-style="rounded"] [role="dialog"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child,
+:root[data-grid-style="rounded"] [role="alertdialog"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+}
+
+:root[data-grid-style="rounded"] [role="dialog"] .widget-content > .widget-inset,
+:root[data-grid-style="rounded"] [role="alertdialog"] .widget-content > .widget-inset {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+}
+
+/* Apply rounded bottom corners only to the main container div that's a direct child of widget-content */
+:root[data-grid-style="rounded"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+}
+
+/* Apply rounded corners to widget-inset elements when they are direct children */
+:root[data-grid-style="rounded"] .widget-content > .widget-inset {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+}
+
+/* But don't apply rounded corners to deeper nested elements */
+:root[data-grid-style="rounded"] .widget-content > * > * {
+  border-radius: initial;
+}
+
+/* Apply appropriate border-radius for UI elements based on grid style */
+/* Default style for UI elements */
+.widget-content button,
+.widget-content [class*="badge"],
+.widget-content [class*="button"],
+.widget-content [role="button"],
+.widget-content [class*="asset"] {
+  border-radius: var(--radius-md);
+}
+
+/* Dense style for UI elements */
+:root[data-grid-style="dense"] .widget-content button,
+:root[data-grid-style="dense"] .widget-content [class*="badge"],
+:root[data-grid-style="dense"] .widget-content [class*="button"],
+:root[data-grid-style="dense"] .widget-content [role="button"],
+:root[data-grid-style="dense"] .widget-content [class*="asset"] {
+  border-radius: var(--radius-md);
+}
+
+/* Rounded style for UI elements - slightly more rounded */
+:root[data-grid-style="rounded"] .widget-content button,
+:root[data-grid-style="rounded"] .widget-content [class*="badge"],
+:root[data-grid-style="rounded"] .widget-content [class*="button"],
+:root[data-grid-style="rounded"] .widget-content [role="button"],
+:root[data-grid-style="rounded"] .widget-content [class*="asset"] {
+  border-radius: var(--radius-lg);
+}
+
+/* Additional padding for asset badges in rounded mode */
+:root[data-grid-style="rounded"] .widget-content [class*="asset"],
+:root[data-grid-style="rounded"] .widget-content button[class*="asset"],
+:root[data-grid-style="rounded"] .widget-content .font-jakarta.font-bold.rounded-md.px-1 {
+  padding-left: 0.375rem !important; /* ~6px */
+  padding-right: 0.375rem !important; /* ~6px */
+}
+
+/* Widget-specific styling */
+.widget-inset {
+  background: transparent !important;
+  user-select: text;
+  border: none !important;
+}
+
+/* Make header buttons clickable */
+.widget-header button {
+  cursor: pointer;
+}
+
+.widget-header button:hover {
+  pointer-events: auto;
+}
+
+/* Add these table styles after the widget styles section */
+.table-container {
+  background: hsl(var(--color-widget-inset));
+  user-select: text;
+}
+
+/* Ensure table cells allow text selection */
+.table-container table {
+  user-select: text;
+}
+
+.table-container td,
+.table-container th {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+}
+
+/* Ensure table cell content is selectable */
+.table-container td *,
+.table-container th * {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+/* Prevent text selection on table headers if they're meant to be static */
+.table-container th {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Ensure table cell content is selectable even when parent has user-select: none */
+.table-container td * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* Main page scrollbar */
+body {
+  @apply bg-background text-foreground overflow-hidden;
+}
+
+.main-content {
+  @apply overflow-auto scrollbar-thin;
+  height: calc(100vh - 4rem); /* Account for TopBar height */
+  margin-top: 4rem; /* Match TopBar height */
+}
+
+.main-content-inner {
+  max-width: 1940px; /* Default max-width */
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 1.5rem; /* Match TopBar padding */
+  position: relative; /* Ensure positioning context for absolute handles */
+  transition: max-width 0.1s ease-out; /* Smooth transition when resizing */
+}
+
+/* Resize handles for main-content-inner */
+.resize-handle {
+  width: 12px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
+.resize-handle:hover {
+  opacity: 0.7;
+}
+
+.resize-handle:active,
+.resize-handle.active {
+  opacity: 1;
+  background-color: rgba(128, 128, 128, 0.3);
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 40%;
+  background-color: rgba(128, 128, 128, 0.6);
+  border-radius: 1px;
+}
+
+.resize-handle:active::after,
+.resize-handle.active::after {
+  height: 60%;
+  width: 3px;
+  background-color: rgba(128, 128, 128, 0.9);
+}
+
+body.resizing {
+  cursor: ew-resize !important;
+  user-select: none;
+}
+
+body.resizing .resize-handle {
+  opacity: 1;
+}
+
+body.resizing .resize-handle::after {
+  height: 60%;
+  width: 3px;
+  background-color: rgba(128, 128, 128, 0.9);
+}
+
+.resize-handle-left {
+  /* Left positioning is now applied inline */
+}
+
+.resize-handle-right {
+  /* Right positioning is now applied inline */
+}
+
+@media (max-width: 1940px) {
+  /* Hide resize handles when viewport width is 1940px or less */
+  .resize-handle {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content-inner {
+    padding: 0;
+  }
+  
+  /* Hide resize handles on mobile */
+  .resize-handle {
+    display: none;
+  }
+}
+
+/* Custom Scrollbar Styling */
+@supports (scrollbar-width: thin) {
+  /* Firefox */
+  .scrollbar-thin,
+  .scrollbar-main {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+  }
+}
+
+/* Webkit browsers */
+.scrollbar-thin::-webkit-scrollbar,
+.scrollbar-main::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.scrollbar-thin::-webkit-scrollbar-track,
+.scrollbar-main::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-color);
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb,
+.scrollbar-main::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+/* Remove scrollbar buttons and corner */
+.scrollbar-thin::-webkit-scrollbar-button,
+.scrollbar-main::-webkit-scrollbar-button,
+.scrollbar-thin::-webkit-scrollbar-corner,
+.scrollbar-main::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Hover effects */
+.scrollbar-thin::-webkit-scrollbar-thumb:hover,
+.scrollbar-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover,
+.dark .scrollbar-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  .theme {
+    --animate-ripple: ripple var(--duration,2s) ease calc(var(--i, 0)*.2s) infinite;
+    --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+    --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+  }
+}
+
+/* Updated GridStack resize handles for v11.3.0 */
+.grid-stack > .grid-stack-item > .ui-resizable-handle {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 2;
+}
+
+.grid-stack > .grid-stack-item:hover > .ui-resizable-handle {
+  opacity: 1;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-se,
+.grid-stack > .grid-stack-item > .ui-resizable-sw,
+.grid-stack > .grid-stack-item > .ui-resizable-ne,
+.grid-stack > .grid-stack-item > .ui-resizable-nw {
+  width: 12px;
+  height: 12px;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-se {
+  bottom: -6px;
+  right: -6px;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-sw {
+  bottom: -6px;
+  left: -6px;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-ne {
+  top: -6px;
+  right: -6px;
+}
+
+.grid-stack > .grid-stack-item > .ui-resizable-nw {
+  top: -6px;
+  left: -6px;
+}
+
+/* Widget drag and drop styles */
+.grid-stack > .grid-stack-item.ui-draggable-dragging {
+  opacity: 0.8;
+  cursor: grabbing !important;
+  z-index: 100;
+  transition: transform 0.1s ease-in-out;
+  will-change: transform;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden !important;
+}
+
+.grid-stack > .grid-stack-item.ui-draggable-dragging .grid-stack-item-content {
+  transition: transform 0.1s ease-in-out;
+  overflow: hidden !important;
+}
+
+/* Hide scrollbars during dragging */
+.grid-stack > .grid-stack-item.ui-draggable-dragging::-webkit-scrollbar,
+.grid-stack > .grid-stack-item.ui-draggable-dragging .grid-stack-item-content::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.grid-stack > .grid-stack-item.ui-draggable-dragging {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+.widget-drag-preview {
+  opacity: 0.7;
+  pointer-events: none;
+  transition: opacity 200ms ease-in-out;
+  overflow: hidden !important;
+}
+
+.widget-drag-preview .grid-stack-item-content {
+  background: hsl(var(--color-widget-bg));
+  border: 2px dashed rgba(128, 128, 128, 0.3);
+  border-radius: var(--grid-item-border-radius);
+  transition: all 200ms ease-in-out;
+  overflow: hidden !important;
+}
+
+/* Hide scrollbars specifically for preview */
+.widget-drag-preview::-webkit-scrollbar,
+.widget-drag-preview .grid-stack-item-content::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.widget-drag-preview {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+.grid-stack .grid-stack-placeholder > .placeholder-content {
+  background: rgba(128, 128, 128, 0.1) !important;
+  border: 2px dashed rgba(128, 128, 128, 0.3) !important;
+  border-radius: var(--grid-item-border-radius);
+  transition: all 0.1s ease-in-out;
+  pointer-events: none;
+}
+
+/* Improve widget movement animation */
+.grid-stack > .grid-stack-item {
+  transition: all 0.2s ease-in-out;
+  will-change: transform;
+}
+
+.grid-stack > .grid-stack-item:not(.ui-draggable-dragging):not(.ui-resizable-resizing) {
+  transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out, left 0.2s ease-in-out, top 0.2s ease-in-out;
+}
+
+/* Ensure smooth animations during grid changes */
+.grid-stack:not(.grid-stack-one-column-mode) > .grid-stack-item {
+  transform-origin: center center;
+}
+
+/* Add this new class */
+.widget-inner-container {
+  position: relative;
+  height: 100%;
+  margin-bottom: -4px; /* Compensate for grid spacing */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grid initialization and transitions */
+.grid-initializing {
+  opacity: 0;
+  transition: none;
+}
+
+/* Disable transitions during drag/resize */
+.grid-stack-item.ui-draggable-dragging,
+.grid-stack-item.ui-resizable-resizing {
+  transition: none !important;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Override for any nested grid-stack-item-content elements */
+.light .grid-stack-item-content .grid-stack-item-content,
+.dark .grid-stack-item-content .grid-stack-item-content,
+.grid-stack-item-content .grid-stack-item-content,
+.grid-stack-item-content * .grid-stack-item-content {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Ensure TradingView charts don't add borders */
+.tv-lightweight-charts,
+.tv-lightweight-charts * {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Override font-bold to be semibold (600) for buttons */
+button.font-bold, 
+.font-bold {
+  font-weight: 600 !important;
+}
+
+/* Widget-specific scrollbar styling - ultra minimal, just the bar */
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-button,
+.grid-stack-item > .grid-stack-item-content::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Firefox styling for widget scrollbars */
+@supports (scrollbar-width: thin) {
+  .grid-stack-item > .grid-stack-item-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
+}
+
+/* Widget content scrollable areas should also have minimal scrollbars */
+.widget-content::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.widget-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+.widget-content::-webkit-scrollbar-button,
+.widget-content::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Firefox styling for widget content scrollbars */
+@supports (scrollbar-width: thin) {
+  .widget-content {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
+}
+
+/* Widget inset areas should also have minimal scrollbars */
+.widget-inset::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+.widget-inset::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-inset::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
+  border-radius: var(--scrollbar-thumb-radius);
+}
+
+.widget-inset::-webkit-scrollbar-button,
+.widget-inset::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* Firefox styling for widget inset scrollbars */
+@supports (scrollbar-width: thin) {
+  .widget-inset {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
+}
+
+/* Tooltip styling */
+.tooltip-content {
+  background: hsl(var(--color-bg-elevated));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: hsl(var(--foreground));
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+  animation: tooltip-slide 0.15s ease-out;
+  user-select: none;
+}
+
+@keyframes tooltip-slide {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dark .tooltip-content {
+  background: hsl(var(--color-bg-elevated));
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+@layer utilities {
+  .text-price-up {
+    color: rgb(var(--color-price-up));
+  }
+  .text-price-down {
+    color: rgb(var(--color-price-down));
+  }
+  .text-price-unchanged {
+    color: hsl(var(--color-price-unchanged));
+  }
+  .bg-price-up {
+    background-color: rgb(var(--color-price-up));
+  }
+  .bg-price-down {
+    background-color: rgb(var(--color-price-down));
+  }
+  .bg-price-unchanged {
+    background-color: hsl(var(--color-price-unchanged));
+  }
+  .bg-price-up\/10 {
+    background-color: rgb(var(--color-price-up) / 0.1);
+  }
+  .bg-price-down\/10 {
+    background-color: rgb(var(--color-price-down) / 0.1);
+  }
+  .bg-price-unchanged\/10 {
+    background-color: hsl(var(--color-price-unchanged) / 0.1);
+  }
+  .bg-price-up\/20 {
+    background-color: rgb(var(--color-price-up) / 0.2);
+  }
+  .bg-price-down\/20 {
+    background-color: rgb(var(--color-price-down) / 0.2);
+  }
+  .bg-price-unchanged\/20 {
+    background-color: hsl(var(--color-price-unchanged) / 0.2);
+  }
+}
+
+/* Ensure there are no gaps between table header cells */
+[data-slot="table-header"] {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: hsl(var(--color-widget-header));
+}
+
+[data-slot="table-header"] tr {
+  position: relative;
+  box-shadow: 0 0 0 1px hsl(var(--color-widget-header));
+}
+
+/* Transaction table row hover and selection styling */
+[data-slot="table-row"] {
+  position: relative;
+}
+
+/* These rules are no longer needed with box-shadow approach */
+
+[data-slot="table-head"] {
+  position: relative;
+  border-collapse: collapse;
+  box-sizing: border-box;
+}
+
+/* Ensure sticky positioning within tables works correctly */
+[data-slot="table"] {
+  position: relative;
+}
+
+[data-slot="table-head"].sticky {
+  position: sticky;
+  z-index: 20;
+  background-color: hsl(var(--color-widget-header));
+}
+
+/* Override border radius with explicit props */
+[data-slot="table-cell"].rounded-l-lg,
+[data-slot="table-head"].rounded-tl-lg {
+  border-top-left-radius: 0.5rem;
+  border-bottom-left-radius: 0.5rem;
+}
+
+/* Add tabular-nums for consistent number widths */
+.font-tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Apply custom styles to the NumberFlow component */
+number-flow-react {
+  --number-flow-char-height: 0.85em;
+  display: inline-flex;
+  vertical-align: baseline;
+  line-height: normal;
+}
+
+/* Fix alignment of NumberFlow with currency symbols */
+.price-container {
+  display: inline-flex;
+  align-items: baseline;
+  line-height: normal;
+  vertical-align: baseline;
+}
+
+.price-container > * {
+  display: inline-flex;
+  vertical-align: baseline;
+}
+
+/* Euro currency symbol alignment */
+.currency-symbol {
+  display: inline-block;
+  vertical-align: baseline;
+  line-height: normal;
+  position: relative;
+  top: 0;
+}
+
+/* Space for price decimals */
+number-flow-react::part(group-decimal) {
+  margin-left: 0.1em;
+}
+
+/* Ensure specific rules to handle text selection in grid items */
+.grid-stack-item .grid-stack-item-content {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  pointer-events: auto !important;
+}
+
+/* Keep the header as the only element that can be used for dragging */
+.grid-stack-item .widget-header {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  cursor: move !important;
+}
+
+/* Ensure content is selectable but doesn't interfere with drag */
+.grid-stack-item .widget-content {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  cursor: auto !important;
+  pointer-events: auto !important;
+}
+
+/* Add this new rule to improve text selection behavior */
+.grid-stack-item-content p, 
+.grid-stack-item-content div:not(.widget-header),
+.grid-stack-item-content span,
+.grid-stack-item-content h1,
+.grid-stack-item-content h2,
+.grid-stack-item-content h3,
+.grid-stack-item-content h4,
+.grid-stack-item-content h5,
+.grid-stack-item-content h6,
+.grid-stack-item-content input,
+.grid-stack-item-content textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important; 
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* Make text selection visually clearer */
+::selection {
+  background: rgba(59, 130, 246, 0.3); /* Blue color with better opacity */
+  color: currentColor;
+}
+
+.dark ::selection {
+  background: hsl(var(--color-warning) / 0.08); /* Orange at 8% opacity */
+  color: hsl(var(--color-warning)); /* Full orange for text */
+}
+
+/* Make text selection use the orange from the logo */
+::selection {
+  background: hsl(var(--color-warning) / 0.08); /* Orange at 8% opacity */
+  color: hsl(var(--color-warning)); /* Full orange for text */
+}
+
+.dark ::selection {
+  background: hsl(var(--color-warning) / 0.08); /* Orange at 8% opacity */
+  color: hsl(var(--color-warning)); /* Full orange for text */
+}
+
+/* Fix for performance widget dialog focus outline */
+[gs-id^="performance"] .DialogContent:focus,
+[gs-id^="performance"] .DialogContent:focus-visible,
+.DialogContent[data-state="open"]:focus,
+.DialogContent[data-state="open"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove white outline from dialog content when opened directly via URL */
+[id^="radix-:"]::after,
+[id^="radix-:"]::before {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+@theme inline {
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite
+    alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+
+  @keyframes shimmer-slide {
+    to {
+      transform: translate(calc(100cqw - 100%), 0);
+    }
+  }
+  @keyframes spin-around {
+    0% {
+      transform: translateZ(0) rotate(0);
+    }
+    15%,
+    35% {
+      transform: translateZ(0) rotate(90deg);
+    }
+    65%,
+    85% {
+      transform: translateZ(0) rotate(270deg);
+    }
+    100% {
+      transform: translateZ(0) rotate(360deg);
+    }
+  }
+}
+
+/* Dense style for dialogs */
+:root[data-grid-style="dense"] div[role="dialog"] > div[data-radix-dialog-content],
+:root[data-grid-style="dense"] div[role="alertdialog"] > div[data-radix-alert-dialog-content] {
+  border-radius: var(--radius-md);
+}
+
+:root[data-grid-style="dense"] .DialogContent,
+:root[data-grid-style="dense"] .AlertDialogContent,
+:root[data-grid-style="dense"] [data-radix-dialog-content],
+:root[data-grid-style="dense"] [data-radix-alert-dialog-content] {
+  border-radius: var(--radius-md);
+}
+
+:root[data-grid-style="dense"] [role="dialog"] .widget-header,
+:root[data-grid-style="dense"] [role="alertdialog"] .widget-header {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+:root[data-grid-style="dense"] [role="dialog"] .widget-content,
+:root[data-grid-style="dense"] [role="alertdialog"] .widget-content {
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+:root[data-grid-style="dense"] [role="dialog"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child,
+:root[data-grid-style="dense"] [role="alertdialog"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+:root[data-grid-style="dense"] [role="dialog"] .widget-content > .widget-inset,
+:root[data-grid-style="dense"] [role="alertdialog"] .widget-content > .widget-inset {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* Transaction badges styling */
+.widget-content .transaction-badge {
+  padding-left: 0.25rem !important; /* 4px */
+  padding-right: 0.25rem !important; /* 4px */
+}
+
+
+/* Ensure the transactions table container always maintains border radius */
+.transactions-table-container {
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+}
+
+/* Apply the same border radius to any card or container in the referral widget */
+:root[data-grid-style="rounded"] [gs-id^="referrals"] .grid-stack-item-content .widget-content div[class*="card"],
+:root[data-grid-style="rounded"] [gs-id^="referrals"] .grid-stack-item-content .widget-content div[class*="container"] {
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 12px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 12px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+}
+
+/* Breakdown widget specific styling */
+/* Make the breakdown widget interior contents match the container border radius */
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content > div:first-child {
+  /* Apply matching border radius for all corners */
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 2px);
+  overflow: hidden;
+}
+
+/* Apply border radius to any card, container, or chart in the breakdown widget */
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content div[class*="card"],
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content div[class*="container"],
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content .recharts-wrapper {
+  border-radius: calc(var(--grid-item-border-radius) - 4px);
+  overflow: hidden;
+}
+
+/* Performance widget specific styling */
+/* Target the bottom inner content area background in performance widget */
+:root[data-grid-style="rounded"] [gs-id^="performance"] .grid-stack-item-content .widget-content > .flex-1 {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+  overflow: hidden;
+}
+
+/* Apply bottom border radius to any card in the performance widget */
+:root[data-grid-style="rounded"] [gs-id^="performance"] .grid-stack-item-content .widget-content div[class*="card"] {
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+}
+
+/* Dialog-specific widget styling to ensure border radius is preserved */
+/* Performance widget in dialog mode */
+[role="dialog"] [gs-id^="performance"] .widget-content > .flex-1,
+[role="alertdialog"] [gs-id^="performance"] .widget-content > .flex-1 {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+  overflow: hidden;
+}
+
+[role="dialog"] [gs-id^="performance"] .widget-content div[class*="card"],
+[role="alertdialog"] [gs-id^="performance"] .widget-content div[class*="card"] {
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+}
+
+/* Referrals widget in dialog mode */
+[role="dialog"] [gs-id^="referrals"] .widget-content > div:first-child,
+[role="alertdialog"] [gs-id^="referrals"] .widget-content > div:first-child {
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+  overflow: hidden;
+}
+
+[role="dialog"] [gs-id^="referrals"] .widget-content div[class*="card"],
+[role="dialog"] [gs-id^="referrals"] .widget-content div[class*="container"],
+[role="alertdialog"] [gs-id^="referrals"] .widget-content div[class*="card"],
+[role="alertdialog"] [gs-id^="referrals"] .widget-content div[class*="container"] {
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 12px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 12px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+}
+
+/* Breakdown (treemap) widget in dialog mode */
+[role="dialog"] [gs-id^="treemap"] .widget-content > div:first-child,
+[role="alertdialog"] [gs-id^="treemap"] .widget-content > div:first-child {
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 2px);
+  overflow: hidden;
+}
+
+[role="dialog"] [gs-id^="treemap"] .widget-content div[class*="card"],
+[role="dialog"] [gs-id^="treemap"] .widget-content div[class*="container"],
+[role="dialog"] [gs-id^="treemap"] .widget-content .recharts-wrapper,
+[role="alertdialog"] [gs-id^="treemap"] .widget-content div[class*="card"],
+[role="alertdialog"] [gs-id^="treemap"] .widget-content div[class*="container"],
+[role="alertdialog"] [gs-id^="treemap"] .widget-content .recharts-wrapper {
+  border-radius: calc(var(--grid-item-border-radius) - 4px);
+  overflow: hidden;
+}
+
+/* Dark mode overrides for specific Tailwind classes */
+.dark .border-slate-100 {
+  --tw-border-opacity: 0.02;
+  border-color: rgb(255 255 255 / var(--tw-border-opacity));
+}
+
+/* Light mode overrides for specific Tailwind classes */
+.border-slate-100 {
+  --tw-border-opacity: 0.08; /* Adjusted opacity for better visibility in light mode */
+  border-color: rgb(0 0 0 / var(--tw-border-opacity));
+}

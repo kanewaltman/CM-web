@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Widget Popout</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script type="module">
+      // Import Tauri APIs
+      import { listen } from '@tauri-apps/api/event';
+
+      // Listen for content updates
+      window.addEventListener('DOMContentLoaded', async () => {
+        try {
+          await listen('set-content', (event) => {
+            document.getElementById('content').innerHTML = event.payload.content;
+            document.title = event.payload.title || 'Widget Popout';
+          });
+        } catch (e) {
+          console.error('Failed to initialize event listener:', e);
+        }
+      });
+    </script>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--background, white);
+        color: var(--foreground, black);
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      #content {
+        height: 100%;
+        overflow: auto;
+        background: var(--background);
+        color: var(--foreground);
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        padding: 1rem;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: rgb(9, 9, 11);
+          color: rgb(250, 250, 250);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="content">Loading...</div>
+  </body>
+</html> 
