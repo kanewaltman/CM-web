@@ -24,7 +24,4 @@
   nodeVersion = "18"
   install_cmd = "npm install --no-audit --prefer-offline --legacy-peer-deps"
   # Force Node.js 18 for all operations
-  env = { NODE_VERSION = "18.20.6", NODE_ENV = "development" }
-
-[[plugins]]
-  package = "@netlify/plugin-visual-editor" 
+  env = { NODE_VERSION = "18.20.6", NODE_ENV = "development" } 
