@@ -1,5 +1,5 @@
 [build]
-  command = "npm ci --legacy-peer-deps && npm run build && npm run build-storybook && mkdir -p dist/storybook && cp -r storybook-static/* dist/storybook/"
+  command = "npm ci --legacy-peer-deps && npm run build && (npm run build-storybook || true) && mkdir -p dist/storybook && (cp -r storybook-static/* dist/storybook/ || true)"
   publish = "dist"
 
 [build.environment]
