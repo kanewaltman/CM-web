@@ -25,6 +25,3 @@ dist-ssr
 
 *storybook.log
 /src-tauri
-
-# Local Netlify folder
-.netlify
