@@ -8,7 +8,6 @@
     "npm": ">=7"
   },
   "scripts": {
-    "preinstall": "node stackbit-setup.js",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "lint": "eslint .",
