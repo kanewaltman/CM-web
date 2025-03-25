@@ -4,7 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "18.20.6"
-  NPM_FLAGS = "--no-optional"
+  NPM_FLAGS = "--no-optional --legacy-peer-deps"
 
 [[redirects]]
   from = "/storybook/*"
@@ -21,4 +21,7 @@
   build_cmd = "npm run build"
   dev_cmd = "npm run dev"
   container_port = 5173
-  nodeVersion = "18" 
+  nodeVersion = "18"
+  install_cmd = "npm install --no-audit --prefer-offline --legacy-peer-deps"
+  # Force Node.js 18 for all operations
+  env = { NODE_VERSION = "18.20.6", NODE_ENV = "development" } 
