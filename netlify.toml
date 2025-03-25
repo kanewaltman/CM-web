@@ -21,4 +21,4 @@
   build_cmd = "npm run build"
   dev_cmd = "npm run dev"
   container_port = 5173
-  node_version = "18" 
+  nodeVersion = "18" 
