@@ -11,7 +11,7 @@ export interface RemovableWidgetProps extends BaseWidgetProps {
 }
 
 export interface PerformanceWidgetProps extends RemovableWidgetProps {
-  widgetId?: string;
+  widgetId: string;
   headerControls?: boolean;
   defaultVariant?: ChartVariant;
   defaultViewMode?: 'split' | 'cumulative' | 'combined';
@@ -32,7 +32,7 @@ export interface WidgetConfig {
 }
 
 export interface WidgetComponentProps {
-  widgetId?: string;
+  widgetId: string;
   headerControls?: boolean;
   className?: string;
   onRemove?: () => void;

@@ -21,6 +21,18 @@ import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MoreHorizontal } from "lucide-react";
 
+// Debug logging utility - only logs in development and when enabled
+const DEBUG_ENABLED = false; // Set to true to enable detailed debug logs
+function debugLog(message: string, data?: any) {
+  if (process.env.NODE_ENV === 'development' && DEBUG_ENABLED) {
+    if (data) {
+      console.log(message, data);
+    } else {
+      console.log(message);
+    }
+  }
+}
+
 // Import sample balances from BalancesWidget
 const SAMPLE_BALANCES = {
   "BTC": {
@@ -206,20 +218,32 @@ function getAssetProfile(asset: AssetTicker) {
 
 // Add sample data that reflects portfolio value history
 function generateSampleData(currentBalances: Record<string, number>, dateRange?: { from: Date; to: Date }, containerWidth: number = 0) {
-  // Ensure the date range is valid
-  if (!dateRange?.from || !dateRange?.to) {
-    console.log('generateSampleData: Using default date range (last 156 weeks)');
-    // Default to 156 weeks (3 years) if no date range provided
+  // Create a default date range of the last 156 weeks if none provided
+  if (!dateRange) {
     const endDate = new Date();
-    const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - 156 * 7);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - (156 * 7)); // 156 weeks
     dateRange = { from: startDate, to: endDate };
-  } else {
-    console.log('generateSampleData: Using provided date range:', {
-      from: dateRange.from.toISOString(),
-      to: dateRange.to.toISOString()
-    });
+    debugLog('generateSampleData: Using default date range (last 156 weeks)');
   }
+  
+  // Calculate number of days in range
+  let days = Math.max(1, Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000)));
+  
+  // If the range is 0 or 1 day, expand it to 7 days for better visualization
+  if (days <= 1) {
+    const newFrom = new Date(dateRange.to);
+    newFrom.setDate(newFrom.getDate() - 6); // 7 days including today
+    dateRange = { from: newFrom, to: dateRange.to };
+    days = 7;
+    debugLog('generateSampleData: Detected same-day or 0-day range, expanding to 7 days');
+  }
+  
+  debugLog('generateSampleData: Using provided date range:', {
+    from: dateRange.from.toISOString(),
+    to: dateRange.to.toISOString(),
+    days
+  });
   
   // Ensure the start date is before the end date
   const startDate = new Date(dateRange.from);
@@ -233,20 +257,23 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   }
   
   // Calculate number of days between dates
-  const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
-  console.log(`generateSampleData: Generating data for ${days} days`);
+  const daysInRange = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)));
+  debugLog(`generateSampleData: Generating data for ${daysInRange} days`);
   
   // Use a fixed number of data points based on container width and date range
-  // Use consistent data point count for smoother animations
-  let dataPoints = Math.min(156, Math.max(20, Math.floor(days / 2))); // Base number
+  // Ensure we have at least one data point per day for shorter ranges
+  let dataPoints = daysInRange <= 20 ? daysInRange : Math.min(156, Math.max(20, Math.floor(daysInRange / 2))); // Base number
   
-  if (containerWidth >= 480) dataPoints = Math.min(180, Math.max(20, Math.floor(days / 1.75)));
-  if (containerWidth >= 768) dataPoints = Math.min(200, Math.max(20, Math.floor(days / 1.5)));
-  if (containerWidth >= 1024) dataPoints = Math.min(220, Math.max(20, Math.floor(days / 1.25)));
-  if (containerWidth >= 1280) dataPoints = Math.min(240, Math.max(20, Math.floor(days)));
-  if (containerWidth >= 1536) dataPoints = Math.min(260, Math.max(20, Math.floor(days)));
+  if (containerWidth >= 480) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(180, Math.max(20, Math.floor(daysInRange / 1.75)));
+  if (containerWidth >= 768) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(200, Math.max(20, Math.floor(daysInRange / 1.5)));
+  if (containerWidth >= 1024) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(220, Math.max(20, Math.floor(daysInRange / 1.25)));
+  if (containerWidth >= 1280) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(240, Math.max(20, Math.floor(daysInRange)));
+  if (containerWidth >= 1536) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(260, Math.max(20, Math.floor(daysInRange)));
   
-  console.log(`generateSampleData: Using ${dataPoints} data points for ${days} days`);
+  // Always ensure at least 2 data points for any date range
+  dataPoints = Math.max(2, dataPoints);
+  
+  debugLog(`generateSampleData: Using ${dataPoints} data points for ${daysInRange} days`);
   
   // Use consistent seed for random number generation
   const seededRandom = (seed: number) => {
@@ -258,11 +285,11 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   let dateFormat: Intl.DateTimeFormatOptions = { month: 'short', year: 'numeric' };
   
   // For shorter date ranges (≤ 60 days), include the day in the format
-  if (days <= 60) {
+  if (daysInRange <= 60) {
     dateFormat = { month: 'short', day: 'numeric', year: 'numeric' };
   }
   // For very short ranges (≤ 7 days), show more detailed info
-  else if (days <= 7) {
+  else if (daysInRange <= 7) {
     dateFormat = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit' };
   }
   
@@ -324,24 +351,6 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const componentId = useId();
   const instanceRef = useRef(Date.now());
   
-  // Improved logging of received dateRange
-  useEffect(() => {
-    if (dateRange) {
-      console.log(`PerformanceChart [${componentId}] received dateRange:`, {
-        from: dateRange.from.toISOString(),
-        to: dateRange.to.toISOString(),
-        instance: instanceRef.current
-      });
-    } else {
-      console.log(`PerformanceChart [${componentId}] received no dateRange`);
-    }
-  }, [dateRange, componentId]);
-  
-  // Track render count for debugging re-renders
-  const renderCount = useRef(0);
-  renderCount.current += 1;
-  console.log(`PerformanceChart [${componentId}] render #${renderCount.current}`);
-  
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const { resolvedTheme } = useTheme();
@@ -359,7 +368,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const popoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Store the current date range for comparison
-  const prevDateRangeRef = useRef<{ from?: Date; to?: Date; instanceId?: number }>({});
+  const prevDateRangeRef = useRef<{ from?: Date; to?: Date; instanceId?: number; dateRangeStr?: string }>({});
 
   // Track the last shown date for year/month labels
   const lastShownDate = useRef<{ month: string; year: string }>({ month: '', year: '' });
@@ -411,13 +420,27 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   // Fetch balance data - defined as a memoized callback to avoid recreation on each render
   const fetchBalanceData = useCallback(async () => {
     if (!dateRange?.from || !dateRange?.to) {
-      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] cannot fetch data without dateRange`);
+      debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] cannot fetch data without dateRange`);
       return;
     }
     
-    console.log(`PerformanceChart [${componentId}:${instanceRef.current}] fetchBalanceData called with dateRange:`, {
-      from: dateRange.from.toISOString(),
-      to: dateRange.to.toISOString()
+    // Check if from and to dates are the same or very close (0-1 day difference)
+    const dayDiff = Math.max(0, Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000)));
+    let effectiveDateRange = dateRange;
+    
+    if (dayDiff <= 1) {
+      debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] detected same-day range in fetchBalanceData, expanding to 7 days`);
+      // Modify the date range to cover the last 7 days ending with the specified "to" date
+      const newFrom = new Date(dateRange.to);
+      newFrom.setDate(newFrom.getDate() - 6); // 7 days including today
+      effectiveDateRange = { from: newFrom, to: dateRange.to };
+    }
+    
+    debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] fetchBalanceData called with dateRange:`, {
+      from: effectiveDateRange.from.toISOString(),
+      to: effectiveDateRange.to.toISOString(),
+      originalDayDiff: dayDiff,
+      effectiveDayDiff: Math.ceil((effectiveDateRange.to.getTime() - effectiveDateRange.from.getTime()) / (24 * 60 * 60 * 1000))
     });
     
     try {
@@ -435,12 +458,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
         setAssets(validAssets);
         
         // Generate data for the exact date range with container width
-        const newData = generateSampleData(sampleBalances, dateRange, containerWidth);
-        console.log(`PerformanceChart [${componentId}:${instanceRef.current}] generated sample data:`, {
+        const newData = generateSampleData(sampleBalances, effectiveDateRange, containerWidth);
+        debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] generated sample data:`, {
           dataPoints: newData.length,
           dateRange: {
-            from: dateRange.from.toISOString(),
-            to: dateRange.to.toISOString()
+            from: effectiveDateRange.from.toISOString(),
+            to: effectiveDateRange.to.toISOString()
           }
         });
         
@@ -452,9 +475,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           // If there is previous data, check if the new data has the same length
           // Having the same length helps with smoother transitions
           if (prevData.length === newData.length) {
-            console.log('Same number of data points, animation should be smooth');
+            debugLog('Same number of data points, animation should be smooth');
           } else {
-            console.log('Different number of data points, may affect animation');
+            debugLog('Different number of data points, may affect animation');
           }
           
           return newData;
@@ -495,12 +518,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           );
 
           // Generate data points based on date range with container width
-          const newData = generateSampleData(currentBalances, dateRange, containerWidth);
-          console.log(`PerformanceChart [${componentId}:${instanceRef.current}] generated data for date range:`, {
+          const newData = generateSampleData(currentBalances, effectiveDateRange, containerWidth);
+          debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] generated data for date range:`, {
             dataPoints: newData.length,
             dateRange: {
-              from: dateRange.from.toISOString(),
-              to: dateRange.to.toISOString()
+              from: effectiveDateRange.from.toISOString(),
+              to: effectiveDateRange.to.toISOString()
             }
           });
           
@@ -508,9 +531,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           setFullBalanceData(prevData => {
             if (prevData.length === 0) return newData;
             if (prevData.length === newData.length) {
-              console.log('Same number of data points, animation should be smooth');
+              debugLog('Same number of data points, animation should be smooth');
             } else {
-              console.log('Different number of data points, may affect animation');
+              debugLog('Different number of data points, may affect animation');
             }
             return newData;
           });
@@ -524,11 +547,33 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     } finally {
       setIsLoading(false);
     }
-  }, [dataSource, dateRange, containerWidth, componentId]);
+  }, [dataSource, containerWidth, componentId]);
 
-  // Update the effect to handle date range changes more carefully
+  // Update the effect to handle date range changes
   useEffect(() => {
-    if (!dateRange?.from || !dateRange?.to) return;
+    // Always log whenever this effect is triggered, regardless of values
+    debugLog(`PerformanceChart [${componentId}] date range effect TRIGGERED`, { 
+      hasDateRange: !!dateRange,
+      instanceId: instanceRef.current 
+    });
+    
+    if (!dateRange?.from || !dateRange?.to) {
+      debugLog(`PerformanceChart [${componentId}] missing dateRange, skipping update`);
+      return;
+    }
+    
+    // Always log date range received for debugging
+    debugLog(`PerformanceChart [${componentId}] received dateRange:`, {
+      from: dateRange.from.toISOString(),
+      to: dateRange.to.toISOString(),
+      timestamp: Date.now() // For tracking sequence
+    });
+    
+    // Create string representation of current date range for reliable comparison
+    const currentDateRangeStr = JSON.stringify({
+      from: dateRange.from.getTime(),
+      to: dateRange.to.getTime()
+    });
     
     // Check if this is the first render or if the date range has changed
     const isNewInstance = !prevDateRangeRef.current.instanceId || 
@@ -536,39 +581,81 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     
     const dateRangeChanged = isNewInstance || 
                            !prevDateRangeRef.current.from || 
-                           !prevDateRangeRef.current.to || 
-                           prevDateRangeRef.current.from.getTime() !== dateRange.from.getTime() || 
-                           prevDateRangeRef.current.to.getTime() !== dateRange.to.getTime();
+                           !prevDateRangeRef.current.to ||
+                           currentDateRangeStr !== prevDateRangeRef.current.dateRangeStr;
     
-    // Only regenerate data if this is a new instance or the date range has changed
-    if (dateRangeChanged) {
-      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] dateRange ${isNewInstance ? 'new instance' : 'changed'}, regenerating data:`, {
+    debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] date range effect triggered:`, {
+      isNewInstance,
+      dateRangeChanged,
+      previousRange: prevDateRangeRef.current.from ? {
+        from: prevDateRangeRef.current.from.toISOString(),
+        to: prevDateRangeRef.current.to?.toISOString()
+      } : null,
+      currentRange: {
         from: dateRange.from.toISOString(),
-        to: dateRange.to.toISOString(),
-        renderCount: renderCount.current,
-        prev: prevDateRangeRef.current.from ? {
-          from: prevDateRangeRef.current.from.toISOString(),
-          to: prevDateRangeRef.current.to?.toISOString()
-        } : 'none'
-      });
-      
+        to: dateRange.to.toISOString()
+      }
+    });
+    
+    // Only regenerate data if this is a new instance or if the date range has changed
+    if (dateRangeChanged) {
       // Store current date range for future reference
       prevDateRangeRef.current = { 
         from: new Date(dateRange.from), 
         to: new Date(dateRange.to),
-        instanceId: instanceRef.current
+        instanceId: instanceRef.current,
+        dateRangeStr: currentDateRangeStr
       };
       
-      // Use a small delay to ensure animations work properly
-      // This allows React to register the change before fetching new data
-      setTimeout(() => {
-        // Trigger regeneration of data
-        fetchBalanceData();
-      }, 10);
-    } else {
-      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] dateRange unchanged, skipping data regeneration`);
+      debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] date range CHANGED, fetching new data for:`, {
+        from: dateRange.from.toISOString(),
+        to: dateRange.to.toISOString()
+      });
+      
+      // Eliminate timeout to ensure immediate data fetching
+      fetchBalanceData();
     }
   }, [dateRange, fetchBalanceData, componentId]);
+
+  // Add a specific initialization effect
+  useEffect(() => {
+    debugLog(`PerformanceChart [${componentId}] INITIALIZATION with dateRange:`, 
+      dateRange ? {
+        from: dateRange.from.toISOString(),
+        to: dateRange.to.toISOString(),
+        daySpan: dateRange.from && dateRange.to ? 
+          Math.round((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000)) : 
+          'unknown'
+      } : 'undefined'
+    );
+
+    // Check if we need to adjust the initial date range
+    if (dateRange?.from && dateRange?.to) {
+      const dayDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000));
+      
+      if (dayDiff <= 1) {
+        debugLog(`PerformanceChart [${componentId}] INITIALIZATION detected same-day range (${dayDiff} days), expanding to 7 days`);
+      }
+      
+      // Set initial reference point no matter what (will be adjusted if needed in fetchBalanceData)
+      prevDateRangeRef.current = { 
+        from: new Date(dateRange.from), 
+        to: new Date(dateRange.to),
+        instanceId: instanceRef.current,
+        dateRangeStr: JSON.stringify({
+          from: dateRange.from.getTime(),
+          to: dateRange.to.getTime()
+        })
+      };
+      
+      // Trigger immediate initial fetch - the fetchBalanceData function will handle
+      // expanding the date range if needed
+      debugLog(`PerformanceChart [${componentId}] Triggering INITIAL data fetch`);
+      fetchBalanceData();
+    } else {
+      debugLog(`PerformanceChart [${componentId}] INITIALIZATION has no dateRange, waiting for prop update`);
+    }
+  }, []); // Empty dependency array ensures this runs once on component mount
 
   // Get visible data based on screen width and date range
   const balanceData = useMemo(() => {
@@ -576,55 +663,56 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       return [];
     }
     
-    let filteredData = [...fullBalanceData]; // Create a copy to avoid modifying the original
+    let filteredData = [...fullBalanceData];
     
     if (dateRange?.from && dateRange?.to) {
-      const beforeFilterCount = filteredData.length;
+      // Check if this is a same-day date range that needs expansion
+      const dayDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000));
       
-      const fromTimeMs = dateRange.from.getTime();
-      const toTimeMs = dateRange.to.getTime();
+      // Use expanded date range for filtering if it's a 0-1 day range
+      let effectiveFromDate = dateRange.from;
+      let effectiveToDate = dateRange.to;
+      
+      if (dayDiff <= 1) {
+        // Create a new from date that's 6 days before the to date (7 days total)
+        effectiveFromDate = new Date(dateRange.to);
+        effectiveFromDate.setDate(effectiveFromDate.getDate() - 6);
+        
+        debugLog(`PerformanceChart balanceData: Using expanded date range for filtering:`, {
+          original: {
+            from: dateRange.from.toISOString(),
+            to: dateRange.to.toISOString(),
+            days: dayDiff
+          },
+          expanded: {
+            from: effectiveFromDate.toISOString(),
+            to: effectiveToDate.toISOString(),
+            days: Math.ceil((effectiveToDate.getTime() - effectiveFromDate.getTime()) / (24 * 60 * 60 * 1000))
+          }
+        });
+      }
+      
+      const fromTimeMs = effectiveFromDate.getTime();
+      const toTimeMs = effectiveToDate.getTime();
       
       filteredData = filteredData.filter(point => {
         const pointDate = new Date(point.date);
         const pointTimeMs = pointDate.getTime();
         return pointTimeMs >= fromTimeMs && pointTimeMs <= toTimeMs;
       });
-      
-      console.log(`PerformanceChart [${componentId}:${instanceRef.current}] filtered data for date range:`, {
-        dateRange: {
-          from: dateRange.from.toISOString(),
-          to: dateRange.to.toISOString()
-        },
-        beforeCount: beforeFilterCount,
-        afterCount: filteredData.length
-      });
     }
     
-    // If no data points after filtering, return empty array
     if (filteredData.length === 0) {
       return [];
     }
     
-    // Sort data by date to ensure correct order
     filteredData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     return filteredData;
-  }, [fullBalanceData, dateRange, componentId]);
-
-  // Update balanceData logging to be more concise
-  useEffect(() => {
-    console.log(`PerformanceChart [${componentId}:${instanceRef.current}] balanceData updated:`, {
-      count: balanceData.length,
-      dateRange: dateRange ? {
-        from: dateRange.from.toISOString(),
-        to: dateRange.to.toISOString()
-      } : 'none'
-    });
-  }, [balanceData, dateRange, componentId]);
+  }, [fullBalanceData, dateRange]);
 
   // Reset lastShownDate when date range changes
   useEffect(() => {
-    // Reset the last shown date tracking when the date range changes
     lastShownDate.current = { month: '', year: '' };
   }, [dateRange]);
 
@@ -670,7 +758,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     // Calculate interval based on data points and target labels
     const interval = Math.max(1, Math.floor(balanceData.length / targetLabels));
     
-    console.log(`Chart params: ${balanceData.length} points, ${daysInRange} days, ${targetLabels} labels, interval ${interval}`);
+    debugLog(`Chart params: ${balanceData.length} points, ${daysInRange} days, ${targetLabels} labels, interval ${interval}`);
     
     return { interval };
   }, [containerWidth, balanceData.length, dateRange]);
@@ -760,8 +848,19 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     // Make sure we have year markers at reasonable intervals
     // If we have multiple years but no transitions detected
     if (transitions.length === 0 && dateRange?.from && dateRange?.to) {
-      const startYear = dateRange.from.getFullYear();
-      const endYear = dateRange.to.getFullYear();
+      // Check if this is a same-day date range that should be expanded
+      const dayDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000));
+      let effectiveFromDate = dateRange.from;
+      let effectiveToDate = dateRange.to;
+      
+      if (dayDiff <= 1) {
+        // Create a new from date that's 6 days before the to date (7 days total)
+        effectiveFromDate = new Date(dateRange.to);
+        effectiveFromDate.setDate(effectiveFromDate.getDate() - 6);
+      }
+      
+      const startYear = effectiveFromDate.getFullYear();
+      const endYear = effectiveToDate.getFullYear();
       
       if (endYear > startYear) {
         // Add year transitions at estimated positions
@@ -771,8 +870,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           const jan1Time = jan1.getTime();
           
           // Find the closest index in the data
-          const totalDuration = dateRange.to.getTime() - dateRange.from.getTime();
-          const yearProgress = (jan1Time - dateRange.from.getTime()) / totalDuration;
+          const totalDuration = effectiveToDate.getTime() - effectiveFromDate.getTime();
+          const yearProgress = (jan1Time - effectiveFromDate.getTime()) / totalDuration;
           const estimatedIndex = Math.floor(yearProgress * visibleData.length);
           
           // Ensure the index is valid
@@ -788,6 +887,25 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   // Get visible and hidden assets
   const visibleAssets = useMemo(() => sortedAssets.slice(0, 5), [sortedAssets]);
   const truncatedAssets = useMemo(() => sortedAssets.slice(5), [sortedAssets]);
+
+  // Optimize chart hover handling
+  const handleChartMouseMove = useCallback((e: any) => {
+    if (e?.activePayload?.[0] && e.activeTooltipIndex !== undefined) {
+      const values = Object.fromEntries(
+        e.activePayload.map(entry => [entry.dataKey, entry.value])
+      );
+
+      setHoverValues({ 
+        index: e.activeTooltipIndex, 
+        values,
+        activeLine: hoverValues?.activeLine || e.activePayload[0].dataKey
+      });
+    }
+  }, [hoverValues?.activeLine]);
+
+  const handleChartMouseLeave = useCallback(() => {
+    setHoverValues(null);
+  }, []);
 
   if (error) {
     return (
