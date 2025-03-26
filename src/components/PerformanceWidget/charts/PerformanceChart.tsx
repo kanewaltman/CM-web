@@ -260,20 +260,22 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   const daysInRange = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)));
   debugLog(`generateSampleData: Generating data for ${daysInRange} days`);
   
-  // Use a fixed number of data points based on container width and date range
-  // Ensure we have at least one data point per day for shorter ranges
-  let dataPoints = daysInRange <= 20 ? daysInRange : Math.min(156, Math.max(20, Math.floor(daysInRange / 2))); // Base number
+  // Calculate the number of data points based on the date range and container width
+  // For short date ranges (less than 60 days), ensure we have at least 60 data points
+  // to maintain visual consistency and ensure hover reference lines display properly
+  let numDataPoints = Math.max(days, 60);
   
-  if (containerWidth >= 480) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(180, Math.max(20, Math.floor(daysInRange / 1.75)));
-  if (containerWidth >= 768) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(200, Math.max(20, Math.floor(daysInRange / 1.5)));
-  if (containerWidth >= 1024) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(220, Math.max(20, Math.floor(daysInRange / 1.25)));
-  if (containerWidth >= 1280) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(240, Math.max(20, Math.floor(daysInRange)));
-  if (containerWidth >= 1536) dataPoints = daysInRange <= 20 ? daysInRange : Math.min(260, Math.max(20, Math.floor(daysInRange)));
+  // Adjust data points based on container width for larger screens
+  if (containerWidth > 0) {
+    // Allocate roughly 1 data point per 8-12px of width for smoother visuals
+    const basePoints = Math.ceil(containerWidth / 10);
+    numDataPoints = Math.max(numDataPoints, basePoints);
+  }
   
-  // Always ensure at least 2 data points for any date range
-  dataPoints = Math.max(2, dataPoints);
+  // Ensure we have a reasonable minimum number of points even for very short ranges
+  numDataPoints = Math.max(numDataPoints, 60);
   
-  debugLog(`generateSampleData: Using ${dataPoints} data points for ${daysInRange} days`);
+  debugLog('generateSampleData: Will generate data with points:', numDataPoints);
   
   // Use consistent seed for random number generation
   const seededRandom = (seed: number) => {
@@ -294,9 +296,9 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   }
   
   // Generate data points
-  return Array.from({ length: dataPoints }).map((_, i) => {
+  return Array.from({ length: numDataPoints }).map((_, i) => {
     const date = new Date(startDate);
-    const progress = i / (dataPoints - 1);
+    const progress = i / (numDataPoints - 1);
     date.setTime(startDate.getTime() + progress * (endDate.getTime() - startDate.getTime()));
     
     const dataPoint: BalanceDataPoint = {
@@ -311,7 +313,7 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
     Object.entries(currentBalances).forEach(([asset, currentValue]) => {
       const profile = getAssetProfile(asset as AssetTicker);
       
-      if (i === dataPoints - 1) {
+      if (i === numDataPoints - 1) {
         dataPoint[asset] = currentValue;
       } else {
         // Use a more consistent seeded random for smoother transitions
@@ -1266,8 +1268,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           key={`value-${asset}`}
                           stroke={assetColor}
                           strokeDasharray="2 2"
-                          opacity={hoverValues?.values[asset] ? 0.25 : 0}
-                          ifOverflow="hidden"
+                          opacity={hoverValues?.values[asset] ? 0.4 : 0}
+                          ifOverflow="extendDomain"
                           position="middle"
                           segment={[
                             { x: 0, y: hoverValues?.values[asset] || 0 },
@@ -1333,8 +1335,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                     key="value-total"
                     stroke="hsl(var(--foreground))"
                     strokeDasharray="2 2"
-                    opacity={hoverValues?.values.total ? 0.25 : 0}
-                    ifOverflow="hidden"
+                    opacity={hoverValues?.values.total ? 0.4 : 0}
+                    ifOverflow="extendDomain"
                     position="middle"
                     segment={[
                       { x: 0, y: hoverValues?.values.total || 0 },
