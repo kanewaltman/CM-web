@@ -15,6 +15,22 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
 
+// Set this to false to disable logging
+const ENABLE_LOGGING = false;
+
+// Logging utility function
+const log = {
+  info: (...args: any[]) => {
+    if (ENABLE_LOGGING) {
+      console.log(...args);
+    }
+  },
+  error: (...args: any[]) => {
+    // Always log errors
+    console.error(...args);
+  }
+};
+
 const formatBalance = (value: number, decimals: number) => {
   // Convert to string without scientific notation and ensure we get all digits
   const fullNumber = value.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 20 });
@@ -296,7 +312,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   // Effect to load balances data
   useEffect(() => {
     const fetchInitialBalances = async () => {
-      console.log(`[BalancesWidget] Fetching balances with data source: ${dataSource}. Component ID: ${Math.random().toString(36).substring(7)}`);
+      log.info(`[BalancesWidget] Fetching balances with data source: ${dataSource}. Component ID: ${Math.random().toString(36).substring(7)}`);
       try {
         setIsInitialLoading(true);
 
@@ -363,7 +379,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           }
         }
       } catch (err) {
-        console.error('Error fetching balances:', err);
+        log.error('Error fetching balances:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch balances');
       } finally {
         setIsInitialLoading(false);
@@ -389,7 +405,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
       }
       const rawPriceData = await pricesResponse.json();
       
-      console.log('📊 Raw prices data received:', {
+      log.info('📊 Raw prices data received:', {
         timestamp: new Date().toISOString(),
         latestPrices: rawPriceData.latestPrices?.length,
         info24h: rawPriceData['24hInfo']?.length,
@@ -407,19 +423,19 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         };
       });
 
-      console.log('📈 Current prices before 24h calculation:', currentPrices);
+      log.info('📈 Current prices before 24h calculation:', currentPrices);
 
       // Calculate 24h changes
       if (rawPriceData['24hInfo']) {
         rawPriceData['24hInfo'].forEach((info: any) => {
           if (currentPrices[info.pair]) {
             // Log the full info object to see its structure
-            console.log(`📊 24h info for ${info.pair}:`, info);
+            log.info(`📊 24h info for ${info.pair}:`, info);
             
             // Use the delta value directly (it's already in percentage form)
             const change = info.delta * 100; // Convert to percentage
             currentPrices[info.pair].change24h = change;
-            console.log(`✅ Set 24h change for ${info.pair}: ${change}%`);
+            log.info(`✅ Set 24h change for ${info.pair}: ${change}%`);
           }
         });
       }
@@ -432,7 +448,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           !value.startsWith('EUR')
         );
 
-      console.log('🔍 Pairs from balances:', pairs);
+      log.info('🔍 Pairs from balances:', pairs);
 
       // Initialize enriched prices with current data
       const enrichedPrices: PriceData = {};
@@ -447,7 +463,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           { pair: `${baseAsset}USDC`, type: 'USDC' }
         ];
         
-        console.log(`🔎 Looking for price data for ${baseAsset}:`, {
+        log.info(`🔎 Looking for price data for ${baseAsset}:`, {
           availablePairs: alternativePairs.map(p => ({
             pair: p.pair,
             hasData: !!currentPrices[p.pair],
@@ -463,7 +479,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
             // If we don't have any data yet, or if this pair has a non-zero change
             if (!bestPriceData || (priceData.change24h !== 0 && bestPriceData.change24h === 0)) {
               bestPriceData = priceData;
-              console.log(`📈 Found better price data for ${baseAsset} from ${pairName}:`, priceData);
+              log.info(`📈 Found better price data for ${baseAsset} from ${pairName}:`, priceData);
             }
           }
         }
@@ -473,9 +489,9 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
             price: bestPriceData.price,
             change24h: bestPriceData.change24h
           };
-          console.log(`💹 Added price data for ${pair}:`, enrichedPrices[pair]);
+          log.info(`💹 Added price data for ${pair}:`, enrichedPrices[pair]);
         } else {
-          console.log(`⚠️ No price data found for ${baseAsset} in any pair`);
+          log.info(`⚠️ No price data found for ${baseAsset} in any pair`);
         }
       });
 
@@ -486,12 +502,12 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
         lastDayPrice: 1
       };
 
-      console.log('💰 Final enriched prices:', enrichedPrices);
+      log.info('💰 Final enriched prices:', enrichedPrices);
 
       setPrices(enrichedPrices);
 
     } catch (err) {
-      console.error('Error fetching prices:', err);
+      log.error('Error fetching prices:', err);
     } finally {
       setIsUpdating(false);
     }
