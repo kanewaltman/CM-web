@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSProperties, forwardRef, useImperativeHandle } from 'react';
 import { 
   Table,
   TableHeader,
@@ -7,11 +7,57 @@ import {
   TableRow,
   TableCell
 } from './ui/table';
+import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
 import { useDataSource } from '@/lib/DataSourceContext';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuCheckboxItem 
+} from './ui/dropdown-menu';
+import { Checkbox } from './ui/checkbox';
+
+// TanStack Table imports
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+  Header,
+  Cell,
+  VisibilityState
+} from '@tanstack/react-table';
+
+// DnD Kit imports
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { restrictToHorizontalAxis, restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, SlidersHorizontal, Star } from 'lucide-react';
 
 // Format price with appropriate number of decimal places
 const formatPrice = (price: number) => {
@@ -42,34 +88,69 @@ const formatLargeNumber = (value: number) => {
   return value.toLocaleString();
 };
 
-const SkeletonRow: React.FC<{ assetColumnWidth?: number }> = ({ assetColumnWidth = 150 }) => (
+interface MarketData {
+  pair: string;
+  baseAsset: AssetTicker;
+  quoteAsset: AssetTicker;
+  price: number;
+  change24h: number;
+  change7d: number;
+  marketCap: number;
+  volume: number;
+  rank: number;
+  marginMultiplier?: number;
+}
+
+interface MarketsWidgetProps {
+  className?: string;
+  compact?: boolean;
+}
+
+// Sample market data with margin multipliers
+const SAMPLE_MARKET_DATA: Record<string, {
+  price: number;
+  change24h: number;
+  change7d: number;
+  marketCap: number;
+  volume: number;
+  rank: number;
+  marginMultiplier?: number;
+}> = {
+  "BTC/EUR": { price: 37000.50, change24h: 2.5, change7d: 5.2, marketCap: 720000000000, volume: 25000000000, rank: 1, marginMultiplier: 3 },
+  "ETH/EUR": { price: 1875.25, change24h: -1.2, change7d: 3.4, marketCap: 225000000000, volume: 15000000000, rank: 2, marginMultiplier: 5 },
+  "BTC/USD": { price: 40100.75, change24h: 2.6, change7d: 5.3, marketCap: 720000000000, volume: 27000000000, rank: 3, marginMultiplier: 3 },
+  "ETH/USD": { price: 2025.80, change24h: -1.1, change7d: 3.5, marketCap: 225000000000, volume: 17000000000, rank: 4, marginMultiplier: 5 },
+  "USDT/EUR": { price: 0.91, change24h: -0.1, change7d: 0.2, marketCap: 95000000000, volume: 50000000000, rank: 5 },
+  "BNB/EUR": { price: 260.50, change24h: 0.8, change7d: -2.1, marketCap: 39000000000, volume: 2000000000, rank: 6 },
+  "SOL/EUR": { price: 85.00, change24h: 3.2, change7d: 10.5, marketCap: 36000000000, volume: 3000000000, rank: 7 },
+  "USDC/EUR": { price: 0.91, change24h: -0.2, change7d: 0.1, marketCap: 28000000000, volume: 4000000000, rank: 8 },
+  "XRP/EUR": { price: 0.45, change24h: 1.3, change7d: -0.8, marketCap: 24000000000, volume: 1500000000, rank: 9, marginMultiplier: 3 },
+  "ADA/EUR": { price: 0.30, change24h: 0.5, change7d: -1.2, marketCap: 10500000000, volume: 500000000, rank: 10 },
+  "ETH/BTC": { price: 0.050632, change24h: -3.7, change7d: -1.8, marketCap: 0, volume: 8500000000, rank: 11 },
+  "SOL/BTC": { price: 0.002297, change24h: 0.7, change7d: 5.2, marketCap: 0, volume: 1200000000, rank: 12 },
+  "DOGE/EUR": { price: 0.012345, change24h: 1.5, change7d: 4.3, marketCap: 10000000000, volume: 900000000, rank: 13 },
+  "DOT/EUR": { price: 10.05, change24h: 0.8, change7d: 2.1, marketCap: 8900000000, volume: 350000000, rank: 14 },
+  "TIA/EUR": { price: 15.75, change24h: 4.2, change7d: 12.5, marketCap: 7500000000, volume: 850000000, rank: 15 },
+  "LTC/EUR": { price: 65.40, change24h: -0.5, change7d: 1.2, marketCap: 4800000000, volume: 320000000, rank: 16 },
+  "MATIC/EUR": { price: 0.52, change24h: -1.8, change7d: -3.5, marketCap: 4300000000, volume: 280000000, rank: 17 },
+  "LINK/EUR": { price: 13.20, change24h: 2.1, change7d: 5.8, marketCap: 7200000000, volume: 450000000, rank: 18 },
+  "ATOM/EUR": { price: 7.85, change24h: -0.3, change7d: 1.9, marketCap: 2900000000, volume: 180000000, rank: 19 },
+  "XMR/EUR": { price: 145.60, change24h: 1.1, change7d: 3.7, marketCap: 2700000000, volume: 120000000, rank: 20 }
+};
+
+// SkeletonRow component for loading state
+const SkeletonRow: React.FC = () => (
   <TableRow isHeader={false}>
-    <TableCell 
-      className="sticky left-0 bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap text-center"
-      style={{ width: '60px', minWidth: '60px' }}
-    >
-      <div className="relative">
-        <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
-        <div className="relative z-10 flex items-center justify-center">
-          <div className="w-5 h-5 rounded bg-white/5 animate-pulse" />
-        </div>
-      </div>
+    <TableCell className="bg-[hsl(var(--color-widget-header))] z-10">
+      <div className="w-5 h-5 rounded bg-white/5 animate-pulse" />
     </TableCell>
-    <TableCell 
-      className="sticky left-[60px] bg-[hsl(var(--color-widget-header))] z-10 whitespace-nowrap"
-      style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
-    >
-      <div className="relative">
-        <div className="absolute inset-0 bg-[hsl(var(--color-widget-header))]"></div>
-        <div className="relative z-10 flex items-center gap-2">
-          <div className="relative flex">
-            {/* Base asset icon skeleton */}
-            <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse z-10" />
-            {/* Quote asset icon skeleton */}
-            <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse absolute -right-3 bottom-0 z-0" />
-          </div>
-          <div className="w-20 h-5 ml-2 rounded-md bg-white/5 animate-pulse" />
+    <TableCell className="bg-[hsl(var(--color-widget-header))] z-10">
+      <div className="flex items-center gap-2">
+        <div className="relative flex">
+          <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse z-10" />
+          <div className="w-6 h-6 rounded-full bg-white/5 animate-pulse absolute -right-3 bottom-0 z-0" />
         </div>
+        <div className="w-20 h-5 ml-2 rounded-md bg-white/5 animate-pulse" />
       </div>
     </TableCell>
     <TableCell className="text-right">
@@ -90,69 +171,289 @@ const SkeletonRow: React.FC<{ assetColumnWidth?: number }> = ({ assetColumnWidth
   </TableRow>
 );
 
-interface PriceData {
-  [key: string]: {
-    price: number;
-    change24h: number;
-    change7d: number;
-    marketCap: number;
-    volume: number;
-    rank: number;
-  };
-}
+// Draggable Table Header Component
+const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
+  const isNarrowColumn = header.column.id === 'favorite'; // Identify narrow columns
 
-interface MarketData {
-  pair: string;
-  baseAsset: AssetTicker;
-  quoteAsset: AssetTicker;
-  price: number;
-  change24h: number;
-  change7d: number;
-  marketCap: number;
-  volume: number;
-  rank: number;
-}
-
-interface MarketsWidgetProps {
-  className?: string;
-  compact?: boolean;
-}
-
-type SortField = 'pair' | 'rank' | 'price' | 'change24h' | 'change7d' | 'marketCap' | 'volume';
-type SortDirection = 'asc' | 'desc';
-
-// Sample market data - in a real app, this would come from an API
-const SAMPLE_MARKET_DATA: Record<string, {
-  price: number;
-  change24h: number;
-  change7d: number;
-  marketCap: number;
-  volume: number;
-  rank: number;
-}> = {
-  "BTC/EUR": { price: 37000.50, change24h: 2.5, change7d: 5.2, marketCap: 720000000000, volume: 25000000000, rank: 1 },
-  "ETH/EUR": { price: 1875.25, change24h: -1.2, change7d: 3.4, marketCap: 225000000000, volume: 15000000000, rank: 2 },
-  "BTC/USD": { price: 40100.75, change24h: 2.6, change7d: 5.3, marketCap: 720000000000, volume: 27000000000, rank: 3 },
-  "ETH/USD": { price: 2025.80, change24h: -1.1, change7d: 3.5, marketCap: 225000000000, volume: 17000000000, rank: 4 },
-  "USDT/EUR": { price: 0.91, change24h: -0.1, change7d: 0.2, marketCap: 95000000000, volume: 50000000000, rank: 5 },
-  "BNB/EUR": { price: 260.50, change24h: 0.8, change7d: -2.1, marketCap: 39000000000, volume: 2000000000, rank: 6 },
-  "SOL/EUR": { price: 85.00, change24h: 3.2, change7d: 10.5, marketCap: 36000000000, volume: 3000000000, rank: 7 },
-  "USDC/EUR": { price: 0.91, change24h: -0.2, change7d: 0.1, marketCap: 28000000000, volume: 4000000000, rank: 8 },
-  "XRP/EUR": { price: 0.45, change24h: 1.3, change7d: -0.8, marketCap: 24000000000, volume: 1500000000, rank: 9 },
-  "ADA/EUR": { price: 0.30, change24h: 0.5, change7d: -1.2, marketCap: 10500000000, volume: 500000000, rank: 10 },
-  "ETH/BTC": { price: 0.050632, change24h: -3.7, change7d: -1.8, marketCap: 0, volume: 8500000000, rank: 11 },
-  "SOL/BTC": { price: 0.002297, change24h: 0.7, change7d: 5.2, marketCap: 0, volume: 1200000000, rank: 12 },
-  "DOGE/EUR": { price: 0.012345, change24h: 1.5, change7d: 4.3, marketCap: 10000000000, volume: 900000000, rank: 13 },
-  "DOT/EUR": { price: 10.05, change24h: 0.8, change7d: 2.1, marketCap: 8900000000, volume: 350000000, rank: 14 },
-  "TIA/EUR": { price: 15.75, change24h: 4.2, change7d: 12.5, marketCap: 7500000000, volume: 850000000, rank: 15 },
-  "LTC/EUR": { price: 65.40, change24h: -0.5, change7d: 1.2, marketCap: 4800000000, volume: 320000000, rank: 16 },
-  "MATIC/EUR": { price: 0.52, change24h: -1.8, change7d: -3.5, marketCap: 4300000000, volume: 280000000, rank: 17 },
-  "LINK/EUR": { price: 13.20, change24h: 2.1, change7d: 5.8, marketCap: 7200000000, volume: 450000000, rank: 18 },
-  "ATOM/EUR": { price: 7.85, change24h: -0.3, change7d: 1.9, marketCap: 2900000000, volume: 180000000, rank: 19 },
-  "XMR/EUR": { price: 145.60, change24h: 1.1, change7d: 3.7, marketCap: 2700000000, volume: 120000000, rank: 20 }
+  return (
+    <TableHead
+      className={cn(
+        "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80",
+        isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
+      )}
+      style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
+      aria-sort={
+        header.column.getIsSorted() === "asc"
+          ? "ascending"
+          : header.column.getIsSorted() === "desc"
+            ? "descending"
+            : "none"
+      }
+    >
+      <div className="relative">
+        <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+        <div className="relative z-10 flex items-center justify-end gap-1">
+          <span className={cn("grow truncate", isNarrowColumn && "sr-only")}>
+            {header.isPlaceholder
+              ? null
+              : flexRender(header.column.columnDef.header, header.getContext())}
+          </span>
+          {header.column.getCanSort() && !isNarrowColumn && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="group -mr-1 h-7 w-7 shadow-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                header.column.getToggleSortingHandler()?.(e);
+              }}
+              onKeyDown={(e) => {
+                if (header.column.getCanSort() && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  header.column.getToggleSortingHandler()?.(e);
+                }
+              }}
+            >
+              {{
+                asc: <ChevronUpIcon className="shrink-0 opacity-60" size={16} aria-hidden="true" />,
+                desc: <ChevronDownIcon className="shrink-0 opacity-60" size={16} aria-hidden="true" />,
+              }[header.column.getIsSorted() as string] ?? (
+                <ChevronUpIcon
+                  className="shrink-0 opacity-0 group-hover:opacity-60"
+                  size={16}
+                  aria-hidden="true"
+                />
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    </TableHead>
+  );
 };
 
-export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact = false }) => {
+// DragAlongCell Component (that moves along with its header)
+const DragAlongCell = ({ cell, currentTheme }: { cell: Cell<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
+  const cellContent = flexRender(cell.column.columnDef.cell, cell.getContext());
+  const isNarrowColumn = cell.column.id === 'favorite'; // Identify narrow columns
+
+  return (
+    <TableCell
+      className={cn(
+        isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
+      )}
+      style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
+    >
+      {cellContent}
+    </TableCell>
+  );
+};
+
+// Draggable Item for column visibility menu
+const DraggableMenuItem = ({ 
+  id, 
+  children, 
+  isChecked, 
+  onCheckedChange 
+}: { 
+  id: string, 
+  children: React.ReactNode, 
+  isChecked: boolean, 
+  onCheckedChange: (checked: boolean) => void 
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: false,
+  });
+  
+  const style: CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 50 : 0,
+  };
+  
+  // Use internal state to make checkbox interaction feel immediate
+  const [internalChecked, setInternalChecked] = useState(isChecked);
+  
+  // Sync internal state with parent state
+  useEffect(() => {
+    setInternalChecked(isChecked);
+  }, [isChecked]);
+  
+  // Only allow drag on the handle, not the entire row
+  const handleDragHandleProps = useMemo(() => {
+    return {
+      ...attributes,
+      ...listeners
+    };
+  }, [attributes, listeners]);
+  
+  // Separate click handler for checkbox area that doesn't trigger drag
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Update internal state immediately 
+    setInternalChecked(!internalChecked);
+    
+    // Then update parent state
+    onCheckedChange(!internalChecked);
+  };
+  
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="flex items-center justify-between rounded-sm px-1 py-0.5"
+    >
+      {/* Clickable checkbox area */}
+      <div 
+        className="flex items-center gap-3 py-1.5 px-1.5 cursor-pointer flex-1 hover:bg-accent/50 rounded-sm"
+        onClick={handleCheckboxClick}
+      >
+        <div 
+          className="flex items-center justify-center h-4 w-4 relative"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCheckboxClick(e);
+          }}
+        >
+          {/* Custom checkbox appearance */}
+          <div 
+            className={cn(
+              "h-4 w-4 rounded-sm transition-colors flex items-center justify-center", 
+              internalChecked ? "bg-white" : "bg-muted"
+            )}
+          >
+            {internalChecked && (
+              <svg width="10" height="8" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 1L3.5 6.5L1 4" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+        </div>
+        
+        <span className="text-sm select-none">
+          {children}
+        </span>
+      </div>
+      
+      {/* Drag handle - only this triggers dragging */}
+      <div 
+        {...handleDragHandleProps}
+        className="cursor-grab active:cursor-grabbing h-full px-2 flex items-center justify-center"
+      >
+        <GripVerticalIcon size={16} className="text-muted-foreground flex-shrink-0" />
+      </div>
+    </div>
+  );
+};
+
+// Component for column visibility to be used in widget context menu
+export const MarketsWidgetColumnVisibility: React.FC<{ 
+  table: ReturnType<typeof useReactTable<any>> 
+}> = ({ table }) => {
+  const columnOrder = table.getState().columnOrder;
+  const [localColumnOrder, setLocalColumnOrder] = useState<string[]>(columnOrder);
+  
+  // Keep local order in sync with table order
+  useEffect(() => {
+    setLocalColumnOrder(columnOrder);
+  }, [columnOrder]);
+
+  // Initialize sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 8 } // Increased distance to avoid accidental drags
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 } // Delay to distinguish between touch and drag
+    }),
+    useSensor(KeyboardSensor, {})
+  );
+
+  // Handle drag end for column visibility menu reordering
+  function handleMenuDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (active && over && active.id !== over.id) {
+      setLocalColumnOrder(prevOrder => {
+        const oldIndex = prevOrder.indexOf(active.id as string);
+        const newIndex = prevOrder.indexOf(over.id as string);
+        const newOrder = arrayMove(prevOrder, oldIndex, newIndex);
+        table.setColumnOrder(newOrder);
+        return newOrder;
+      });
+    }
+  }
+  
+  // Direct column visibility toggle that uses the table API directly
+  const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
+    // Create a new visibility state object to avoid mutating the existing one
+    const newState = {...table.getState().columnVisibility};
+    
+    if (isVisible) {
+      // For TanStack Table, removing the column from the visibility state makes it visible
+      delete newState[columnId];
+    } else {
+      // Setting the column's visibility to false makes it hidden
+      newState[columnId] = false;
+    }
+    
+    // Update the table's visibility state
+    table.setColumnVisibility(newState);
+  };
+
+  return (
+    <>
+      <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      <div className="max-h-[300px] overflow-auto py-1">
+        <DndContext
+          id={useId() + "-menu"}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragEnd={handleMenuDragEnd}
+          sensors={sensors}
+        >
+          <SortableContext
+            items={localColumnOrder}
+            strategy={verticalListSortingStrategy}
+          >
+            {localColumnOrder.map((columnId) => {
+              const column = table.getAllColumns().find(col => col.id === columnId);
+              if (!column) return null;
+              
+              const headerLabel = typeof column.columnDef.header === 'string' 
+                ? column.columnDef.header 
+                : columnId;
+              
+              // Use column.getIsVisible() directly from the table API
+              return (
+                <DraggableMenuItem
+                  key={column.id}
+                  id={column.id}
+                  isChecked={column.getIsVisible()}
+                  onCheckedChange={(checked) => handleColumnVisibilityChange(column.id, checked)}
+                >
+                  {headerLabel}
+                </DraggableMenuItem>
+              );
+            })}
+          </SortableContext>
+        </DndContext>
+      </div>
+    </>
+  );
+};
+
+export interface MarketsWidgetRef {
+  getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
+}
+
+export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({ className }, ref) => {
   const { theme, resolvedTheme } = useTheme();
   const { dataSource } = useDataSource();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
@@ -161,85 +462,74 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
-  const [sortField, setSortField] = useState<SortField>('marketCap');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'marketCap', desc: true }]);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>('ALL');
+  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const textMeasureRef = useRef<HTMLDivElement>(null);
-  const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150);
+  const [columnSizes, setColumnSizes] = useState({
+    pair: 200, // Increased to accommodate favorite star
+    price: 120,
+    change24h: 100,
+    change7d: 100,
+    marketCap: 140,
+    volume: 140
+  });
 
-  // Handle sort
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      if (field === 'rank') {
-        setSortDirection('asc');
-      } else if (field === 'pair') {
-        setSortDirection('asc');
-      } else {
-        setSortDirection('desc');
-      }
+  // Add a separate state for tracking dynamic column visibility based on container width
+  const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
+
+  // Get unique quote assets from market data
+  const quoteAssets = useMemo(() => {
+    const assets = new Set<AssetTicker>();
+    marketData.forEach(item => assets.add(item.quoteAsset));
+    return Array.from(assets);
+  }, [marketData]);
+
+  // Filter market data based on selected quote asset and favorites filter
+  const filteredMarketData = useMemo(() => {
+    // First apply quote asset filter
+    let filtered = selectedQuoteAsset === 'ALL' 
+      ? marketData 
+      : marketData.filter(item => item.quoteAsset === selectedQuoteAsset);
+    
+    // Then apply favorites filter if enabled
+    if (showOnlyFavorites) {
+      filtered = filtered.filter(item => favorites.has(item.pair));
     }
-  };
+    
+    return filtered;
+  }, [marketData, selectedQuoteAsset, favorites, showOnlyFavorites]);
 
-  // Sort market data
-  const sortedMarketData = useMemo(() => {
-    return [...marketData].sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortField) {
-        case 'pair':
-          comparison = a.pair.localeCompare(b.pair);
-          break;
-        case 'rank':
-          comparison = a.rank - b.rank;
-          break;
-        case 'price':
-          comparison = a.price - b.price;
-          break;
-        case 'change24h':
-          comparison = a.change24h - b.change24h;
-          break;
-        case 'change7d':
-          comparison = a.change7d - b.change7d;
-          break;
-        case 'marketCap':
-          comparison = a.marketCap - b.marketCap;
-          break;
-        case 'volume':
-          comparison = a.volume - b.volume;
-          break;
-        default:
-          comparison = 0;
-      }
-
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [marketData, sortField, sortDirection]);
-
-  // Check for container width to determine compact mode
+  // Check for container width to determine which columns to dynamically hide
   useEffect(() => {
-    const calculateMinTableWidth = () => {
-      const assetColWidth = assetColumnWidth;
-      const rankColWidth = 80;
-      const priceColWidth = 120;
-      const change24hColWidth = 110;
-      const change7dColWidth = 110;
-      const marketCapColWidth = 140;
-      const volumeColWidth = 140;
-      const buffer = 10;
-      
-      return assetColWidth + rankColWidth + priceColWidth + change24hColWidth + 
-             change7dColWidth + marketCapColWidth + volumeColWidth + buffer;
-    };
-
     const checkWidth = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.clientWidth;
-        const minTableWidth = calculateMinTableWidth();
-        const shouldBeCompact = containerWidth < minTableWidth;
-        setIsCompact(shouldBeCompact);
+        
+        // Define breakpoints for hiding columns (from right to left)
+        const newDynamicVisibility: VisibilityState = {};
+        
+        // Always show pair and price columns
+        
+        // Hide columns from right to left based on container width
+        if (containerWidth < 900) {
+          newDynamicVisibility.volume = false; // First to hide
+        }
+        if (containerWidth < 750) {
+          newDynamicVisibility.marketCap = false; // Second to hide
+        }
+        if (containerWidth < 600) {
+          newDynamicVisibility.change7d = false; // Third to hide
+        }
+        if (containerWidth < 450) {
+          newDynamicVisibility.change24h = false; // Last to hide
+        }
+        
+        // Update the dynamic visibility state
+        setDynamicVisibility(newDynamicVisibility);
       }
     };
 
@@ -255,7 +545,219 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
       resizeObserver.disconnect();
       window.removeEventListener('resize', checkWidth);
     };
-  }, [assetColumnWidth]);
+  }, []);
+
+  // Calculate column sizes based on container width (keep this effect separate)
+  useEffect(() => {
+    const updateColumnSizes = () => {
+      if (!containerRef.current) return;
+      
+      const containerWidth = containerRef.current.clientWidth;
+      const isNarrow = containerWidth < 768;
+      const isMedium = containerWidth < 1024;
+
+      setColumnSizes({
+        pair: isNarrow ? 160 : 200, // Increased to accommodate favorite star
+        price: isNarrow ? 100 : 120,
+        change24h: isNarrow ? 80 : 100,
+        change7d: isNarrow ? 80 : 100,
+        marketCap: isNarrow ? 100 : isMedium ? 120 : 140,
+        volume: isNarrow ? 100 : isMedium ? 120 : 140
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(updateColumnSizes);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  // Define columns for the table
+  const columns = useMemo<ColumnDef<MarketData>[]>(() => [
+    {
+      id: 'pair',
+      header: 'Pair',
+      accessorKey: 'pair',
+      cell: ({ row }) => {
+        const baseAssetConfig = ASSETS[row.original.baseAsset];
+        const quoteAssetConfig = ASSETS[row.original.quoteAsset];
+        const marginMultiplier = row.original.marginMultiplier;
+        const pair = row.original.pair;
+        const isFavorite = favorites.has(pair);
+        
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={cn(
+                "flex items-center justify-center p-0 mr-1",
+                isFavorite ? "text-yellow-400 hover:text-yellow-500" : "text-muted-foreground/40 hover:text-muted-foreground/60"
+              )}
+              onClick={() => {
+                handleFavoriteToggle(pair);
+              }}
+            >
+              <Star
+                size={16}
+                className={cn(
+                  "transition-colors",
+                  isFavorite ? "fill-current" : "fill-none"
+                )}
+              />
+            </button>
+            
+            <div className="relative flex shrink-0">
+              {/* Base asset icon */}
+              <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10">
+                <img
+                  src={baseAssetConfig.icon}
+                  alt={row.original.baseAsset}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              {/* Quote asset icon */}
+              <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border absolute -right-3 bottom-0 z-0">
+                <img
+                  src={quoteAssetConfig.icon}
+                  alt={row.original.quoteAsset}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+            <div className="ml-2 flex items-center gap-2">
+              <span className="font-jakarta font-semibold text-sm">
+                {row.original.baseAsset}
+                <span className="text-muted-foreground font-semibold">/{row.original.quoteAsset}</span>
+              </span>
+              {marginMultiplier && marginMultiplier >= 5 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500 font-medium">
+                  5×
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      },
+      size: columnSizes.pair,
+    },
+    {
+      id: 'price',
+      header: 'Price',
+      accessorKey: 'price',
+      cell: ({ row }) => {
+        const pricePrefix = secondaryCurrency ? 
+          (secondaryCurrency === 'EUR' ? '€' : 
+           secondaryCurrency === 'USD' ? '$' :
+           secondaryCurrency === 'GBP' ? '£' : '') :
+          (row.original.quoteAsset === 'EUR' ? '€' : 
+           row.original.quoteAsset === 'USD' ? '$' :
+           row.original.quoteAsset === 'GBP' ? '£' : '');
+        
+        // Use original price or converted price based on secondary currency
+        const displayPrice = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+          row.original.price * 1.08 : // Example conversion rate
+          row.original.price;
+        
+        return (
+          <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%]">
+            {pricePrefix}{formatPrice(displayPrice)}
+          </div>
+        );
+      },
+      size: columnSizes.price,
+    },
+    {
+      id: 'change24h',
+      header: '24h %',
+      accessorKey: 'change24h',
+      cell: ({ row }) => (
+        <div className={cn(
+          "text-right whitespace-nowrap font-mono",
+          row.original.change24h > 0 ? "text-price-up" : 
+          row.original.change24h < 0 ? "text-price-down" : 
+          "text-muted-foreground/80"
+        )}>
+          {row.original.change24h > 0 ? '+' : ''}{row.original.change24h.toFixed(2)}%
+        </div>
+      ),
+      size: columnSizes.change24h,
+    },
+    {
+      id: 'change7d',
+      header: '7d %',
+      accessorKey: 'change7d',
+      cell: ({ row }) => (
+        <div className={cn(
+          "text-right whitespace-nowrap font-mono",
+          row.original.change7d > 0 ? "text-price-up" : 
+          row.original.change7d < 0 ? "text-price-down" : 
+          "text-muted-foreground/80"
+        )}>
+          {row.original.change7d > 0 ? '+' : ''}{row.original.change7d.toFixed(2)}%
+        </div>
+      ),
+      size: columnSizes.change7d,
+    },
+    {
+      id: 'marketCap',
+      header: 'Market Cap',
+      accessorKey: 'marketCap',
+      cell: ({ row }) => {
+        const pricePrefix = secondaryCurrency ? 
+          (secondaryCurrency === 'EUR' ? '€' : 
+           secondaryCurrency === 'USD' ? '$' :
+           secondaryCurrency === 'GBP' ? '£' : '') :
+          (row.original.quoteAsset === 'EUR' ? '€' : 
+           row.original.quoteAsset === 'USD' ? '$' :
+           row.original.quoteAsset === 'GBP' ? '£' : '');
+        
+        // Use original marketCap or converted marketCap based on secondary currency
+        const displayMarketCap = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+          row.original.marketCap * 1.08 : // Example conversion rate
+          row.original.marketCap;
+        
+        return (
+          <div className="text-right font-jakarta font-semibold text-sm leading-[150%]">
+            {displayMarketCap > 0 ? `${pricePrefix}${formatLargeNumber(displayMarketCap)}` : '-'}
+          </div>
+        );
+      },
+      size: columnSizes.marketCap,
+    },
+    {
+      id: 'volume',
+      header: 'Volume (24h)',
+      accessorKey: 'volume',
+      cell: ({ row }) => {
+        const pricePrefix = secondaryCurrency ? 
+          (secondaryCurrency === 'EUR' ? '€' : 
+           secondaryCurrency === 'USD' ? '$' :
+           secondaryCurrency === 'GBP' ? '£' : '') :
+          (row.original.quoteAsset === 'EUR' ? '€' : 
+           row.original.quoteAsset === 'USD' ? '$' :
+           row.original.quoteAsset === 'GBP' ? '£' : '');
+        
+        // Use original volume or converted volume based on secondary currency
+        const displayVolume = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+          row.original.volume * 1.08 : // Example conversion rate
+          row.original.volume;
+        
+        return (
+          <div className="text-right font-jakarta font-semibold text-sm leading-[150%]">
+            {pricePrefix}{formatLargeNumber(displayVolume)}
+          </div>
+        );
+      },
+      size: columnSizes.volume,
+    }
+  ], [favorites, columnSizes, secondaryCurrency]);
+
+  // Setup column order
+  const [columnOrder, setColumnOrder] = useState<string[]>(
+    columns.map((column) => column.id as string)
+  );
 
   // Detect theme from document class list
   useEffect(() => {
@@ -285,7 +787,7 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
   // Effect to load market data
   useEffect(() => {
     const fetchMarketData = async () => {
-      console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}. Component ID: ${Math.random().toString(36).substring(7)}`);
+      console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
       try {
         setIsInitialLoading(true);
 
@@ -308,7 +810,8 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                 change7d: details.change7d,
                 marketCap: details.marketCap,
                 volume: details.volume,
-                rank: details.rank
+                rank: details.rank,
+                marginMultiplier: details.marginMultiplier
               };
             })
             .filter(Boolean) as MarketData[];
@@ -325,19 +828,16 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
             }
 
             // Use the CryptoCompare API to fetch market data for pairs
-            // Define our base assets (crypto) and quote assets (mainly fiat currencies)
             const baseAssets = ['BTC', 'ETH', 'SOL', 'XRP', 'USDT', 'BNB', 'ADA', 'DOGE', 'MATIC', 'DOT', 'LTC', 'ATOM', 'LINK', 'XMR', 'TIA'];
-            const quoteAssets = ['EUR', 'USD', 'BTC']; // Including BTC as a quote asset for crypto/crypto pairs
+            const quoteAssets = ['EUR', 'USD', 'BTC'];
             
-            // Prepare the API request to CryptoCompare
             const apiUrl = 'https://min-api.cryptocompare.com/data/pricemultifull';
             const params = new URLSearchParams({
-              fsyms: baseAssets.join(','), // From symbols (base assets)
-              tsyms: quoteAssets.join(','), // To symbols (quote assets)
+              fsyms: baseAssets.join(','),
+              tsyms: quoteAssets.join(','),
               api_key: tokenData.token
             });
             
-            // Fetch data from CryptoCompare API
             const response = await fetch(`${apiUrl}?${params}`);
             
             if (!response.ok) {
@@ -350,7 +850,6 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
               throw new Error('Invalid API response format');
             }
             
-            // Transform the API response into our MarketData format
             const marketDataArray: MarketData[] = [];
             let rank = 1;
             
@@ -358,14 +857,12 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
               if (!(baseAsset in data.RAW)) continue;
               
               for (const quoteAsset of quoteAssets) {
-                if (baseAsset === quoteAsset) continue; // Skip same asset pairs
-                if (quoteAsset === 'BTC' && baseAsset === 'BTC') continue; // Skip BTC/BTC
+                if (baseAsset === quoteAsset) continue;
+                if (quoteAsset === 'BTC' && baseAsset === 'BTC') continue;
                 
                 if (quoteAsset in data.RAW[baseAsset]) {
                   const pairData = data.RAW[baseAsset][quoteAsset];
-                  const pairDisplayData = data.DISPLAY?.[baseAsset]?.[quoteAsset] || {};
                   
-                  // Skip if the base asset or quote asset isn't in our ASSETS lookup
                   if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) continue;
                   
                   marketDataArray.push({
@@ -374,19 +871,18 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
                     quoteAsset: quoteAsset as AssetTicker,
                     price: pairData.PRICE || 0,
                     change24h: pairData.CHANGEPCT24HOUR || 0,
-                    change7d: 0, // CryptoCompare doesn't provide 7d change in the basic API
+                    change7d: 0,
                     marketCap: pairData.MKTCAP || 0,
                     volume: pairData.TOTALVOLUME24H || 0,
-                    rank: rank++
+                    rank: rank++,
+                    marginMultiplier: pairData.MARGINALIZED ? pairData.MARGINALIZED : undefined
                   });
                 }
               }
             }
             
-            // Sort by market cap by default
             marketDataArray.sort((a, b) => b.marketCap - a.marketCap);
             
-            // Update rank based on sorted order
             marketDataArray.forEach((item, index) => {
               item.rank = index + 1;
             });
@@ -411,15 +907,11 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
 
   // Memoize the fetch prices function to prevent recreating it on every render
   const fetchPrices = useCallback(async () => {
-    if (dataSource === 'sample') {
-      // Already using sample data
-      return;
-    }
+    if (dataSource === 'sample') return;
 
     try {
       setIsUpdating(true);
       
-      // Fetch real-time prices from the CryptoCompare API
       const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
       const tokenData = await tokenResponse.json();
       
@@ -427,7 +919,6 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
         throw new Error('Failed to get demo token');
       }
       
-      // Get current data to update
       const baseAssets = [...new Set(marketData.map(item => item.baseAsset))];
       const quoteAssets = [...new Set(marketData.map(item => item.quoteAsset))];
       
@@ -435,7 +926,6 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
         return;
       }
       
-      // Prepare the API request to CryptoCompare for price updates
       const apiUrl = 'https://min-api.cryptocompare.com/data/pricemultifull';
       const params = new URLSearchParams({
         fsyms: baseAssets.join(','),
@@ -443,7 +933,6 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
         api_key: tokenData.token
       });
       
-      // Fetch updated prices
       const response = await fetch(`${apiUrl}?${params}`);
       
       if (!response.ok) {
@@ -456,15 +945,11 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
         throw new Error('Invalid API response format');
       }
       
-      // Update only the price and 24h change data
       setMarketData(prevData => {
         return prevData.map(market => {
           const { baseAsset, quoteAsset } = market;
           
-          if (
-            data.RAW[baseAsset] && 
-            data.RAW[baseAsset][quoteAsset]
-          ) {
+          if (data.RAW[baseAsset] && data.RAW[baseAsset][quoteAsset]) {
             const updatedData = data.RAW[baseAsset][quoteAsset];
             return {
               ...market,
@@ -492,294 +977,187 @@ export const MarketsWidget: React.FC<MarketsWidgetProps> = ({ className, compact
     return () => clearInterval(interval);
   }, [fetchPrices]);
 
-  // Calculate the width needed for the asset column based on the longest asset name
-  useEffect(() => {
-    if (!textMeasureRef.current) return;
+  // Initialize TanStack Table with filtered data
+  const table = useReactTable({
+    data: filteredMarketData,
+    columns,
+    state: {
+      sorting,
+      columnOrder,
+      columnVisibility,
+    },
+    columnResizeMode: 'onChange',
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
+    onColumnOrderChange: setColumnOrder,
+    onColumnVisibilityChange: setColumnVisibility,
+    enableSortingRemoval: false,
+  });
 
-    // Create a temporary span to measure text width
-    const measureElement = document.createElement('span');
-    measureElement.style.visibility = 'hidden';
-    measureElement.style.position = 'absolute';
-    measureElement.style.whiteSpace = 'nowrap';
-    measureElement.style.fontFamily = 'var(--font-jakarta)';
-    measureElement.style.fontWeight = 'bold';
-    measureElement.style.fontSize = '14px';
-    document.body.appendChild(measureElement);
+  // Expose the table instance via ref
+  useImperativeHandle(ref, () => ({
+    getTable: () => table
+  }), [table]);
 
-    // Find the longest asset name
-    let maxWidth = 0;
-    Object.values(ASSETS).forEach(asset => {
-      measureElement.textContent = asset.name;
-      const width = measureElement.getBoundingClientRect().width;
-      maxWidth = Math.max(maxWidth, width);
-    });
-
-    // Remove the temporary element
-    document.body.removeChild(measureElement);
-
-    // Add padding for icon (32px) + gap (8px) + padding (16px)
-    const totalWidth = maxWidth + 32 + 8 + 16;
+  // Filter visible columns based on both user preferences and dynamic constraints
+  const visibleColumnIds = useMemo(() => {
+    // Start with user preferences
+    const userVisibleColumns = columnOrder.filter(id => columnVisibility[id] !== false);
     
-    // Set minimum width
-    const minWidth = 120;
-    setAssetColumnWidth(Math.max(totalWidth, minWidth));
-  }, []);
+    // Then apply dynamic constraints without modifying user preferences
+    return userVisibleColumns.filter(id => dynamicVisibility[id] !== false);
+  }, [columnOrder, columnVisibility, dynamicVisibility]);
+
+  // Update favorites and handle emptying favorites while in favorites view
+  const handleFavoriteToggle = useCallback((pair: string) => {
+    setFavorites(prevFavorites => {
+      const newFavorites = new Set(prevFavorites);
+      if (newFavorites.has(pair)) {
+        newFavorites.delete(pair);
+        // If we're removing the last favorite while in favorites view, reset to all view
+        if (newFavorites.size === 0 && showOnlyFavorites) {
+          setShowOnlyFavorites(false);
+        }
+      } else {
+        newFavorites.add(pair);
+      }
+      return newFavorites;
+    });
+  }, [showOnlyFavorites]);
 
   return (
     <div 
       className={cn("h-full flex flex-col p-2 relative", className)}
       ref={containerRef}
     >
-      <div className="flex-1 min-h-0 relative">
-        <div className="absolute left-[8px] right-[16px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
-        {/* Hidden div for text measurement */}
-        <div ref={textMeasureRef} className="absolute -left-[9999px] -top-[9999px]"></div>
-        <Table>
-          <TableHeader className="sticky top-0 z-20">
-            <TableRow className="bg-[hsl(var(--color-widget-header))]">
-              <TableHead 
-                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap cursor-pointer hover:text-foreground/80 text-center"
-                style={{ width: '60px', minWidth: '60px' }}
-                onClick={() => handleSort('rank')}
-              >
-                <div className="relative">
-                  <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-                  <div className="relative z-10 flex items-center justify-center gap-1">
-                    #
-                    {sortField === 'rank' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </div>
-              </TableHead>
-              <TableHead 
-                className="sticky left-[60px] top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap cursor-pointer hover:text-foreground/80"
-                style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
-                onClick={() => handleSort('pair')}
-              >
-                <div className="px-0 py-1 flex items-center gap-1">
-                  Pair
-                  {sortField === 'pair' && (
-                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
-                onClick={() => handleSort('price')}
-              >
-                <div className="relative">
-                  <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-                  <div className="relative z-10 flex items-center justify-end gap-1">
-                    Price
-                    {sortField === 'price' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </div>
-              </TableHead>
-              <TableHead 
-                className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
-                onClick={() => handleSort('change24h')}
-              >
-                <div className="relative">
-                  <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-                  <div className="relative z-10 flex items-center justify-end gap-1">
-                    24h %
-                    {sortField === 'change24h' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </div>
-              </TableHead>
-              {!isCompact && (
-                <>
-                  <TableHead 
-                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
-                    onClick={() => handleSort('change7d')}
-                  >
-                    <div className="relative">
-                      <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-                      <div className="relative z-10 flex items-center justify-end gap-1">
-                        7d %
-                        {sortField === 'change7d' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </div>
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
-                    onClick={() => handleSort('marketCap')}
-                  >
-                    <div className="relative">
-                      <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-                      <div className="relative z-10 flex items-center justify-end gap-1">
-                        Market Cap
-                        {sortField === 'marketCap' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </div>
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
-                    onClick={() => handleSort('volume')}
-                  >
-                    <div className="relative">
-                      <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-                      <div className="relative z-10 flex items-center justify-end gap-1">
-                        Volume (24h)
-                        {sortField === 'volume' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </div>
-                    </div>
-                  </TableHead>
-                </>
+      <div className="flex items-center gap-2 mb-2">
+        {favorites.size > 0 && (
+          <Button 
+            variant={showOnlyFavorites ? "default" : "outline"} 
+            size="sm"
+            onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+            className={cn(
+              showOnlyFavorites ? "bg-yellow-500 hover:bg-yellow-600 text-black" : ""
+            )}
+          >
+            <Star
+              size={16}
+              className={cn(
+                "mr-1 transition-colors",
+                showOnlyFavorites ? "fill-black" : "fill-none"
               )}
-            </TableRow>
-          </TableHeader>
-          {isInitialLoading ? (
+            />
+            Favorites
+          </Button>
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              {selectedQuoteAsset === 'ALL' ? 'All Pairs' : `${selectedQuoteAsset} Pairs`}
+              <ChevronDownIcon className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => setSelectedQuoteAsset('ALL')}>
+              All Pairs
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {quoteAssets.map((asset) => (
+              <DropdownMenuItem 
+                key={asset}
+                onClick={() => setSelectedQuoteAsset(asset)}
+              >
+                {asset} Pairs
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              {secondaryCurrency ? `Show in ${secondaryCurrency}` : 'Secondary Currency'}
+              <ChevronDownIcon className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => setSecondaryCurrency(null)}>
+              None
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {['USD', 'EUR', 'GBP'].map((currency) => (
+              <DropdownMenuItem 
+                key={currency}
+                onClick={() => setSecondaryCurrency(currency as AssetTicker)}
+              >
+                Show in {currency}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="flex-1 min-h-0 relative w-full">
+        <div className="absolute left-[8px] right-[16px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
+        <div className="h-full w-full overflow-x-auto">
+          <Table className="w-full table-fixed">
+            <TableHeader className="sticky top-0 z-20">
+              <TableRow className="bg-[hsl(var(--color-widget-header))]">
+                {table.getHeaderGroups()[0].headers
+                  .filter(header => visibleColumnIds.includes(header.column.id))
+                  .map((header) => (
+                    <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
+                  ))}
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {[...Array(10)].map((_, i) => (
-                <SkeletonRow key={i} assetColumnWidth={assetColumnWidth} />
-              ))}
-            </TableBody>
-          ) : error ? (
-            <div className="p-3">
-              <div className="text-red-500">{error}</div>
-            </div>
-          ) : marketData.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-sm text-muted-foreground">No market data found</div>
-            </div>
-          ) : (
-            <TableBody>
-              {sortedMarketData.map((market) => {
-                const baseAssetConfig = ASSETS[market.baseAsset];
-                const quoteAssetConfig = ASSETS[market.quoteAsset];
-                const baseAssetColor = currentTheme === 'dark' ? baseAssetConfig.theme.dark : baseAssetConfig.theme.light;
-                
-                // Format price with appropriate currency symbol
-                const pricePrefix = market.quoteAsset === 'EUR' ? '€' : 
-                                   market.quoteAsset === 'USD' ? '$' :
-                                   market.quoteAsset === 'GBP' ? '£' : '';
-                
-                return (
-                  <TableRow key={market.pair} className="group hover:bg-[hsl(var(--color-widget-hover))]" isHeader={false}>
-                    <TableCell 
-                      className="sticky left-0 z-10 whitespace-nowrap p-0 overflow-hidden text-center"
-                      style={{ width: '60px', minWidth: '60px' }}
-                    >
-                      <div className={cn(
-                        "relative h-full bg-[hsl(var(--color-widget-header))]",
-                        "group-hover:bg-[hsl(var(--color-widget-hover))]"
-                      )}>
-                        <div className="p-2 relative z-10 flex items-center justify-center">
-                          <span className="font-jakarta font-semibold text-sm leading-[150%] text-muted-foreground">
-                            {market.rank}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell 
-                      className="sticky left-[60px] z-10 whitespace-nowrap p-0 overflow-hidden"
-                      style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
-                    >
-                      <div className={cn(
-                        "relative h-full bg-[hsl(var(--color-widget-header))]",
-                        "group-hover:bg-[hsl(var(--color-widget-hover))]"
-                      )}>
-                        <div className="p-2 relative z-10 flex items-center gap-2">
-                          <div className="relative flex">
-                            {/* Base asset icon */}
-                            <div 
-                              className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10"
-                            >
-                              <img
-                                src={baseAssetConfig.icon}
-                                alt={market.baseAsset}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            {/* Quote asset icon */}
-                            <div 
-                              className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border absolute -right-3 bottom-0 z-0"
-                            >
-                              <img
-                                src={quoteAssetConfig.icon}
-                                alt={market.quoteAsset}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          </div>
-                          <span className="font-jakarta font-semibold text-sm ml-2">
-                            {market.baseAsset}/{market.quoteAsset}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right whitespace-nowrap p-0 overflow-hidden">
-                      <div className="relative h-full">
-                        <div className="p-2 relative z-10">
-                          <span className="font-jakarta font-mono font-semibold text-sm leading-[150%]">
-                            {pricePrefix}{formatPrice(market.price)}
-                          </span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className={cn(
-                      "text-right whitespace-nowrap font-mono p-0 overflow-hidden",
-                      market.change24h > 0 ? "text-price-up" : market.change24h < 0 ? "text-price-down" : "text-muted-foreground/80"
-                    )}>
-                      <div className="relative h-full">
-                        <div className="p-2 relative z-10">
-                          {market.change24h > 0 ? '+' : ''}{market.change24h.toFixed(2)}%
-                        </div>
-                      </div>
-                    </TableCell>
-                    {!isCompact && (
-                      <>
-                        <TableCell className={cn(
-                          "text-right whitespace-nowrap font-mono p-0 overflow-hidden",
-                          market.change7d > 0 ? "text-price-up" : market.change7d < 0 ? "text-price-down" : "text-muted-foreground/80"
-                        )}>
-                          <div className="relative h-full">
-                            <div className="p-2 relative z-10">
-                              {market.change7d > 0 ? '+' : ''}{market.change7d.toFixed(2)}%
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap p-0 overflow-hidden">
-                          <div className="relative h-full">
-                            <div className="p-2 relative z-10">
-                              <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                                {market.marketCap > 0 ? `${pricePrefix}${formatLargeNumber(market.marketCap)}` : '-'}
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap p-0 overflow-hidden">
-                          <div className="relative h-full">
-                            <div className="p-2 relative z-10">
-                              <span className="font-jakarta font-semibold text-sm leading-[150%]">
-                                {pricePrefix}{formatLargeNumber(market.volume)}
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-                      </>
-                    )}
+              {isInitialLoading ? (
+                // Loading skeleton rows
+                Array.from({ length: 10 }).map((_, index) => (
+                  <SkeletonRow key={index} />
+                ))
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={visibleColumnIds.length} className="h-24 text-center">
+                    <div className="text-red-500">{error}</div>
+                  </TableCell>
+                </TableRow>
+              ) : marketData.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={visibleColumnIds.length} className="h-24 text-center">
+                    <div className="text-sm text-muted-foreground">No market data found</div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                // Actual data rows
+                table.getRowModel().rows.map((row, index) => (
+                  <TableRow 
+                    key={row.id} 
+                    className={cn(
+                      "group hover:bg-[hsl(var(--color-widget-hover))]",
+                      index % 2 === 0 ? "bg-transparent" : "bg-[hsl(var(--color-widget-alt-row))]"
+                    )} 
+                    isHeader={false}
+                  >
+                    {row.getVisibleCells()
+                      .filter(cell => visibleColumnIds.includes(cell.column.id))
+                      .map((cell) => (
+                        <DragAlongCell key={cell.id} cell={cell} currentTheme={currentTheme} />
+                      ))}
                   </TableRow>
-                );
-              })}
+                ))
+              )}
             </TableBody>
-          )}
-        </Table>
+          </Table>
+        </div>
       </div>
     </div>
   );
-};
+});
+
+// Add displayName for easier debugging
+MarketsWidget.displayName = 'MarketsWidget';
 
 export default MarketsWidget; 

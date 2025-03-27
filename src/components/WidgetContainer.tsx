@@ -9,6 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 
 interface WidgetContainerProps {
@@ -17,6 +18,7 @@ interface WidgetContainerProps {
   headerControls?: React.ReactNode;
   onRemove?: () => void;
   isMobile?: boolean;
+  widgetMenu?: React.ReactNode;
 }
 
 export const WidgetContainer = memo(function WidgetContainer({ 
@@ -24,7 +26,8 @@ export const WidgetContainer = memo(function WidgetContainer({
   title, 
   headerControls, 
   onRemove,
-  isMobile = false 
+  isMobile = false,
+  widgetMenu
 }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +125,12 @@ export const WidgetContainer = memo(function WidgetContainer({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {widgetMenu && (
+                    <>
+                      {widgetMenu}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   <DropdownMenuItem onClick={() => {
                     console.log('Remove button clicked for widget:', title, 'onRemove function:', !!onRemove);
                     if (onRemove) onRemove();

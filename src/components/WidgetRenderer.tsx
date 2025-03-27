@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, createRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
@@ -15,6 +15,7 @@ import {
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle } from '@/lib/widgetState';
+import { MarketsWidgetColumnVisibility } from './MarketsWidget';
 
 /**
  * Creates a new widget DOM element for GridStack
@@ -119,41 +120,78 @@ export const renderWidgetIntoElement = (
       return;
     }
 
+    // Create a clean onRemove wrapper that will properly clean up
+    const handleRemove = () => {
+      // Unmount the component before removing
+      try {
+        if ((widgetElement as any)._reactRoot) {
+          (widgetElement as any)._reactRoot.unmount();
+        }
+      } catch (err) {
+        console.error('Error unmounting widget:', err);
+      }
+      
+      return onRemove();
+    };
+
     if (baseId === 'performance') {
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
             <WidgetContainer
               title={widgetTitles[widgetType]}
-              onRemove={onRemove}
+              onRemove={handleRemove}
               headerControls={<PerformanceWidgetWrapper 
                 isHeader 
                 widgetId={widgetId} 
                 widgetComponent={WidgetComponent} 
-                onRemove={onRemove} 
+                onRemove={handleRemove} 
               />}
             >
               <PerformanceWidgetWrapper 
                 widgetId={widgetId} 
                 widgetComponent={WidgetComponent} 
-                onRemove={onRemove} 
+                onRemove={handleRemove} 
+              />
+            </WidgetContainer>
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    } else if (widgetType === 'markets') {
+      // Special handling for Markets widget to add column visibility menu
+      const widgetRef = createRef<any>();
+      
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={handleRemove}
+              widgetMenu={
+                <MarketsWidgetMenuWrapper widgetRef={widgetRef} />
+              }
+            >
+              <WidgetComponent 
+                widgetId={widgetId} 
+                onRemove={handleRemove} 
+                ref={widgetRef}
               />
             </WidgetContainer>
           </DataSourceProvider>
         </React.StrictMode>
       );
     } else {
-      // For non-performance widgets
+      // For other widgets
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
             <WidgetContainer
               title={widgetTitles[widgetType]}
-              onRemove={onRemove}
+              onRemove={handleRemove}
             >
               <WidgetComponent 
                 widgetId={widgetId} 
-                onRemove={onRemove} 
+                onRemove={handleRemove} 
               />
             </WidgetContainer>
           </DataSourceProvider>
@@ -163,6 +201,38 @@ export const renderWidgetIntoElement = (
   } catch (error) {
     console.error('Error rendering widget:', error);
   }
+};
+
+// Wrapper to handle getting table from MarketsWidget ref
+const MarketsWidgetMenuWrapper = ({ widgetRef }: { widgetRef: React.RefObject<any> }) => {
+  const [table, setTable] = React.useState<any>(null);
+  
+  React.useEffect(() => {
+    // Function to check for table
+    const checkForTable = () => {
+      if (widgetRef.current?.getTable) {
+        const tableInstance = widgetRef.current.getTable();
+        if (tableInstance) {
+          setTable(tableInstance);
+          return true;
+        }
+      }
+      return false;
+    };
+    
+    // Try immediately
+    if (!checkForTable()) {
+      // If not available, try again in a short delay to allow for component to mount
+      const timer = setTimeout(checkForTable, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [widgetRef]);
+  
+  if (!table) {
+    return null;
+  }
+
+  return <MarketsWidgetColumnVisibility table={table} />;
 };
 
 /**
