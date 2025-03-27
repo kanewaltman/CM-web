@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, createRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
@@ -18,6 +18,7 @@ import {
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
+import { MarketsWidgetColumnVisibility } from './MarketsWidget';
 
 // Check if widget should use content-only view
 const shouldUseContentOnly = (widgetId: string): boolean => {

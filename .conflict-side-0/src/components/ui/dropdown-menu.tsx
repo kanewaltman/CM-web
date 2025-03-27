@@ -98,24 +98,53 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
-  <DropdownMenuPrimitive.CheckboxItem
-    ref={ref}
-    className={cn(
-      'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-      className
-    )}
-    checked={checked}
-    {...props}
-  >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <CheckIcon className="h-4 w-4" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
-    {children}
-  </DropdownMenuPrimitive.CheckboxItem>
-));
+>(({ className, children, checked, ...props }, ref) => {
+  // Local state for instant visual feedback
+  const [isChecked, setIsChecked] = React.useState(checked);
+  
+  // Keep local state in sync with props
+  React.useEffect(() => {
+    setIsChecked(checked);
+  }, [checked]);
+  
+  // Handle checked state changes
+  const handleCheckedChange = (e: Event) => {
+    e.preventDefault();
+    // Toggle the state for immediate visual feedback
+    setIsChecked(!isChecked);
+    
+    // If onCheckedChange is provided, call it after a frame
+    if (props.onCheckedChange) {
+      requestAnimationFrame(() => {
+        props.onCheckedChange?.(!isChecked);
+      });
+    }
+  };
+
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      ref={ref}
+      className={cn(
+        'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 hover:bg-accent/60 active:bg-accent',
+        className
+      )}
+      checked={isChecked}
+      onSelect={(e) => {
+        e.preventDefault();
+        handleCheckedChange(e);
+      }}
+      {...props}
+      onCheckedChange={undefined} // We'll handle this ourselves
+    >
+      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <CheckIcon className="h-4 w-4 transition-transform" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+});
 DropdownMenuCheckboxItem.displayName =
   DropdownMenuPrimitive.CheckboxItem.displayName;
 
