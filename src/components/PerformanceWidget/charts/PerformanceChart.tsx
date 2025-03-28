@@ -20,6 +20,7 @@ import { useDataSource } from '@/lib/DataSourceContext';
 import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MoreHorizontal } from "lucide-react";
+import { AssetPriceTooltip } from "@/components/AssetPriceTooltip";
 
 // Debug logging utility - only logs in development and when enabled
 const DEBUG_ENABLED = false; // Set to true to enable detailed debug logs
@@ -894,11 +895,11 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const handleChartMouseMove = useCallback((e: any) => {
     if (e?.activePayload?.[0] && e.activeTooltipIndex !== undefined) {
       const values = Object.fromEntries(
-        e.activePayload.map(entry => [entry.dataKey, entry.value])
+        e.activePayload.map((entry: {dataKey: string, value: number}) => [entry.dataKey, entry.value])
       );
 
-      setHoverValues({ 
-        index: e.activeTooltipIndex, 
+      setHoverValues({
+        index: e.activeTooltipIndex,
         values,
         activeLine: hoverValues?.activeLine || e.activePayload[0].dataKey
       });
@@ -940,49 +941,50 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                     ? ((currentValue - previousValue) / previousValue * 100)
                     : 0;
                   return (
-                    <button 
-                      key={asset}
-                      type="button"
-                      className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
-                      style={{ 
-                        color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
-                        backgroundColor: isActive ? assetColor : `${assetColor}14`,
-                        cursor: 'pointer',
-                        WebkitTouchCallout: 'none',
-                        WebkitUserSelect: 'text',
-                        userSelect: 'text',
-                        opacity: isHidden ? 0.5 : 1
-                      }}
-                      onClick={() => toggleAssetVisibility(asset)}
-                      onMouseEnter={(e) => {
-                        if (hoverTimeoutRef.current) {
-                          clearTimeout(hoverTimeoutRef.current);
-                          hoverTimeoutRef.current = null;
-                        }
-                        const target = e.currentTarget;
-                        target.style.backgroundColor = assetColor;
-                        target.style.color = 'hsl(var(--color-widget-bg))';
-                        setHoveredAsset(asset);
-                      }}
-                      onMouseLeave={(e) => {
-                        const target = e.currentTarget;
-                        if (!isActive) {
-                          target.style.backgroundColor = `${assetColor}14`;
-                          target.style.color = assetColor;
-                        }
-                        
-                        hoverTimeoutRef.current = setTimeout(() => {
-                          setHoveredAsset(null);
-                        }, 150);
-                      }}
-                      onMouseDown={(e) => {
-                        if (e.detail > 1) {
-                          e.preventDefault();
-                        }
-                      }}
-                    >
-                      {assetConfig.name}
-                    </button>
+                    <AssetPriceTooltip key={asset} asset={asset}>
+                      <button 
+                        type="button"
+                        className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
+                        style={{ 
+                          color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
+                          backgroundColor: isActive ? assetColor : `${assetColor}14`,
+                          cursor: 'pointer',
+                          WebkitTouchCallout: 'none',
+                          WebkitUserSelect: 'text',
+                          userSelect: 'text',
+                          opacity: isHidden ? 0.5 : 1
+                        }}
+                        onClick={() => toggleAssetVisibility(asset)}
+                        onMouseEnter={(e) => {
+                          if (hoverTimeoutRef.current) {
+                            clearTimeout(hoverTimeoutRef.current);
+                            hoverTimeoutRef.current = null;
+                          }
+                          const target = e.currentTarget;
+                          target.style.backgroundColor = assetColor;
+                          target.style.color = 'hsl(var(--color-widget-bg))';
+                          setHoveredAsset(asset);
+                        }}
+                        onMouseLeave={(e) => {
+                          const target = e.currentTarget;
+                          if (!isActive) {
+                            target.style.backgroundColor = `${assetColor}14`;
+                            target.style.color = assetColor;
+                          }
+                          
+                          hoverTimeoutRef.current = setTimeout(() => {
+                            setHoveredAsset(null);
+                          }, 150);
+                        }}
+                        onMouseDown={(e) => {
+                          if (e.detail > 1) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        {assetConfig.name}
+                      </button>
+                    </AssetPriceTooltip>
                   );
                 })}
                 {truncatedAssets.length > 0 && (
@@ -1045,44 +1047,45 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           const isEnabled = enabledTruncatedAssets.has(asset);
                           const isActive = hoverValues?.activeLine === asset;
                           return (
-                            <button
-                              key={asset}
-                              type="button"
-                              className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
-                              style={{ 
-                                color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
-                                backgroundColor: isActive ? assetColor : `${assetColor}14`,
-                                cursor: 'pointer',
-                                WebkitTouchCallout: 'none',
-                                WebkitUserSelect: 'text',
-                                userSelect: 'text',
-                                opacity: isEnabled ? 1 : 0.5
-                              }}
-                              onClick={() => toggleTruncatedAsset(asset)}
-                              onMouseEnter={(e) => {
-                                if (hoverTimeoutRef.current) {
-                                  clearTimeout(hoverTimeoutRef.current);
-                                  hoverTimeoutRef.current = null;
-                                }
-                                const target = e.currentTarget;
-                                target.style.backgroundColor = assetColor;
-                                target.style.color = 'hsl(var(--color-widget-bg))';
-                                setHoveredAsset(asset);
-                              }}
-                              onMouseLeave={(e) => {
-                                const target = e.currentTarget;
-                                if (!isActive) {
-                                  target.style.backgroundColor = `${assetColor}14`;
-                                  target.style.color = assetColor;
-                                }
-                                
-                                hoverTimeoutRef.current = setTimeout(() => {
-                                  setHoveredAsset(null);
-                                }, 150);
-                              }}
-                            >
-                              {assetConfig.name}
-                            </button>
+                            <AssetPriceTooltip key={asset} asset={asset}>
+                              <button
+                                type="button"
+                                className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
+                                style={{ 
+                                  color: isActive ? 'hsl(var(--color-widget-bg))' : assetColor,
+                                  backgroundColor: isActive ? assetColor : `${assetColor}14`,
+                                  cursor: 'pointer',
+                                  WebkitTouchCallout: 'none',
+                                  WebkitUserSelect: 'text',
+                                  userSelect: 'text',
+                                  opacity: isEnabled ? 1 : 0.5
+                                }}
+                                onClick={() => toggleTruncatedAsset(asset)}
+                                onMouseEnter={(e) => {
+                                  if (hoverTimeoutRef.current) {
+                                    clearTimeout(hoverTimeoutRef.current);
+                                    hoverTimeoutRef.current = null;
+                                  }
+                                  const target = e.currentTarget;
+                                  target.style.backgroundColor = assetColor;
+                                  target.style.color = 'hsl(var(--color-widget-bg))';
+                                  setHoveredAsset(asset);
+                                }}
+                                onMouseLeave={(e) => {
+                                  const target = e.currentTarget;
+                                  if (!isActive) {
+                                    target.style.backgroundColor = `${assetColor}14`;
+                                    target.style.color = assetColor;
+                                  }
+                                  
+                                  hoverTimeoutRef.current = setTimeout(() => {
+                                    setHoveredAsset(null);
+                                  }, 150);
+                                }}
+                              >
+                                {assetConfig.name}
+                              </button>
+                            </AssetPriceTooltip>
                           );
                         })}
                       </div>

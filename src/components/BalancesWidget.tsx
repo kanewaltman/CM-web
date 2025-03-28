@@ -14,6 +14,7 @@ import { useTheme } from 'next-themes';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
+import { AssetPriceTooltip } from './AssetPriceTooltip';
 
 // Set this to false to disable logging
 const ENABLE_LOGGING = false;
@@ -163,7 +164,7 @@ export const SAMPLE_BALANCES = {
 };
 
 const SAMPLE_PRICES = {
-  "BTCEUR": { price: 37000.50, change24h: 2.5 },
+  "BTCEUR": { price: 79000.50, change24h: 2.5 },
   "ETHEUR": { price: 1875.25, change24h: -1.2 },
   "DOTEUR": { price: 10.05, change24h: 0.8 },
   "USDTEUR": { price: 0.91, change24h: -0.1 },
@@ -716,35 +717,37 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <button 
-                            type="button"
-                            className="font-jakarta font-bold text-sm rounded-md px-1"
-                            style={{ 
-                              color: assetColor,
-                              backgroundColor: `${assetColor}14`,
-                              cursor: 'pointer',
-                              WebkitTouchCallout: 'none',
-                              WebkitUserSelect: 'text',
-                              userSelect: 'text'
-                            }}
-                            onMouseEnter={(e) => {
-                              const target = e.currentTarget;
-                              target.style.backgroundColor = assetColor;
-                              target.style.color = 'hsl(var(--color-widget-bg))';
-                            }}
-                            onMouseLeave={(e) => {
-                              const target = e.currentTarget;
-                              target.style.backgroundColor = `${assetColor}14`;
-                              target.style.color = assetColor;
-                            }}
-                            onMouseDown={(e) => {
-                              if (e.detail > 1) {
-                                e.preventDefault();
-                              }
-                            }}
-                          >
-                            {assetConfig.name}
-                          </button>
+                          <AssetPriceTooltip asset={balance.asset}>
+                            <button 
+                              type="button"
+                              className="font-jakarta font-bold text-sm rounded-md px-1"
+                              style={{ 
+                                color: assetColor,
+                                backgroundColor: `${assetColor}14`,
+                                cursor: 'pointer',
+                                WebkitTouchCallout: 'none',
+                                WebkitUserSelect: 'text',
+                                userSelect: 'text'
+                              }}
+                              onMouseEnter={(e) => {
+                                const target = e.currentTarget;
+                                target.style.backgroundColor = assetColor;
+                                target.style.color = 'hsl(var(--color-widget-bg))';
+                              }}
+                              onMouseLeave={(e) => {
+                                const target = e.currentTarget;
+                                target.style.backgroundColor = `${assetColor}14`;
+                                target.style.color = assetColor;
+                              }}
+                              onMouseDown={(e) => {
+                                if (e.detail > 1) {
+                                  e.preventDefault();
+                                }
+                              }}
+                            >
+                              {assetConfig.name}
+                            </button>
+                          </AssetPriceTooltip>
                         </div>
                       </div>
                     </TableCell>
