@@ -3,21 +3,42 @@ import coinGeckoService, { ExchangeRateData } from '@/services/coinGeckoService'
 
 // Storage keys
 const STORAGE_RATES_KEY = 'cm_exchange_rates';
+const STORAGE_PREV_RATES_KEY = 'cm_exchange_rates_prev';
 const STORAGE_TIMESTAMP_KEY = 'cm_exchange_rates_timestamp';
 
 // Custom event for rate updates
 export const RATES_UPDATED_EVENT = 'cm_rates_updated';
 
 // Create a custom event to notify components about rate updates
-export const dispatchRatesUpdatedEvent = (data: ExchangeRateData) => {
+export const dispatchRatesUpdatedEvent = (data: ExchangeRateData, prevData: ExchangeRateData) => {
   const event = new CustomEvent(RATES_UPDATED_EVENT, { 
-    detail: { timestamp: Date.now() } 
+    detail: { timestamp: Date.now(), hasChanges: hasRateChanges(data, prevData) } 
   });
   window.dispatchEvent(event);
 };
 
+// Helper to detect if rates have actually changed
+const hasRateChanges = (newRates: ExchangeRateData, prevRates: ExchangeRateData): boolean => {
+  // If no previous rates, consider it changed
+  if (!prevRates || Object.keys(prevRates).length === 0) return true;
+  
+  // Check a few major currencies for changes
+  const currencies = ['BTC', 'ETH', 'USDT', 'SOL'];
+  for (const currency of currencies) {
+    if (
+      newRates[currency]?.eur !== prevRates[currency]?.eur ||
+      newRates[currency]?.usd !== prevRates[currency]?.usd
+    ) {
+      return true;
+    }
+  }
+  
+  return false;
+};
+
 interface ExchangeRatesContextType {
   rates: ExchangeRateData;
+  previousRates: ExchangeRateData;
   loading: boolean;
   error: string | null;
   refreshRates: () => Promise<void>;
@@ -36,26 +57,33 @@ interface ExchangeRatesProviderProps {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Get cached data from localStorage
-const getCachedRates = (): { rates: ExchangeRateData | null, timestamp: number | null } => {
+const getCachedRates = (): { 
+  rates: ExchangeRateData | null, 
+  previousRates: ExchangeRateData | null,
+  timestamp: number | null 
+} => {
   try {
     const cachedRates = localStorage.getItem(STORAGE_RATES_KEY);
+    const cachedPrevRates = localStorage.getItem(STORAGE_PREV_RATES_KEY);
     const cachedTimestamp = localStorage.getItem(STORAGE_TIMESTAMP_KEY);
     
     return {
       rates: cachedRates ? JSON.parse(cachedRates) : null,
+      previousRates: cachedPrevRates ? JSON.parse(cachedPrevRates) : null,
       timestamp: cachedTimestamp ? parseInt(cachedTimestamp, 10) : null
     };
   } catch (error) {
     console.warn('Failed to load cached exchange rates:', error);
-    return { rates: null, timestamp: null };
+    return { rates: null, previousRates: null, timestamp: null };
   }
 };
 
 // Save data to localStorage
-const cacheRates = (rates: ExchangeRateData): void => {
+const cacheRates = (rates: ExchangeRateData, previousRates: ExchangeRateData): void => {
   try {
     const timestamp = Date.now();
     localStorage.setItem(STORAGE_RATES_KEY, JSON.stringify(rates));
+    localStorage.setItem(STORAGE_PREV_RATES_KEY, JSON.stringify(previousRates));
     localStorage.setItem(STORAGE_TIMESTAMP_KEY, timestamp.toString());
   } catch (error) {
     console.warn('Failed to cache exchange rates:', error);
@@ -72,9 +100,10 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
   maxRetries = 3 // Default max retries
 }) => {
   // Load initial state from cache
-  const { rates: cachedRates, timestamp: cachedTimestamp } = getCachedRates();
+  const { rates: cachedRates, previousRates: cachedPrevRates, timestamp: cachedTimestamp } = getCachedRates();
   
   const [rates, setRates] = useState<ExchangeRateData>(cachedRates || {});
+  const [previousRates, setPreviousRates] = useState<ExchangeRateData>(cachedPrevRates || {});
   const [loading, setLoading] = useState<boolean>(cachedRates ? false : true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(cachedTimestamp);
@@ -104,15 +133,18 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
       // Update the last request time
       lastRequestTime = now;
       
-      const data = await coinGeckoService.fetchExchangeRates();
+      const newRates = await coinGeckoService.fetchExchangeRates();
+      
+      // Store previous rates before updating with new ones
+      setPreviousRates(rates);
       
       // Update state and cache
-      setRates(data);
+      setRates(newRates);
       setLastUpdated(now);
-      cacheRates(data);
+      cacheRates(newRates, rates);
       
       // Dispatch global event to notify all components
-      dispatchRatesUpdatedEvent(data);
+      dispatchRatesUpdatedEvent(newRates, rates);
       
       setError(null);
       setRetryCount(0); // Reset retry count on success
@@ -139,7 +171,7 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
       isRequestInProgress = false;
       setLoading(false);
     }
-  }, [refreshInterval, maxRetries]);
+  }, [refreshInterval, maxRetries, rates]);
 
   // Initial fetch - only if cache is old or missing
   useEffect(() => {
@@ -172,6 +204,7 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
 
   const value = {
     rates,
+    previousRates,
     loading,
     error,
     refreshRates,
