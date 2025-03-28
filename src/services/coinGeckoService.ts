@@ -4,7 +4,7 @@ import { ASSET_TYPE } from "@/assets/common";
 /**
  * Base URL for CoinGecko API v3
  */
-const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
+const COINGECKO_API_URL = '/coingecko'; // Use Vite proxy instead of direct API calls
 
 /**
  * API key for CoinGecko API
@@ -220,7 +220,7 @@ export const fetchExchangeRates = async (): Promise<ExchangeRateData> => {
     const response = await fetch(url);
     
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
       throw new Error(`CoinGecko API error: ${errorData.error || response.statusText}`);
     }
     
