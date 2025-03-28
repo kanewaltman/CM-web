@@ -22,7 +22,8 @@ const FALLBACK_MARKET_DATA = {
   DOGE: { eur: 0.13 },
   SOL: { eur: 145.00 },
   ADA: { eur: 0.45 },
-  HBAR: { eur: 0.07 }
+  HBAR: { eur: 0.07 },
+  XCM: { eur: 0.67 }  // Add XCM fallback data
 };
 
 // Create a global singleton for cached rates that all tooltip instances will share
@@ -399,6 +400,33 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
     setIsTooltipOpen(open);
   };
   
+  // Ensure all asset tickers have proper configuration
+  const validateAssetConfig = () => {
+    const missingAssets = [];
+    for (const ticker of Object.keys(ASSETS)) {
+      if (!ASSETS[ticker as AssetTicker]?.icon) {
+        missingAssets.push(ticker);
+        console.warn(`Missing icon configuration for asset: ${ticker}`);
+      }
+    }
+    
+    // Also check if all fallback data assets have configurations
+    for (const ticker of Object.keys(FALLBACK_MARKET_DATA)) {
+      if (!ASSETS[ticker as AssetTicker]) {
+        missingAssets.push(ticker);
+        console.warn(`Asset ${ticker} has fallback data but no configuration in ASSETS`);
+      }
+    }
+    
+    return missingAssets.length === 0;
+  };
+
+  // Validate asset configuration on load
+  const assetsValid = validateAssetConfig();
+  if (!assetsValid) {
+    console.error('Some assets have invalid configuration. Tooltips may not display correctly.');
+  }
+
   // Use context if available, otherwise use shared global state
   useEffect(() => {
     let cleanup: () => void = () => {};
@@ -418,6 +446,9 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
         globalRates.previousRates = exchangeRatesData.previousRates;
         globalRates.timestamp = exchangeRatesData.lastUpdated;
         globalRates.loading = exchangeRatesData.loading;
+        
+        // Log available assets for debugging
+        console.debug(`Available rates from context: ${Object.keys(exchangeRatesData.rates).join(', ')}`);
       } else {
         // Otherwise use localStorage synchronized global state
         if (!hasInitialized) {
@@ -426,6 +457,9 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
           setPreviousRates(globalRates.previousRates);
           setLastUpdated(globalRates.timestamp);
         }
+        
+        // Log available assets for debugging
+        console.debug(`Available rates from global/local: ${Object.keys(globalRates.currentRates).join(', ')}`);
       }
       
       // Listen for the custom event for rates updates
@@ -437,6 +471,9 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
           setLastUpdated(timestamp);
           setLoading(false);
           setError(null);
+          
+          // Log updates for debugging
+          console.debug(`Rates updated event. Assets: ${Object.keys(rates).join(', ')}`);
         }
       };
       
@@ -445,13 +482,25 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
       cleanup = () => {
         window.removeEventListener(RATES_UPDATED_EVENT, handleRatesUpdated);
       };
+      
+      // Always ensure specific asset exists in currentRates if not present
+      if (!currentRates[asset] && !loading) {
+        console.warn(`Asset ${asset} not found in current rates, ensuring fallback data is available`);
+        // Handle access to FALLBACK_MARKET_DATA more safely with type checking
+        if (Object.prototype.hasOwnProperty.call(FALLBACK_MARKET_DATA, asset)) {
+          setCurrentRates(prev => ({
+            ...prev, 
+            [asset]: FALLBACK_MARKET_DATA[asset as keyof typeof FALLBACK_MARKET_DATA]
+          }));
+        }
+      }
     } catch (e) {
       console.error('Error setting up exchange rates:', e);
       setError('Failed to load price data');
     }
     
     return cleanup;
-  }, []);
+  }, [asset]);
   
   // Helper for formatting in NumberFlow component
   const getNumberFormat = (price: number) => {
@@ -468,11 +517,27 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
     }
   };
 
-  // If no price data and not loading, don't render tooltip content
-  if (!currentAssetData && !loading) {
-    return <>{children}</>;
-  }
+  // Improved check for missing data - always show tooltip but with appropriate state
+  // If no currentAssetData, set a longer initial loading state to give API time to respond
+  useEffect(() => {
+    if (!currentAssetData && !loading && !error) {
+      // Set temporary loading state if data isn't available yet
+      setLoading(true);
+      
+      // Set a timeout to clear loading state if data never arrives
+      const timeout = setTimeout(() => {
+        if (!currentRates[asset]) {
+          setLoading(false);
+          setError(`Price data unavailable for ${asset}`);
+          console.warn(`Failed to load price data for ${asset}`);
+        }
+      }, 3000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [currentAssetData, loading, error, asset, currentRates]);
 
+  // Always render tooltip content, but show appropriate state
   return (
     <TooltipProvider delayDuration={0}>
       <Tooltip onOpenChange={handleTooltipOpenChange}>

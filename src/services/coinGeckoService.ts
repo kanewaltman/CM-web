@@ -220,11 +220,32 @@ export const fetchExchangeRates = async (): Promise<ExchangeRateData> => {
     const response = await fetch(url);
     
     if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      // Check if we're getting HTML instead of JSON (error page)
+      if (contentType.includes('text/html')) {
+        throw new Error(`CoinGecko API returned HTML instead of JSON. Rate limit may have been reached or API key may be invalid.`);
+      }
+      
+      // Try to parse error as JSON, fallback to statusText if that fails
       const errorData = await response.json().catch(() => ({ error: response.statusText }));
       throw new Error(`CoinGecko API error: ${errorData.error || response.statusText}`);
     }
     
-    const data: CoinPriceResponse = await response.json();
+    // Check content type before parsing to avoid JSON parse errors
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error(`CoinGecko API returned non-JSON response: ${contentType}`);
+    }
+    
+    const responseText = await response.text();
+    let data: CoinPriceResponse;
+    
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse CoinGecko response as JSON:', responseText.substring(0, 100));
+      throw new Error(`Invalid JSON response from CoinGecko API`);
+    }
     
     // Convert CoinGecko response to our format with asset tickers
     const exchangeRates: ExchangeRateData = {};
@@ -274,10 +295,33 @@ export const fetchCoinPrice = async (coinId: string, currencies: string[] = FIAT
     const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch price for ${coinId}`);
+      const contentType = response.headers.get('content-type') || '';
+      // Check if we're getting HTML instead of JSON (error page)
+      if (contentType.includes('text/html')) {
+        throw new Error(`CoinGecko API returned HTML instead of JSON. Rate limit may have been reached or API key may be invalid.`);
+      }
+      
+      // Try to parse error as JSON, fallback to statusText if that fails
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(`CoinGecko API error: ${errorData.error || response.statusText}`);
     }
     
-    const data = await response.json();
+    // Check content type before parsing to avoid JSON parse errors
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error(`CoinGecko API returned non-JSON response: ${contentType}`);
+    }
+    
+    const responseText = await response.text();
+    let data: CoinPriceResponse;
+    
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse CoinGecko response as JSON:', responseText.substring(0, 100));
+      throw new Error(`Invalid JSON response from CoinGecko API`);
+    }
+    
     return data[coinId] || {};
   } catch (error) {
     console.error(`Error fetching price for ${coinId}:`, error);

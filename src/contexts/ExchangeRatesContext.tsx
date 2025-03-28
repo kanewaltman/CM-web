@@ -133,7 +133,32 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
       // Update the last request time
       lastRequestTime = now;
       
-      const newRates = await coinGeckoService.fetchExchangeRates();
+      let newRates: ExchangeRateData = {};
+      
+      try {
+        newRates = await coinGeckoService.fetchExchangeRates();
+      } catch (fetchError) {
+        console.error('Error fetching exchange rates from CoinGecko:', fetchError);
+        
+        // If we have cached rates and this wasn't a forced refresh, use the cached rates
+        if (Object.keys(rates).length > 0 && !force) {
+          console.log('Using cached exchange rates as fallback');
+          return;
+        }
+        
+        // Otherwise, propagate the error to be handled by the outer catch block
+        throw fetchError;
+      }
+      
+      // Only update if we actually received data
+      if (Object.keys(newRates).length === 0) {
+        console.warn('Received empty exchange rates data');
+        if (Object.keys(rates).length > 0) {
+          console.log('Keeping existing rates instead of using empty data');
+          return;
+        }
+        throw new Error('Received empty exchange rates data');
+      }
       
       // Store previous rates before updating with new ones
       setPreviousRates(rates);
