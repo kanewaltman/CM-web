@@ -23,6 +23,7 @@ import {
   DropdownMenuCheckboxItem 
 } from './ui/dropdown-menu';
 import { Checkbox } from './ui/checkbox';
+import { Input } from './ui/input';
 
 // TanStack Table imports
 import {
@@ -57,7 +58,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, SlidersHorizontal, Star } from 'lucide-react';
+import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, Search, SlidersHorizontal, Star, X } from 'lucide-react';
 
 // Format price with appropriate number of decimal places
 const formatPrice = (price: number) => {
@@ -357,11 +358,13 @@ export const MarketsWidgetColumnVisibility: React.FC<{
   table: ReturnType<typeof useReactTable<any>> 
 }> = ({ table }) => {
   const columnOrder = table.getState().columnOrder;
-  const [localColumnOrder, setLocalColumnOrder] = useState<string[]>(columnOrder);
+  const [localColumnOrder, setLocalColumnOrder] = useState<string[]>(
+    columnOrder.filter(id => id !== 'pair')
+  );
   
-  // Keep local order in sync with table order
+  // Keep local order in sync with table order (excluding 'pair')
   useEffect(() => {
-    setLocalColumnOrder(columnOrder);
+    setLocalColumnOrder(columnOrder.filter(id => id !== 'pair'));
   }, [columnOrder]);
 
   // Initialize sensors for drag and drop
@@ -382,8 +385,14 @@ export const MarketsWidgetColumnVisibility: React.FC<{
       setLocalColumnOrder(prevOrder => {
         const oldIndex = prevOrder.indexOf(active.id as string);
         const newIndex = prevOrder.indexOf(over.id as string);
+        
+        // Create a new order by moving the item
         const newOrder = arrayMove(prevOrder, oldIndex, newIndex);
-        table.setColumnOrder(newOrder);
+        
+        // Update the full column order with 'pair' always at the beginning
+        const fullOrder = ['pair', ...newOrder];
+        table.setColumnOrder(fullOrder);
+        
         return newOrder;
       });
     }
@@ -391,6 +400,11 @@ export const MarketsWidgetColumnVisibility: React.FC<{
   
   // Direct column visibility toggle that uses the table API directly
   const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
+    // Prevent toggling off the 'pair' column (safety check)
+    if (columnId === 'pair') {
+      return;
+    }
+    
     // Create a new visibility state object to avoid mutating the existing one
     const newState = {...table.getState().columnVisibility};
     
@@ -462,12 +476,30 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'marketCap', desc: true }]);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>('ALL');
-  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(null);
+  
+  // Initialize state with values from localStorage
+  const [sorting, setSorting] = useState<SortingState>(
+    getStoredValue(STORAGE_KEYS.SORTING, [{ id: 'marketCap', desc: true }])
+  );
+  const [favorites, setFavorites] = useState<Set<string>>(
+    new Set(getStoredValue<string[]>(STORAGE_KEYS.FAVORITES, []))
+  );
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(
+    getStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, false)
+  );
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    getStoredValue(STORAGE_KEYS.COLUMN_VISIBILITY, {})
+  );
+  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(
+    getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL')
+  );
+  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(
+    getStoredValue<AssetTicker | null>(STORAGE_KEYS.SECONDARY_CURRENCY, null)
+  );
+  
+  // Add search state
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnSizes, setColumnSizes] = useState({
     pair: 200, // Increased to accommodate favorite star
@@ -481,6 +513,31 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   // Add a separate state for tracking dynamic column visibility based on container width
   const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
 
+  // Persist state changes to localStorage
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.FAVORITES, Array.from(favorites));
+  }, [favorites]);
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, showOnlyFavorites);
+  }, [showOnlyFavorites]);
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.COLUMN_VISIBILITY, columnVisibility);
+  }, [columnVisibility]);
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.SELECTED_QUOTE_ASSET, selectedQuoteAsset);
+  }, [selectedQuoteAsset]);
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.SECONDARY_CURRENCY, secondaryCurrency);
+  }, [secondaryCurrency]);
+
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.SORTING, sorting);
+  }, [sorting]);
+
   // Get unique quote assets from market data
   const quoteAssets = useMemo(() => {
     const assets = new Set<AssetTicker>();
@@ -488,7 +545,56 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     return Array.from(assets);
   }, [marketData]);
 
-  // Filter market data based on selected quote asset and favorites filter
+  // Helper function to check if an asset matches the search query
+  const assetMatchesSearch = useCallback((item: MarketData, query: string) => {
+    if (!query.trim()) return true;
+    
+    const normalizedQuery = query.trim().toLowerCase();
+    const [baseAsset, quoteAsset] = item.pair.split('/');
+    
+    // Check if query matches ticker symbols
+    if (item.pair.toLowerCase().includes(normalizedQuery)) return true;
+    if (baseAsset.toLowerCase().includes(normalizedQuery)) return true;
+    if (quoteAsset.toLowerCase().includes(normalizedQuery)) return true;
+    
+    // Check if query matches full asset names
+    const baseAssetFullName = ASSETS[baseAsset]?.name.toLowerCase() || '';
+    const quoteAssetFullName = ASSETS[quoteAsset]?.name.toLowerCase() || '';
+    
+    if (baseAssetFullName.includes(normalizedQuery)) return true;
+    if (quoteAssetFullName.includes(normalizedQuery)) return true;
+    
+    // Check for combined searches like "eth usd"
+    const queryParts = normalizedQuery.split(/\s+/);
+    if (queryParts.length > 1) {
+      const [queryBase, queryQuote] = queryParts;
+      
+      const baseMatches = 
+        baseAsset.toLowerCase().includes(queryBase) || 
+        baseAssetFullName.includes(queryBase);
+      
+      const quoteMatches = 
+        quoteAsset.toLowerCase().includes(queryQuote) || 
+        quoteAssetFullName.includes(queryQuote);
+      
+      if (baseMatches && quoteMatches) return true;
+      
+      // Also check the reverse order
+      const baseMatchesReverse = 
+        baseAsset.toLowerCase().includes(queryQuote) || 
+        baseAssetFullName.includes(queryQuote);
+      
+      const quoteMatchesReverse = 
+        quoteAsset.toLowerCase().includes(queryBase) || 
+        quoteAssetFullName.includes(queryBase);
+      
+      if (baseMatchesReverse && quoteMatchesReverse) return true;
+    }
+    
+    return false;
+  }, []);
+
+  // Filter market data based on selected quote asset, favorites filter, and search query
   const filteredMarketData = useMemo(() => {
     // First apply quote asset filter
     let filtered = selectedQuoteAsset === 'ALL' 
@@ -500,79 +606,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       filtered = filtered.filter(item => favorites.has(item.pair));
     }
     
+    // Finally, apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(item => assetMatchesSearch(item, searchQuery));
+    }
+    
     return filtered;
-  }, [marketData, selectedQuoteAsset, favorites, showOnlyFavorites]);
-
-  // Check for container width to determine which columns to dynamically hide
-  useEffect(() => {
-    const checkWidth = () => {
-      if (containerRef.current) {
-        const containerWidth = containerRef.current.clientWidth;
-        
-        // Define breakpoints for hiding columns (from right to left)
-        const newDynamicVisibility: VisibilityState = {};
-        
-        // Always show pair and price columns
-        
-        // Hide columns from right to left based on container width
-        if (containerWidth < 900) {
-          newDynamicVisibility.volume = false; // First to hide
-        }
-        if (containerWidth < 750) {
-          newDynamicVisibility.marketCap = false; // Second to hide
-        }
-        if (containerWidth < 600) {
-          newDynamicVisibility.change7d = false; // Third to hide
-        }
-        if (containerWidth < 450) {
-          newDynamicVisibility.change24h = false; // Last to hide
-        }
-        
-        // Update the dynamic visibility state
-        setDynamicVisibility(newDynamicVisibility);
-      }
-    };
-
-    checkWidth();
-    const resizeObserver = new ResizeObserver(checkWidth);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
-    window.addEventListener('resize', checkWidth);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', checkWidth);
-    };
-  }, []);
-
-  // Calculate column sizes based on container width (keep this effect separate)
-  useEffect(() => {
-    const updateColumnSizes = () => {
-      if (!containerRef.current) return;
-      
-      const containerWidth = containerRef.current.clientWidth;
-      const isNarrow = containerWidth < 768;
-      const isMedium = containerWidth < 1024;
-
-      setColumnSizes({
-        pair: isNarrow ? 160 : 200, // Increased to accommodate favorite star
-        price: isNarrow ? 100 : 120,
-        change24h: isNarrow ? 80 : 100,
-        change7d: isNarrow ? 80 : 100,
-        marketCap: isNarrow ? 100 : isMedium ? 120 : 140,
-        volume: isNarrow ? 100 : isMedium ? 120 : 140
-      });
-    };
-
-    const resizeObserver = new ResizeObserver(updateColumnSizes);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
-    return () => resizeObserver.disconnect();
-  }, []);
+  }, [marketData, selectedQuoteAsset, favorites, showOnlyFavorites, searchQuery, assetMatchesSearch]);
 
   // Define columns for the table
   const columns = useMemo<ColumnDef<MarketData>[]>(() => [
@@ -756,8 +796,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 
   // Setup column order
   const [columnOrder, setColumnOrder] = useState<string[]>(
-    columns.map((column) => column.id as string)
+    getStoredValue(STORAGE_KEYS.COLUMN_ORDER, columns.map((column) => column.id as string))
   );
+
+  // Persist column order changes
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.COLUMN_ORDER, columnOrder);
+  }, [columnOrder]);
 
   // Detect theme from document class list
   useEffect(() => {
@@ -918,7 +963,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       if (!tokenData.token) {
         throw new Error('Failed to get demo token');
       }
-      
+
+      // Use the CryptoCompare API to fetch market data for pairs
       const baseAssets = [...new Set(marketData.map(item => item.baseAsset))];
       const quoteAssets = [...new Set(marketData.map(item => item.quoteAsset))];
       
@@ -1031,7 +1077,27 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       className={cn("h-full flex flex-col p-2 relative", className)}
       ref={containerRef}
     >
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        {/* Search input - moved to the far left */}
+        <div className="relative h-9">
+          <Input
+            type="text"
+            placeholder="Search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 w-[200px] pl-8 pr-8"
+          />
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          {searchQuery && (
+            <button 
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+              onClick={() => setSearchQuery('')}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        
         {favorites.size > 0 && (
           <Button 
             variant={showOnlyFavorites ? "default" : "outline"} 
@@ -1161,3 +1227,35 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 MarketsWidget.displayName = 'MarketsWidget';
 
 export default MarketsWidget; 
+
+const STORAGE_KEY_PREFIX = 'markets-widget-';
+const STORAGE_KEYS = {
+  FAVORITES: `${STORAGE_KEY_PREFIX}favorites`,
+  SHOW_ONLY_FAVORITES: `${STORAGE_KEY_PREFIX}show-only-favorites`,
+  SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}selected-quote-asset`,
+  SECONDARY_CURRENCY: `${STORAGE_KEY_PREFIX}secondary-currency`,
+  COLUMN_VISIBILITY: `${STORAGE_KEY_PREFIX}column-visibility`,
+  COLUMN_ORDER: `${STORAGE_KEY_PREFIX}column-order`,
+  SORTING: `${STORAGE_KEY_PREFIX}sorting`,
+};
+
+const getStoredValue = <T,>(key: string, defaultValue: T): T => {
+  if (typeof window === 'undefined') return defaultValue;
+  try {
+    const item = window.localStorage.getItem(key);
+    if (!item) return defaultValue;
+    return JSON.parse(item) as T;
+  } catch (error) {
+    console.error(`Error reading from localStorage for key ${key}:`, error);
+    return defaultValue;
+  }
+};
+
+const setStoredValue = <T,>(key: string, value: T): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Error writing to localStorage for key ${key}:`, error);
+  }
+};
