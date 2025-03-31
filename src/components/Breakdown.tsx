@@ -11,6 +11,29 @@ import { cn } from '@/lib/utils';
 // Default color for assets not found in ASSETS
 const DEFAULT_COLOR = '#4f46e5';
 
+// Add keyframes for the pulse animation
+const pulseKeyframes = `
+@keyframes pulse-border {
+  0% {
+    stroke-opacity: 0.6;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
+  100% {
+    stroke-opacity: 0.6;
+  }
+}
+`;
+
+// Inject the keyframes into the document head
+if (typeof document !== 'undefined') {
+  // Only run in browser environment
+  const style = document.createElement('style');
+  style.innerHTML = pulseKeyframes;
+  document.head.appendChild(style);
+}
+
 // Asset Button component to match the style in balances and performance widgets
 const AssetButton = ({ 
   asset, 
@@ -219,6 +242,9 @@ const Breakdown: React.FC<{
   const [isLoading, setIsLoading] = useState(true);
   const [balances, setBalances] = useState<any>(SAMPLE_BALANCES);
   const [error, setError] = useState<string | null>(null);
+  const [clickedItemId, setClickedItemId] = useState<string | null>(null);
+  // Track whether any item has been clicked
+  const [showAllTooltips, setShowAllTooltips] = useState(false);
   
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
@@ -228,20 +254,70 @@ const Breakdown: React.FC<{
     if (active && payload && payload.length > 0) {
       const data = payload[0].payload;
       
-      // Only show tooltip for smaller sections where labels are hidden
-      // Use same thresholds as in TreeMapItem but in reverse
+      // Show tooltip for small sections or when any section has been clicked
       const width = data.width || 0;
       const height = data.height || 0;
       const isSmallSection = width <= 80 || height <= 50;
       
-      if (!isSmallSection) {
-        return null; // Don't show tooltip for larger sections that already have visible labels
+      // Show all tooltips when showAllTooltips is true or if it's a small section
+      if (!isSmallSection && !showAllTooltips) {
+        return null; // Don't show tooltip for larger sections unless user has clicked
       }
       
+      // Get asset-specific color for styling accents
+      let assetColor = DEFAULT_COLOR;
+      if (isAssetTicker(data.name) && ASSETS[data.name as AssetTicker]) {
+        assetColor = ASSETS[data.name as AssetTicker].theme[effectiveTheme];
+      }
+      
+      // Check if we have a valid balance
+      const hasValidBalance = data.balance > 0;
+      
       return (
-        <div className="bg-card px-3 py-2 rounded-md shadow-md border text-sm">
-          <p className="font-semibold">{data.name}</p>
-          <p className="text-sm opacity-80">{data.formattedPercentage}</p>
+        <div className="bg-card px-4 py-3 rounded-md shadow-md border text-sm backdrop-blur-sm">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              {isAssetTicker(data.name) && ASSETS[data.name as AssetTicker]?.icon && (
+                <div 
+                  className="w-6 h-6 rounded-full flex items-center justify-center"
+                  style={{ 
+                    backgroundColor: `${assetColor}22`,
+                    border: `1px solid ${assetColor}` 
+                  }}
+                >
+                  <img 
+                    src={ASSETS[data.name as AssetTicker].icon} 
+                    alt={data.name} 
+                    className="w-4 h-4 object-contain"
+                  />
+                </div>
+              )}
+              <p className="font-semibold text-base" style={{ color: assetColor }}>{data.name}</p>
+            </div>
+            
+            <div className="text-muted-foreground space-y-1.5 pt-0.5">
+              <div className="flex justify-between gap-4">
+                <span>Allocation:</span>
+                <span className="font-medium text-foreground">{data.formattedPercentage}</span>
+              </div>
+              
+              <div className="flex justify-between gap-4">
+                <span>Balance:</span>
+                <span className="font-medium text-foreground">
+                  {hasValidBalance 
+                    ? data.formattedBalance 
+                    : <span className="italic opacity-60">Not available</span>}
+                </span>
+              </div>
+              
+              <hr className="border-t border-border my-1.5 opacity-60" />
+              
+              <div className="flex justify-between gap-4 pt-0.5">
+                <span>Value:</span>
+                <span className="font-medium text-foreground">{data.formattedValue}</span>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
@@ -379,14 +455,22 @@ const Breakdown: React.FC<{
       <g
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onClick={() => {
+          // Toggle global tooltip visibility
+          setShowAllTooltips(true);
+        }}
+        // style={{ cursor: 'pointer' }} // Removed cursor styling
       >
         <path 
           d={pathData}
           fill={fillColorWithOpacity}
           stroke={fillColor}
-          strokeWidth={1}
+          strokeWidth={1} // Removed conditional styling for clicked items
+          // strokeDasharray={isClicked ? "4,2" : "none"} // Commented out dashed stroke for clicked items
+          strokeOpacity={0.8} // Use constant stroke opacity
           style={{
             transition: 'fill 0.2s ease-out',
+            // animation: isClicked ? 'pulse-border 2s infinite' : 'none', // Commented out pulse animation
           }}
         />
         
@@ -541,12 +625,96 @@ const Breakdown: React.FC<{
         return;
       }
       
+      // Log a sample of the balances format to help with debugging
+      // const sampleAssets = Object.entries(balances).slice(0, 1);
+      // if (sampleAssets.length > 0) {
+      //   console.log('Breakdown: Balance data structure sample:', {
+      //     asset: sampleAssets[0][0],
+      //     balanceObj: sampleAssets[0][1],
+      //     keys: Object.keys(sampleAssets[0][1]),
+      //   });
+      // }
+      
       // Create data for the treemap without including fill color
       let processedData = Object.entries(balances)
         .filter(([asset]) => asset !== 'TOTAL') // Filter out total if present
         .map(([asset, balance]: [string, any]) => {
           const value = parseFloat(balance.EUR || '0');
           const percentage = (value / totalValue) * 100;
+          
+          // Get the actual balance amount (quantity of the asset)
+          // In our data structure, each asset has a property with its own ticker containing the balance
+          let assetBalance = 0;
+          
+          // The primary way to get balance - asset has its own ticker as a property
+          // Example: BTC: { BTC: "1.23456789", EUR: "45678.90" }
+          if (balance[asset] !== undefined) {
+            assetBalance = parseFloat(balance[asset]);
+          } 
+          // Fallbacks if the primary method doesn't work
+          else if (balance.amount !== undefined) {
+            assetBalance = typeof balance.amount === 'string' ? parseFloat(balance.amount) : balance.amount;
+          } else if (balance.balance !== undefined) {
+            assetBalance = typeof balance.balance === 'string' ? parseFloat(balance.balance) : balance.balance;
+          } else if (balance.quantity !== undefined) {
+            assetBalance = typeof balance.quantity === 'string' ? parseFloat(balance.quantity) : balance.quantity;
+          } else if (typeof balance === 'object') {
+            // The balance might be directly in the object with keys being currencies
+            const keys = Object.keys(balance).filter(k => k !== 'EUR' && k !== 'USD' && k !== 'price');
+            if (keys.length === 1) {
+              // If there's only one non-currency key, it might be the asset quantity
+              const possibleAmount = balance[keys[0]];
+              if (typeof possibleAmount === 'string' || typeof possibleAmount === 'number') {
+                assetBalance = parseFloat(possibleAmount);
+              }
+            }
+          }
+          
+          // If we still don't have a balance but we have EUR value and price, calculate it
+          if (assetBalance === 0 && value > 0) {
+            if (balance.price && balance.price.EUR) {
+              // Calculate from price
+              const price = parseFloat(balance.price.EUR);
+              assetBalance = price > 0 ? value / price : 0;
+            } else if (ASSETS[asset as AssetTicker]?.price) {
+              // Try to get price from ASSETS if available
+              const price = parseFloat(ASSETS[asset as AssetTicker].price);
+              assetBalance = price > 0 ? value / price : 0;
+            }
+          }
+          
+          // If balance is extremely small or NaN, set to 0
+          if (isNaN(assetBalance) || !isFinite(assetBalance)) {
+            assetBalance = 0;
+          }
+          
+          // Asset-specific formatting for the balance
+          const getFormattedBalance = () => {
+            if (assetBalance === 0) return '0.00';
+            
+            // For large balances, use fewer decimal places
+            if (assetBalance >= 1000) {
+              return assetBalance.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              });
+            } else if (assetBalance >= 1) {
+              return assetBalance.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4
+              });
+            } else {
+              // For very small balances, use scientific notation for extremely small values
+              if (assetBalance < 0.00001 && assetBalance > 0) {
+                return assetBalance.toExponential(4);
+              }
+              // Otherwise show up to 8 decimal places for small balances
+              return assetBalance.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 8
+              });
+            }
+          };
           
           // Create a unique ID for each item to prevent naming conflicts
           return {
@@ -558,6 +726,14 @@ const Breakdown: React.FC<{
             size: Math.max(value, totalValue * 0.002), // 0.2% minimum visual size
             originalValue: value, // Keep the original value for tooltip
             formattedPercentage: `${percentage.toFixed(2)}%`,
+            balance: assetBalance, // Store the balance amount
+            formattedBalance: getFormattedBalance(),
+            formattedValue: value.toLocaleString(undefined, {
+              style: 'currency',
+              currency: 'EUR',
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }),
           };
         })
         .filter(item => !isNaN(item.value) && item.value > 0) // Filter out zero values
@@ -651,8 +827,20 @@ const Breakdown: React.FC<{
         return true;
       }}
     >
-      <div className="h-full w-full rounded-xl bg-card overflow-hidden">
-        <div className="h-full w-full">
+      <div 
+        className="h-full w-full rounded-xl bg-card overflow-hidden"
+        onClick={(e) => {
+          // Toggle tooltip visibility when clicking anywhere in the container
+          setShowAllTooltips(!showAllTooltips);
+        }}
+      >
+        <div 
+          className="h-full w-full"
+          onClick={(e) => {
+            // Toggle tooltip visibility when clicking anywhere in the container
+            setShowAllTooltips(!showAllTooltips);
+          }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <Treemap
               data={treeMapData}
