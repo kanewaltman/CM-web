@@ -120,11 +120,18 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     from: startOfYear(subYears(today, 1)),
     to: endOfYear(subYears(today, 1)),
   };
+
+  // State for controlling popover and selection
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<{ from: Date; to?: Date }>(propDateRange || last7Days);
+  const [selectionStart, setSelectionStart] = useState<Date | undefined>();
+  
+  // Just use a single state for the popover
+  const [month, setMonth] = useState(today);
+  const [activePreset, setActivePreset] = useState<string>('Last 7 Days');
   
   // Set initial state to last 7 days or use prop date range if provided
   const [date, setDate] = useState<{ from: Date; to: Date } | undefined>(propDateRange || last7Days);
-  const [month, setMonth] = useState(today);
-  const [activePreset, setActivePreset] = useState<string>('Last 7 Days');
   
   // Helper function to compare date ranges
   const isDateRangeEqual = useCallback((range1: { from: Date; to: Date }, range2: { from: Date; to: Date }): boolean => {
@@ -353,24 +360,30 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
     // Initialize date range from props or defaults
     if (propDateRange?.from && propDateRange?.to) {
-      // Check if the prop date range is a same-day range and needs to be expanded
-      const dayDiff = Math.ceil((propDateRange.to.getTime() - propDateRange.from.getTime()) / (24 * 60 * 60 * 1000));
-      if (dayDiff <= 1 && (activePreset === 'Last 7 Days' || !activePreset)) {
-        const now = new Date();
-        const sevenDaysAgo = new Date(now);
-        sevenDaysAgo.setDate(now.getDate() - 6);
-        setDate({
-          from: sevenDaysAgo,
-          to: now
-        });
-        
-        // Also update the active preset to match
+      // Don't expand single-day or two-day ranges anymore
+      setDate({
+        from: propDateRange.from,
+        to: propDateRange.to
+      });
+      
+      // Set appropriate preset based on the actual date range
+      if (isDateRangeEqual(propDateRange, yesterday)) {
+        setActivePreset('Yesterday');
+      } else if (isDateRangeEqual(propDateRange, last7Days)) {
         setActivePreset('Last 7 Days');
+      } else if (isDateRangeEqual(propDateRange, last30Days)) {
+        setActivePreset('Last 30 Days');
+      } else if (isDateRangeEqual(propDateRange, monthToDate)) {
+        setActivePreset('Month to Date');
+      } else if (isDateRangeEqual(propDateRange, lastMonth)) {
+        setActivePreset('Last Month');
+      } else if (isDateRangeEqual(propDateRange, yearToDate)) {
+        setActivePreset('Year to Date');
+      } else if (isDateRangeEqual(propDateRange, lastYear)) {
+        setActivePreset('Last Year');
       } else {
-        setDate({
-          from: propDateRange.from,
-          to: propDateRange.to
-        });
+        // For custom date range, set a formatted date string
+        setActivePreset(formatDateRange(propDateRange));
       }
       
       // Let the parent component know about the date range
@@ -418,6 +431,11 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     formatDateRange,
     propDateRange
   ]);
+
+  // Initialize selectedRange after presets are defined
+  useEffect(() => {
+    setSelectedRange(propDateRange || last7Days);
+  }, []);
 
   // Memoize event handlers to prevent unnecessary re-renders
   const handleVariantChange = useCallback((value: ChartVariant) => {
@@ -512,37 +530,26 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     handleDateRangeChange(lastYear);
   };
 
-  // Calendar
-  const handleCalendarSelect = (range: DayPickerDateRange | undefined) => {
-    if (!range?.from) return;
+  // Handle the popover state changes
+  const handleOpenChange = (open: boolean) => {
+    setIsCalendarOpen(open);
     
-    // Create a proper DateRange object from the DayPickerDateRange
-    const newDateRange: { from: Date; to: Date } = {
-      from: range.from,
-      to: range.to || range.from
-    };
-    
-    // Check if the new range matches any preset
-    if (isDateRangeEqual(newDateRange, yesterday)) {
-      setActivePreset('Yesterday');
-    } else if (isDateRangeEqual(newDateRange, last7Days)) {
-      setActivePreset('Last 7 Days');
-    } else if (isDateRangeEqual(newDateRange, last30Days)) {
-      setActivePreset('Last 30 Days');
-    } else if (isDateRangeEqual(newDateRange, monthToDate)) {
-      setActivePreset('Month to Date');
-    } else if (isDateRangeEqual(newDateRange, lastMonth)) {
-      setActivePreset('Last Month');
-    } else if (isDateRangeEqual(newDateRange, yearToDate)) {
-      setActivePreset('Year to Date');
-    } else if (isDateRangeEqual(newDateRange, lastYear)) {
-      setActivePreset('Last Year');
+    if (!open) {
+      // Reset selection state when closing the calendar
+      setSelectionStart(undefined);
+      
+      // Ensure the selectedRange is restored to the current date range
+      if (date?.from && date?.to) {
+        setSelectedRange({ from: date.from, to: date.to });
+      }
     } else {
-      // For custom date range, set a formatted date string
-      setActivePreset(formatDateRange(newDateRange));
+      // When opening, ensure we show the current date range
+      // and reset any in-progress selection
+      setSelectionStart(undefined);
+      if (date?.from && date?.to) {
+        setSelectedRange({ from: date.from, to: date.to });
+      }
     }
-    
-    handleDateRangeChange(newDateRange);
   };
 
   // Chart components for each variant
@@ -596,7 +603,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   const headerControlsContent = (
     <div className="flex items-center gap-2">
       {/* Date range selector */}
-      <Popover>
+      <Popover open={isCalendarOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs max-w-[180px] whitespace-nowrap">
             <CalendarIcon className="mr-1 h-3 w-3 flex-shrink-0" />
@@ -611,7 +618,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
+        <PopoverContent className="w-auto p-0" align="end" onOpenAutoFocus={(e) => e.preventDefault()}>
           <div className="flex max-sm:flex-col">
             <div className="relative py-4 max-sm:order-1 max-sm:border-t sm:w-32">
               <div className="h-full sm:border-e">
@@ -620,7 +627,10 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     variant="ghost"
                     size="sm"
                     className="w-full justify-start"
-                    onClick={handleYesterday}
+                    onClick={() => {
+                      handleYesterday();
+                      setIsCalendarOpen(false);
+                    }}
                   >
                     Yesterday
                   </Button>
@@ -628,7 +638,10 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     variant="ghost"
                     size="sm"
                     className="w-full justify-start"
-                    onClick={handleLast7Days}
+                    onClick={() => {
+                      handleLast7Days();
+                      setIsCalendarOpen(false);
+                    }}
                   >
                     Last 7 Days
                   </Button>
@@ -636,7 +649,10 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     variant="ghost"
                     size="sm"
                     className="w-full justify-start"
-                    onClick={handleLast30Days}
+                    onClick={() => {
+                      handleLast30Days();
+                      setIsCalendarOpen(false);
+                    }}
                   >
                     Last 30 Days
                   </Button>
@@ -644,7 +660,10 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     variant="ghost"
                     size="sm"
                     className="w-full justify-start"
-                    onClick={handleMonthToDate}
+                    onClick={() => {
+                      handleMonthToDate();
+                      setIsCalendarOpen(false);
+                    }}
                   >
                     Month to Date
                   </Button>
@@ -652,7 +671,10 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     variant="ghost"
                     size="sm"
                     className="w-full justify-start"
-                    onClick={handleLastMonth}
+                    onClick={() => {
+                      handleLastMonth();
+                      setIsCalendarOpen(false);
+                    }}
                   >
                     Last Month
                   </Button>
@@ -660,7 +682,10 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
                     variant="ghost"
                     size="sm"
                     className="w-full justify-start"
-                    onClick={handleYearToDate}
+                    onClick={() => {
+                      handleYearToDate();
+                      setIsCalendarOpen(false);
+                    }}
                   >
                     Year to Date
                   </Button>
@@ -669,8 +694,65 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             </div>
             <Calendar
               mode="range"
-              selected={date}
-              onSelect={handleCalendarSelect}
+              selected={selectionStart ? {} as any : selectedRange}
+              modifiers={selectionStart ? {
+                selected: [selectionStart]
+              } : undefined}
+              onDayClick={(day) => {
+                // Start of a new selection or continuing an existing selection
+                if (!selectionStart) {
+                  // Starting a brand new selection - completely clear any previous selection
+                  setSelectionStart(day);
+                  return;
+                }
+
+                // Second click - completing the selection
+                let newRange;
+                
+                // Check if the clicked date is the same as the start date
+                if (isSameDay(selectionStart, day)) {
+                  // Single day selection - don't expand to a week
+                  newRange = { from: day, to: day };
+                } else {
+                  // Multi-day selection - ensure correct order
+                  newRange = selectionStart < day 
+                    ? { from: selectionStart, to: day }
+                    : { from: day, to: selectionStart };
+                }
+                
+                // Check if the new range matches any preset
+                if (isDateRangeEqual(newRange, yesterday)) {
+                  setActivePreset('Yesterday');
+                } else if (isDateRangeEqual(newRange, last7Days)) {
+                  setActivePreset('Last 7 Days');
+                } else if (isDateRangeEqual(newRange, last30Days)) {
+                  setActivePreset('Last 30 Days');
+                } else if (isDateRangeEqual(newRange, monthToDate)) {
+                  setActivePreset('Month to Date');
+                } else if (isDateRangeEqual(newRange, lastMonth)) {
+                  setActivePreset('Last Month');
+                } else if (isDateRangeEqual(newRange, yearToDate)) {
+                  setActivePreset('Year to Date');
+                } else if (isDateRangeEqual(newRange, lastYear)) {
+                  setActivePreset('Last Year');
+                } else {
+                  // For custom date range, set a formatted date string
+                  setActivePreset(formatDateRange(newRange));
+                }
+                
+                // Update the selection
+                setSelectedRange(newRange);
+                setSelectionStart(undefined);
+                
+                // Apply the range
+                setDate(newRange as { from: Date; to: Date });
+                handleDateRangeChange(newRange as { from: Date; to: Date });
+                
+                // Close the calendar after a brief delay
+                setTimeout(() => {
+                  setIsCalendarOpen(false);
+                }, 150);
+              }}
               month={month}
               onMonthChange={setMonth}
               className="p-2"
@@ -679,6 +761,15 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
               ]}
               numberOfMonths={1}
               defaultMonth={month}
+              footer={
+                selectionStart ? (
+                  <div className="px-3 pt-2 pb-3 border-t">
+                    <div className="text-xs text-muted-foreground text-center">
+                      Select end date: {format(selectionStart, 'MMM d, yyyy')} - ?
+                    </div>
+                  </div>
+                ) : null
+              }
             />
           </div>
         </PopoverContent>
