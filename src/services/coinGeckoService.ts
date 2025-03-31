@@ -1,5 +1,6 @@
 import { AssetTicker, ASSETS } from "@/assets/AssetTicker";
 import { ASSET_TYPE } from "@/assets/common";
+import { rateLimiter } from './rateLimit';
 
 /**
  * Base URL for CoinGecko API v3
@@ -207,10 +208,11 @@ export const getCoinGeckoIds = (): string[] => {
     .filter(Boolean);
 };
 
-/**
- * Fetch exchange rates for multiple cryptocurrencies at once
- */
-export const fetchExchangeRates = async (): Promise<ExchangeRateData> => {
+// Register the exchange rates fetcher with the rate limiter
+const EXCHANGE_RATES_KEY = 'coingecko_exchange_rates';
+
+// Initialize the rate limiter with our fetcher function
+rateLimiter.registerFetcher(EXCHANGE_RATES_KEY, async () => {
   try {
     const coinIds = getCoinGeckoIds().join(',');
     const currencies = FIAT_CURRENCIES.join(',');
@@ -242,45 +244,28 @@ export const fetchExchangeRates = async (): Promise<ExchangeRateData> => {
     
     try {
       data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Failed to parse CoinGecko response as JSON:', responseText.substring(0, 100));
-      throw new Error(`Invalid JSON response from CoinGecko API`);
+    } catch (e) {
+      console.error('Failed to parse CoinGecko response:', responseText);
+      throw new Error('Failed to parse CoinGecko response');
     }
     
-    // Convert CoinGecko response to our format with asset tickers
-    const exchangeRates: ExchangeRateData = {};
-    
-    // Reverse mapping from CoinGecko ID to asset ticker
-    const coinGeckoIdToAssetTicker = Object.entries(ASSET_TICKER_TO_COINGECKO_ID)
-      .reduce((acc, [ticker, id]) => {
-        acc[id] = ticker;
-        return acc;
-      }, {} as Record<string, string>);
-    
-    // Transform the data
-    Object.entries(data).forEach(([coinId, rates]) => {
-      const ticker = coinGeckoIdToAssetTicker[coinId];
-      if (ticker) {
-        const rateObj: Record<string, number> = {};
-        
-        // Process exchange rates separately from last_updated
-        Object.entries(rates).forEach(([currency, rate]) => {
-          if (currency !== 'last_updated_at') {
-            rateObj[currency] = rate as number;
-          }
-        });
-        
-        // Add to the exchange rates with the last_updated property
-        exchangeRates[ticker] = {
-          ...rateObj,
-          last_updated: rates.last_updated_at || Date.now() / 1000
-        };
-      }
-    });
-    
-    return exchangeRates;
+    // Transform the data into our ExchangeRateData format
+    return transformCoinGeckoResponse(data);
   } catch (error) {
-    console.error('Error fetching exchange rates from CoinGecko:', error);
+    console.error('Error in CoinGecko exchange rates fetcher:', error);
+    throw error;
+  }
+});
+
+/**
+ * Fetch exchange rates for multiple cryptocurrencies at once
+ */
+export const fetchExchangeRates = async (): Promise<ExchangeRateData> => {
+  try {
+    // Use the rate limiter to handle batching and caching
+    return await rateLimiter.queueRequest<ExchangeRateData>(EXCHANGE_RATES_KEY);
+  } catch (error) {
+    console.error('Error fetching exchange rates through rate limiter:', error);
     throw error;
   }
 };
@@ -343,3 +328,40 @@ export const coinGeckoService = {
 };
 
 export default coinGeckoService; 
+
+/**
+ * Transform CoinGecko response to our ExchangeRateData format
+ */
+function transformCoinGeckoResponse(data: CoinPriceResponse): ExchangeRateData {
+  const exchangeRates: ExchangeRateData = {};
+  
+  // Reverse mapping from CoinGecko ID to asset ticker
+  const coinGeckoIdToAssetTicker = Object.entries(ASSET_TICKER_TO_COINGECKO_ID)
+    .reduce((acc, [ticker, id]) => {
+      acc[id] = ticker;
+      return acc;
+    }, {} as Record<string, string>);
+  
+  // Transform the data
+  Object.entries(data).forEach(([coinId, rates]) => {
+    const ticker = coinGeckoIdToAssetTicker[coinId];
+    if (ticker) {
+      const rateObj: Record<string, number> = {};
+      
+      // Process exchange rates separately from last_updated
+      Object.entries(rates).forEach(([currency, rate]) => {
+        if (currency !== 'last_updated_at') {
+          rateObj[currency] = rate as number;
+        }
+      });
+      
+      // Add to the exchange rates with the last_updated property
+      exchangeRates[ticker] = {
+        ...rateObj,
+        last_updated: rates.last_updated_at || Date.now() / 1000
+      };
+    }
+  });
+  
+  return exchangeRates;
+}
