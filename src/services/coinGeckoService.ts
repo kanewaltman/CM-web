@@ -244,8 +244,28 @@ rateLimiter.registerFetcher(EXCHANGE_RATES_KEY, async () => {
     
     try {
       data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Failed to parse CoinGecko response:', responseText);
+      
+      // Validate response format
+      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length === 0) {
+        console.error('Invalid API response format:', responseText.substring(0, 100));
+        throw new Error('Invalid API response format: Expected non-empty object');
+      }
+      
+      // Check if at least one entry has the expected structure
+      const hasValidFormat = Object.values(data).some(entry => {
+        return entry && typeof entry === 'object' && !Array.isArray(entry) && 
+               Object.keys(entry).some(key => typeof entry[key] === 'number');
+      });
+      
+      if (!hasValidFormat) {
+        console.error('Invalid API response structure:', responseText.substring(0, 100));
+        throw new Error('Invalid API response structure: Missing price data');
+      }
+    } catch (e: unknown) {
+      console.error('Failed to parse or validate CoinGecko response:', e);
+      if (e instanceof Error && e.message.includes('Invalid API response')) {
+        throw e; // Re-throw validation errors
+      }
       throw new Error('Failed to parse CoinGecko response');
     }
     
