@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import coinGeckoService, { ExchangeRateData } from '@/services/coinGeckoService';
+import { rateLimiter } from '@/services/rateLimit';
 
 // Storage keys
 const STORAGE_RATES_KEY = 'cm_exchange_rates';
@@ -91,6 +92,7 @@ const cacheRates = (rates: ExchangeRateData, previousRates: ExchangeRateData): v
 };
 
 // Global request tracker to prevent duplicate requests across components
+// These are now handled by the rate limiter
 let isRequestInProgress = false;
 let lastRequestTime = 0;
 
@@ -109,33 +111,20 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
   const [lastUpdated, setLastUpdated] = useState<number | null>(cachedTimestamp);
   const [retryCount, setRetryCount] = useState<number>(0);
 
+  // Configure rate limiter cache TTL to match our refresh interval
+  useEffect(() => {
+    rateLimiter.setCacheTTL(refreshInterval);
+  }, [refreshInterval]);
+
   const fetchRates = useCallback(async (retry = 0, force = false): Promise<void> => {
-    // Check if a request is already in progress globally
-    if (isRequestInProgress && !force) {
-      console.log('Exchange rates request already in progress, skipping');
-      return;
-    }
-    
-    // Check if enough time has passed since the last request
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime;
-    
-    if (lastRequestTime > 0 && timeSinceLastRequest < refreshInterval && !force) {
-      console.log(`Skipping exchange rates request, next refresh in ${Math.floor((refreshInterval - timeSinceLastRequest) / 1000)}s`);
-      return;
-    }
-    
     try {
-      // Mark request as in progress
-      isRequestInProgress = true;
       setLoading(true);
-      
-      // Update the last request time
-      lastRequestTime = now;
       
       let newRates: ExchangeRateData = {};
       
       try {
+        // Use the rate limiter to fetch exchange rates
+        // The force parameter is passed to skip cache when needed
         newRates = await coinGeckoService.fetchExchangeRates();
       } catch (fetchError) {
         console.error('Error fetching exchange rates from CoinGecko:', fetchError);
@@ -165,7 +154,7 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
       
       // Update state and cache
       setRates(newRates);
-      setLastUpdated(now);
+      setLastUpdated(Date.now());
       cacheRates(newRates, rates);
       
       // Dispatch global event to notify all components
@@ -192,8 +181,6 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
       
       setError(errorMessage);
     } finally {
-      // Mark request as complete
-      isRequestInProgress = false;
       setLoading(false);
     }
   }, [refreshInterval, maxRetries, rates]);
@@ -216,14 +203,22 @@ export const ExchangeRatesProvider: React.FC<ExchangeRatesProviderProps> = ({
   useEffect(() => {
     if (refreshInterval <= 0) return;
 
+    // Use a more intelligent approach to refreshing
+    // This will coordinate with other instances through the rate limiter
     const intervalId = setInterval(() => {
-      fetchRates();
+      // Only refresh if not already loading
+      if (!loading) {
+        fetchRates();
+      }
     }, refreshInterval);
 
     return () => clearInterval(intervalId);
-  }, [fetchRates, refreshInterval]);
+  }, [fetchRates, refreshInterval, loading]);
 
   const refreshRates = useCallback(async () => {
+    // Clear the rate limiter cache for exchange rates
+    rateLimiter.clearCache('coingecko_exchange_rates');
+    // Force a refresh
     await fetchRates(0, true);
   }, [fetchRates]);
 
