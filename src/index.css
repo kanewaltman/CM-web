@@ -830,3 +830,43 @@ button.font-bold,
   border-top-left-radius: 0.5rem;
   border-bottom-left-radius: 0.5rem;
 }
+
+/* Add tabular-nums for consistent number widths */
+.font-tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Apply custom styles to the NumberFlow component */
+number-flow-react {
+  --number-flow-char-height: 0.85em;
+  display: inline-flex;
+  vertical-align: baseline;
+  line-height: normal;
+}
+
+/* Fix alignment of NumberFlow with currency symbols */
+.price-container {
+  display: inline-flex;
+  align-items: baseline;
+  line-height: normal;
+  vertical-align: baseline;
+}
+
+.price-container > * {
+  display: inline-flex;
+  vertical-align: baseline;
+}
+
+/* Euro currency symbol alignment */
+.currency-symbol {
+  display: inline-block;
+  vertical-align: baseline;
+  line-height: normal;
+  position: relative;
+  top: 0;
+}
+
+/* Space for price decimals */
+number-flow-react::part(group-decimal) {
+  margin-left: 0.1em;
+}

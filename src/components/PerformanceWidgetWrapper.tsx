@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
@@ -19,10 +19,14 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
   widgetComponent: WidgetComponent,
   onRemove,
 }) => {
-  // Get or create widget state
-  const getWidgetState = (): WidgetState => {
-    let widgetState = widgetStateRegistry.get(widgetId);
-    if (!widgetState) {
+  // Track operations to reduce logging
+  const operationCount = useRef(0);
+  const didInit = useRef(false);
+  
+  // Get or create widget state - memoize to prevent unnecessary re-creation
+  const widgetState = useMemo(() => {
+    let state = widgetStateRegistry.get(widgetId);
+    if (!state) {
       // Default date range (last 7 days)
       const today = new Date();
       const initialDateRange = {
@@ -48,25 +52,28 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
         console.error('Error retrieving view mode from localStorage:', error);
       }
       
-      widgetState = new WidgetState(
+      state = new WidgetState(
         'revenue',
         getPerformanceTitle('revenue'),
         initialViewMode,
         initialDateRange
       );
-      widgetStateRegistry.set(widgetId, widgetState);
+      widgetStateRegistry.set(widgetId, state);
     }
-    return widgetState;
-  };
+    return state;
+  }, [widgetId]);
 
-  const widgetState = getWidgetState();
   const [variant, setVariant] = useState<ChartVariant>(widgetState.variant);
   const [title, setTitle] = useState(widgetState.title);
   const [viewMode, setViewMode] = useState<'split' | 'cumulative' | 'combined'>(widgetState.viewMode);
   const [dateRange, setDateRange] = useState(widgetState.dateRange);
+  const [updateCounter, setUpdateCounter] = useState(0);
 
-  // Subscribe to state changes
+  // Subscribe to state changes - only subscribe once
   useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
+    
     try {
       // Initial state sync
       setVariant(widgetState.variant);
@@ -156,12 +163,15 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
         console.error('Failed to save widget view state:', error);
       }
     }
-  }, [widgetId, onRemove, WidgetComponent]);
+  }, [widgetId, onRemove, WidgetComponent, widgetState]);
 
   const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative' | 'combined') => {
     if (!newViewMode) return;
     
-    console.log('PerformanceWidgetWrapper: view mode changing to:', newViewMode);
+    // Only log in development mode and occasionally
+    if (process.env.NODE_ENV === 'development' && (++operationCount.current % 1000 === 0)) {
+      console.log('PerformanceWidgetWrapper: view mode changing to:', newViewMode);
+    }
     
     // Update local state first for immediate UI feedback
     setViewMode(newViewMode);
@@ -185,7 +195,6 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
             }
           };
           localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-          console.log('PerformanceWidgetWrapper: saved view mode to layout data:', newViewMode);
         }
       } catch (error) {
         console.error('Failed to save widget view state:', error);
@@ -200,64 +209,122 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     }
   }, [widgetId, widgetState]);
 
+  // Use a debounced version of date range change to prevent excessive updates
+  const lastDateChangeTime = useRef(0);
   const handleDateRangeChange = useCallback((newDateRange: { from: Date; to: Date } | undefined) => {
     if (!newDateRange?.from || !newDateRange?.to) return;
     
-    console.log(`PerformanceWidgetWrapper: Date range changed to:`, {
-      from: newDateRange.from.toISOString(),
-      to: newDateRange.to.toISOString(),
-      widgetId,
-      isHeader
-    });
+    // Debounce updates to at most once every 200ms
+    const now = Date.now();
+    if (now - lastDateChangeTime.current < 200) {
+      return;
+    }
+    lastDateChangeTime.current = now;
+    
+    // Only log in development mode and occasionally
+    if (process.env.NODE_ENV === 'development' && (++operationCount.current % 1000 === 0)) {
+      console.log(`PerformanceWidgetWrapper: Date range changed to:`, {
+        widgetId,
+        count: operationCount.current
+      });
+    }
+    
+    // Create a completely new object to force React to recognize the change
+    const freshDateRange = {
+      from: new Date(newDateRange.from.getTime()),
+      to: new Date(newDateRange.to.getTime())
+    };
     
     // Update local state first for immediate UI update
-    setDateRange(newDateRange);
+    setDateRange(freshDateRange);
+    setUpdateCounter(prev => prev + 1);
 
-    // Update shared state
-    widgetState.setDateRange(newDateRange);
+    // Update shared state with the fresh copy
+    widgetState.setDateRange(freshDateRange);
     
-    // Save to layout data
+    // Force a re-render of the widget container
+    const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+    if (widgetContainer) {
+      try {
+        // Force state change in all widget components sharing this ID
+        const event = new CustomEvent('performance-widget-date-change', { 
+          detail: { 
+            dateRange: freshDateRange,
+            widgetId,
+            timestamp: Date.now()
+          } 
+        });
+        document.dispatchEvent(event);
+        
+      } catch (error) {
+        console.error('Error forcing widget re-render:', error);
+      }
+    }
+    
+    // Save to layout data - reduce frequency of saves by checking time
+    if (now - lastSaveTime.current > 1000) {
+      lastSaveTime.current = now;
+      saveToLayout(freshDateRange);
+    }
+  }, [widgetId, widgetState]);
+
+  // Separate the layout saving to its own function to reduce complexity
+  const lastSaveTime = useRef(0);
+  const saveToLayout = useCallback((dateRange: { from: Date; to: Date }) => {
     const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
     if (savedLayout) {
       try {
         const layout = JSON.parse(savedLayout);
         const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
         if (widgetIndex !== -1) {
+          // Update layout with the new date range
           layout[widgetIndex] = {
             ...layout[widgetIndex],
             viewState: {
               ...layout[widgetIndex].viewState,
-              chartVariant: widgetState.variant,
-              viewMode: widgetState.viewMode,
               dateRange: {
-                from: newDateRange.from.toISOString(),
-                to: newDateRange.to.toISOString()
+                from: dateRange.from.toISOString(),
+                to: dateRange.to.toISOString()
               }
             }
           };
           localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
         }
       } catch (error) {
-        console.error('Failed to save widget date range state:', error);
+        console.error('Failed to save date range to layout:', error);
       }
     }
-  }, [isHeader, widgetId, widgetState]);
+  }, [widgetId]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     widgetState.setTitle(newTitle);
   }, [widgetState]);
 
-  return (
-    <WidgetComponent 
-      widgetId={widgetId} 
-      headerControls={isHeader}
-      defaultVariant={variant}
-      defaultViewMode={viewMode}
-      onVariantChange={handleVariantChange}
-      onViewModeChange={handleViewModeChange}
-      onDateRangeChange={handleDateRangeChange}
-      dateRange={dateRange}
-      onTitleChange={handleTitleChange}
-    />
-  );
+  // Memoize the component props to prevent unnecessary re-renders
+  const componentProps = useMemo(() => ({
+    widgetId,
+    headerControls: isHeader,
+    defaultVariant: variant,
+    defaultViewMode: viewMode,
+    onVariantChange: handleVariantChange,
+    onViewModeChange: handleViewModeChange,
+    onDateRangeChange: handleDateRangeChange,
+    dateRange,
+    onTitleChange: handleTitleChange,
+  }), [
+    widgetId, 
+    isHeader, 
+    variant, 
+    viewMode, 
+    handleVariantChange, 
+    handleViewModeChange, 
+    handleDateRangeChange, 
+    dateRange, 
+    handleTitleChange,
+  ]);
+
+  // Generate a key separately
+  const componentKey = `${widgetId}-${updateCounter}`;
+
+  return <WidgetComponent key={componentKey} {...componentProps} />;
 }; 

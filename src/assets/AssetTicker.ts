@@ -81,7 +81,6 @@ import iconPERP from "@/assets/symbols/PERP.svg";
 import iconPRO from "@/assets/symbols/PRO.svg";
 import iconPROPS from "@/assets/symbols/PROPS.svg";
 import iconPRQ from "@/assets/symbols/PRQ.svg";
-import iconPRQB from "@/assets/symbols/PRQB.svg";
 import iconQNT from "@/assets/symbols/QNT.svg";
 import iconQRDO from "@/assets/symbols/QRDO.svg";
 import iconRIO from "@/assets/symbols/RIO.svg";
@@ -157,7 +156,6 @@ export namespace AssetTicker {
     | "ENJ"
     | "OMG"
     | "PRQ"
-    | "PRQB"
     | "QNT"
     | "USDC"
     | "LINK"
@@ -562,16 +560,6 @@ export const ASSETS: { [K in AssetTicker]: AssetConfig<K> } = {
       { type: ASSET_NETWORK.Polygon, isAlternative: true },
     ],
     collateral: true,
-  },
-  PRQB: {
-    name: "Parsiq Boost",
-    symbol: "PRQB",
-    type: ASSET_TYPE.Crypto,
-    icon: iconPRQB,
-    theme: { light: "#01C753", dark: "#01C753" },
-    decimalPlaces: 1,
-    multiplier: 1e3,
-    networks: [{ type: ASSET_NETWORK.Ethereum }],
   },
   VXV: {
     name: "Vectorspace AI",

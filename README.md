@@ -20,6 +20,13 @@ cd CM-web
 npm install
 ```
 
+3. Set up environment variables:
+```bash
+cp .env.example .env
+```
+Then edit the `.env` file and fill in the required values:
+- `VITE_COINGECKO_API_KEY`: Your CoinGecko API key (get one at https://www.coingecko.com/en/api)
+
 ## Available Scripts
 
 ### Development Server

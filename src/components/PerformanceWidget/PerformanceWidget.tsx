@@ -31,6 +31,7 @@ import {
 } from 'date-fns';
 import { Card } from '@/components/ui/card';
 import { KeyedPerformanceChart } from './KeyedPerformanceChart';
+import { PerformanceWidgetProps } from '../../types/widgets';
 
 export type ChartVariant = 'revenue' | 'subscribers' | 'mrr-growth' | 'refunds' | 'subscriptions' | 'upgrades';
 
@@ -62,19 +63,6 @@ const chartLabels: Record<ChartVariant, string> = {
 export type WidgetViewMode = 'split' | 'cumulative' | 'combined';
 export type ChartViewMode = 'split' | 'stacked' | 'line' | 'cumulative' | 'combined';
 
-interface PerformanceWidgetProps {
-  className?: string;
-  defaultVariant?: ChartVariant;
-  defaultViewMode?: WidgetViewMode;
-  onVariantChange?: (variant: ChartVariant) => void;
-  onViewModeChange?: (mode: WidgetViewMode) => void;
-  onTitleChange?: (title: string) => void;
-  onRemove?: () => void;
-  headerControls?: boolean;
-  onDateRangeChange?: (range: DateRange | undefined) => void;
-  dateRange?: DateRange;
-}
-
 type DateRange = {
   from: Date;
   to: Date;
@@ -91,6 +79,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   headerControls,
   onDateRangeChange,
   dateRange: propDateRange,
+  widgetId,
 }: PerformanceWidgetProps): React.ReactNode => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const [viewMode, setViewMode] = useState<WidgetViewMode>(defaultViewMode);
@@ -133,52 +122,153 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   };
   
   // Set initial state to last 7 days or use prop date range if provided
-  const [date, setDate] = useState<DateRange | undefined>(propDateRange || last7Days);
+  const [date, setDate] = useState<{ from: Date; to: Date } | undefined>(propDateRange || last7Days);
   const [month, setMonth] = useState(today);
   const [activePreset, setActivePreset] = useState<string>('Last 7 Days');
+  
+  // Helper function to compare date ranges
+  const isDateRangeEqual = useCallback((range1: { from: Date; to: Date }, range2: { from: Date; to: Date }): boolean => {
+    return isEqual(new Date(range1.from), new Date(range2.from)) && 
+           isEqual(new Date(range1.to), new Date(range2.to));
+  }, []);
+  
+  // Update the formatDateRange function to provide different formats based on context
+  const formatDateRange = useCallback((range: { from: Date; to: Date } | undefined) => {
+    if (!range?.from) return 'Date Range';
+    if (!range.to) return format(range.from, 'MMM d, yyyy');
+    
+    if (isSameDay(range.from, range.to)) {
+      return format(range.from, 'MMM d, yyyy');
+    }
+    
+    if (range.from.getMonth() === range.to.getMonth() && 
+        range.from.getFullYear() === range.to.getFullYear()) {
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'd, yyyy')}`;
+    }
+    
+    if (range.from.getFullYear() === range.to.getFullYear()) {
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'MMM d, yyyy')}`;
+    }
+    
+    return `${format(range.from, 'MMM d, yyyy')}-${format(range.to, 'MMM d, yyyy')}`;
+  }, []);
+  
+  // Update the formatCompactDateRange function to handle cross-year formatting better
+  const formatCompactDateRange = useCallback((range: { from: Date; to: Date } | undefined) => {
+    if (!range?.from) return 'Date';
+    if (!range.to) return format(range.from, 'MMM d, yyyy');
+    
+    // For same day selections
+    if (isSameDay(range.from, range.to)) {
+      return format(range.from, 'MMM d, yyyy');
+    }
+    
+    // For same month and same year
+    if (range.from.getMonth() === range.to.getMonth() && 
+        range.from.getFullYear() === range.to.getFullYear()) {
+      // Format as "Mar 3-17, 2025" for same month/year
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'd, yyyy')}`;
+    }
+    
+    // For same year
+    if (range.from.getFullYear() === range.to.getFullYear()) {
+      // Format as "Mar 3-Apr 17, 2025" for different months in same year
+      return `${format(range.from, 'MMM d')}-${format(range.to, 'MMM d, yyyy')}`;
+    }
+    
+    // For different years, use a more compact format that clearly shows both years
+    // Format as "Nov'23-Mar'25" for different years
+    const fromYear = range.from.getFullYear().toString().slice(-2);
+    const toYear = range.to.getFullYear().toString().slice(-2);
+    return `${format(range.from, 'MMM d')}'${fromYear}-${format(range.to, 'MMM d')}'${toYear}`;
+  }, []);
   
   // Keep track of render count to debug re-rendering issues
   const renderCount = useRef(0);
   renderCount.current += 1;
   
-  // Log when component renders
-  console.log(`PerformanceWidget render #${renderCount.current}`, {
-    headerControls,
-    propDateRange: propDateRange ? {
-      from: propDateRange.from.toISOString(),
-      to: propDateRange.to.toISOString()
-    } : 'undefined',
-    currentDate: date ? {
-      from: date.from.toISOString(),
-      to: date.to.toISOString()
-    } : 'undefined'
-  });
+  // Log when component renders - only in development and only once every 1000 renders
+  if (process.env.NODE_ENV === 'development' && renderCount.current % 1000 === 0) {
+    console.log(`PerformanceWidget render #${renderCount.current}`, {
+      headerControls,
+      widgetId
+    });
+  }
 
-  // Update date state when the prop changes
+  // Memoize date presets to prevent unnecessary re-renders
+  const datePresets = useMemo(() => ({
+    yesterday,
+    last7Days,
+    last30Days,
+    monthToDate,
+    lastMonth,
+    yearToDate,
+    lastYear
+  }), [yesterday, last7Days, last30Days, monthToDate, lastMonth, yearToDate, lastYear]);
+
+  // Listen for custom date change events to sync between header and content
   useEffect(() => {
-    if (propDateRange?.from && propDateRange?.to) {
-      console.log('PerformanceWidget received new dateRange prop:', {
-        from: propDateRange.from.toISOString(),
-        to: propDateRange.to.toISOString()
+    // Only process date change events that target this specific widget
+    const handleDateChangeEvent = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { dateRange, widgetId: eventWidgetId } = customEvent.detail;
+      
+      // Only update if this event is for our widget ID and we're not the header
+      if (!headerControls && widgetId === eventWidgetId) {
+        setDate({
+          from: new Date(dateRange.from),
+          to: new Date(dateRange.to)
+        });
+      }
+    };
+    
+    document.addEventListener('performance-widget-date-change', handleDateChangeEvent);
+    
+    return () => {
+      document.removeEventListener('performance-widget-date-change', handleDateChangeEvent);
+    };
+  }, [headerControls, widgetId]);
+
+  // Update date state when the prop changes - use deep comparison for dates
+  useEffect(() => {
+    if (!propDateRange?.from || !propDateRange?.to) return;
+    if (!date?.from || !date?.to) {
+      setDate({
+        from: new Date(propDateRange.from),
+        to: new Date(propDateRange.to)
+      });
+      return;
+    }
+    
+    const fromTimeChanged = propDateRange.from.getTime() !== date.from.getTime();
+    const toTimeChanged = propDateRange.to.getTime() !== date.to.getTime();
+    
+    // Only update if different by time value
+    if (fromTimeChanged || toTimeChanged) {
+      setDate({
+        from: new Date(propDateRange.from),
+        to: new Date(propDateRange.to)
       });
       
-      // Only update if different
-      if (!date || 
-          propDateRange.from.getTime() !== date.from.getTime() || 
-          propDateRange.to.getTime() !== date.to.getTime()) {
-        setDate({
+      // If this is the header controls, also notify parent of change to keep in sync
+      if (headerControls && onDateRangeChange) {
+        onDateRangeChange({
           from: new Date(propDateRange.from),
           to: new Date(propDateRange.to)
         });
       }
     }
-  }, [propDateRange]);
+  }, [
+    propDateRange?.from?.getTime(), 
+    propDateRange?.to?.getTime(), 
+    headerControls, 
+    onDateRangeChange
+  ]);
 
   // Update local state when defaultVariant changes
   useEffect(() => {
     if (defaultVariant !== selectedVariant) {
       setSelectedVariant(defaultVariant);
-      // Update title when variant changes via prop
       onTitleChange?.(chartLabels[defaultVariant]);
     }
   }, [defaultVariant, onTitleChange, selectedVariant]);
@@ -210,25 +300,138 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     }
   }, []); // Run only on mount
 
-  const handleVariantChange = (value: ChartVariant) => {
-    console.log('Changing variant to', value);
+  // This effect initializes the date range on component mount - use useRef to ensure it only runs once
+  const didInit = useRef(false);
+  useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
+    
+    // Try to load saved date range from localStorage first
+    try {
+      const savedDateRangeStr = localStorage.getItem(`widget_${widgetId}_date_range`);
+      if (savedDateRangeStr) {
+        const savedDateRange = JSON.parse(savedDateRangeStr);
+        
+        const restoredRange = {
+          from: new Date(savedDateRange.from),
+          to: new Date(savedDateRange.to)
+        };
+        
+        // Update local state
+        setDate(restoredRange);
+        
+        // Notify parent component about the restored date range
+        if (onDateRangeChange) {
+          onDateRangeChange(restoredRange);
+        }
+        
+        // Determine which preset this matches, if any
+        if (isDateRangeEqual(restoredRange, yesterday)) {
+          setActivePreset('Yesterday');
+        } else if (isDateRangeEqual(restoredRange, last7Days)) {
+          setActivePreset('Last 7 Days');
+        } else if (isDateRangeEqual(restoredRange, last30Days)) {
+          setActivePreset('Last 30 Days');
+        } else if (isDateRangeEqual(restoredRange, monthToDate)) {
+          setActivePreset('Month to Date');
+        } else if (isDateRangeEqual(restoredRange, lastMonth)) {
+          setActivePreset('Last Month');
+        } else if (isDateRangeEqual(restoredRange, yearToDate)) {
+          setActivePreset('Year to Date');
+        } else if (isDateRangeEqual(restoredRange, lastYear)) {
+          setActivePreset('Last Year');
+        } else {
+          // For custom date range, set a formatted date string
+          setActivePreset(formatDateRange(restoredRange));
+        }
+        
+        return; // Exit early as we've restored the saved date range
+      }
+    } catch (error) {
+      console.error('Error loading date range from localStorage:', error);
+    }
+
+    // Initialize date range from props or defaults
+    if (propDateRange?.from && propDateRange?.to) {
+      // Check if the prop date range is a same-day range and needs to be expanded
+      const dayDiff = Math.ceil((propDateRange.to.getTime() - propDateRange.from.getTime()) / (24 * 60 * 60 * 1000));
+      if (dayDiff <= 1 && (activePreset === 'Last 7 Days' || !activePreset)) {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setDate(now.getDate() - 6);
+        setDate({
+          from: sevenDaysAgo,
+          to: now
+        });
+        
+        // Also update the active preset to match
+        setActivePreset('Last 7 Days');
+      } else {
+        setDate({
+          from: propDateRange.from,
+          to: propDateRange.to
+        });
+      }
+      
+      // Let the parent component know about the date range
+      if (!headerControls && onDateRangeChange) {
+        onDateRangeChange({
+          from: propDateRange.from,
+          to: propDateRange.to
+        });
+      }
+    } else {
+      // Use default date range
+      const now = new Date();
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 6);
+      
+      setDate({
+        from: sevenDaysAgo,
+        to: now
+      });
+      
+      // Set the active range to "Last 7 Days"
+      setActivePreset('Last 7 Days');
+      
+      // Let the parent component know about the date range
+      if (!headerControls && onDateRangeChange) {
+        onDateRangeChange({
+          from: sevenDaysAgo,
+          to: now
+        });
+      }
+    }
+  }, [
+    widgetId, 
+    onDateRangeChange, 
+    headerControls,
+    yesterday, 
+    last7Days, 
+    last30Days, 
+    monthToDate, 
+    lastMonth, 
+    yearToDate, 
+    lastYear, 
+    activePreset,
+    isDateRangeEqual, 
+    formatDateRange,
+    propDateRange
+  ]);
+
+  // Memoize event handlers to prevent unnecessary re-renders
+  const handleVariantChange = useCallback((value: ChartVariant) => {
     setSelectedVariant(value);
     onVariantChange?.(value);
-  };
+  }, [onVariantChange]);
 
-  const handleViewModeChange = (mode: WidgetViewMode) => {
+  const handleViewModeChange = useCallback((mode: WidgetViewMode) => {
     setViewMode(mode);
     onViewModeChange?.(mode);
-  };
+  }, [onViewModeChange]);
 
   // Handler for receiving chart view mode changes and mapping them to widget view modes
-  const handleChartViewModeChange = (mode: ChartViewMode) => {
-    // Proper logging for debugging
-    console.log('PerformanceWidget: Chart view mode changed to:', mode, {
-      previousMode: viewMode,
-      timestamp: Date.now()
-    });
-    
+  const handleChartViewModeChange = useCallback((mode: ChartViewMode) => {
     // Map chart view modes to widget view modes
     const widgetMode: WidgetViewMode = mode === 'cumulative' || mode === 'split' || mode === 'combined'
       ? mode 
@@ -239,11 +442,8 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     
     // Notify parent component via callback
     if (onViewModeChange) {
-      console.log('PerformanceWidget: Calling parent onViewModeChange with:', widgetMode);
       onViewModeChange(widgetMode);
     } else {
-      console.log('PerformanceWidget: No onViewModeChange handler provided');
-      
       // If no parent handler, save locally as fallback
       try {
         localStorage.setItem('performance_widget_view_mode', widgetMode);
@@ -251,9 +451,9 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
         console.error('Failed to save view mode to localStorage:', error);
       }
     }
-  };
+  }, [onViewModeChange]);
 
-  const handleDateRangeChange = (newDate: DateRange | undefined) => {
+  const handleDateRangeChange = useCallback((newDate: { from: Date; to: Date } | undefined) => {
     if (!newDate?.from || !newDate?.to) return;
     
     // Create deep copies of the dates to avoid reference issues
@@ -262,15 +462,19 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       to: new Date(newDate.to)
     };
     
-    console.log('Date range changed to:', {
-      from: newDateCopy.from.toISOString(),
-      to: newDateCopy.to.toISOString(),
-      timestamp: Date.now() // Add timestamp for tracking
-    });
+    // Save to localStorage with widget-specific key
+    try {
+      localStorage.setItem(`widget_${widgetId}_date_range`, JSON.stringify({
+        from: newDateCopy.from.toISOString(),
+        to: newDateCopy.to.toISOString()
+      }));
+    } catch (error) {
+      console.error('Failed to save date range to localStorage:', error);
+    }
     
     setDate(newDateCopy);
     onDateRangeChange?.(newDateCopy);
-  };
+  }, [widgetId, onDateRangeChange]);
 
   // Date range buttons
   const handleYesterday = () => {
@@ -313,7 +517,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     if (!range?.from) return;
     
     // Create a proper DateRange object from the DayPickerDateRange
-    const newDateRange: DateRange = {
+    const newDateRange: { from: Date; to: Date } = {
       from: range.from,
       to: range.to || range.from
     };
@@ -339,12 +543,6 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     }
     
     handleDateRangeChange(newDateRange);
-  };
-
-  // Helper function to compare date ranges
-  const isDateRangeEqual = (range1: DateRange, range2: DateRange): boolean => {
-    return isEqual(new Date(range1.from), new Date(range2.from)) && 
-           isEqual(new Date(range1.to), new Date(range2.to));
   };
 
   // Chart components for each variant
@@ -379,90 +577,20 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   const dateRangeProp = useMemo(() => {
     if (!date?.from || !date?.to) return undefined;
     
-    // Create new Date objects to break reference equality
-    const result = { 
-      from: new Date(date.from),
-      to: new Date(date.to)
+    // Force new object creation with time values to ensure React detects the change
+    return { 
+      from: new Date(date.from.getTime()),
+      to: new Date(date.to.getTime())
     };
-    
-    console.log('PerformanceWidget providing dateRange:', {
-      from: result.from.toISOString(),
-      to: result.to.toISOString(),
-      hash: Date.now() // Add timestamp for tracking
-    });
-    
-    return result;
-  }, [date]);
+  }, [date?.from?.getTime(), date?.to?.getTime()]);
 
   // Add a key generator that updates when date changes but allows for animation
-  const getChartKey = (variant: ChartVariant) => {
+  const getChartKey = useCallback((variant: ChartVariant) => {
     if (!date?.from || !date?.to) return `chart-${variant}-no-date`;
     return `chart-${variant}-${date.from.getTime()}-${date.to.getTime()}`;
-  };
-
-  // Log each render with date information
-  console.log('PerformanceWidget rendering with date range:', dateRangeProp ? {
-    from: dateRangeProp.from.toISOString(),
-    to: dateRangeProp.to.toISOString(),
-    key: getChartKey(selectedVariant)
-  } : 'undefined');
+  }, [date]);
 
   const ChartComponent = MemoizedCharts[selectedVariant];
-
-  // Update the formatDateRange function to provide different formats based on context
-  const formatDateRange = (range: DateRange | undefined) => {
-    if (!range?.from) return 'Date Range';
-    if (!range.to) return format(range.from, 'MMM d, yyyy');
-    
-    // For same day selections
-    if (isSameDay(range.from, range.to)) {
-      return format(range.from, 'MMM d, yyyy');
-    }
-    
-    // For same month and year selections
-    if (range.from.getMonth() === range.to.getMonth() && 
-        range.from.getFullYear() === range.to.getFullYear()) {
-      return `${format(range.from, 'MMM d')}-${format(range.to, 'd, yyyy')}`;
-    }
-    
-    // For same year but different month selections
-    if (range.from.getFullYear() === range.to.getFullYear()) {
-      return `${format(range.from, 'MMM d')}-${format(range.to, 'MMM d, yyyy')}`;
-    }
-    
-    // For different year selections
-    return `${format(range.from, 'MMM d, yyyy')}-${format(range.to, 'MMM d, yyyy')}`;
-  };
-
-  // Update the formatCompactDateRange function to handle cross-year formatting better
-  const formatCompactDateRange = (range: DateRange | undefined) => {
-    if (!range?.from) return 'Date';
-    if (!range.to) return format(range.from, 'MMM d, yyyy');
-    
-    // For same day selections
-    if (isSameDay(range.from, range.to)) {
-      return format(range.from, 'MMM d, yyyy');
-    }
-    
-    // For same month and same year
-    if (range.from.getMonth() === range.to.getMonth() && 
-        range.from.getFullYear() === range.to.getFullYear()) {
-      // Format as "Mar 3-17, 2025" for same month/year
-      return `${format(range.from, 'MMM d')}-${format(range.to, 'd, yyyy')}`;
-    }
-    
-    // For same year
-    if (range.from.getFullYear() === range.to.getFullYear()) {
-      // Format as "Mar 3-Apr 17, 2025" for different months in same year
-      return `${format(range.from, 'MMM d')}-${format(range.to, 'MMM d, yyyy')}`;
-    }
-    
-    // For different years, use a more compact format that clearly shows both years
-    // Format as "Nov'23-Mar'25" for different years
-    const fromYear = range.from.getFullYear().toString().slice(-2);
-    const toYear = range.to.getFullYear().toString().slice(-2);
-    return `${format(range.from, 'MMM d')}'${fromYear}-${format(range.to, 'MMM d')}'${toYear}`;
-  };
 
   // Create compact header controls that will be returned when onRemove is provided
   const headerControlsContent = (

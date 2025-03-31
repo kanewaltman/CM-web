@@ -31,6 +31,15 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: false,
+      },
+      '/coingecko': {
+        target: 'https://api.coingecko.com/api/v3',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/coingecko/, ''),
+        secure: true,
+        headers: {
+          'Accept': 'application/json',
+        },
       }
     }
   }

@@ -14,6 +14,8 @@ import { createWidget, updateWidgetsDataSource } from './components/WidgetRender
 import { DASHBOARD_LAYOUT_KEY, MOBILE_BREAKPOINT, LayoutWidget, ExtendedGridStackWidget } from './types/widgets';
 import { WIDGET_REGISTRY, widgetIds, widgetTypes, widgetTitles } from './lib/widgetRegistry';
 import { isValidLayout } from './layouts/dashboardLayout';
+import { ExchangeRatesProvider } from './contexts/ExchangeRatesContext';
+import ExchangeRatesTester from './components/ExchangeRatesTester';
 
 function AppContent() {
   const { dataSource, setDataSource } = useDataSource();
@@ -29,6 +31,9 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const resizeFrameRef = useRef<number>();
   const gridElementRef = useRef<HTMLDivElement>(null);
+
+  // Check if we're on the exchange-rates route
+  const isExchangeRatesRoute = window.location.pathname === '/exchange-rates';
 
   // Initialize the grid through our custom hook
   const {
@@ -101,8 +106,10 @@ function AppContent() {
     pageChangeRef.current = handlePageChange;
   }, [handlePageChange]);
 
-  // Initialize grid when page changes
+  // Skip grid initialization on exchange rates route
   useEffect(() => {
+    if (isExchangeRatesRoute) return;
+    
     try {
       if (!gridElementRef.current) {
         console.error('❌ Grid element not found');
@@ -121,7 +128,7 @@ function AppContent() {
         : 'Failed to initialize the dashboard. Please try refreshing the page.';
       setError(errorMessage);
     }
-  }, [currentPage, isMobile, adBlockerDetected, initGrid]);
+  }, [currentPage, isMobile, adBlockerDetected, initGrid, isExchangeRatesRoute]);
 
   useEffect(() => {
     // Set initial page and initialize grid based on URL
@@ -373,6 +380,19 @@ function AppContent() {
     };
   }, [gridRef, isMobile, currentPage]);
 
+  // If we're on the exchange rates route, render the tester component
+  if (isExchangeRatesRoute) {
+    return (
+      <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
+        <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
+        <div className="main-content p-4 mt-4">
+          <ExchangeRatesTester />
+        </div>
+        <Toaster position="bottom-right" />
+      </div>
+    );
+  }
+
   // Render error state if there's an error
   if (error) {
     return (
@@ -380,7 +400,7 @@ function AppContent() {
         <div className="bg-red-50 p-4 rounded-lg border border-red-200 max-w-md">
           <h2 className="text-lg font-semibold text-red-800 mb-2">Error</h2>
           <p className="text-red-700">{error}</p>
-          <button 
+          <button
             className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
             onClick={() => window.location.reload()}
           >
@@ -391,12 +411,13 @@ function AppContent() {
     );
   }
 
+  // Regular dashboard view
   return (
     <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
       <div className="main-content h-[calc(100vh-4rem)] overflow-y-auto bg-[hsl(var(--color-bg-base))]">
         <div className="main-content-inner h-full relative">
-          <ControlBar 
+          <ControlBar
             onResetLayout={handleResetLayout}
             onCopyLayout={handleCopyLayout}
             onPasteLayout={handlePasteLayout}
@@ -433,7 +454,9 @@ function AppContent() {
 function App() {
   return (
     <DataSourceProvider>
-      <AppContent />
+      <ExchangeRatesProvider refreshInterval={30000}>
+        <AppContent />
+      </ExchangeRatesProvider>
     </DataSourceProvider>
   );
 }

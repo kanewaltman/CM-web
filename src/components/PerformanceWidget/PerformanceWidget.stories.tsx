@@ -186,6 +186,7 @@ const BaseStory = (args: any) => {
         headerControls={
           <PerformanceWidget 
             {...headerArgs}
+            widgetId="performance-header"
             onVariantChange={(newVariant) => {
               console.log('Variant changed to:', newVariant);
               setVariant(newVariant);
@@ -203,6 +204,7 @@ const BaseStory = (args: any) => {
       >
         <PerformanceWidget 
           {...contentArgs}
+          widgetId="performance-content"
           onVariantChange={(newVariant) => {
             console.log('Variant changed to:', newVariant);
             setVariant(newVariant);

@@ -24,68 +24,53 @@ export function KeyedPerformanceChart({ dateRange, viewMode, onViewModeChange }:
       return 'chart-default';
     }
     
-    // Create a key based on date range timestamps only
-    // Removing the timestamp allows the chart to animate properly
-    return `chart-${dateRange.from.getTime()}-${dateRange.to.getTime()}`;
-  }, [dateRange]);
+    // Force a new key on each date range change to ensure complete re-rendering
+    const key = `chart-${dateRange.from.getTime()}-${dateRange.to.getTime()}-${Math.random().toString(36).substring(2, 9)}`;
+    return key;
+  }, [dateRange]); // Simplified dependency array
   
   // Create a fresh copy of the date range to break reference equality
   const dateRangeProp = useMemo(() => {
-    if (!dateRange?.from || !dateRange?.to) return undefined;
+    if (!dateRange?.from || !dateRange?.to) {
+      return undefined;
+    }
     
-    return {
-      from: new Date(dateRange.from),
-      to: new Date(dateRange.to)
+    const freshDateRange = {
+      from: new Date(dateRange.from.getTime()),
+      to: new Date(dateRange.to.getTime())
     };
-  }, [dateRange]);
+    
+    return freshDateRange;
+  }, [dateRange]); // Simplified dependency array
   
   // Convert the viewMode for the PerformanceChart
-  // 'cumulative' needs to be mapped correctly for the chart
   const mappedViewMode = useMemo(() => {
-    // The PerformanceChart expects 'split', 'cumulative', or 'combined'
     if (viewMode === 'split' || viewMode === 'cumulative' || viewMode === 'combined') {
       return viewMode;
     }
-    // Default to 'split' for any other mode
     return 'split';
   }, [viewMode]);
   
-  // Log the current render for debugging
-  console.log('KeyedPerformanceChart rendering with:', {
-    key: chartKey,
-    originalViewMode: viewMode,
-    mappedViewMode,
-    dateRange: dateRangeProp ? {
-      from: dateRangeProp.from.toISOString(),
-      to: dateRangeProp.to.toISOString()
-    } : 'undefined'
-  });
-  
   // Handle view mode change from the PerformanceChart
-  const handleViewModeChange = (mode: 'split' | 'cumulative' | 'combined') => {
-    if (onViewModeChange) {
-      console.log('KeyedPerformanceChart: view mode changed to', mode);
-      
-      // Immediate invocation of parent callback to ensure state is updated
-      onViewModeChange(mode);
-      
-      // Also store the selection in localStorage to ensure persistence
-      try {
-        localStorage.setItem('performance_chart_view_mode', mode);
-      } catch (error) {
-        console.error('Failed to save view mode to localStorage:', error);
+  const handleViewModeChange = useMemo(() => {
+    return (mode: 'split' | 'cumulative' | 'combined') => {
+      if (onViewModeChange) {
+        onViewModeChange(mode);
+        try {
+          localStorage.setItem('performance_chart_view_mode', mode);
+        } catch (error) {
+          console.error('Failed to save view mode to localStorage:', error);
+        }
       }
-    }
-  };
+    };
+  }, [onViewModeChange]);
   
   // Effect to sync with localStorage on mount
   useEffect(() => {
-    // If no viewMode is provided, try to get from localStorage
     if (!viewMode) {
       try {
         const savedMode = localStorage.getItem('performance_chart_view_mode');
         if (savedMode && (savedMode === 'split' || savedMode === 'cumulative' || savedMode === 'combined')) {
-          // If valid mode found in localStorage, update parent
           onViewModeChange?.(savedMode as any);
         }
       } catch (error) {
