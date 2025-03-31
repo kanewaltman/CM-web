@@ -231,14 +231,8 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   // Calculate number of days in range
   let days = Math.max(1, Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000)));
   
-  // If the range is 0 or 1 day, expand it to 7 days for better visualization
-  if (days <= 1) {
-    const newFrom = new Date(dateRange.to);
-    newFrom.setDate(newFrom.getDate() - 6); // 7 days including today
-    dateRange = { from: newFrom, to: dateRange.to };
-    days = 7;
-    debugLog('generateSampleData: Detected same-day or 0-day range, expanding to 7 days');
-  }
+  // Respect the exact date range provided, even for single-day views
+  // No longer expanding 0-1 day ranges to 7 days
   
   debugLog('generateSampleData: Using provided date range:', {
     from: dateRange.from.toISOString(),
@@ -266,6 +260,14 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   // to maintain visual consistency and ensure hover reference lines display properly
   let numDataPoints = Math.max(days, 60);
   
+  // For very short ranges (0-2 days), increase data point density for smooth time display
+  if (daysInRange <= 2) {
+    // For 0-1 day range, generate a point roughly every 15-30 minutes (48-96 points per day)
+    // For 2 day range, generate a point roughly every 30-60 minutes (24-48 points per day)
+    const pointsPerDay = daysInRange <= 1 ? 96 : 48;
+    numDataPoints = Math.max(numDataPoints, daysInRange * pointsPerDay);
+  }
+  
   // Adjust data points based on container width for larger screens
   if (containerWidth > 0) {
     // Allocate roughly 1 data point per 8-12px of width for smoother visuals
@@ -287,11 +289,15 @@ function generateSampleData(currentBalances: Record<string, number>, dateRange?:
   // Determine the appropriate date format based on the date range
   let dateFormat: Intl.DateTimeFormatOptions = { month: 'short', year: 'numeric' };
   
+  // For very short ranges (≤ 2 days), include hours and minutes
+  if (daysInRange <= 2) {
+    dateFormat = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+  }
   // For shorter date ranges (≤ 60 days), include the day in the format
-  if (daysInRange <= 60) {
+  else if (daysInRange <= 60) {
     dateFormat = { month: 'short', day: 'numeric', year: 'numeric' };
   }
-  // For very short ranges (≤ 7 days), show more detailed info
+  // For short ranges (≤ 7 days), show more detailed info with hours
   else if (daysInRange <= 7) {
     dateFormat = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit' };
   }
@@ -427,23 +433,13 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       return;
     }
     
-    // Check if from and to dates are the same or very close (0-1 day difference)
-    const dayDiff = Math.max(0, Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000)));
-    let effectiveDateRange = dateRange;
-    
-    if (dayDiff <= 1) {
-      debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] detected same-day range in fetchBalanceData, expanding to 7 days`);
-      // Modify the date range to cover the last 7 days ending with the specified "to" date
-      const newFrom = new Date(dateRange.to);
-      newFrom.setDate(newFrom.getDate() - 6); // 7 days including today
-      effectiveDateRange = { from: newFrom, to: dateRange.to };
-    }
+    // Always respect the original date range, even for single-day or same-day selections
+    const effectiveDateRange = dateRange;
     
     debugLog(`PerformanceChart [${componentId}:${instanceRef.current}] fetchBalanceData called with dateRange:`, {
       from: effectiveDateRange.from.toISOString(),
       to: effectiveDateRange.to.toISOString(),
-      originalDayDiff: dayDiff,
-      effectiveDayDiff: Math.ceil((effectiveDateRange.to.getTime() - effectiveDateRange.from.getTime()) / (24 * 60 * 60 * 1000))
+      dayDiff: Math.ceil((effectiveDateRange.to.getTime() - effectiveDateRange.from.getTime()) / (24 * 60 * 60 * 1000))
     });
     
     try {
@@ -632,15 +628,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
       } : 'undefined'
     );
 
-    // Check if we need to adjust the initial date range
+    // Check if we have a valid date range
     if (dateRange?.from && dateRange?.to) {
-      const dayDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000));
-      
-      if (dayDiff <= 1) {
-        debugLog(`PerformanceChart [${componentId}] INITIALIZATION detected same-day range (${dayDiff} days), expanding to 7 days`);
-      }
-      
-      // Set initial reference point no matter what (will be adjusted if needed in fetchBalanceData)
+      // Set initial reference point with exactly the provided date range
       prevDateRangeRef.current = { 
         from: new Date(dateRange.from), 
         to: new Date(dateRange.to),
@@ -651,8 +641,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
         })
       };
       
-      // Trigger immediate initial fetch - the fetchBalanceData function will handle
-      // expanding the date range if needed
+      // Trigger immediate initial fetch
       debugLog(`PerformanceChart [${componentId}] Triggering INITIAL data fetch`);
       fetchBalanceData();
     } else {
@@ -669,31 +658,9 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     let filteredData = [...fullBalanceData];
     
     if (dateRange?.from && dateRange?.to) {
-      // Check if this is a same-day date range that needs expansion
-      const dayDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000));
-      
-      // Use expanded date range for filtering if it's a 0-1 day range
-      let effectiveFromDate = dateRange.from;
-      let effectiveToDate = dateRange.to;
-      
-      if (dayDiff <= 1) {
-        // Create a new from date that's 6 days before the to date (7 days total)
-        effectiveFromDate = new Date(dateRange.to);
-        effectiveFromDate.setDate(effectiveFromDate.getDate() - 6);
-        
-        debugLog(`PerformanceChart balanceData: Using expanded date range for filtering:`, {
-          original: {
-            from: dateRange.from.toISOString(),
-            to: dateRange.to.toISOString(),
-            days: dayDiff
-          },
-          expanded: {
-            from: effectiveFromDate.toISOString(),
-            to: effectiveToDate.toISOString(),
-            days: Math.ceil((effectiveToDate.getTime() - effectiveFromDate.getTime()) / (24 * 60 * 60 * 1000))
-          }
-        });
-      }
+      // Always respect the original date range, even for single-day views
+      const effectiveFromDate = dateRange.from;
+      const effectiveToDate = dateRange.to;
       
       const fromTimeMs = effectiveFromDate.getTime();
       const toTimeMs = effectiveToDate.getTime();
@@ -827,7 +794,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     });
   }, [balanceData, assets]);
 
-  // Update the yearTransitions calculation to more effectively identify and mark year boundaries
+  // Update the yearTransitions calculation to respect the original date range
   const yearTransitions = useMemo(() => {
     if (balanceData.length === 0) return [];
     
@@ -851,19 +818,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
     // Make sure we have year markers at reasonable intervals
     // If we have multiple years but no transitions detected
     if (transitions.length === 0 && dateRange?.from && dateRange?.to) {
-      // Check if this is a same-day date range that should be expanded
-      const dayDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000));
-      let effectiveFromDate = dateRange.from;
-      let effectiveToDate = dateRange.to;
-      
-      if (dayDiff <= 1) {
-        // Create a new from date that's 6 days before the to date (7 days total)
-        effectiveFromDate = new Date(dateRange.to);
-        effectiveFromDate.setDate(effectiveFromDate.getDate() - 6);
-      }
-      
-      const startYear = effectiveFromDate.getFullYear();
-      const endYear = effectiveToDate.getFullYear();
+      const startYear = dateRange.from.getFullYear();
+      const endYear = dateRange.to.getFullYear();
       
       if (endYear > startYear) {
         // Add year transitions at estimated positions
@@ -873,8 +829,8 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
           const jan1Time = jan1.getTime();
           
           // Find the closest index in the data
-          const totalDuration = effectiveToDate.getTime() - effectiveFromDate.getTime();
-          const yearProgress = (jan1Time - effectiveFromDate.getTime()) / totalDuration;
+          const totalDuration = dateRange.to.getTime() - dateRange.from.getTime();
+          const yearProgress = (jan1Time - dateRange.from.getTime()) / totalDuration;
           const estimatedIndex = Math.floor(yearProgress * visibleData.length);
           
           // Ensure the index is valid
@@ -1396,6 +1352,62 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
               tickLine={false}
               tickMargin={12}
               tickFormatter={(value) => {
+                // Get the current date range span in days
+                const daySpan = dateRange ? 
+                  Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (24 * 60 * 60 * 1000)) : 
+                  999;
+                
+                // For very short ranges (0-2 days), show detailed time
+                if (daySpan <= 2) {
+                  // Format like "10:30 AM" or "3:45 PM" for very short ranges
+                  if (value.includes(':')) {
+                    // Already has time component
+                    const [datePart, timePart] = value.split(', ');
+                    // Extract hour and minute from time part
+                    const timeComponents = timePart.split(':');
+                    const hour = parseInt(timeComponents[0]);
+                    const hour12 = hour % 12 || 12; // Convert to 12-hour format
+                    
+                    // Get full minutes (not truncated)
+                    let minutes = '00';
+                    if (timeComponents.length > 1) {
+                      // Extract just the minutes, handle cases where it might include seconds
+                      const minutePart = timeComponents[1].split(' ')[0].split(':')[0];
+                      minutes = minutePart.padStart(2, '0');
+                    }
+                    
+                    const meridiem = hour >= 12 ? 'PM' : 'AM';
+                    
+                    // For single day view show just time, for 2-day view include day
+                    if (daySpan <= 1) {
+                      return `${hour12}:${minutes} ${meridiem}`;
+                    } else {
+                      // For 2-day view, also include AM/PM indicator
+                      return `${datePart.split(' ')[1]}/${hour12}:${minutes} ${meridiem}`;
+                    }
+                  } else {
+                    // Try to parse the date to extract time
+                    try {
+                      const date = new Date(value);
+                      const hour = date.getHours();
+                      const minute = date.getMinutes();
+                      const hour12 = hour % 12 || 12; // Convert to 12-hour format
+                      const meridiem = hour >= 12 ? 'PM' : 'AM';
+                      const minuteStr = minute.toString().padStart(2, '0'); // Ensure 2 digits
+                      
+                      if (daySpan <= 1) {
+                        return `${hour12}:${minuteStr} ${meridiem}`;
+                      } else {
+                        // For 2-day view, also include AM/PM indicator
+                        return `${date.getDate()}/${hour12}:${minuteStr} ${meridiem}`;
+                      }
+                    } catch (e) {
+                      // Fallback if parsing fails
+                      return value;
+                    }
+                  }
+                }
+                
                 // Parse the timestamp based on its format
                 if (value.includes(':')) {
                   // Format for very short date ranges (≤ 7 days) with hours
