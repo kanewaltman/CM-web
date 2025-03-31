@@ -5,7 +5,9 @@ import { rateLimiter } from './rateLimit';
 /**
  * Base URL for CoinGecko API v3
  */
-const COINGECKO_API_URL = '/coingecko'; // Use Vite proxy instead of direct API calls
+const COINGECKO_API_URL = import.meta.env.PROD 
+  ? 'https://api.coingecko.com/api/v3' 
+  : '/coingecko'; // Use Vite proxy in development, direct URL in production
 
 /**
  * API key for CoinGecko API
