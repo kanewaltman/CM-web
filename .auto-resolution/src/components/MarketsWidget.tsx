@@ -30,6 +30,7 @@ import {
   DropdownMenuCheckboxItem 
 } from './ui/dropdown-menu';
 import { Checkbox } from './ui/checkbox';
+import { Input } from './ui/input';
 
 // TanStack Table imports
 import {
@@ -64,7 +65,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, SlidersHorizontal, Star } from 'lucide-react';
+import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, Search, SlidersHorizontal, Star, X } from 'lucide-react';
 
 // Format price with appropriate number of decimal places
 const formatPrice = (price: number) => {
@@ -364,11 +365,13 @@ export const MarketsWidgetColumnVisibility: React.FC<{
   table: ReturnType<typeof useReactTable<any>> 
 }> = ({ table }) => {
   const columnOrder = table.getState().columnOrder;
-  const [localColumnOrder, setLocalColumnOrder] = useState<string[]>(columnOrder);
+  const [localColumnOrder, setLocalColumnOrder] = useState<string[]>(
+    columnOrder.filter(id => id !== 'pair')
+  );
   
-  // Keep local order in sync with table order
+  // Keep local order in sync with table order (excluding 'pair')
   useEffect(() => {
-    setLocalColumnOrder(columnOrder);
+    setLocalColumnOrder(columnOrder.filter(id => id !== 'pair'));
   }, [columnOrder]);
 
   // Initialize sensors for drag and drop
@@ -389,8 +392,14 @@ export const MarketsWidgetColumnVisibility: React.FC<{
       setLocalColumnOrder(prevOrder => {
         const oldIndex = prevOrder.indexOf(active.id as string);
         const newIndex = prevOrder.indexOf(over.id as string);
+        
+        // Create a new order by moving the item
         const newOrder = arrayMove(prevOrder, oldIndex, newIndex);
-        table.setColumnOrder(newOrder);
+        
+        // Update the full column order with 'pair' always at the beginning
+        const fullOrder = ['pair', ...newOrder];
+        table.setColumnOrder(fullOrder);
+        
         return newOrder;
       });
     }
@@ -398,6 +407,11 @@ export const MarketsWidgetColumnVisibility: React.FC<{
   
   // Direct column visibility toggle that uses the table API directly
   const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
+    // Prevent toggling off the 'pair' column (safety check)
+    if (columnId === 'pair') {
+      return;
+    }
+    
     // Create a new visibility state object to avoid mutating the existing one
     const newState = {...table.getState().columnVisibility};
     
@@ -469,12 +483,30 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'marketCap', desc: true }]);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>('ALL');
-  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(null);
+  
+  // Initialize state with values from localStorage
+  const [sorting, setSorting] = useState<SortingState>(
+    getStoredValue(STORAGE_KEYS.SORTING, [{ id: 'marketCap', desc: true }])
+  );
+  const [favorites, setFavorites] = useState<Set<string>>(
+    new Set(getStoredValue<string[]>(STORAGE_KEYS.FAVORITES, []))
+  );
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(
+    getStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, false)
+  );
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    getStoredValue(STORAGE_KEYS.COLUMN_VISIBILITY, {})
+  );
+  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(
+    getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL')
+  );
+  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(
+    getStoredValue<AssetTicker | null>(STORAGE_KEYS.SECONDARY_CURRENCY, null)
+  );
+  
+  // Add search state
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150);
   const [isCompact, setIsCompact] = useState(compact);
@@ -866,8 +898,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 
   // Setup column order
   const [columnOrder, setColumnOrder] = useState<string[]>(
-    columns.map((column) => column.id as string)
+    getStoredValue(STORAGE_KEYS.COLUMN_ORDER, columns.map((column) => column.id as string))
   );
+
+  // Persist column order changes
+  useEffect(() => {
+    setStoredValue(STORAGE_KEYS.COLUMN_ORDER, columnOrder);
+  }, [columnOrder]);
 
   // Detect theme from document class list
   useEffect(() => {
@@ -1202,3 +1239,35 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 MarketsWidget.displayName = 'MarketsWidget';
 
 export default MarketsWidget; 
+
+const STORAGE_KEY_PREFIX = 'markets-widget-';
+const STORAGE_KEYS = {
+  FAVORITES: `${STORAGE_KEY_PREFIX}favorites`,
+  SHOW_ONLY_FAVORITES: `${STORAGE_KEY_PREFIX}show-only-favorites`,
+  SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}selected-quote-asset`,
+  SECONDARY_CURRENCY: `${STORAGE_KEY_PREFIX}secondary-currency`,
+  COLUMN_VISIBILITY: `${STORAGE_KEY_PREFIX}column-visibility`,
+  COLUMN_ORDER: `${STORAGE_KEY_PREFIX}column-order`,
+  SORTING: `${STORAGE_KEY_PREFIX}sorting`,
+};
+
+const getStoredValue = <T,>(key: string, defaultValue: T): T => {
+  if (typeof window === 'undefined') return defaultValue;
+  try {
+    const item = window.localStorage.getItem(key);
+    if (!item) return defaultValue;
+    return JSON.parse(item) as T;
+  } catch (error) {
+    console.error(`Error reading from localStorage for key ${key}:`, error);
+    return defaultValue;
+  }
+};
+
+const setStoredValue = <T,>(key: string, value: T): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Error writing to localStorage for key ${key}:`, error);
+  }
+};

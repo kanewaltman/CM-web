@@ -64,7 +64,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, SlidersHorizontal } from 'lucide-react';
+import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, SlidersHorizontal, Star } from 'lucide-react';
 
 // Format price with appropriate number of decimal places
 const formatPrice = (price: number) => {
@@ -105,6 +105,7 @@ interface MarketData {
   marketCap: number;
   volume: number;
   rank: number;
+  marginMultiplier?: number;
 }
 
 interface MarketsWidgetProps {
@@ -112,7 +113,7 @@ interface MarketsWidgetProps {
   compact?: boolean;
 }
 
-// Sample market data - in a real app, this would come from an API
+// Sample market data with margin multipliers
 const SAMPLE_MARKET_DATA: Record<string, {
   price: number;
   change24h: number;
@@ -120,16 +121,17 @@ const SAMPLE_MARKET_DATA: Record<string, {
   marketCap: number;
   volume: number;
   rank: number;
+  marginMultiplier?: number;
 }> = {
-  "BTC/EUR": { price: 37000.50, change24h: 2.5, change7d: 5.2, marketCap: 720000000000, volume: 25000000000, rank: 1 },
-  "ETH/EUR": { price: 1875.25, change24h: -1.2, change7d: 3.4, marketCap: 225000000000, volume: 15000000000, rank: 2 },
-  "BTC/USD": { price: 40100.75, change24h: 2.6, change7d: 5.3, marketCap: 720000000000, volume: 27000000000, rank: 3 },
-  "ETH/USD": { price: 2025.80, change24h: -1.1, change7d: 3.5, marketCap: 225000000000, volume: 17000000000, rank: 4 },
+  "BTC/EUR": { price: 37000.50, change24h: 2.5, change7d: 5.2, marketCap: 720000000000, volume: 25000000000, rank: 1, marginMultiplier: 3 },
+  "ETH/EUR": { price: 1875.25, change24h: -1.2, change7d: 3.4, marketCap: 225000000000, volume: 15000000000, rank: 2, marginMultiplier: 5 },
+  "BTC/USD": { price: 40100.75, change24h: 2.6, change7d: 5.3, marketCap: 720000000000, volume: 27000000000, rank: 3, marginMultiplier: 3 },
+  "ETH/USD": { price: 2025.80, change24h: -1.1, change7d: 3.5, marketCap: 225000000000, volume: 17000000000, rank: 4, marginMultiplier: 5 },
   "USDT/EUR": { price: 0.91, change24h: -0.1, change7d: 0.2, marketCap: 95000000000, volume: 50000000000, rank: 5 },
   "BNB/EUR": { price: 260.50, change24h: 0.8, change7d: -2.1, marketCap: 39000000000, volume: 2000000000, rank: 6 },
   "SOL/EUR": { price: 85.00, change24h: 3.2, change7d: 10.5, marketCap: 36000000000, volume: 3000000000, rank: 7 },
   "USDC/EUR": { price: 0.91, change24h: -0.2, change7d: 0.1, marketCap: 28000000000, volume: 4000000000, rank: 8 },
-  "XRP/EUR": { price: 0.45, change24h: 1.3, change7d: -0.8, marketCap: 24000000000, volume: 1500000000, rank: 9 },
+  "XRP/EUR": { price: 0.45, change24h: 1.3, change7d: -0.8, marketCap: 24000000000, volume: 1500000000, rank: 9, marginMultiplier: 3 },
   "ADA/EUR": { price: 0.30, change24h: 0.5, change7d: -1.2, marketCap: 10500000000, volume: 500000000, rank: 10 },
   "ETH/BTC": { price: 0.050632, change24h: -3.7, change7d: -1.8, marketCap: 0, volume: 8500000000, rank: 11 },
   "SOL/BTC": { price: 0.002297, change24h: 0.7, change7d: 5.2, marketCap: 0, volume: 1200000000, rank: 12 },
@@ -178,44 +180,15 @@ const SkeletonRow: React.FC = () => (
 
 // Draggable Table Header Component
 const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
-  const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
-    id: header.column.id,
-    disabled: false,
-  });
-
-  const style: CSSProperties = {
-    opacity: isDragging ? 0.8 : 1,
-    position: 'relative',
-    transform: CSS.Translate.toString(transform),
-    transition,
-    whiteSpace: 'nowrap',
-    width: header.column.getSize(),
-    zIndex: isDragging ? 30 : 20,
-    touchAction: 'none', // Prevent touch events from causing scrolling during drag
-  };
-
-  // Create enhanced listeners with stopPropagation
-  const enhancedListeners = {
-    ...listeners,
-    onMouseDown: (e: React.MouseEvent) => {
-      e.stopPropagation(); // Stop event from reaching GridStack
-      if (listeners && typeof listeners.onMouseDown === 'function') {
-        listeners.onMouseDown(e);
-      }
-    },
-    onTouchStart: (e: React.TouchEvent) => {
-      e.stopPropagation(); // Stop event from reaching GridStack
-      if (listeners && typeof listeners.onTouchStart === 'function') {
-        listeners.onTouchStart(e);
-      }
-    },
-  };
+  const isNarrowColumn = header.column.id === 'favorite'; // Identify narrow columns
 
   return (
     <TableHead
-      ref={setNodeRef}
-      className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80"
-      style={style}
+      className={cn(
+        "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80",
+        isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
+      )}
+      style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
       aria-sort={
         header.column.getIsSorted() === "asc"
           ? "ascending"
@@ -227,31 +200,12 @@ const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketD
       <div className="relative">
         <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
         <div className="relative z-10 flex items-center justify-end gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="-ml-2 h-7 w-7 shadow-none cursor-grab active:cursor-grabbing"
-            {...attributes}
-            {...enhancedListeners}
-            aria-label="Drag to reorder"
-            data-draggable="true"
-            onMouseDown={(e) => { 
-              e.stopPropagation();
-              if (enhancedListeners.onMouseDown) enhancedListeners.onMouseDown(e);
-            }}
-            onTouchStart={(e) => {
-              e.stopPropagation();
-              if (enhancedListeners.onTouchStart) enhancedListeners.onTouchStart(e);
-            }}
-          >
-            <GripVerticalIcon className="opacity-60" size={16} aria-hidden="true" />
-          </Button>
-          <span className="grow truncate">
+          <span className={cn("grow truncate", isNarrowColumn && "sr-only")}>
             {header.isPlaceholder
               ? null
               : flexRender(header.column.columnDef.header, header.getContext())}
           </span>
-          {header.column.getCanSort() && (
+          {header.column.getCanSort() && !isNarrowColumn && (
             <Button
               size="icon"
               variant="ghost"
@@ -286,27 +240,18 @@ const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketD
   );
 };
 
-// Draggable Cell Component (that moves along with its header)
+// DragAlongCell Component (that moves along with its header)
 const DragAlongCell = ({ cell, currentTheme }: { cell: Cell<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
-  const { isDragging, setNodeRef, transform, transition } = useSortable({
-    id: cell.column.id,
-    disabled: false,
-  });
-
-  const style: CSSProperties = {
-    opacity: isDragging ? 0.8 : 1,
-    position: 'relative',
-    transform: CSS.Translate.toString(transform),
-    transition,
-    width: cell.column.getSize(),
-    zIndex: isDragging ? 1 : 0,
-    touchAction: 'none', // Prevent touch events from causing scrolling during drag
-  };
-
   const cellContent = flexRender(cell.column.columnDef.cell, cell.getContext());
+  const isNarrowColumn = cell.column.id === 'favorite'; // Identify narrow columns
 
   return (
-    <TableCell ref={setNodeRef} style={style}>
+    <TableCell
+      className={cn(
+        isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
+      )}
+      style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
+    >
       {cellContent}
     </TableCell>
   );
@@ -525,9 +470,11 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'marketCap', desc: true }]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
-    rank: false
-  });
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>('ALL');
+  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150);
   const [isCompact, setIsCompact] = useState(compact);
@@ -740,27 +687,38 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   // Define columns for the table
   const columns = useMemo<ColumnDef<MarketData>[]>(() => [
     {
-      id: 'rank',
-      header: 'Rank',
-      accessorKey: 'rank',
-      cell: ({ row }) => (
-        <div className="font-jakarta font-semibold text-sm leading-[150%] text-muted-foreground text-center">
-          {row.original.rank}
-        </div>
-      ),
-      size: 40,
-    },
-    {
       id: 'pair',
       header: 'Pair',
       accessorKey: 'pair',
       cell: ({ row }) => {
         const baseAssetConfig = ASSETS[row.original.baseAsset];
         const quoteAssetConfig = ASSETS[row.original.quoteAsset];
+        const marginMultiplier = row.original.marginMultiplier;
+        const pair = row.original.pair;
+        const isFavorite = favorites.has(pair);
         
         return (
           <div className="flex items-center gap-2">
-            <div className="relative flex">
+            <button
+              type="button"
+              className={cn(
+                "flex items-center justify-center p-0 mr-1",
+                isFavorite ? "text-yellow-400 hover:text-yellow-500" : "text-muted-foreground/40 hover:text-muted-foreground/60"
+              )}
+              onClick={() => {
+                handleFavoriteToggle(pair);
+              }}
+            >
+              <Star
+                size={16}
+                className={cn(
+                  "transition-colors",
+                  isFavorite ? "fill-current" : "fill-none"
+                )}
+              />
+            </button>
+            
+            <div className="relative flex shrink-0">
               {/* Base asset icon */}
               <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10">
                 <img
@@ -778,30 +736,47 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
                 />
               </div>
             </div>
-            <span className="font-jakarta font-semibold text-sm ml-2">
-              {row.original.baseAsset}/{row.original.quoteAsset}
-            </span>
+            <div className="ml-2 flex items-center gap-2">
+              <span className="font-jakarta font-semibold text-sm">
+                {row.original.baseAsset}
+                <span className="text-muted-foreground font-semibold">/{row.original.quoteAsset}</span>
+              </span>
+              {marginMultiplier && marginMultiplier >= 5 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500 font-medium">
+                  5×
+                </span>
+              )}
+            </div>
           </div>
         );
       },
-      size: 160,
+      size: columnSizes.pair,
     },
     {
       id: 'price',
       header: 'Price',
       accessorKey: 'price',
       cell: ({ row }) => {
-        const pricePrefix = row.original.quoteAsset === 'EUR' ? '€' : 
-                           row.original.quoteAsset === 'USD' ? '$' :
-                           row.original.quoteAsset === 'GBP' ? '£' : '';
+        const pricePrefix = secondaryCurrency ? 
+          (secondaryCurrency === 'EUR' ? '€' : 
+           secondaryCurrency === 'USD' ? '$' :
+           secondaryCurrency === 'GBP' ? '£' : '') :
+          (row.original.quoteAsset === 'EUR' ? '€' : 
+           row.original.quoteAsset === 'USD' ? '$' :
+           row.original.quoteAsset === 'GBP' ? '£' : '');
+        
+        // Use original price or converted price based on secondary currency
+        const displayPrice = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+          row.original.price * 1.08 : // Example conversion rate
+          row.original.price;
         
         return (
           <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%]">
-            {pricePrefix}{formatPrice(row.original.price)}
+            {pricePrefix}{formatPrice(displayPrice)}
           </div>
         );
       },
-      size: 120,
+      size: columnSizes.price,
     },
     {
       id: 'change24h',
@@ -817,7 +792,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
           {row.original.change24h > 0 ? '+' : ''}{row.original.change24h.toFixed(2)}%
         </div>
       ),
-      size: 100,
+      size: columnSizes.change24h,
     },
     {
       id: 'change7d',
@@ -833,74 +808,66 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
           {row.original.change7d > 0 ? '+' : ''}{row.original.change7d.toFixed(2)}%
         </div>
       ),
-      size: 100,
+      size: columnSizes.change7d,
     },
     {
       id: 'marketCap',
       header: 'Market Cap',
       accessorKey: 'marketCap',
       cell: ({ row }) => {
-        const pricePrefix = row.original.quoteAsset === 'EUR' ? '€' : 
-                           row.original.quoteAsset === 'USD' ? '$' :
-                           row.original.quoteAsset === 'GBP' ? '£' : '';
+        const pricePrefix = secondaryCurrency ? 
+          (secondaryCurrency === 'EUR' ? '€' : 
+           secondaryCurrency === 'USD' ? '$' :
+           secondaryCurrency === 'GBP' ? '£' : '') :
+          (row.original.quoteAsset === 'EUR' ? '€' : 
+           row.original.quoteAsset === 'USD' ? '$' :
+           row.original.quoteAsset === 'GBP' ? '£' : '');
+        
+        // Use original marketCap or converted marketCap based on secondary currency
+        const displayMarketCap = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+          row.original.marketCap * 1.08 : // Example conversion rate
+          row.original.marketCap;
         
         return (
           <div className="text-right font-jakarta font-semibold text-sm leading-[150%]">
-            {row.original.marketCap > 0 ? `${pricePrefix}${formatLargeNumber(row.original.marketCap)}` : '-'}
+            {displayMarketCap > 0 ? `${pricePrefix}${formatLargeNumber(displayMarketCap)}` : '-'}
           </div>
         );
       },
-      size: 140,
+      size: columnSizes.marketCap,
     },
     {
       id: 'volume',
       header: 'Volume (24h)',
       accessorKey: 'volume',
       cell: ({ row }) => {
-        const pricePrefix = row.original.quoteAsset === 'EUR' ? '€' : 
-                           row.original.quoteAsset === 'USD' ? '$' :
-                           row.original.quoteAsset === 'GBP' ? '£' : '';
+        const pricePrefix = secondaryCurrency ? 
+          (secondaryCurrency === 'EUR' ? '€' : 
+           secondaryCurrency === 'USD' ? '$' :
+           secondaryCurrency === 'GBP' ? '£' : '') :
+          (row.original.quoteAsset === 'EUR' ? '€' : 
+           row.original.quoteAsset === 'USD' ? '$' :
+           row.original.quoteAsset === 'GBP' ? '£' : '');
+        
+        // Use original volume or converted volume based on secondary currency
+        const displayVolume = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+          row.original.volume * 1.08 : // Example conversion rate
+          row.original.volume;
         
         return (
           <div className="text-right font-jakarta font-semibold text-sm leading-[150%]">
-            {pricePrefix}{formatLargeNumber(row.original.volume)}
+            {pricePrefix}{formatLargeNumber(displayVolume)}
           </div>
         );
       },
-      size: 140,
-    },
-  ], []);
+      size: columnSizes.volume,
+    }
+  ], [favorites, columnSizes, secondaryCurrency]);
 
   // Setup column order
   const [columnOrder, setColumnOrder] = useState<string[]>(
     columns.map((column) => column.id as string)
   );
-
-  // Check for container width to determine compact mode
-  useEffect(() => {
-    const checkWidth = () => {
-      if (containerRef.current) {
-        const containerWidth = containerRef.current.clientWidth;
-        // Calculate minimum width based on column sizes
-        const minTableWidth = columns.reduce((sum, col) => sum + (col.size || 100), 0);
-        const shouldBeCompact = containerWidth < minTableWidth;
-        setIsCompact(shouldBeCompact);
-      }
-    };
-
-    checkWidth();
-    const resizeObserver = new ResizeObserver(checkWidth);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
-    window.addEventListener('resize', checkWidth);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', checkWidth);
-    };
-  }, [columns]);
 
   // Detect theme from document class list
   useEffect(() => {
@@ -973,21 +940,31 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     useSensor(KeyboardSensor, {})
   );
 
-  // Filter visible columns based on compact mode
+  // Filter visible columns based on both user preferences and dynamic constraints
   const visibleColumnIds = useMemo(() => {
-    if (isCompact) {
-      // Even in compact mode, respect column visibility settings
-      const compactDefault = ['pair', 'price', 'change24h'];
-      
-      // Add rank only if it's visible
-      if (columnVisibility.rank !== false) {
-        compactDefault.unshift('rank');
+    // Start with user preferences
+    const userVisibleColumns = columnOrder.filter(id => columnVisibility[id] !== false);
+    
+    // Then apply dynamic constraints without modifying user preferences
+    return userVisibleColumns.filter(id => dynamicVisibility[id] !== false);
+  }, [columnOrder, columnVisibility, dynamicVisibility]);
+
+  // Update favorites and handle emptying favorites while in favorites view
+  const handleFavoriteToggle = useCallback((pair: string) => {
+    setFavorites(prevFavorites => {
+      const newFavorites = new Set(prevFavorites);
+      if (newFavorites.has(pair)) {
+        newFavorites.delete(pair);
+        // If we're removing the last favorite while in favorites view, reset to all view
+        if (newFavorites.size === 0 && showOnlyFavorites) {
+          setShowOnlyFavorites(false);
+        }
+      } else {
+        newFavorites.add(pair);
       }
-      
-      return compactDefault;
-    }
-    return columnOrder.filter(id => columnVisibility[id] !== false);
-  }, [isCompact, columnOrder, columnVisibility]);
+      return newFavorites;
+    });
+  }, [showOnlyFavorites]);
 
   if (error) {
     return (
@@ -1211,32 +1188,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : marketData.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={visibleColumnIds.length} className="h-24 text-center">
-                      <div className="text-sm text-muted-foreground">No market data found</div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  // Actual data rows
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow key={row.id} className="group hover:bg-[hsl(var(--color-widget-hover))]" isHeader={false}>
-                      <SortableContext
-                        items={visibleColumnIds}
-                        strategy={horizontalListSortingStrategy}
-                      >
-                        {row.getVisibleCells()
-                          .filter(cell => visibleColumnIds.includes(cell.column.id))
-                          .map((cell) => (
-                            <DragAlongCell key={cell.id} cell={cell} currentTheme={currentTheme} />
-                          ))}
-                      </SortableContext>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </DndContext>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>
