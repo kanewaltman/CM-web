@@ -7,19 +7,24 @@ import {
   TableRow,
   TableCell
 } from './ui/table';
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardContent
-} from './ui/card';
 import { Button } from './ui/button';
-import { AlertTriangle as AlertTriangleIcon, RefreshCw as RefreshCwIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { getApiUrl } from '@/lib/api-config';
 import { useTheme } from 'next-themes';
 import { useDataSource } from '@/lib/DataSourceContext';
+import { 
+  ChevronDown as ChevronDownIcon, 
+  Star, 
+  Search, 
+  X,
+  AlertTriangle as AlertTriangleIcon,
+  RefreshCw as RefreshCwIcon,
+  ChevronUp,
+  SlidersHorizontal,
+  GripVertical as GripVerticalIcon
+} from 'lucide-react';
+import coinGeckoService from '@/services/coinGeckoService';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -65,7 +70,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, Search, SlidersHorizontal, Star, X } from 'lucide-react';
 
 // Format price with appropriate number of decimal places
 const formatPrice = (price: number) => {
@@ -224,10 +228,10 @@ const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketD
               }}
             >
               {{
-                asc: <ChevronUpIcon className="shrink-0 opacity-60" size={16} aria-hidden="true" />,
+                asc: <ChevronUp className="shrink-0 opacity-60" size={16} aria-hidden="true" />,
                 desc: <ChevronDownIcon className="shrink-0 opacity-60" size={16} aria-hidden="true" />,
               }[header.column.getIsSorted() as string] ?? (
-                <ChevronUpIcon
+                <ChevronUp
                   className="shrink-0 opacity-0 group-hover:opacity-60"
                   size={16}
                   aria-hidden="true"
@@ -474,18 +478,17 @@ export interface MarketsWidgetRef {
   getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
 }
 
-export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({ className, compact }, ref) => {
+export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({ className }, ref) => {
   const { theme, resolvedTheme } = useTheme();
   const { dataSource } = useDataSource();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [filteredData, setFilteredData] = useState<MarketData[]>([]);
-  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isCompact, setIsCompact] = useState(compact);
-  const [assetColumnWidth, setAssetColumnWidth] = useState<number>(150);
+  const [isCompact, setIsCompact] = useState(false);
   
   // Initialize state with values from localStorage
   const [sorting, setSorting] = useState<SortingState>(
@@ -511,8 +514,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [searchQuery, setSearchQuery] = useState('');
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const assetColumnRef = useRef<HTMLDivElement>(null);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [columnSizes, setColumnSizes] = useState({
     pair: 200, // Increased to accommodate favorite star
     price: 120,
@@ -521,235 +522,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     marketCap: 140,
     volume: 140
   });
-  
-  // Function to fetch market data
-  const fetchMarketData = useCallback(async () => {
-    console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}. Component ID: ${Math.random().toString(36).substring(7)}`);
-    try {
-      setIsInitialLoading(true);
-
-      // Try to fetch from API first, fall back to sample data if it fails
-      if (dataSource === 'demo') {
-        try {
-          const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
-          
-          // Check if the token response is ok
-          if (!tokenResponse.ok) {
-            console.error(`Failed to get demo token: ${tokenResponse.status}`);
-            throw new Error('Failed to get demo token');
-          }
-          
-          const tokenData = await tokenResponse.json();
-          
-          if (!tokenData.token) {
-            console.error('Token data missing token property');
-            throw new Error('Failed to get demo token');
-          }
-
-          // Use the CryptoCompare API to fetch market data for pairs
-          // Define our base assets (crypto) and quote assets (mainly fiat currencies)
-          const baseAssets = ['BTC', 'ETH', 'SOL', 'XRP', 'USDT', 'BNB', 'ADA', 'DOGE', 'MATIC', 'DOT', 'LTC', 'ATOM', 'LINK', 'XMR', 'TIA'];
-          const quoteAssets = ['EUR', 'USD', 'BTC']; // Including BTC as a quote asset for crypto/crypto pairs
-          
-          // Prepare the API request to CryptoCompare
-          const apiUrl = 'https://min-api.cryptocompare.com/data/pricemultifull';
-          const params = new URLSearchParams({
-            fsyms: baseAssets.join(','), // From symbols (base assets)
-            tsyms: quoteAssets.join(','), // To symbols (quote assets)
-            api_key: tokenData.token
-          });
-          
-          // Fetch data from CryptoCompare API
-          const response = await fetch(`${apiUrl}?${params}`);
-          
-          if (!response.ok) {
-            console.error(`API request failed with status ${response.status}`);
-            throw new Error(`API request failed with status ${response.status}`);
-          }
-          
-          const data = await response.json();
-          
-          if (!data || !data.RAW) {
-            console.error('Invalid API response format from CryptoCompare:', 
-              JSON.stringify(data).substring(0, 200));
-            throw new Error('Invalid API response format');
-          }
-          
-          // Transform the API response into our MarketData format
-          const marketDataArray: MarketData[] = [];
-          let rank = 1;
-          
-          try {
-            for (const baseAsset of baseAssets) {
-              if (!(baseAsset in data.RAW)) continue;
-              
-              for (const quoteAsset of quoteAssets) {
-                if (baseAsset === quoteAsset) continue; // Skip same asset pairs
-                if (quoteAsset === 'BTC' && baseAsset === 'BTC') continue; // Skip BTC/BTC
-                
-                if (quoteAsset in data.RAW[baseAsset]) {
-                  const pairData = data.RAW[baseAsset][quoteAsset];
-                  
-                  // Skip if the base asset or quote asset isn't in our ASSETS lookup
-                  if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) continue;
-                  
-                  // Validate that pairData contains the required fields
-                  if (!pairData || typeof pairData !== 'object') {
-                    console.warn(`Missing or invalid pair data for ${baseAsset}/${quoteAsset}`);
-                    continue;
-                  }
-                  
-                  marketDataArray.push({
-                    pair: `${baseAsset}/${quoteAsset}`,
-                    baseAsset: baseAsset as AssetTicker,
-                    quoteAsset: quoteAsset as AssetTicker,
-                    price: pairData.PRICE || 0,
-                    change24h: pairData.CHANGEPCT24HOUR || 0,
-                    change7d: 0, // CryptoCompare doesn't provide 7d change in the basic API
-                    marketCap: pairData.MKTCAP || 0,
-                    volume: pairData.TOTALVOLUME24H || 0,
-                    rank: rank++,
-                    marginMultiplier: pairData.MARGINALIZED ? pairData.MARGINALIZED : undefined
-                  });
-                }
-              }
-            }
-          } catch (err) {
-            console.error('Error processing CryptoCompare data:', err);
-            // If we have no market data, throw an error
-            if (marketDataArray.length === 0) {
-              throw new Error('Failed to process market data');
-            }
-            // Otherwise continue with what we have
-            console.warn(`Processed ${marketDataArray.length} pairs despite errors`);
-          }
-          
-          // Sort by market cap by default
-          marketDataArray.sort((a, b) => b.marketCap - a.marketCap);
-          
-          // Update state with the fetched data
-          setMarketData(marketDataArray);
-          setError(null);
-          return; // Success! Exit the function
-        } catch (error) {
-          console.error('Error fetching market data from API:', error);
-          console.log('Falling back to sample data...');
-          // Fall through to sample data as fallback
-        }
-      }
-      
-      // Use sample data (either by choice or as fallback)
-      const marketDataArray = Object.entries(SAMPLE_MARKET_DATA)
-        .map(([pair, details]) => {
-          const [baseAsset, quoteAsset] = pair.split('/') as [AssetTicker, AssetTicker];
-          
-          if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) {
-            return null;
-          }
-          
-          return {
-            pair,
-            baseAsset,
-            quoteAsset,
-            price: details.price,
-            change24h: details.change24h,
-            change7d: details.change7d,
-            marketCap: details.marketCap,
-            volume: details.volume,
-            rank: details.rank,
-            marginMultiplier: details.marginMultiplier
-          };
-        })
-        .filter(Boolean) as MarketData[];
-
-      setMarketData(marketDataArray);
-      setError(null);
-    } catch (e) {
-      console.error('Error in fetchMarketData:', e);
-      setError(e instanceof Error ? e.message : 'An unexpected error occurred');
-      setMarketData([]);
-    } finally {
-      setIsInitialLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [dataSource]);
-
-  // Effect to load market data
-  useEffect(() => {
-    fetchMarketData();
-  }, [fetchMarketData]);
-  
-  // Memoize the fetch prices function to prevent recreating it on every render
-  const fetchPrices = useCallback(async () => {
-    if (dataSource === 'sample') return;
-
-    try {
-      setIsUpdating(true);
-      
-      const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
-      const tokenData = await tokenResponse.json();
-      
-      if (!tokenData.token) {
-        throw new Error('Failed to get demo token');
-      }
-
-      // Use the CryptoCompare API to fetch market data for pairs
-      const baseAssets = [...new Set(marketData.map(item => item.baseAsset))];
-      const quoteAssets = [...new Set(marketData.map(item => item.quoteAsset))];
-      
-      if (baseAssets.length === 0 || quoteAssets.length === 0) {
-        return;
-      }
-      
-      const apiUrl = 'https://min-api.cryptocompare.com/data/pricemultifull';
-      const params = new URLSearchParams({
-        fsyms: baseAssets.join(','),
-        tsyms: quoteAssets.join(','),
-        api_key: tokenData.token
-      });
-      
-      const response = await fetch(`${apiUrl}?${params}`);
-      
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (!data || !data.RAW) {
-        throw new Error('Invalid API response format');
-      }
-      
-      setMarketData(prevData => {
-        return prevData.map(market => {
-          const { baseAsset, quoteAsset } = market;
-          
-          if (data.RAW[baseAsset] && data.RAW[baseAsset][quoteAsset]) {
-            const updatedData = data.RAW[baseAsset][quoteAsset];
-            return {
-              ...market,
-              price: updatedData.PRICE || market.price,
-              change24h: updatedData.CHANGEPCT24HOUR || market.change24h,
-              volume: updatedData.TOTALVOLUME24H || market.volume,
-              marketCap: updatedData.MKTCAP || market.marketCap
-            };
-          }
-          return market;
-        });
-      });
-      
-      setIsUpdating(false);
-    } catch (err) {
-      console.error('Error updating market data:', err);
-      setIsUpdating(false);
-    }
-  }, [dataSource, marketData]);
-
-  // Update prices periodically
-  useEffect(() => {
-    const interval = setInterval(fetchMarketData, 30000); // Update every 30 seconds
-    return () => clearInterval(interval);
-  }, [fetchMarketData]);
 
   // Add a separate state for tracking dynamic column visibility based on container width
   const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
@@ -799,8 +571,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     if (quoteAsset.toLowerCase().includes(normalizedQuery)) return true;
     
     // Check if query matches full asset names
-    const baseAssetFullName = ASSETS[baseAsset]?.name.toLowerCase() || '';
-    const quoteAssetFullName = ASSETS[quoteAsset]?.name.toLowerCase() || '';
+    const baseAssetFullName = (baseAsset in ASSETS) ? ASSETS[baseAsset as keyof typeof ASSETS]?.name.toLowerCase() || '' : '';
+    const quoteAssetFullName = (quoteAsset in ASSETS) ? ASSETS[quoteAsset as keyof typeof ASSETS]?.name.toLowerCase() || '' : '';
     
     if (baseAssetFullName.includes(normalizedQuery)) return true;
     if (quoteAssetFullName.includes(normalizedQuery)) return true;
@@ -1070,6 +842,213 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     return () => observer.disconnect();
   }, []);
 
+  const fetchMarketData = useCallback(async () => {
+    console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
+    try {
+      setIsInitialLoading(true);
+
+      if (dataSource === 'sample') {
+        try {
+          // Use CoinGecko API for sample data
+          const exchangeRates = await coinGeckoService.fetchExchangeRates();
+          
+          // Transform the exchange rates into MarketData format
+          const marketDataArray: MarketData[] = [];
+          let rank = 1;
+          
+          // Process each asset in the exchange rates
+          for (const [baseAsset, rates] of Object.entries(exchangeRates)) {
+            // Skip if the asset is not in our ASSETS lookup
+            if (!(baseAsset in ASSETS)) continue;
+            
+            // Create market data for EUR, USD, and BTC pairs
+            const quoteAssets: AssetTicker[] = ['EUR', 'USD', 'BTC'];
+            
+            for (const quoteAsset of quoteAssets) {
+              // Skip if the quote asset is not in our ASSETS lookup
+              if (!(quoteAsset in ASSETS)) continue;
+              
+              // Skip same asset pairs
+              if (baseAsset === quoteAsset) continue;
+              
+              // Get the price in the quote currency
+              let price = 0;
+              if (quoteAsset === 'EUR' && rates.eur) {
+                price = rates.eur;
+              } else if (quoteAsset === 'USD' && rates.usd) {
+                price = rates.usd;
+              } else if (quoteAsset === 'BTC' && rates.btc) {
+                price = rates.btc;
+              } else {
+                // Skip if we don't have a price for this quote asset
+                continue;
+              }
+              
+              // Generate random change percentages for sample data
+              const change24h = (Math.random() * 20) - 10; // -10% to +10%
+              const change7d = (Math.random() * 30) - 15;  // -15% to +15%
+              
+              // Calculate market cap and volume based on price
+              const marketCap = price * (Math.random() * 1000000000 + 100000000); // Random market cap
+              const volume = marketCap * (Math.random() * 0.3 + 0.05); // Random volume (5-35% of market cap)
+              
+              // Add margin multiplier for some assets
+              const marginMultiplier = Math.random() > 0.7 ? Math.floor(Math.random() * 10) + 1 : undefined;
+              
+              marketDataArray.push({
+                pair: `${baseAsset}/${quoteAsset}`,
+                baseAsset: baseAsset as AssetTicker,
+                quoteAsset: quoteAsset as AssetTicker,
+                price,
+                change24h,
+                change7d,
+                marketCap,
+                volume,
+                rank: rank++,
+                marginMultiplier
+              });
+            }
+          }
+          
+          // Sort by market cap by default
+          marketDataArray.sort((a, b) => b.marketCap - a.marketCap);
+          
+          // Update ranks based on sorted order
+          marketDataArray.forEach((item, index) => {
+            item.rank = index + 1;
+          });
+          
+          setMarketData(marketDataArray);
+          setError(null);
+          return;
+        } catch (error) {
+          console.error('Error fetching market data from CoinGecko:', error);
+          console.log('Falling back to sample data...');
+          // Fall through to sample data as fallback
+        }
+        
+        // Use sample data as fallback
+        const marketDataArray = Object.entries(SAMPLE_MARKET_DATA)
+          .map(([pair, details]) => {
+            const [baseAsset, quoteAsset] = pair.split('/') as [AssetTicker, AssetTicker];
+            
+            if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) {
+              return null;
+            }
+            
+            return {
+              pair,
+              baseAsset,
+              quoteAsset,
+              price: details.price,
+              change24h: details.change24h,
+              change7d: details.change7d,
+              marketCap: details.marketCap,
+              volume: details.volume,
+              rank: details.rank,
+              marginMultiplier: details.marginMultiplier
+            };
+          })
+          .filter(Boolean) as MarketData[];
+
+        setMarketData(marketDataArray);
+        setError(null);
+      } else {
+        try {
+          const tokenResponse = await fetch(getApiUrl('open/demo/temp'));
+          const tokenData = await tokenResponse.json();
+          
+          if (!tokenData.token) {
+            throw new Error('Failed to get demo token');
+          }
+
+          // Use the CryptoCompare API to fetch market data for pairs
+          const baseAssets = ['BTC', 'ETH', 'SOL', 'XRP', 'USDT', 'BNB', 'ADA', 'DOGE', 'MATIC', 'DOT', 'LTC', 'ATOM', 'LINK', 'XMR', 'TIA'];
+          const quoteAssets = ['EUR', 'USD', 'BTC'];
+          
+          const apiUrl = 'https://min-api.cryptocompare.com/data/pricemultifull';
+          const params = new URLSearchParams({
+            fsyms: baseAssets.join(','),
+            tsyms: quoteAssets.join(','),
+            api_key: tokenData.token
+          });
+          
+          const response = await fetch(`${apiUrl}?${params}`);
+          
+          if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (!data || !data.RAW) {
+            throw new Error('Invalid API response format');
+          }
+          
+          const marketDataArray: MarketData[] = [];
+          let rank = 1;
+          
+          for (const baseAsset of baseAssets) {
+            if (!(baseAsset in data.RAW)) continue;
+            
+            for (const quoteAsset of quoteAssets) {
+              if (baseAsset === quoteAsset) continue;
+              if (quoteAsset === 'BTC' && baseAsset === 'BTC') continue;
+              
+              if (quoteAsset in data.RAW[baseAsset]) {
+                const pairData = data.RAW[baseAsset][quoteAsset];
+                
+                if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) continue;
+                
+                marketDataArray.push({
+                  pair: `${baseAsset}/${quoteAsset}`,
+                  baseAsset: baseAsset as AssetTicker,
+                  quoteAsset: quoteAsset as AssetTicker,
+                  price: pairData.PRICE || 0,
+                  change24h: pairData.CHANGEPCT24HOUR || 0,
+                  change7d: 0,
+                  marketCap: pairData.MKTCAP || 0,
+                  volume: pairData.TOTALVOLUME24H || 0,
+                  rank: rank++,
+                  marginMultiplier: pairData.MARGINALIZED ? pairData.MARGINALIZED : undefined
+                });
+              }
+            }
+          }
+          
+          marketDataArray.sort((a, b) => b.marketCap - a.marketCap);
+          
+          marketDataArray.forEach((item, index) => {
+            item.rank = index + 1;
+          });
+          
+          setMarketData(marketDataArray);
+          setError(null);
+        } catch (error) {
+          console.error('Error fetching market data:', error);
+          setError(error instanceof Error ? error.message : 'Failed to fetch market data');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching market data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch market data');
+    } finally {
+      setIsInitialLoading(false);
+    }
+  }, [dataSource]);
+
+  useEffect(() => {
+    fetchMarketData();
+  }, [fetchMarketData]);
+
+  // Update prices periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchMarketData();
+    }, 30000); // Update every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchMarketData]);
+
   // Initialize TanStack Table with filtered data
   const table = useReactTable({
     data: filteredMarketData,
@@ -1087,11 +1066,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     onColumnVisibilityChange: setColumnVisibility,
     enableSortingRemoval: false,
   });
-
-  // Calculate the width needed for the asset column based on the longest asset name
-  useEffect(() => {
-    if (!assetColumnRef.current) return;
-  }, []);
 
   // Expose the table instance via ref
   useImperativeHandle(ref, () => ({
@@ -1126,8 +1100,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 
   if (error) {
     return (
-      <Card className={cn("h-full flex flex-col", className)}>
-        <CardContent className="flex-1 flex flex-col items-center justify-center p-6">
+      <div className={cn("h-full flex flex-col", className)}>
+        <div className="flex-1 flex flex-col items-center justify-center p-6">
           <div className="w-full max-w-md bg-[hsl(var(--color-widget-highlight-bg))] rounded-lg p-6 text-center">
             <AlertTriangleIcon className="h-12 w-12 mx-auto mb-4 text-amber-500" />
             <h3 className="text-lg font-medium mb-2">Unable to load market data</h3>
@@ -1141,7 +1115,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
               onClick={() => {
                 setError(null);
                 setIsInitialLoading(true);
-                fetchMarketData();
+                fetchMarketData?.(); // Fix the fetchMarketData reference
               }}
               className="mx-auto"
             >
@@ -1149,8 +1123,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
               Try Again
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
@@ -1179,6 +1153,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
             </button>
           )}
         </div>
+
         <Button 
           variant={showOnlyFavorites ? "default" : "outline"} 
           size="sm"
@@ -1196,6 +1171,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
           />
           Favorites
         </Button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -1218,6 +1194,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -1241,6 +1218,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
       <div className="flex-1 min-h-0 relative w-full">
         <div className="absolute left-[8px] right-[16px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         <div className="h-full w-full overflow-x-auto">

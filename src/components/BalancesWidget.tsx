@@ -15,6 +15,7 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { AssetPriceTooltip } from './AssetPriceTooltip';
+import coinGeckoService from '@/services/coinGeckoService';
 
 // Set this to false to disable logging
 const ENABLE_LOGGING = false;
@@ -393,7 +394,57 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   // Memoize the fetch prices function to prevent recreating it on every render
   const fetchPrices = useCallback(async () => {
     if (dataSource === 'sample') {
-      setPrices(SAMPLE_PRICES);
+      try {
+        setIsUpdating(true);
+        
+        // Use CoinGecko API for sample data
+        const exchangeRates = await coinGeckoService.fetchExchangeRates();
+        
+        // Transform the exchange rates into the format expected by the component
+        const priceData: PriceData = {};
+        
+        // Process each asset in our balances
+        for (const balance of balances) {
+          const assetTicker = balance.asset;
+          const rateInfo = exchangeRates[assetTicker];
+          
+          if (rateInfo) {
+            // Get EUR price and calculate 24h change
+            const currentPrice = rateInfo.eur || 0;
+            
+            // For sample data, generate a random change between -5% and +5%
+            const randomChange = (Math.random() * 10) - 5;
+            const change24h = rateInfo.last_updated ? randomChange : 0;
+            
+            priceData[`${assetTicker}EUR`] = {
+              price: currentPrice,
+              change24h: change24h
+            };
+          } else {
+            // Fallback to sample data if the asset is not found in CoinGecko
+            const assetKey = `${assetTicker}EUR`;
+            priceData[assetKey] = SAMPLE_PRICES[assetKey as keyof typeof SAMPLE_PRICES] || {
+              price: 0,
+              change24h: 0
+            };
+          }
+        }
+        
+        // Add EUR with no change
+        priceData['EUREUR'] = {
+          price: 1,
+          change24h: 0,
+          lastDayPrice: 1
+        };
+        
+        setPrices(priceData);
+      } catch (error) {
+        log.error('Error fetching prices from CoinGecko:', error);
+        // Fallback to sample data if CoinGecko fails
+        setPrices(SAMPLE_PRICES);
+      } finally {
+        setIsUpdating(false);
+      }
       return;
     }
 
