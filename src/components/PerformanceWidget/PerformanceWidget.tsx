@@ -88,6 +88,9 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   // Track the last processed variant to prevent loops
   const lastProcessedVariant = useRef<string | null>(null);
   
+  // Track last logged variant to prevent excessive logging
+  const lastLoggedVariant = useRef<string | null>(null);
+  
   // Define date range presets
   const yesterday = {
     from: subDays(today, 1),
@@ -254,7 +257,12 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       
       // Only update if this event is for our widget ID 
       if (widgetId === eventWidgetId) {
-        // Log the variant change
+        // Skip if no actual change
+        if (selectedVariant === variant) {
+          return;
+        }
+        
+        // Log the variant change only if it's meaningful
         console.log('PerformanceWidget received variant change event:', {
           current: selectedVariant,
           new: variant,
@@ -265,20 +273,18 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
         lastProcessedVariant.current = variantKey;
         
         // Force update the variant in the local state
-        if (selectedVariant !== variant) {
-          setSelectedVariant(variant as ChartVariant);
-          
-          // Also update title if this component controls the title
-          if (onTitleChange) {
-            const newTitle = chartLabels[variant as ChartVariant];
-            onTitleChange(newTitle);
-          }
-          
-          // Force component to re-render with new variant
-          const chartComponent = document.querySelector(`[data-chart-variant="${selectedVariant}"]`);
-          if (chartComponent) {
-            chartComponent.setAttribute('data-chart-variant', variant);
-          }
+        setSelectedVariant(variant as ChartVariant);
+        
+        // Also update title if this component controls the title
+        if (onTitleChange) {
+          const newTitle = chartLabels[variant as ChartVariant];
+          onTitleChange(newTitle);
+        }
+        
+        // Force component to re-render with new variant
+        const chartComponent = document.querySelector(`[data-chart-variant="${selectedVariant}"]`);
+        if (chartComponent) {
+          chartComponent.setAttribute('data-chart-variant', variant);
         }
         
         // Update localStorage to ensure persistence - only when needed
@@ -371,6 +377,15 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
   // Force re-render when variant changes to ensure UI consistency
   useEffect(() => {
+    // Skip logging if we've already logged this variant
+    const variantKey = `${widgetId}-${selectedVariant}`;
+    if (lastLoggedVariant.current === variantKey) {
+      return;
+    }
+    
+    // Update what we've logged
+    lastLoggedVariant.current = variantKey;
+    
     console.log('PerformanceWidget: Variant state changed to:', selectedVariant);
     
     // Try to update the widget's DOM node to force refresh

@@ -100,6 +100,9 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
 
   // Keep track of the last processed variant change to avoid loops
   const lastProcessedVariantChange = useRef<string | null>(null);
+  
+  // Track the last logged change to prevent excessive logging
+  const lastLoggedChange = useRef<string | null>(null);
 
   // Listen for variant change events from other components
   useEffect(() => {
@@ -135,11 +138,16 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
         // Force re-render
         setUpdateCounter(prev => prev + 1);
         
-        console.log('PerformanceWidgetWrapper received variant change event:', {
-          widgetId,
-          variant,
-          title: newTitle
-        });
+        // Only log if we haven't logged this exact change
+        const logKey = `${widgetId}-${variant}`;
+        if (lastLoggedChange.current !== logKey) {
+          lastLoggedChange.current = logKey;
+          console.log('PerformanceWidgetWrapper received variant change event:', {
+            widgetId,
+            variant,
+            title: newTitle
+          });
+        }
       }
     };
     
@@ -164,7 +172,12 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     // Get new title first
     const newTitle = getPerformanceTitle(newVariant);
     
-    console.log('PerformanceWidgetWrapper: Variant changing from', variant, 'to', newVariant);
+    // Only log if we haven't logged this exact change
+    const logKey = `${widgetId}-${newVariant}`;
+    if (lastLoggedChange.current !== logKey) {
+      lastLoggedChange.current = logKey;
+      console.log('PerformanceWidgetWrapper: Variant changing from', variant, 'to', newVariant);
+    }
 
     // Force immediate re-render of the container by updating state first
     setVariant(newVariant);
