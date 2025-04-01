@@ -473,14 +473,8 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
             // Force re-render
             setUpdateCounter(prev => prev + 1);
             
-            // Force update the widget container title
-            const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
-            if (widgetContainer) {
-              const titleElement = widgetContainer.querySelector('.widget-title');
-              if (titleElement) {
-                titleElement.textContent = newTitle;
-              }
-            }
+            // Update all instances of this widget title in the DOM
+            updateAllWidgetTitles(widgetId, newTitle);
           }
         }
       }
@@ -488,6 +482,39 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
       console.error('Error syncing variant from localStorage:', error);
     }
   }, [widgetId, variant, widgetState]);
+
+  // Helper function to update all instances of a widget title in the DOM
+  const updateAllWidgetTitles = useCallback((widgetId: string, title: string) => {
+    try {
+      // First try direct widget containers by gs-id
+      const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+      if (widgetContainer) {
+        const titleElement = widgetContainer.querySelector('.widget-title');
+        if (titleElement && titleElement.textContent !== title) {
+          console.log(`Directly updating title for widget ${widgetId} to ${title}`);
+          titleElement.textContent = title;
+        }
+      }
+      
+      // Also try widget elements by data attribute
+      const widgetElements = document.querySelectorAll(`[data-widget-id="${widgetId}"]`);
+      widgetElements.forEach(element => {
+        const titleElement = element.querySelector('.widget-title');
+        if (titleElement && titleElement.textContent !== title) {
+          console.log(`Updating title by data-widget-id for ${widgetId} to ${title}`);
+          titleElement.textContent = title;
+        }
+      });
+      
+      // Also try to update any rendered chart components
+      const chartElements = document.querySelectorAll(`[data-chart-widget-id="${widgetId}"]`);
+      chartElements.forEach(element => {
+        element.setAttribute('data-title', title);
+      });
+    } catch (error) {
+      console.error('Error updating widget titles in DOM:', error);
+    }
+  }, []);
 
   // Listen for document load to sync headers with localStorage on initialization
   useEffect(() => {
@@ -525,11 +552,33 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
           if (titleElement && titleElement.textContent !== title) {
             console.log(`Updating header title for widget ${widgetId} to ${title}`);
             titleElement.textContent = title;
+            
+            // Also update any widget state that might be out of sync
+            const state = widgetStateRegistry.get(widgetId);
+            if (state && state.variant !== variant) {
+              state.setVariant(variant);
+              state.setTitle(title);
+            }
           }
         });
       } catch (error) {
         console.error('Error syncing headers with localStorage:', error);
       }
+    };
+
+    // Schedule multiple sync attempts with increasing delays
+    // This ensures we catch any late-rendered components
+    const syncWithDelays = () => {
+      // Immediate sync attempt
+      syncHeadersWithLocalStorage();
+      
+      // Additional sync attempts with increasing delays and more frequent early checks
+      const delays = [50, 100, 200, 500, 1000, 2000, 5000];
+      const timeoutIds = delays.map(delay => 
+        setTimeout(syncHeadersWithLocalStorage, delay)
+      );
+      
+      return () => timeoutIds.forEach(id => clearTimeout(id));
     };
     
     // Handle immediate header update from other widgets
@@ -538,23 +587,18 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
       const { widgetId: updatedWidgetId, title } = customEvent.detail;
       
       try {
-        // Find the specific widget that needs updating
-        const widgetElement = document.querySelector(`[gs-id="${updatedWidgetId}"]`);
-        if (!widgetElement) return;
-        
-        // Find and update its title
-        const titleElement = widgetElement.querySelector('.widget-title');
-        if (titleElement) {
-          console.log(`Direct header update for widget ${updatedWidgetId} to ${title}`);
-          titleElement.textContent = title;
-        }
+        // Use the helper to update all instances of this widget title
+        updateAllWidgetTitles(updatedWidgetId, title);
       } catch (error) {
         console.error('Error updating widget header:', error);
       }
     };
     
-    // Sync on mount with a slight delay to ensure DOM is ready
-    const timeoutId = setTimeout(syncHeadersWithLocalStorage, 500);
+    // Run sync on component mount
+    const cleanupSync = syncWithDelays();
+    
+    // Also trigger sync when DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', syncWithDelays);
     
     // Also sync whenever the localStorage changes
     const handleStorageChange = (e: StorageEvent) => {
@@ -564,16 +608,29 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     };
     
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('load', syncHeadersWithLocalStorage);
+    window.addEventListener('load', syncWithDelays);
     document.addEventListener('widget-headers-update', handleHeadersUpdate);
     
+    // Run additional sync when GridStack finishes initialization
+    document.addEventListener('gridstack-initialized', syncWithDelays);
+    
+    // Also sync on window focus/visibility change as this may indicate a refresh
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        syncWithDelays();
+      }
+    });
+    
     return () => {
-      clearTimeout(timeoutId);
+      cleanupSync();
+      document.removeEventListener('DOMContentLoaded', syncWithDelays);
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('load', syncHeadersWithLocalStorage);
+      window.removeEventListener('load', syncWithDelays);
       document.removeEventListener('widget-headers-update', handleHeadersUpdate);
+      document.removeEventListener('gridstack-initialized', syncWithDelays);
+      document.removeEventListener('visibilitychange', syncWithDelays);
     };
-  }, []);
+  }, [updateAllWidgetTitles]);
 
   // Memoize the component props to prevent unnecessary re-renders
   const componentProps = useMemo(() => ({
