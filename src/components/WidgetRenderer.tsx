@@ -98,6 +98,25 @@ export const createWidget = ({
 };
 
 /**
+ * Gets the correct title for a Performance widget from localStorage
+ */
+const getPerformanceWidgetTitle = (widgetId: string): string => {
+  try {
+    const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+    if (savedLayout) {
+      const layout = JSON.parse(savedLayout);
+      const widgetData = layout.find((item: any) => item.id === widgetId);
+      if (widgetData?.viewState?.chartVariant) {
+        return getPerformanceTitle(widgetData.viewState.chartVariant);
+      }
+    }
+  } catch (error) {
+    console.error('Error getting performance widget title:', error);
+  }
+  return widgetTitles['performance']; // Fallback to default
+};
+
+/**
  * Renders a React widget into a DOM element
  */
 export const renderWidgetIntoElement = (
@@ -120,11 +139,14 @@ export const renderWidgetIntoElement = (
     }
 
     if (baseId === 'performance') {
+      // Get correct title from localStorage for performance widgets
+      const widgetTitle = getPerformanceWidgetTitle(widgetId);
+      
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
             <WidgetContainer
-              title={widgetTitles[widgetType]}
+              title={widgetTitle}
               onRemove={onRemove}
               headerControls={<PerformanceWidgetWrapper 
                 isHeader 

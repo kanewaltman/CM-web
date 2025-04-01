@@ -81,6 +81,11 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   dateRange: propDateRange,
   widgetId,
 }: PerformanceWidgetProps): React.ReactNode => {
+  // Use a ref to track if we're in the initial render
+  // This helps prevent default variant from overriding the saved variant
+  const isInitialMount = useRef(true);
+  
+  // Instead of defaulting to 'revenue', use the defaultVariant prop value to allow parent control
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const [viewMode, setViewMode] = useState<WidgetViewMode>(defaultViewMode);
   const [forceUpdate, setForceUpdate] = useState(0); // Used to force re-render
@@ -243,6 +248,15 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     };
   }, [headerControls, widgetId]);
 
+  // Initialize title on component mount
+  useEffect(() => {
+    // Update title on initial render to ensure it's set correctly
+    if (isInitialMount.current && onTitleChange) {
+      onTitleChange(chartLabels[selectedVariant]);
+    }
+    isInitialMount.current = false;
+  }, [selectedVariant, onTitleChange, chartLabels]);
+
   // Listen for variant change events to ensure immediate UI updates
   useEffect(() => {
     // Handle variant change events for widget sync
@@ -290,37 +304,6 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
         if (chartComponent) {
           chartComponent.setAttribute('data-chart-variant', variant);
         }
-        
-        // Update localStorage to ensure persistence - only when needed
-        try {
-          // Get the current layout
-          const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
-          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-          if (savedLayout) {
-            const layout = JSON.parse(savedLayout);
-            const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-            if (widgetIndex !== -1) {
-              // Only update if different
-              const currentVariant = layout[widgetIndex]?.viewState?.chartVariant;
-              if (currentVariant !== variant) {
-                // Update the view state with the new variant
-                layout[widgetIndex] = {
-                  ...layout[widgetIndex],
-                  viewState: {
-                    ...layout[widgetIndex].viewState,
-                    chartVariant: variant
-                  }
-                };
-                // Save back to localStorage
-                localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-                
-                console.log('Updated layout in localStorage for widget:', widgetId, 'with variant:', variant);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error updating layout in localStorage:', error);
-        }
       }
     };
     
@@ -367,17 +350,66 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     onDateRangeChange
   ]);
 
-  // Update local state when defaultVariant changes
+  // Load variant from localStorage once on mount
   useEffect(() => {
-    if (defaultVariant !== selectedVariant) {
-      console.log('PerformanceWidget: Updating variant from props:', {
+    // Only run once
+    if (!widgetId) return;
+    
+    try {
+      // Check localStorage for the correct variant
+      const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+      if (!savedLayout) return;
+      
+      const layout = JSON.parse(savedLayout);
+      const widgetData = layout.find((item: any) => item.id === widgetId);
+      
+      if (widgetData?.viewState?.chartVariant) {
+        const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
+        console.log(`PerformanceWidget: Direct init from localStorage for ${widgetId}:`, storedVariant);
+        
+        // Set the variant in state
+        setSelectedVariant(storedVariant);
+        
+        // Notify parent of variant change
+        onVariantChange?.(storedVariant);
+        
+        // Update title
+        if (onTitleChange) {
+          const newTitle = chartLabels[storedVariant];
+          onTitleChange(newTitle);
+        }
+        
+        // Force re-render
+        setForceUpdate(prev => prev + 1);
+        
+        // Update DOM directly in case React is too slow
+        const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+        if (widgetContainer) {
+          const titleElement = widgetContainer.querySelector('.widget-title');
+          if (titleElement) {
+            const correctTitle = chartLabels[storedVariant];
+            titleElement.textContent = correctTitle;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing variant from localStorage:', error);
+    }
+  }, [widgetId, onVariantChange, onTitleChange, chartLabels]);
+
+  // Update local state when defaultVariant changes from parent props
+  useEffect(() => {
+    // Only use defaultVariant from props if it's explicitly different
+    // This handles the case when parent passes a non-default variant
+    if (defaultVariant !== selectedVariant && defaultVariant !== 'revenue') {
+      console.log('PerformanceWidget: Explicit variant change from props:', {
         from: selectedVariant,
         to: defaultVariant
       });
       setSelectedVariant(defaultVariant);
-      onTitleChange?.(chartLabels[defaultVariant]);
     }
-  }, [defaultVariant, onTitleChange, selectedVariant, chartLabels]);
+  }, [defaultVariant, selectedVariant]);
 
   // Force re-render when variant changes to ensure UI consistency
   useEffect(() => {
@@ -1012,132 +1044,6 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   if (headerControls || onRemove) {
     return headerControlsContent;
   }
-
-  // Ensure the widget title is updated when the component mounts and when variant changes
-  useEffect(() => {
-    if (!widgetId || !selectedVariant) return;
-    
-    // Handler to update widget title based on variant
-    const updateWidgetTitle = () => {
-      try {
-        const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
-        if (!widgetContainer) return;
-        
-        const titleElement = widgetContainer.querySelector('.widget-title');
-        if (!titleElement) return;
-        
-        const correctTitle = chartLabels[selectedVariant];
-        if (titleElement.textContent !== correctTitle) {
-          console.log(`Updating widget ${widgetId} title to ${correctTitle} (current: ${titleElement.textContent})`);
-          titleElement.textContent = correctTitle;
-          
-          // Also update in localStorage for persistence
-          try {
-            const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
-            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-            if (savedLayout) {
-              const layout = JSON.parse(savedLayout);
-              const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-              if (widgetIndex !== -1) {
-                layout[widgetIndex] = {
-                  ...layout[widgetIndex],
-                  viewState: {
-                    ...layout[widgetIndex].viewState,
-                    chartVariant: selectedVariant
-                  }
-                };
-                localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-              }
-            }
-          } catch (error) {
-            console.error('Error updating layout in localStorage:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error updating widget title:', error);
-      }
-    };
-    
-    // Set up MutationObserver to detect when widget containers are added
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'childList') {
-          const widget = document.querySelector(`[gs-id="${widgetId}"]`);
-          if (widget) {
-            updateWidgetTitle();
-          }
-        }
-      }
-    });
-    
-    // Initial update and setup observers
-    updateWidgetTitle(); // Try to update immediately
-    
-    // Watch for widget container changes
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    
-    // Set up multiple delayed checks to ensure title is updated
-    const timeoutIds = [100, 500, 1000, 2000].map(delay => 
-      setTimeout(updateWidgetTitle, delay)
-    );
-    
-    // Clean up all observers and timeouts when unmounting
-    return () => {
-      observer.disconnect();
-      timeoutIds.forEach(id => clearTimeout(id));
-    };
-  }, [widgetId, selectedVariant, chartLabels]);
-
-  // Initialize variant from localStorage immediately on mount if needed
-  useEffect(() => {
-    // Skip if we already have a proper variant
-    if (!widgetId || selectedVariant !== 'revenue') return;
-    
-    try {
-      // Check localStorage for the correct variant
-      const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
-      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-      if (!savedLayout) return;
-      
-      const layout = JSON.parse(savedLayout);
-      const widgetData = layout.find((item: any) => item.id === widgetId);
-      
-      if (widgetData?.viewState?.chartVariant && widgetData.viewState.chartVariant !== selectedVariant) {
-        const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
-        console.log(`PerformanceWidget: Direct init from localStorage for ${widgetId}:`, storedVariant);
-        
-        // Set the variant in state
-        setSelectedVariant(storedVariant);
-        
-        // Notify parent of variant change
-        onVariantChange?.(storedVariant);
-        
-        // Update title
-        if (onTitleChange) {
-          const newTitle = chartLabels[storedVariant];
-          onTitleChange(newTitle);
-        }
-        
-        // Force re-render
-        setForceUpdate(prev => prev + 1);
-        
-        // Update DOM directly in case React is too slow
-        const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
-        if (widgetContainer) {
-          const titleElement = widgetContainer.querySelector('.widget-title');
-          if (titleElement) {
-            const correctTitle = chartLabels[storedVariant];
-            titleElement.textContent = correctTitle;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error initializing variant from localStorage:', error);
-    }
-  }, [widgetId, selectedVariant, onVariantChange, onTitleChange, chartLabels]); // Include all dependencies
 
   // Main content now only returns the chart component, without duplicating the controls
   return (
