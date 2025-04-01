@@ -98,14 +98,31 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     }
   }, [widgetState]);
 
+  // Keep track of the last processed variant change to avoid loops
+  const lastProcessedVariantChange = useRef<string | null>(null);
+
   // Listen for variant change events from other components
   useEffect(() => {
     const handleVariantChangeEvent = (event: Event) => {
       const customEvent = event as CustomEvent;
-      const { variant, widgetId: eventWidgetId } = customEvent.detail;
+      const { variant, widgetId: eventWidgetId, timestamp } = customEvent.detail;
+      
+      // Skip if we just processed this exact same change to avoid loops
+      const changeId = `${eventWidgetId}-${variant}-${timestamp}`;
+      if (lastProcessedVariantChange.current === changeId) {
+        return;
+      }
       
       // Only process events for this widget
       if (widgetId === eventWidgetId) {
+        // Update tracking to prevent loops
+        lastProcessedVariantChange.current = changeId;
+        
+        // Skip if variant hasn't actually changed
+        if (variant === widgetState.variant) {
+          return;
+        }
+        
         // Update local state
         setVariant(variant);
         const newTitle = getPerformanceTitle(variant);
@@ -136,6 +153,14 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
   const handleVariantChange = useCallback((newVariant: ChartVariant) => {
     if (!newVariant) return;
     
+    // Skip if no actual change occurred
+    if (newVariant === variant) return;
+    
+    // Generate timestamp for this change to track it
+    const timestamp = Date.now();
+    const changeId = `${widgetId}-${newVariant}-${timestamp}`;
+    lastProcessedVariantChange.current = changeId;
+    
     // Get new title first
     const newTitle = getPerformanceTitle(newVariant);
     
@@ -161,7 +186,7 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
           detail: { 
             variant: newVariant,
             widgetId,
-            timestamp: Date.now()
+            timestamp
           } 
         });
         document.dispatchEvent(event);

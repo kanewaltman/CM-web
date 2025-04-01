@@ -238,10 +238,19 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
   // Listen for variant change events to ensure immediate UI updates
   useEffect(() => {
+    // Use ref to track the last processed variant to prevent loops
+    const lastProcessedVariant = useRef<string | null>(null);
+    
     // Handle variant change events for widget sync
     const handleVariantChangeEvent = (event: Event) => {
       const customEvent = event as CustomEvent;
-      const { variant, widgetId: eventWidgetId } = customEvent.detail;
+      const { variant, widgetId: eventWidgetId, timestamp } = customEvent.detail;
+      
+      // Skip if we've already processed this exact variant recently (prevents loops)
+      const variantKey = `${eventWidgetId}-${variant}-${timestamp}`;
+      if (lastProcessedVariant.current === variantKey) {
+        return;
+      }
       
       // Only update if this event is for our widget ID 
       if (widgetId === eventWidgetId) {
@@ -251,6 +260,9 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           new: variant,
           widgetId
         });
+        
+        // Update last processed to prevent loops
+        lastProcessedVariant.current = variantKey;
         
         // Force update the variant in the local state
         if (selectedVariant !== variant) {
@@ -269,7 +281,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           }
         }
         
-        // Update localStorage to ensure persistence
+        // Update localStorage to ensure persistence - only when needed
         try {
           // Get the current layout
           const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
@@ -278,18 +290,22 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             const layout = JSON.parse(savedLayout);
             const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
             if (widgetIndex !== -1) {
-              // Update the view state with the new variant
-              layout[widgetIndex] = {
-                ...layout[widgetIndex],
-                viewState: {
-                  ...layout[widgetIndex].viewState,
-                  chartVariant: variant
-                }
-              };
-              // Save back to localStorage
-              localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-              
-              console.log('Updated layout in localStorage for widget:', widgetId, 'with variant:', variant);
+              // Only update if different
+              const currentVariant = layout[widgetIndex]?.viewState?.chartVariant;
+              if (currentVariant !== variant) {
+                // Update the view state with the new variant
+                layout[widgetIndex] = {
+                  ...layout[widgetIndex],
+                  viewState: {
+                    ...layout[widgetIndex].viewState,
+                    chartVariant: variant
+                  }
+                };
+                // Save back to localStorage
+                localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                
+                console.log('Updated layout in localStorage for widget:', widgetId, 'with variant:', variant);
+              }
             }
           }
         } catch (error) {
@@ -682,6 +698,23 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     }
   };
 
+  // Create a fresh dateRange object to ensure React detects changes
+  const dateRangeProp = useMemo(() => {
+    if (!date?.from || !date?.to) return undefined;
+    
+    // Force new object creation with time values to ensure React detects the change
+    return { 
+      from: new Date(date.from.getTime()),
+      to: new Date(date.to.getTime())
+    };
+  }, [date?.from?.getTime(), date?.to?.getTime()]);
+
+  // Add a key generator that updates when date changes but allows for animation
+  const getChartKey = useCallback((variant: ChartVariant) => {
+    if (!date?.from || !date?.to) return `chart-${variant}-no-date`;
+    return `chart-${variant}-${date.from.getTime()}-${date.to.getTime()}`;
+  }, [date]);
+
   // Chart components for each variant
   const charts = {
     'revenue': PerformanceChart,
@@ -701,33 +734,6 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     'subscriptions': 'subscriptions-chart',
     'upgrades': 'upgrades-chart',
   };
-
-  // Memoize chart components for better performance
-  const MemoizedCharts = useMemo(() => {
-    return Object.entries(charts).reduce((acc, [key, Component]) => {
-      acc[key as ChartVariant] = React.memo(Component);
-      return acc;
-    }, {} as Record<ChartVariant, React.ComponentType<BaseChartProps>>);
-  }, []);
-
-  // Create a fresh dateRange object to ensure React detects changes
-  const dateRangeProp = useMemo(() => {
-    if (!date?.from || !date?.to) return undefined;
-    
-    // Force new object creation with time values to ensure React detects the change
-    return { 
-      from: new Date(date.from.getTime()),
-      to: new Date(date.to.getTime())
-    };
-  }, [date?.from?.getTime(), date?.to?.getTime()]);
-
-  // Add a key generator that updates when date changes but allows for animation
-  const getChartKey = useCallback((variant: ChartVariant) => {
-    if (!date?.from || !date?.to) return `chart-${variant}-no-date`;
-    return `chart-${variant}-${date.from.getTime()}-${date.to.getTime()}`;
-  }, [date]);
-
-  const ChartComponent = MemoizedCharts[selectedVariant];
 
   // Create compact header controls that will be returned when onRemove is provided
   const headerControlsContent = (
@@ -992,21 +998,24 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   return (
     <div className={cn("h-full flex flex-col", className)}>
       {/* Chart Display */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden" data-current-variant={selectedVariant}>
         {selectedVariant === 'revenue' ? (
           <KeyedPerformanceChart
             viewMode={viewMode}
             onViewModeChange={handleChartViewModeChange}
             dateRange={dateRangeProp}
-            key={`keyed-chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime()}-${dateRangeProp?.to?.getTime()}`}
+            key={`keyed-chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime() || 'no-date'}-${dateRangeProp?.to?.getTime() || 'no-date'}`}
             data-chart-variant={selectedVariant}
           />
         ) : (
-          <ChartComponent 
-            dateRange={dateRangeProp}
-            key={`chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime() || 'no-date'}-${dateRangeProp?.to?.getTime() || 'no-date'}`}
-            data-chart-variant={selectedVariant}
-          />
+          // Get the correct component for the current variant
+          React.createElement(
+            chartComponents[selectedVariant], 
+            {
+              dateRange: dateRangeProp,
+              key: `chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime() || 'no-date'}-${dateRangeProp?.to?.getTime() || 'no-date'}`
+            }
+          )
         )}
       </div>
     </div>
