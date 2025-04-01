@@ -236,6 +236,54 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     };
   }, [headerControls, widgetId]);
 
+  // Listen for variant change events to ensure immediate UI updates
+  useEffect(() => {
+    // Handle variant change events for widget sync
+    const handleVariantChangeEvent = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { variant, widgetId: eventWidgetId } = customEvent.detail;
+      
+      // Only update if this event is for our widget ID 
+      if (widgetId === eventWidgetId) {
+        // Force update the variant in the local state
+        setSelectedVariant(variant);
+        
+        // Update localStorage to ensure persistence
+        try {
+          // Get the current layout
+          const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          if (savedLayout) {
+            const layout = JSON.parse(savedLayout);
+            const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+            if (widgetIndex !== -1) {
+              // Update the view state with the new variant
+              layout[widgetIndex] = {
+                ...layout[widgetIndex],
+                viewState: {
+                  ...layout[widgetIndex].viewState,
+                  chartVariant: variant
+                }
+              };
+              // Save back to localStorage
+              localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+              
+              console.log('Updated layout in localStorage for widget:', widgetId, 'with variant:', variant);
+            }
+          }
+        } catch (error) {
+          console.error('Error updating layout in localStorage:', error);
+        }
+      }
+    };
+    
+    document.addEventListener('performance-widget-variant-change', handleVariantChangeEvent);
+    
+    return () => {
+      document.removeEventListener('performance-widget-variant-change', handleVariantChangeEvent);
+    };
+  }, [widgetId]);
+
   // Update date state when the prop changes - use deep comparison for dates
   useEffect(() => {
     if (!propDateRange?.from || !propDateRange?.to) return;
@@ -439,9 +487,49 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
   // Memoize event handlers to prevent unnecessary re-renders
   const handleVariantChange = useCallback((value: ChartVariant) => {
+    // Log when a view is selected
+    console.log('Performance Widget View Selected:', {
+      selectedView: value,
+      previousView: selectedVariant
+    });
+    
     setSelectedVariant(value);
     onVariantChange?.(value);
-  }, [onVariantChange]);
+    
+    // Log the new state after selection
+    console.log('Performance Widget View Updated:', {
+      title: chartLabels[value],
+      chartVariant: value,
+      viewMode: viewMode
+    });
+    
+    // Force an update to the widget to ensure changes are reflected immediately
+    if (widgetId) {
+      try {
+        // Create and dispatch a custom event to force the widget to update
+        const event = new CustomEvent('performance-widget-variant-change', { 
+          detail: { 
+            variant: value,
+            widgetId,
+            timestamp: Date.now()
+          } 
+        });
+        document.dispatchEvent(event);
+        
+        // Try to update the widget's DOM node
+        const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+        if (widgetContainer) {
+          // Force a DOM update by adding and removing a class
+          widgetContainer.classList.add('variant-updating');
+          setTimeout(() => {
+            widgetContainer.classList.remove('variant-updating');
+          }, 10);
+        }
+      } catch (error) {
+        console.error('Error forcing widget variant update:', error);
+      }
+    }
+  }, [onVariantChange, selectedVariant, viewMode, widgetId, chartLabels]);
 
   const handleViewModeChange = useCallback((mode: WidgetViewMode) => {
     setViewMode(mode);
@@ -776,7 +864,15 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       </Popover>
       
       {/* Variant selector dropdown */}
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => {
+        if (open) {
+          console.log('Performance Widget Dropdown Opened:', {
+            title: chartLabels[selectedVariant],
+            chartVariant: selectedVariant,
+            viewMode: viewMode
+          });
+        }
+      }}>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap ml-1">
             Views
@@ -815,11 +911,12 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             viewMode={viewMode}
             onViewModeChange={handleChartViewModeChange}
             dateRange={dateRangeProp}
+            key={`keyed-chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime()}-${dateRangeProp?.to?.getTime()}`}
           />
         ) : (
           <ChartComponent 
             dateRange={dateRangeProp}
-            key={getChartKey(selectedVariant)}
+            key={`chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime() || 'no-date'}-${dateRangeProp?.to?.getTime() || 'no-date'}`}
           />
         )}
       </div>

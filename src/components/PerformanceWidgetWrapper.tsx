@@ -98,6 +98,41 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     }
   }, [widgetState]);
 
+  // Listen for variant change events from other components
+  useEffect(() => {
+    const handleVariantChangeEvent = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { variant, widgetId: eventWidgetId } = customEvent.detail;
+      
+      // Only process events for this widget
+      if (widgetId === eventWidgetId) {
+        // Update local state
+        setVariant(variant);
+        const newTitle = getPerformanceTitle(variant);
+        setTitle(newTitle);
+        
+        // Update widget state
+        widgetState.setVariant(variant);
+        widgetState.setTitle(newTitle);
+        
+        // Force re-render
+        setUpdateCounter(prev => prev + 1);
+        
+        console.log('PerformanceWidgetWrapper received variant change event:', {
+          widgetId,
+          variant,
+          title: newTitle
+        });
+      }
+    };
+    
+    document.addEventListener('performance-widget-variant-change', handleVariantChangeEvent);
+    
+    return () => {
+      document.removeEventListener('performance-widget-variant-change', handleVariantChangeEvent);
+    };
+  }, [widgetId, widgetState]);
+
   const handleVariantChange = useCallback((newVariant: ChartVariant) => {
     if (!newVariant) return;
     
@@ -115,31 +150,46 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     // Force a re-render of the widget container
     const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
     if (widgetContainer) {
-      const root = (widgetContainer as any)._reactRoot;
-      if (root) {
-        root.render(
-          <React.StrictMode>
-            <DataSourceProvider>
-              <WidgetContainer
-                key={newTitle} // Force re-render with new title
-                title={newTitle}
-                onRemove={onRemove}
-                headerControls={<PerformanceWidgetWrapper 
-                  isHeader 
-                  widgetId={widgetId} 
-                  widgetComponent={WidgetComponent} 
-                  onRemove={onRemove} 
-                />}
-              >
-                <PerformanceWidgetWrapper 
-                  widgetId={widgetId} 
-                  widgetComponent={WidgetComponent} 
-                  onRemove={onRemove} 
-                />
-              </WidgetContainer>
-            </DataSourceProvider>
-          </React.StrictMode>
-        );
+      try {
+        // Force state change in all widget components sharing this ID using the custom event system
+        const event = new CustomEvent('performance-widget-variant-change', { 
+          detail: { 
+            variant: newVariant,
+            widgetId,
+            timestamp: Date.now()
+          } 
+        });
+        document.dispatchEvent(event);
+        
+        // Also try direct root rendering for backwards compatibility
+        const root = (widgetContainer as any)._reactRoot;
+        if (root) {
+          root.render(
+            <React.StrictMode>
+              <DataSourceProvider>
+                <WidgetContainer
+                  key={`${newTitle}-${Date.now()}`} // Force re-render with new title and timestamp
+                  title={newTitle}
+                  onRemove={onRemove}
+                  headerControls={<PerformanceWidgetWrapper 
+                    isHeader 
+                    widgetId={widgetId} 
+                    widgetComponent={WidgetComponent} 
+                    onRemove={onRemove} 
+                  />}
+                >
+                  <PerformanceWidgetWrapper 
+                    widgetId={widgetId} 
+                    widgetComponent={WidgetComponent} 
+                    onRemove={onRemove} 
+                  />
+                </WidgetContainer>
+              </DataSourceProvider>
+            </React.StrictMode>
+          );
+        }
+      } catch (error) {
+        console.error('Error forcing widget variant update:', error);
       }
     }
 
@@ -158,6 +208,9 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
             }
           };
           localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+          
+          // Log successful save
+          console.log('Updated layout in localStorage with new variant:', newVariant);
         }
       } catch (error) {
         console.error('Failed to save widget view state:', error);
@@ -323,8 +376,11 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     handleTitleChange,
   ]);
 
-  // Generate a key separately
-  const componentKey = `${widgetId}-${updateCounter}`;
+  // Generate a key that will change when important state changes
+  const componentKey = useMemo(() => 
+    `${widgetId}-${variant}-${viewMode}-${updateCounter}`,
+    [widgetId, variant, viewMode, updateCounter]
+  );
 
   return <WidgetComponent key={componentKey} {...componentProps} />;
 }; 
