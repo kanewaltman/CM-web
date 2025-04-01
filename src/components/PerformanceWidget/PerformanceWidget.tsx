@@ -85,6 +85,9 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   const [viewMode, setViewMode] = useState<WidgetViewMode>(defaultViewMode);
   const today = new Date();
   
+  // Track the last processed variant to prevent loops
+  const lastProcessedVariant = useRef<string | null>(null);
+  
   // Define date range presets
   const yesterday = {
     from: subDays(today, 1),
@@ -238,9 +241,6 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
   // Listen for variant change events to ensure immediate UI updates
   useEffect(() => {
-    // Use ref to track the last processed variant to prevent loops
-    const lastProcessedVariant = useRef<string | null>(null);
-    
     // Handle variant change events for widget sync
     const handleVariantChangeEvent = (event: Event) => {
       const customEvent = event as CustomEvent;
