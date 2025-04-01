@@ -245,8 +245,29 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       
       // Only update if this event is for our widget ID 
       if (widgetId === eventWidgetId) {
+        // Log the variant change
+        console.log('PerformanceWidget received variant change event:', {
+          current: selectedVariant,
+          new: variant,
+          widgetId
+        });
+        
         // Force update the variant in the local state
-        setSelectedVariant(variant);
+        if (selectedVariant !== variant) {
+          setSelectedVariant(variant as ChartVariant);
+          
+          // Also update title if this component controls the title
+          if (onTitleChange) {
+            const newTitle = chartLabels[variant as ChartVariant];
+            onTitleChange(newTitle);
+          }
+          
+          // Force component to re-render with new variant
+          const chartComponent = document.querySelector(`[data-chart-variant="${selectedVariant}"]`);
+          if (chartComponent) {
+            chartComponent.setAttribute('data-chart-variant', variant);
+          }
+        }
         
         // Update localStorage to ensure persistence
         try {
@@ -282,7 +303,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     return () => {
       document.removeEventListener('performance-widget-variant-change', handleVariantChangeEvent);
     };
-  }, [widgetId]);
+  }, [widgetId, selectedVariant, chartLabels, onTitleChange]);
 
   // Update date state when the prop changes - use deep comparison for dates
   useEffect(() => {
@@ -323,10 +344,31 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   // Update local state when defaultVariant changes
   useEffect(() => {
     if (defaultVariant !== selectedVariant) {
+      console.log('PerformanceWidget: Updating variant from props:', {
+        from: selectedVariant,
+        to: defaultVariant
+      });
       setSelectedVariant(defaultVariant);
       onTitleChange?.(chartLabels[defaultVariant]);
     }
-  }, [defaultVariant, onTitleChange, selectedVariant]);
+  }, [defaultVariant, onTitleChange, selectedVariant, chartLabels]);
+
+  // Force re-render when variant changes to ensure UI consistency
+  useEffect(() => {
+    console.log('PerformanceWidget: Variant state changed to:', selectedVariant);
+    
+    // Try to update the widget's DOM node to force refresh
+    if (widgetId) {
+      const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+      if (widgetContainer) {
+        // Force a DOM update by adding and removing a class
+        widgetContainer.classList.add('variant-updated');
+        setTimeout(() => {
+          widgetContainer.classList.remove('variant-updated');
+        }, 10);
+      }
+    }
+  }, [selectedVariant, widgetId]);
 
   // Update local state when defaultViewMode changes
   useEffect(() => {
@@ -866,6 +908,26 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       {/* Variant selector dropdown */}
       <DropdownMenu onOpenChange={(open) => {
         if (open) {
+          // Force re-check of selected variant before opening dropdown
+          const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+          try {
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              const layout = JSON.parse(savedLayout);
+              const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+              if (widgetIndex !== -1 && layout[widgetIndex]?.viewState?.chartVariant) {
+                const storedVariant = layout[widgetIndex].viewState.chartVariant as ChartVariant;
+                if (storedVariant !== selectedVariant) {
+                  console.log('Dropdown opened: Found mismatch, correcting variant from', selectedVariant, 'to', storedVariant);
+                  setSelectedVariant(storedVariant);
+                }
+              }
+            }
+          } catch (error) {
+            // Just log the error, don't prevent dropdown from opening
+            console.error('Error checking layout variant:', error);
+          }
+          
           console.log('Performance Widget Dropdown Opened:', {
             title: chartLabels[selectedVariant],
             chartVariant: selectedVariant,
@@ -878,7 +940,32 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             Views
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" onCloseAutoFocus={(e) => {
+          // When dropdown closes, verify the selected variant matched what's displayed
+          if (widgetId) {
+            try {
+              const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+              const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+              if (savedLayout) {
+                const layout = JSON.parse(savedLayout);
+                const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+                if (widgetIndex !== -1) {
+                  // Force view state update on dropdown close
+                  layout[widgetIndex] = {
+                    ...layout[widgetIndex],
+                    viewState: {
+                      ...layout[widgetIndex].viewState,
+                      chartVariant: selectedVariant
+                    }
+                  };
+                  localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                }
+              }
+            } catch (error) {
+              console.error('Error updating layout on dropdown close:', error);
+            }
+          }
+        }}>
           {Object.entries(chartLabels).map(([key, label]) => (
             <DropdownMenuItem
               key={key}
@@ -912,11 +999,13 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             onViewModeChange={handleChartViewModeChange}
             dateRange={dateRangeProp}
             key={`keyed-chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime()}-${dateRangeProp?.to?.getTime()}`}
+            data-chart-variant={selectedVariant}
           />
         ) : (
           <ChartComponent 
             dateRange={dateRangeProp}
             key={`chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime() || 'no-date'}-${dateRangeProp?.to?.getTime() || 'no-date'}`}
+            data-chart-variant={selectedVariant}
           />
         )}
       </div>

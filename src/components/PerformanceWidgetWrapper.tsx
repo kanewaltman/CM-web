@@ -138,10 +138,15 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     
     // Get new title first
     const newTitle = getPerformanceTitle(newVariant);
+    
+    console.log('PerformanceWidgetWrapper: Variant changing from', variant, 'to', newVariant);
 
     // Force immediate re-render of the container by updating state first
     setVariant(newVariant);
     setTitle(newTitle);
+    
+    // Force counter update to ensure re-rendering
+    setUpdateCounter(prev => prev + 1);
 
     // Update shared state
     widgetState.setVariant(newVariant);
@@ -164,30 +169,43 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
         // Also try direct root rendering for backwards compatibility
         const root = (widgetContainer as any)._reactRoot;
         if (root) {
-          root.render(
-            <React.StrictMode>
-              <DataSourceProvider>
-                <WidgetContainer
-                  key={`${newTitle}-${Date.now()}`} // Force re-render with new title and timestamp
-                  title={newTitle}
-                  onRemove={onRemove}
-                  headerControls={<PerformanceWidgetWrapper 
-                    isHeader 
-                    widgetId={widgetId} 
-                    widgetComponent={WidgetComponent} 
-                    onRemove={onRemove} 
-                  />}
-                >
-                  <PerformanceWidgetWrapper 
-                    widgetId={widgetId} 
-                    widgetComponent={WidgetComponent} 
-                    onRemove={onRemove} 
-                  />
-                </WidgetContainer>
-              </DataSourceProvider>
-            </React.StrictMode>
-          );
+          // Create fresh component tree to force complete re-render
+          setTimeout(() => {
+            root.render(
+              <React.StrictMode>
+                <DataSourceProvider>
+                  <WidgetContainer
+                    key={`${newTitle}-${Date.now()}`} // Force re-render with new title and timestamp
+                    title={newTitle}
+                    onRemove={onRemove}
+                    headerControls={<PerformanceWidgetWrapper 
+                      isHeader 
+                      widgetId={widgetId} 
+                      widgetComponent={WidgetComponent} 
+                      onRemove={onRemove} 
+                    />}
+                  >
+                    <PerformanceWidgetWrapper 
+                      widgetId={widgetId} 
+                      widgetComponent={WidgetComponent} 
+                      onRemove={onRemove} 
+                    />
+                  </WidgetContainer>
+                </DataSourceProvider>
+              </React.StrictMode>
+            );
+          }, 0);
         }
+        
+        // Force DOM refresh by toggling classes
+        widgetContainer.classList.add('variant-changing');
+        setTimeout(() => {
+          widgetContainer.classList.remove('variant-changing');
+          widgetContainer.classList.add('variant-changed');
+          setTimeout(() => {
+            widgetContainer.classList.remove('variant-changed');
+          }, 50);
+        }, 50);
       } catch (error) {
         console.error('Error forcing widget variant update:', error);
       }
@@ -216,7 +234,23 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
         console.error('Failed to save widget view state:', error);
       }
     }
-  }, [widgetId, onRemove, WidgetComponent, widgetState]);
+    
+    // Force update the GridStack widget to reflect changes immediately
+    try {
+      // Try to trigger a GridStack update
+      const gridstackInstance = (window as any).gridstack?.gridstack;
+      if (gridstackInstance) {
+        // Update the widget in the grid
+        gridstackInstance.update(`[gs-id="${widgetId}"]`, { 
+          _dirty: true, 
+          _forceUpdate: true 
+        });
+        console.log('Forced GridStack widget update for', widgetId);
+      }
+    } catch (error) {
+      console.error('Error updating GridStack widget:', error);
+    }
+  }, [widgetId, onRemove, WidgetComponent, widgetState, variant]);
 
   const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative' | 'combined') => {
     if (!newViewMode) return;
