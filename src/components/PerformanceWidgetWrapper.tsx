@@ -6,6 +6,91 @@ import { ChartVariant } from './PerformanceWidget/PerformanceWidget';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle } from '@/lib/widgetState';
 import { DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
 
+// Preload script to update widget headers as early as possible
+// This runs even before React components mount
+(() => {
+  try {
+    // Don't run this in SSR context
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    
+    // Function to update all widget headers based on localStorage data
+    const preloadUpdateWidgetHeaders = () => {
+      try {
+        // Get saved layout data
+        const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+        if (!savedLayout) return;
+        
+        const layout = JSON.parse(savedLayout);
+        if (!Array.isArray(layout)) return;
+        
+        // Wait for DOM to be ready
+        const checkAndUpdateHeaders = () => {
+          // Get all widget headers in the DOM
+          const widgetHeaders = document.querySelectorAll('.widget-header');
+          if (!widgetHeaders.length) return;
+          
+          console.log('Preload header sync: Found', widgetHeaders.length, 'widget headers');
+          
+          // Update each header's title based on its widget ID
+          widgetHeaders.forEach(header => {
+            const widgetElement = header.closest('[gs-id]');
+            if (!widgetElement) return;
+            
+            const widgetId = widgetElement.getAttribute('gs-id');
+            if (!widgetId) return;
+            
+            // Find this widget's data in the layout
+            const widgetData = layout.find((item: any) => item.id === widgetId);
+            if (!widgetData?.viewState?.chartVariant) return;
+            
+            // Get the correct title for the stored variant
+            const variant = widgetData.viewState.chartVariant;
+            
+            // Map of variant to title
+            const titleMap: Record<string, string> = {
+              'revenue': 'Performance',
+              'subscribers': 'Subscribers',
+              'mrr-growth': 'MRR Growth',
+              'refunds': 'Refunds',
+              'subscriptions': 'Subscriptions',
+              'upgrades': 'Upgrades'
+            };
+            
+            const title = titleMap[variant] || 'Performance';
+            
+            // Update the title element if it exists
+            const titleElement = header.querySelector('.widget-title');
+            if (titleElement && titleElement.textContent !== title) {
+              console.log(`Preload: Updating widget ${widgetId} header to "${title}"`);
+              titleElement.textContent = title;
+            }
+          });
+        };
+        
+        // Try multiple times with increasing delays
+        // This ensures we catch headers as they're rendered to the DOM
+        [0, 50, 100, 200, 500, 1000].forEach(delay => {
+          setTimeout(checkAndUpdateHeaders, delay);
+        });
+      } catch (error) {
+        console.error('Error in preload widget header sync:', error);
+      }
+    };
+    
+    // Run on page load
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', preloadUpdateWidgetHeaders);
+    } else {
+      preloadUpdateWidgetHeaders();
+    }
+    
+    // Also run when DOM is fully loaded
+    window.addEventListener('load', preloadUpdateWidgetHeaders);
+  } catch (error) {
+    console.error('Error in preload widget header initialization:', error);
+  }
+})();
+
 interface PerformanceWidgetWrapperProps {
   isHeader?: boolean;
   widgetId: string;
@@ -52,9 +137,30 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
         console.error('Error retrieving view mode from localStorage:', error);
       }
       
+      // IMPORTANT: Read the initial variant from localStorage first
+      let initialVariant: ChartVariant = 'revenue';
+      let initialTitle = getPerformanceTitle('revenue');
+      
+      try {
+        const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+        if (savedLayout) {
+          const layout = JSON.parse(savedLayout);
+          const widgetData = layout.find((item: any) => item.id === widgetId);
+          
+          if (widgetData?.viewState?.chartVariant) {
+            const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
+            console.log(`Widget ${widgetId} initial variant from localStorage:`, storedVariant);
+            initialVariant = storedVariant;
+            initialTitle = getPerformanceTitle(storedVariant);
+          }
+        }
+      } catch (error) {
+        console.error('Error reading initial variant from localStorage:', error);
+      }
+      
       state = new WidgetState(
-        'revenue',
-        getPerformanceTitle('revenue'),
+        initialVariant,
+        initialTitle,
         initialViewMode,
         initialDateRange
       );

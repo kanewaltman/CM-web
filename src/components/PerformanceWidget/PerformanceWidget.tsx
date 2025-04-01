@@ -1091,6 +1091,54 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     };
   }, [widgetId, selectedVariant, chartLabels]);
 
+  // Initialize variant from localStorage immediately on mount if needed
+  useEffect(() => {
+    // Skip if we already have a proper variant
+    if (!widgetId || selectedVariant !== 'revenue') return;
+    
+    try {
+      // Check localStorage for the correct variant
+      const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+      if (!savedLayout) return;
+      
+      const layout = JSON.parse(savedLayout);
+      const widgetData = layout.find((item: any) => item.id === widgetId);
+      
+      if (widgetData?.viewState?.chartVariant && widgetData.viewState.chartVariant !== selectedVariant) {
+        const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
+        console.log(`PerformanceWidget: Direct init from localStorage for ${widgetId}:`, storedVariant);
+        
+        // Set the variant in state
+        setSelectedVariant(storedVariant);
+        
+        // Notify parent of variant change
+        onVariantChange?.(storedVariant);
+        
+        // Update title
+        if (onTitleChange) {
+          const newTitle = chartLabels[storedVariant];
+          onTitleChange(newTitle);
+        }
+        
+        // Force re-render
+        setForceUpdate(prev => prev + 1);
+        
+        // Update DOM directly in case React is too slow
+        const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+        if (widgetContainer) {
+          const titleElement = widgetContainer.querySelector('.widget-title');
+          if (titleElement) {
+            const correctTitle = chartLabels[storedVariant];
+            titleElement.textContent = correctTitle;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing variant from localStorage:', error);
+    }
+  }, [widgetId, selectedVariant, onVariantChange, onTitleChange, chartLabels]); // Include all dependencies
+
   // Main content now only returns the chart component, without duplicating the controls
   return (
     <div className={cn("h-full flex flex-col", className)}>
