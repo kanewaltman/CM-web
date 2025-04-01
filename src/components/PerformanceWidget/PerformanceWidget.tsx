@@ -83,6 +83,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 }: PerformanceWidgetProps): React.ReactNode => {
   const [selectedVariant, setSelectedVariant] = useState<ChartVariant>(defaultVariant);
   const [viewMode, setViewMode] = useState<WidgetViewMode>(defaultViewMode);
+  const [forceUpdate, setForceUpdate] = useState(0); // Used to force re-render
   const today = new Date();
   
   // Track the last processed variant to prevent loops
@@ -274,6 +275,9 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
         
         // Force update the variant in the local state
         setSelectedVariant(variant as ChartVariant);
+        
+        // Force re-render
+        setForceUpdate(prev => prev + 1);
         
         // Also update title if this component controls the title
         if (onTitleChange) {
@@ -1019,7 +1023,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             viewMode={viewMode}
             onViewModeChange={handleChartViewModeChange}
             dateRange={dateRangeProp}
-            key={`keyed-chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime() || 'no-date'}-${dateRangeProp?.to?.getTime() || 'no-date'}`}
+            key={`keyed-chart-${selectedVariant}-${viewMode}-${forceUpdate}`}
             data-chart-variant={selectedVariant}
           />
         ) : (
@@ -1028,7 +1032,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
             chartComponents[selectedVariant], 
             {
               dateRange: dateRangeProp,
-              key: `chart-${selectedVariant}-${viewMode}-${dateRangeProp?.from?.getTime() || 'no-date'}-${dateRangeProp?.to?.getTime() || 'no-date'}`
+              key: `chart-${selectedVariant}-${viewMode}-${forceUpdate}`
             }
           )
         )}

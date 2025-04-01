@@ -235,6 +235,12 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
           }, 0);
         }
         
+        // Force update the widget title element directly
+        const titleElement = widgetContainer.querySelector('.widget-title');
+        if (titleElement) {
+          titleElement.textContent = newTitle;
+        }
+        
         // Force DOM refresh by toggling classes
         widgetContainer.classList.add('variant-changing');
         setTimeout(() => {
@@ -267,6 +273,16 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
           
           // Log successful save
           console.log('Updated layout in localStorage with new variant:', newVariant);
+          
+          // Dispatch event to update all widget headers
+          const updateEvent = new CustomEvent('widget-headers-update', {
+            detail: {
+              widgetId,
+              variant: newVariant,
+              title: newTitle
+            }
+          });
+          document.dispatchEvent(updateEvent);
         }
       } catch (error) {
         console.error('Failed to save widget view state:', error);
@@ -424,6 +440,140 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
   const handleTitleChange = useCallback((newTitle: string) => {
     widgetState.setTitle(newTitle);
   }, [widgetState]);
+
+  // Sync with localStorage when component mounts or updates
+  useEffect(() => {
+    try {
+      // Check if we need to sync from localStorage
+      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+      if (savedLayout) {
+        const layout = JSON.parse(savedLayout);
+        const widgetData = layout.find((item: any) => item.id === widgetId);
+        
+        if (widgetData && widgetData.viewState && widgetData.viewState.chartVariant) {
+          const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
+          
+          // Only update if different from current state
+          if (storedVariant !== variant) {
+            console.log('PerformanceWidgetWrapper: Syncing variant from localStorage', {
+              current: variant,
+              stored: storedVariant,
+              widgetId
+            });
+            
+            // Update local state
+            const newTitle = getPerformanceTitle(storedVariant);
+            setVariant(storedVariant);
+            setTitle(newTitle);
+            
+            // Update widget state
+            widgetState.setVariant(storedVariant);
+            widgetState.setTitle(newTitle);
+            
+            // Force re-render
+            setUpdateCounter(prev => prev + 1);
+            
+            // Force update the widget container title
+            const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
+            if (widgetContainer) {
+              const titleElement = widgetContainer.querySelector('.widget-title');
+              if (titleElement) {
+                titleElement.textContent = newTitle;
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing variant from localStorage:', error);
+    }
+  }, [widgetId, variant, widgetState]);
+
+  // Listen for document load to sync headers with localStorage on initialization
+  useEffect(() => {
+    const syncHeadersWithLocalStorage = () => {
+      try {
+        // Get all widget headers
+        const widgetHeaders = document.querySelectorAll('.widget-header');
+        if (!widgetHeaders.length) return;
+        
+        // Get saved layout
+        const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+        if (!savedLayout) return;
+        
+        const layout = JSON.parse(savedLayout);
+        
+        // Update each header with the correct title
+        widgetHeaders.forEach(header => {
+          // Find the widget ID from parent
+          const widgetElement = header.closest('[gs-id]');
+          if (!widgetElement) return;
+          
+          const widgetId = widgetElement.getAttribute('gs-id');
+          if (!widgetId) return;
+          
+          // Find widget data in layout
+          const widgetData = layout.find((item: any) => item.id === widgetId);
+          if (!widgetData || !widgetData.viewState || !widgetData.viewState.chartVariant) return;
+          
+          // Get correct title for the variant
+          const variant = widgetData.viewState.chartVariant as ChartVariant;
+          const title = getPerformanceTitle(variant);
+          
+          // Update title element
+          const titleElement = header.querySelector('.widget-title');
+          if (titleElement && titleElement.textContent !== title) {
+            console.log(`Updating header title for widget ${widgetId} to ${title}`);
+            titleElement.textContent = title;
+          }
+        });
+      } catch (error) {
+        console.error('Error syncing headers with localStorage:', error);
+      }
+    };
+    
+    // Handle immediate header update from other widgets
+    const handleHeadersUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { widgetId: updatedWidgetId, title } = customEvent.detail;
+      
+      try {
+        // Find the specific widget that needs updating
+        const widgetElement = document.querySelector(`[gs-id="${updatedWidgetId}"]`);
+        if (!widgetElement) return;
+        
+        // Find and update its title
+        const titleElement = widgetElement.querySelector('.widget-title');
+        if (titleElement) {
+          console.log(`Direct header update for widget ${updatedWidgetId} to ${title}`);
+          titleElement.textContent = title;
+        }
+      } catch (error) {
+        console.error('Error updating widget header:', error);
+      }
+    };
+    
+    // Sync on mount with a slight delay to ensure DOM is ready
+    const timeoutId = setTimeout(syncHeadersWithLocalStorage, 500);
+    
+    // Also sync whenever the localStorage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === DASHBOARD_LAYOUT_KEY) {
+        syncHeadersWithLocalStorage();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('load', syncHeadersWithLocalStorage);
+    document.addEventListener('widget-headers-update', handleHeadersUpdate);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('load', syncHeadersWithLocalStorage);
+      document.removeEventListener('widget-headers-update', handleHeadersUpdate);
+    };
+  }, []);
 
   // Memoize the component props to prevent unnecessary re-renders
   const componentProps = useMemo(() => ({
