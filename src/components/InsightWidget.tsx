@@ -144,7 +144,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       }
     } catch (err) {
       console.error('Error fetching digests:', err);
-      setError('Failed to load market insights. Using fallback data.');
+      setError('Failed to load insights. Using fallback data.');
       
       // Use fallback data
       setAllDigests([FALLBACK_DATA]);
@@ -573,7 +573,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
           </div>
         ) : (
           <div className="text-center text-muted-foreground">
-            No market insight available
+            No insight available
           </div>
         )}
       </div>
@@ -693,7 +693,7 @@ export const InsightWidgetControls: React.FC<{ widgetId: string }> = ({ widgetId
         size="icon" 
         onClick={handleRefresh}
         className="h-8 w-8"
-        title="Refresh market insight"
+        title="Refresh insight"
       >
         <RefreshCcw className="h-4 w-4" />
       </Button>

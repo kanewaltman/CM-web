@@ -96,7 +96,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
   },
   'insight': {
     id: 'insight',
-    title: 'Market Insight',
+    title: 'Insight',
     component: InsightWidget,
     defaultSize: { w: 6, h: 6 },
     minSize: { w: 4, h: 4 },
