@@ -1,4 +1,4 @@
-import React, { useRef, createRef } from 'react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
@@ -15,7 +15,6 @@ import {
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle } from '@/lib/widgetState';
-import { MarketsWidgetColumnVisibility } from './MarketsWidget';
 
 /**
  * Creates a new widget DOM element for GridStack
@@ -99,6 +98,25 @@ export const createWidget = ({
 };
 
 /**
+ * Gets the correct title for a Performance widget from localStorage
+ */
+const getPerformanceWidgetTitle = (widgetId: string): string => {
+  try {
+    const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+    if (savedLayout) {
+      const layout = JSON.parse(savedLayout);
+      const widgetData = layout.find((item: any) => item.id === widgetId);
+      if (widgetData?.viewState?.chartVariant) {
+        return getPerformanceTitle(widgetData.viewState.chartVariant);
+      }
+    }
+  } catch (error) {
+    console.error('Error getting performance widget title:', error);
+  }
+  return widgetTitles['performance']; // Fallback to default
+};
+
+/**
  * Renders a React widget into a DOM element
  */
 export const renderWidgetIntoElement = (
@@ -120,78 +138,44 @@ export const renderWidgetIntoElement = (
       return;
     }
 
-    // Create a clean onRemove wrapper that will properly clean up
-    const handleRemove = () => {
-      // Unmount the component before removing
-      try {
-        if ((widgetElement as any)._reactRoot) {
-          (widgetElement as any)._reactRoot.unmount();
-        }
-      } catch (err) {
-        console.error('Error unmounting widget:', err);
-      }
-      
-      return onRemove();
-    };
-
     if (baseId === 'performance') {
+      // Get correct title from localStorage for performance widgets
+      const widgetTitle = getPerformanceWidgetTitle(widgetId);
+      
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
             <WidgetContainer
-              title={widgetTitles[widgetType]}
-              onRemove={handleRemove}
+              title={widgetTitle}
+              onRemove={onRemove}
               headerControls={<PerformanceWidgetWrapper 
                 isHeader 
                 widgetId={widgetId} 
                 widgetComponent={WidgetComponent} 
-                onRemove={handleRemove} 
+                onRemove={onRemove} 
               />}
             >
               <PerformanceWidgetWrapper 
                 widgetId={widgetId} 
                 widgetComponent={WidgetComponent} 
-                onRemove={handleRemove} 
-              />
-            </WidgetContainer>
-          </DataSourceProvider>
-        </React.StrictMode>
-      );
-    } else if (widgetType === 'markets') {
-      // Special handling for Markets widget to add column visibility menu
-      const widgetRef = createRef<any>();
-      
-      root.render(
-        <React.StrictMode>
-          <DataSourceProvider>
-            <WidgetContainer
-              title={widgetTitles[widgetType]}
-              onRemove={handleRemove}
-              widgetMenu={
-                <MarketsWidgetMenuWrapper widgetRef={widgetRef} />
-              }
-            >
-              <WidgetComponent 
-                widgetId={widgetId} 
-                onRemove={handleRemove} 
-                ref={widgetRef}
+                onRemove={onRemove} 
               />
             </WidgetContainer>
           </DataSourceProvider>
         </React.StrictMode>
       );
     } else {
-      // For other widgets
+      // For non-performance widgets
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
             <WidgetContainer
               title={widgetTitles[widgetType]}
-              onRemove={handleRemove}
+              onRemove={onRemove}
             >
               <WidgetComponent 
                 widgetId={widgetId} 
-                onRemove={handleRemove} 
+                onRemove={onRemove} 
               />
             </WidgetContainer>
           </DataSourceProvider>
@@ -201,38 +185,6 @@ export const renderWidgetIntoElement = (
   } catch (error) {
     console.error('Error rendering widget:', error);
   }
-};
-
-// Wrapper to handle getting table from MarketsWidget ref
-const MarketsWidgetMenuWrapper = ({ widgetRef }: { widgetRef: React.RefObject<any> }) => {
-  const [table, setTable] = React.useState<any>(null);
-  
-  React.useEffect(() => {
-    // Function to check for table
-    const checkForTable = () => {
-      if (widgetRef.current?.getTable) {
-        const tableInstance = widgetRef.current.getTable();
-        if (tableInstance) {
-          setTable(tableInstance);
-          return true;
-        }
-      }
-      return false;
-    };
-    
-    // Try immediately
-    if (!checkForTable()) {
-      // If not available, try again in a short delay to allow for component to mount
-      const timer = setTimeout(checkForTable, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [widgetRef]);
-  
-  if (!table) {
-    return null;
-  }
-
-  return <MarketsWidgetColumnVisibility table={table} />;
 };
 
 /**

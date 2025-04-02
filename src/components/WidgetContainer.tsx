@@ -16,6 +16,7 @@ interface WidgetContainerProps {
   children: React.ReactNode;
   title: string;
   headerControls?: React.ReactNode;
+  extraControls?: React.ReactNode;
   onRemove?: () => void;
   isMobile?: boolean;
   widgetMenu?: React.ReactNode;
@@ -25,6 +26,7 @@ export const WidgetContainer = memo(function WidgetContainer({
   children, 
   title, 
   headerControls, 
+  extraControls,
   onRemove,
   isMobile = false,
   widgetMenu
@@ -107,6 +109,7 @@ export const WidgetContainer = memo(function WidgetContainer({
           </div>
           
           <div className="flex items-center space-x-1">
+            {extraControls}
             {headerControls}
             <div className="flex items-center space-x-1">
               <Button 

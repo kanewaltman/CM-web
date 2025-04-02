@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Treemap, Tooltip, ResponsiveContainer } from 'recharts';
+import { Treemap, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { WidgetContainer } from './WidgetContainer';
 import { SAMPLE_BALANCES } from './BalancesWidget';
 import { useTheme } from 'next-themes';
@@ -7,6 +7,13 @@ import { useDataSource } from '@/lib/DataSourceContext';
 import { getApiUrl } from '@/lib/api-config';
 import { ASSETS, isAssetTicker, AssetTicker } from '@/assets/AssetTicker';
 import { cn } from '@/lib/utils';
+import { Button } from './ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 // Default color for assets not found in ASSETS
 const DEFAULT_COLOR = '#4f46e5';
@@ -33,6 +40,15 @@ if (typeof document !== 'undefined') {
   style.innerHTML = pulseKeyframes;
   document.head.appendChild(style);
 }
+
+// View modes for the Breakdown widget
+export type BreakdownViewMode = 'treemap' | 'donut';
+
+// View mode labels
+const viewLabels: Record<BreakdownViewMode, string> = {
+  'treemap': 'Tree Map',
+  'donut': 'Donut Chart'
+};
 
 // Asset Button component to match the style in balances and performance widgets
 const AssetButton = ({ 
@@ -165,6 +181,7 @@ const TreeMapSkeleton = () => {
 export const BreakdownWrapper: React.FC<{
   className?: string;
   onRemove?: () => void;
+  onViewModeChange?: (mode: BreakdownViewMode) => void;
 }> = (props) => {
   const { resolvedTheme } = useTheme();
   const [key, setKey] = useState(Date.now());
@@ -220,7 +237,13 @@ export const BreakdownWrapper: React.FC<{
   console.log(`BreakdownWrapper rendering with key: ${key}, forced theme: ${forcedTheme}, onRemove available: ${!!props.onRemove}`);
   
   // Pass the onRemove directly to Breakdown
-  return <Breakdown key={key} forceTheme={forcedTheme} className={props.className} onRemove={props.onRemove} />;
+  return <Breakdown 
+    key={key} 
+    forceTheme={forcedTheme} 
+    className={props.className} 
+    onRemove={props.onRemove} 
+    onViewModeChange={props.onViewModeChange}
+  />;
 };
 
 // The actual implementation of Breakdown stays focused on data
@@ -228,7 +251,8 @@ const Breakdown: React.FC<{
   className?: string;
   onRemove?: () => void;
   forceTheme?: 'light' | 'dark';
-}> = ({ className, onRemove, forceTheme }) => {
+  onViewModeChange?: (mode: BreakdownViewMode) => void;
+}> = ({ className, onRemove, forceTheme, onViewModeChange }) => {
   // Add debug logging
   console.log('Breakdown component received props:', {
     hasOnRemove: !!onRemove,
@@ -243,8 +267,12 @@ const Breakdown: React.FC<{
   const [balances, setBalances] = useState<any>(SAMPLE_BALANCES);
   const [error, setError] = useState<string | null>(null);
   const [clickedItemId, setClickedItemId] = useState<string | null>(null);
-  // Track whether any item has been clicked
-  const [showAllTooltips, setShowAllTooltips] = useState(false);
+  // Track whether treemap tooltips should be shown
+  const [showTreemapTooltips, setShowTreemapTooltips] = useState(false);
+  // Track current view mode
+  const [viewMode, setViewMode] = useState<BreakdownViewMode>('treemap');
+  // Track hovered donut segment
+  const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
   
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
@@ -260,7 +288,7 @@ const Breakdown: React.FC<{
       const isSmallSection = width <= 80 || height <= 50;
       
       // Show all tooltips when showAllTooltips is true or if it's a small section
-      if (!isSmallSection && !showAllTooltips) {
+      if (!isSmallSection && !showTreemapTooltips) {
         return null; // Don't show tooltip for larger sections unless user has clicked
       }
       
@@ -391,8 +419,9 @@ const Breakdown: React.FC<{
     
     // Get color directly based on asset and current theme
     let fillColor = DEFAULT_COLOR;
-    if (isAssetTicker(item.name) && ASSETS[item.name]) {
-      fillColor = ASSETS[item.name].theme[currentTheme];
+    if (isAssetTicker(item.name) && item.name in ASSETS) {
+      const asset = ASSETS[item.name as keyof typeof ASSETS];
+      fillColor = asset.theme[currentTheme];
     }
     
     // Apply opacity only to the fill color, not to stroke or text
@@ -456,8 +485,8 @@ const Breakdown: React.FC<{
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={() => {
-          // Toggle global tooltip visibility
-          setShowAllTooltips(true);
+          // Only update treemap tooltip visibility
+          setShowTreemapTooltips(true);
         }}
         // style={{ cursor: 'pointer' }} // Removed cursor styling
       >
@@ -484,7 +513,6 @@ const Breakdown: React.FC<{
             className="pointer-events-none"
           >
             <div
-              xmlns="http://www.w3.org/1999/xhtml"
               className="w-full h-full flex items-center justify-center"
             >
               <img
@@ -510,7 +538,6 @@ const Breakdown: React.FC<{
             className="overflow-visible pointer-events-none"
           >
             <div 
-              xmlns="http://www.w3.org/1999/xhtml"
               className="flex items-center justify-between w-full h-full"
             >
               {/* Asset button at bottom left */}
@@ -664,21 +691,18 @@ const Breakdown: React.FC<{
             if (keys.length === 1) {
               // If there's only one non-currency key, it might be the asset quantity
               const possibleAmount = balance[keys[0]];
-              if (typeof possibleAmount === 'string' || typeof possibleAmount === 'number') {
+              if (typeof possibleAmount === 'string') {
                 assetBalance = parseFloat(possibleAmount);
+              } else if (typeof possibleAmount === 'number') {
+                assetBalance = possibleAmount;
               }
             }
           }
-          
           // If we still don't have a balance but we have EUR value and price, calculate it
           if (assetBalance === 0 && value > 0) {
             if (balance.price && balance.price.EUR) {
               // Calculate from price
-              const price = parseFloat(balance.price.EUR);
-              assetBalance = price > 0 ? value / price : 0;
-            } else if (ASSETS[asset as AssetTicker]?.price) {
-              // Try to get price from ASSETS if available
-              const price = parseFloat(ASSETS[asset as AssetTicker].price);
+              const price = parseFloat(balance.price?.EUR || '0');
               assetBalance = price > 0 ? value / price : 0;
             }
           }
@@ -766,6 +790,163 @@ const Breakdown: React.FC<{
     }
   }, [balances, isLoading]);
 
+  // Memoize view mode change handler
+  const handleViewModeChange = useCallback((mode: BreakdownViewMode) => {
+    console.log(`Breakdown: view mode changed to ${mode}`);
+    
+    // Update local state
+    setViewMode(mode);
+    
+    // Save to localStorage for persistence
+    try {
+      localStorage.setItem('breakdown_widget_view_mode', mode);
+    } catch (error) {
+      console.error('Failed to save view mode to localStorage:', error);
+    }
+    
+    // Notify parent of view mode change if callback is provided
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    }
+  }, [onViewModeChange]);
+
+  // Initialize view mode from localStorage on mount
+  useEffect(() => {
+    try {
+      const storedMode = localStorage.getItem('breakdown_widget_view_mode');
+      if (storedMode && (storedMode === 'treemap' || storedMode === 'donut')) {
+        console.log('Breakdown: Restoring view mode from localStorage:', storedMode);
+        setViewMode(storedMode as BreakdownViewMode);
+      }
+    } catch (error) {
+      console.error('Error retrieving view mode from localStorage:', error);
+    }
+  }, []);
+
+  // Function to adjust color opacity based on theme and hover state - moved to component level
+  const adjustOpacity = (color: string, opacity: number) => {
+    // Parse the hex color and convert it to rgba
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  };
+  
+  // Get opacity based on theme - moved to component level
+  const getOpacity = (isHovered: boolean) => {
+    if (effectiveTheme === 'dark') {
+      return isHovered ? 0.32 : 0.08; // Dark theme: 8% to 32%
+    } else {
+      return isHovered ? 1 : 0.32; // Light theme: 32% to 100%
+    }
+  };
+
+  // Render donut chart with styling that matches the treemap
+  const renderDonutChart = () => {
+    // Custom cursor component that updates the hovered segment state
+    const CustomCursor = ({ active, payload }: any) => {
+      if (active && payload && payload.length > 0) {
+        const currentSegment = payload[0].payload;
+        
+        // Update the hovered segment if needed
+        if (hoveredSegmentId !== currentSegment.id) {
+          setHoveredSegmentId(currentSegment.id);
+        }
+        
+        return null;
+      }
+      
+      // Clear hovered state when not hovering any segment
+      if (!active && hoveredSegmentId !== null) {
+        setHoveredSegmentId(null);
+      }
+      
+      return null;
+    };
+
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={treeMapData}
+            dataKey="size"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            innerRadius="25%"
+            outerRadius="85%"
+            paddingAngle={0}
+            stroke="#111111"
+            strokeWidth={2}
+            animationDuration={0}
+            isAnimationActive={false}
+          >
+            {treeMapData.map((entry, index) => {
+              // Get color based on asset
+              let fillColor = DEFAULT_COLOR;
+              if (isAssetTicker(entry.name) && entry.name in ASSETS) {
+                fillColor = ASSETS[entry.name as keyof typeof ASSETS].theme[effectiveTheme];
+              }
+              
+              // Check if this segment is currently hovered
+              const isHovered = hoveredSegmentId === entry.id;
+              
+              // Apply opacity based on theme and hover
+              const fillOpacity = getOpacity(isHovered);
+              const fillColorWithOpacity = adjustOpacity(fillColor, fillOpacity);
+              
+              return (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={fillColorWithOpacity}
+                  stroke={fillColor}
+                  strokeWidth={2}
+                  strokeOpacity={0.8}
+                  style={{ transition: 'fill 0.2s ease-out' }}
+                  onMouseEnter={() => setHoveredSegmentId(entry.id)}
+                  onMouseLeave={() => setHoveredSegmentId(null)}
+                />
+              );
+            })}
+          </Pie>
+          <Tooltip 
+            content={<CustomTooltip />} 
+            cursor={<CustomCursor />}
+            wrapperStyle={{ transition: 'transform 0.2s ease-out, opacity 0.2s ease-out' }}
+            isAnimationActive={true}
+            animationDuration={200}
+            animationEasing="ease-out"
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  };
+
+  // Create the view controller dropdown
+  const viewController = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap ml-1">
+          Views
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {Object.entries(viewLabels).map(([key, label]) => (
+          <DropdownMenuItem
+            key={key}
+            onClick={() => handleViewModeChange(key as BreakdownViewMode)}
+            className={cn(
+              "text-xs",
+              viewMode === key ? "font-medium bg-accent" : ""
+            )}
+          >
+            {label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   if (isLoading) {
     return (
       <WidgetContainer 
@@ -826,45 +1007,47 @@ const Breakdown: React.FC<{
         }
         return true;
       }}
+      extraControls={viewController}
     >
       <div 
-        className="h-full w-full rounded-xl bg-card overflow-hidden"
-        onClick={(e) => {
-          // Toggle tooltip visibility when clicking anywhere in the container
-          setShowAllTooltips(!showAllTooltips);
+        className="h-full w-full rounded-xl bg-card overflow-hidden border"
+        onClick={() => {
+          // Only toggle treemap tooltips when in treemap view
+          if (viewMode === 'treemap') {
+            setShowTreemapTooltips(!showTreemapTooltips);
+          }
         }}
       >
-        <div 
-          className="h-full w-full"
-          onClick={(e) => {
-            // Toggle tooltip visibility when clicking anywhere in the container
-            setShowAllTooltips(!showAllTooltips);
-          }}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={treeMapData}
-              dataKey="size"
-              nameKey="name"
-              idKey="id"
-              stroke="transparent"
-              animationDuration={0}
-              isAnimationActive={false}
-              content={<TreeMapItem />}
-              aspectRatio={1}
-              colorPanel={[]} // Disable default coloring system
-            >
-              <Tooltip 
-                content={<CustomTooltip />} 
-                cursor={false}
-                position={{ x: 'auto', y: 'auto' }}
-                wrapperStyle={{ transition: 'transform 0.2s ease-out, opacity 0.2s ease-out' }}
-                isAnimationActive={true}
-                animationDuration={200}
-                animationEasing="ease-out"
-              />
-            </Treemap>
-          </ResponsiveContainer>
+        <div className="h-full w-full">
+          {/* Render different charts based on view mode */}
+          {viewMode === 'treemap' && (
+            <ResponsiveContainer width="100%" height="100%">
+              <Treemap
+                data={treeMapData}
+                dataKey="size"
+                nameKey="name"
+                key="id"
+                stroke="transparent"
+                animationDuration={0}
+                isAnimationActive={false}
+                content={<TreeMapItem />}
+                aspectRatio={1}
+                colorPanel={[]} // Disable default coloring system
+              >
+                <Tooltip 
+                  content={<CustomTooltip />} 
+                  cursor={false}
+                  wrapperStyle={{ transition: 'transform 0.2s ease-out, opacity 0.2s ease-out' }}
+                  isAnimationActive={true}
+                  animationDuration={200}
+                  animationEasing="ease-out"
+                  active={showTreemapTooltips}
+                />
+              </Treemap>
+            </ResponsiveContainer>
+          )}
+          
+          {viewMode === 'donut' && renderDonutChart()}
         </div>
       </div>
     </WidgetContainer>
