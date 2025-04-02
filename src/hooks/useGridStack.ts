@@ -1050,6 +1050,27 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     getLayoutForPage
   ]);
 
+  const toggleLayoutLock = useCallback((locked: boolean) => {
+    if (!gridRef.current) return;
+    
+    const grid = gridRef.current;
+    
+    // Update GridStack settings based on lock state
+    if (locked) {
+      // Lock the layout - disable drag and resize
+      grid.setStatic(true);
+      grid.enableMove(false);
+      grid.enableResize(false);
+    } else {
+      // Unlock the layout - enable drag and resize if we're on dashboard and not mobile
+      const shouldEnableInteraction = !isMobile && currentPage === 'dashboard';
+      
+      grid.setStatic(false);
+      grid.enableMove(shouldEnableInteraction);
+      grid.enableResize(shouldEnableInteraction);
+    }
+  }, [gridRef, isMobile, currentPage]);
+
   return {
     grid,
     gridRef,
@@ -1059,6 +1080,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     handleCopyLayout,
     handlePasteLayout,
     handleAddWidget,
+    toggleLayoutLock,
     compactGrid,
     saveLayout
   };

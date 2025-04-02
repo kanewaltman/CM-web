@@ -139,7 +139,7 @@ export const WidgetContainer = memo(function WidgetContainer({
         </div>
 
         {/* Content wrapper */}
-        <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1">
+        <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1 select-text">
           {children}
         </div>
       </div>
