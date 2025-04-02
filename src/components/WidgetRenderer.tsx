@@ -166,7 +166,7 @@ export const renderWidgetIntoElement = (
         </React.StrictMode>
       );
     } else if (widgetType === 'insight') {
-      // For market insight widget with refresh control in header
+      // For insight widget with refresh control in header
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
