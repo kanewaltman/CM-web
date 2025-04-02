@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Treemap, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import * as d3 from 'd3';
 import { WidgetContainer } from './WidgetContainer';
 import { SAMPLE_BALANCES } from './BalancesWidget';
 import { useTheme } from 'next-themes';
@@ -876,7 +877,7 @@ const Breakdown: React.FC<{
       
       return null;
     };
-    
+
     return (
       <ResponsiveContainer width="100%" height="100%">
         <PieChart onClick={() => setShowAllTooltips(!showAllTooltips)}>
@@ -886,10 +887,11 @@ const Breakdown: React.FC<{
             nameKey="name"
             cx="50%"
             cy="50%"
-            innerRadius="55%"
+            innerRadius="25%"
             outerRadius="85%"
-            paddingAngle={4}
-            stroke="none"
+            paddingAngle={0}
+            stroke="#111111"
+            strokeWidth={2}
             animationDuration={0}
             isAnimationActive={false}
           >
@@ -912,7 +914,7 @@ const Breakdown: React.FC<{
                   key={`cell-${index}`} 
                   fill={fillColorWithOpacity}
                   stroke={fillColor}
-                  strokeWidth={1}
+                  strokeWidth={2}
                   strokeOpacity={0.8}
                   style={{ transition: 'fill 0.2s ease-out' }}
                   onMouseEnter={() => setHoveredSegmentId(entry.id)}
@@ -1025,7 +1027,7 @@ const Breakdown: React.FC<{
       extraControls={viewController}
     >
       <div 
-        className="h-full w-full rounded-xl bg-card overflow-hidden"
+        className="h-full w-full rounded-xl bg-card overflow-hidden border"
         onClick={() => {
           // Toggle tooltip visibility when clicking anywhere in the container
           setShowAllTooltips(!showAllTooltips);
