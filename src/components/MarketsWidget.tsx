@@ -113,9 +113,21 @@ interface MarketData {
   marginMultiplier?: number;
 }
 
+export type { MarketData };
+
 interface MarketsWidgetProps {
   className?: string;
   compact?: boolean;
+  searchQuery?: string;
+  onSearchQueryChange?: (value: string) => void;
+  showOnlyFavorites?: boolean;
+  onShowOnlyFavoritesChange?: (value: boolean) => void;
+  selectedQuoteAsset?: AssetTicker | 'ALL';
+  onSelectedQuoteAssetChange?: (value: AssetTicker | 'ALL') => void;
+  secondaryCurrency?: AssetTicker | null;
+  onSecondaryCurrencyChange?: (value: AssetTicker | null) => void;
+  onQuoteAssetsChange?: (assets: AssetTicker[]) => void;
+  onRemove?: () => void;
 }
 
 // Sample market data with margin multipliers
@@ -475,7 +487,18 @@ export interface MarketsWidgetRef {
   getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
 }
 
-export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({ className }, ref) => {
+export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({ 
+  className,
+  searchQuery: externalSearchQuery,
+  onSearchQueryChange: externalSearchQueryChange,
+  showOnlyFavorites: externalShowOnlyFavorites,
+  onShowOnlyFavoritesChange: externalShowOnlyFavoritesChange,
+  selectedQuoteAsset: externalSelectedQuoteAsset,
+  onSelectedQuoteAssetChange: externalSelectedQuoteAssetChange,
+  secondaryCurrency: externalSecondaryCurrency,
+  onSecondaryCurrencyChange: externalSecondaryCurrencyChange,
+  onQuoteAssetsChange,
+}, ref) => {
   const { theme, resolvedTheme } = useTheme();
   const { dataSource } = useDataSource();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
@@ -487,32 +510,45 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   
-  // Initialize state with values from localStorage
+  // Use external state if provided, otherwise use local state
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
+  
+  const [internalShowOnlyFavorites, setInternalShowOnlyFavorites] = useState(
+    getStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, false)
+  );
+  const showOnlyFavorites = externalShowOnlyFavorites !== undefined 
+    ? externalShowOnlyFavorites 
+    : internalShowOnlyFavorites;
+  
+  const [internalSelectedQuoteAsset, setInternalSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(
+    getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL')
+  );
+  const selectedQuoteAsset = externalSelectedQuoteAsset !== undefined 
+    ? externalSelectedQuoteAsset 
+    : internalSelectedQuoteAsset;
+  
+  const [internalSecondaryCurrency, setInternalSecondaryCurrency] = useState<AssetTicker | null>(
+    getStoredValue<AssetTicker | null>(STORAGE_KEYS.SECONDARY_CURRENCY, null)
+  );
+  const secondaryCurrency = externalSecondaryCurrency !== undefined 
+    ? externalSecondaryCurrency 
+    : internalSecondaryCurrency;
+  
+  // Initialize other state with values from localStorage
   const [sorting, setSorting] = useState<SortingState>(
     getStoredValue(STORAGE_KEYS.SORTING, [{ id: 'marketCap', desc: true }])
   );
   const [favorites, setFavorites] = useState<Set<string>>(
     new Set(getStoredValue<string[]>(STORAGE_KEYS.FAVORITES, []))
   );
-  const [showOnlyFavorites, setShowOnlyFavorites] = useState(
-    getStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, false)
-  );
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     getStoredValue(STORAGE_KEYS.COLUMN_VISIBILITY, {})
   );
-  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(
-    getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL')
-  );
-  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(
-    getStoredValue<AssetTicker | null>(STORAGE_KEYS.SECONDARY_CURRENCY, null)
-  );
-  
-  // Add search state
-  const [searchQuery, setSearchQuery] = useState('');
   
   const containerRef = useRef<HTMLDivElement>(null);
   const [columnSizes, setColumnSizes] = useState({
-    pair: 200, // Increased to accommodate favorite star
+    pair: 200,
     price: 120,
     change24h: 100,
     change7d: 100,
@@ -529,20 +565,22 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   }, [favorites]);
 
   useEffect(() => {
-    setStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, showOnlyFavorites);
-  }, [showOnlyFavorites]);
+    if (externalShowOnlyFavorites === undefined) {
+      setStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, internalShowOnlyFavorites);
+    }
+  }, [internalShowOnlyFavorites, externalShowOnlyFavorites]);
 
   useEffect(() => {
-    setStoredValue(STORAGE_KEYS.COLUMN_VISIBILITY, columnVisibility);
-  }, [columnVisibility]);
+    if (externalSelectedQuoteAsset === undefined) {
+      setStoredValue(STORAGE_KEYS.SELECTED_QUOTE_ASSET, internalSelectedQuoteAsset);
+    }
+  }, [internalSelectedQuoteAsset, externalSelectedQuoteAsset]);
 
   useEffect(() => {
-    setStoredValue(STORAGE_KEYS.SELECTED_QUOTE_ASSET, selectedQuoteAsset);
-  }, [selectedQuoteAsset]);
-
-  useEffect(() => {
-    setStoredValue(STORAGE_KEYS.SECONDARY_CURRENCY, secondaryCurrency);
-  }, [secondaryCurrency]);
+    if (externalSecondaryCurrency === undefined) {
+      setStoredValue(STORAGE_KEYS.SECONDARY_CURRENCY, internalSecondaryCurrency);
+    }
+  }, [internalSecondaryCurrency, externalSecondaryCurrency]);
 
   useEffect(() => {
     setStoredValue(STORAGE_KEYS.SORTING, sorting);
@@ -554,6 +592,46 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     marketData.forEach(item => assets.add(item.quoteAsset));
     return Array.from(assets);
   }, [marketData]);
+
+  // Notify parent component of quote assets change
+  useEffect(() => {
+    if (onQuoteAssetsChange && quoteAssets.length > 0) {
+      onQuoteAssetsChange(quoteAssets);
+    }
+  }, [quoteAssets, onQuoteAssetsChange]);
+
+  // Handler functions that respect external handlers
+  const handleSearchQueryChange = useCallback((value: string) => {
+    if (externalSearchQueryChange) {
+      externalSearchQueryChange(value);
+    } else {
+      setInternalSearchQuery(value);
+    }
+  }, [externalSearchQueryChange]);
+
+  const handleShowOnlyFavoritesChange = useCallback((value: boolean) => {
+    if (externalShowOnlyFavoritesChange) {
+      externalShowOnlyFavoritesChange(value);
+    } else {
+      setInternalShowOnlyFavorites(value);
+    }
+  }, [externalShowOnlyFavoritesChange]);
+
+  const handleSelectedQuoteAssetChange = useCallback((value: AssetTicker | 'ALL') => {
+    if (externalSelectedQuoteAssetChange) {
+      externalSelectedQuoteAssetChange(value);
+    } else {
+      setInternalSelectedQuoteAsset(value);
+    }
+  }, [externalSelectedQuoteAssetChange]);
+
+  const handleSecondaryCurrencyChange = useCallback((value: AssetTicker | null) => {
+    if (externalSecondaryCurrencyChange) {
+      externalSecondaryCurrencyChange(value);
+    } else {
+      setInternalSecondaryCurrency(value);
+    }
+  }, [externalSecondaryCurrencyChange]);
 
   // Helper function to check if an asset matches the search query
   const assetMatchesSearch = useCallback((item: MarketData, query: string) => {
@@ -617,7 +695,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     }
     
     // Finally, apply search filter
-    if (searchQuery.trim()) {
+    if (searchQuery?.trim()) {
       filtered = filtered.filter(item => assetMatchesSearch(item, searchQuery));
     }
     
@@ -1086,14 +1164,14 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
         newFavorites.delete(pair);
         // If we're removing the last favorite while in favorites view, reset to all view
         if (newFavorites.size === 0 && showOnlyFavorites) {
-          setShowOnlyFavorites(false);
+          handleShowOnlyFavoritesChange(false);
         }
       } else {
         newFavorites.add(pair);
       }
       return newFavorites;
     });
-  }, [showOnlyFavorites]);
+  }, [showOnlyFavorites, handleShowOnlyFavoritesChange]);
 
   if (error) {
     return (
@@ -1127,95 +1205,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 
   return (
     <div 
-      className={cn("h-full flex flex-col p-2 relative", className)}
+      className={cn("h-full flex flex-col relative", className)}
       ref={containerRef}
     >
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        {/* Search input - moved to the far left */}
-        <div className="relative h-9">
-          <Input
-            type="text"
-            placeholder="Search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-[200px] pl-8 pr-8"
-          />
-          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          {searchQuery && (
-            <button 
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
-              onClick={() => setSearchQuery('')}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
-        </div>
-
-        <Button 
-          variant={showOnlyFavorites ? "default" : "outline"} 
-          size="sm"
-          onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-          className={cn(
-            showOnlyFavorites ? "bg-yellow-500 hover:bg-yellow-600 text-black" : ""
-          )}
-        >
-          <Star
-            size={16}
-            className={cn(
-              "mr-1 transition-colors",
-              showOnlyFavorites ? "fill-black" : "fill-none"
-            )}
-          />
-          Favorites
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              {selectedQuoteAsset === 'ALL' ? 'All Pairs' : `${selectedQuoteAsset} Pairs`}
-              <ChevronDownIcon className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => setSelectedQuoteAsset('ALL')}>
-              All Pairs
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {quoteAssets.map((asset) => (
-              <DropdownMenuItem 
-                key={asset}
-                onClick={() => setSelectedQuoteAsset(asset)}
-              >
-                {asset} Pairs
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              {secondaryCurrency ? `Show in ${secondaryCurrency}` : 'Secondary Currency'}
-              <ChevronDownIcon className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => setSecondaryCurrency(null)}>
-              None
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {['USD', 'EUR', 'GBP'].map((currency) => (
-              <DropdownMenuItem 
-                key={currency}
-                onClick={() => setSecondaryCurrency(currency as AssetTicker)}
-              >
-                Show in {currency}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
       <div className="flex-1 min-h-0 relative w-full">
         <div className="absolute left-[8px] right-[16px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         <div className="h-full w-full overflow-x-auto">

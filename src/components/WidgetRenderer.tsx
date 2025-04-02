@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
 import { PerformanceWidgetWrapper } from './PerformanceWidgetWrapper';
+import { MarketsWidgetWrapper } from './MarketsWidgetWrapper';
 import { 
   CreateWidgetParams, 
   ExtendedGridStackWidget,
@@ -164,8 +165,38 @@ export const renderWidgetIntoElement = (
           </DataSourceProvider>
         </React.StrictMode>
       );
+    } else if (widgetType === 'markets') {
+      // Use MarketsWidgetWrapper for markets widgets
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={onRemove}
+              headerControls={<MarketsWidgetWrapper 
+                isHeader 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent} 
+                onRemove={onRemove} 
+              />}
+              widgetMenu={<MarketsWidgetWrapper 
+                isMenu 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent} 
+                onRemove={onRemove} 
+              />}
+            >
+              <MarketsWidgetWrapper 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent} 
+                onRemove={onRemove} 
+              />
+            </WidgetContainer>
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
     } else {
-      // For non-performance widgets
+      // For non-performance, non-markets widgets
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
