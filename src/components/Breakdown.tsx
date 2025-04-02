@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Treemap, Tooltip, ResponsiveContainer, PieChart, Pie, RadialBarChart, RadialBar, Cell, Legend } from 'recharts';
+import { Treemap, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { WidgetContainer } from './WidgetContainer';
 import { SAMPLE_BALANCES } from './BalancesWidget';
 import { useTheme } from 'next-themes';
@@ -42,14 +42,12 @@ if (typeof document !== 'undefined') {
 }
 
 // View modes for the Breakdown widget
-export type BreakdownViewMode = 'treemap' | 'donut' | 'radial-grid' | 'radial-stacked';
+export type BreakdownViewMode = 'treemap' | 'donut';
 
 // View mode labels
 const viewLabels: Record<BreakdownViewMode, string> = {
   'treemap': 'Tree Map',
-  'donut': 'Donut Chart',
-  'radial-grid': 'Radial Grid',
-  'radial-stacked': 'Radial Stacked'
+  'donut': 'Donut Chart'
 };
 
 // Asset Button component to match the style in balances and performance widgets
@@ -265,6 +263,8 @@ const Breakdown: React.FC<{
   const [showAllTooltips, setShowAllTooltips] = useState(false);
   // Track current view mode
   const [viewMode, setViewMode] = useState<BreakdownViewMode>('treemap');
+  // Track hovered donut segment
+  const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
   
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
@@ -827,7 +827,7 @@ const Breakdown: React.FC<{
   useEffect(() => {
     try {
       const storedMode = localStorage.getItem('breakdown_widget_view_mode');
-      if (storedMode && (storedMode === 'treemap' || storedMode === 'donut' || storedMode === 'radial-grid' || storedMode === 'radial-stacked')) {
+      if (storedMode && (storedMode === 'treemap' || storedMode === 'donut')) {
         console.log('Breakdown: Restoring view mode from localStorage:', storedMode);
         setViewMode(storedMode as BreakdownViewMode);
       }
@@ -836,19 +836,50 @@ const Breakdown: React.FC<{
     }
   }, []);
 
-  // Render donut chart with centered text
-  const renderDonutChart = () => {
-    const totalValue = treeMapData.reduce((sum, item) => sum + item.value, 0);
-    const formattedTotal = totalValue.toLocaleString(undefined, {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+  // Function to adjust color opacity based on theme and hover state - moved to component level
+  const adjustOpacity = (color: string, opacity: number) => {
+    // Parse the hex color and convert it to rgba
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  };
+  
+  // Get opacity based on theme - moved to component level
+  const getOpacity = (isHovered: boolean) => {
+    if (effectiveTheme === 'dark') {
+      return isHovered ? 0.32 : 0.08; // Dark theme: 8% to 32%
+    } else {
+      return isHovered ? 1 : 0.32; // Light theme: 32% to 100%
+    }
+  };
 
+  // Render donut chart with styling that matches the treemap
+  const renderDonutChart = () => {
+    // Custom cursor component that updates the hovered segment state
+    const CustomCursor = ({ active, payload }: any) => {
+      if (active && payload && payload.length > 0) {
+        const currentSegment = payload[0].payload;
+        
+        // Update the hovered segment if needed
+        if (hoveredSegmentId !== currentSegment.id) {
+          setHoveredSegmentId(currentSegment.id);
+        }
+        
+        return null;
+      }
+      
+      // Clear hovered state when not hovering any segment
+      if (!active && hoveredSegmentId !== null) {
+        setHoveredSegmentId(null);
+      }
+      
+      return null;
+    };
+    
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
+        <PieChart onClick={() => setShowAllTooltips(!showAllTooltips)}>
           <Pie
             data={treeMapData}
             dataKey="size"
@@ -857,8 +888,8 @@ const Breakdown: React.FC<{
             cy="50%"
             innerRadius="55%"
             outerRadius="85%"
-            paddingAngle={2}
-            stroke="transparent"
+            paddingAngle={4}
+            stroke="none"
             animationDuration={0}
             isAnimationActive={false}
           >
@@ -868,99 +899,40 @@ const Breakdown: React.FC<{
               if (isAssetTicker(entry.name) && ASSETS[entry.name]) {
                 fillColor = ASSETS[entry.name].theme[effectiveTheme];
               }
-              return <Cell key={`cell-${index}`} fill={fillColor} />;
+              
+              // Check if this segment is currently hovered
+              const isHovered = hoveredSegmentId === entry.id;
+              
+              // Apply opacity based on theme and hover
+              const fillOpacity = getOpacity(isHovered);
+              const fillColorWithOpacity = adjustOpacity(fillColor, fillOpacity);
+              
+              return (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={fillColorWithOpacity}
+                  stroke={fillColor}
+                  strokeWidth={1}
+                  strokeOpacity={0.8}
+                  style={{ transition: 'fill 0.2s ease-out' }}
+                  onMouseEnter={() => setHoveredSegmentId(entry.id)}
+                  onMouseLeave={() => setHoveredSegmentId(null)}
+                />
+              );
             })}
           </Pie>
-          <Tooltip content={<CustomTooltip />} />
-          {/* Center text */}
-          <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="text-foreground font-medium text-sm">
-            {formattedTotal}
-          </text>
-        </PieChart>
-      </ResponsiveContainer>
-    );
-  };
-
-  // Render radial grid chart
-  const renderRadialGridChart = () => {
-    return (
-      <ResponsiveContainer width="100%" height="100%">
-        <RadialBarChart 
-          cx="50%" 
-          cy="50%" 
-          innerRadius="20%" 
-          outerRadius="90%" 
-          barSize={20} 
-          data={treeMapData}
-          startAngle={90}
-          endAngle={-270}
-        >
-          <RadialBar
-            dataKey="size"
-            nameKey="name"
-            background={{ fill: 'hsl(var(--muted))' }}
-            label={false}
-          >
-            {treeMapData.map((entry, index) => {
-              // Get color based on asset
-              let fillColor = DEFAULT_COLOR;
-              if (isAssetTicker(entry.name) && ASSETS[entry.name]) {
-                fillColor = ASSETS[entry.name].theme[effectiveTheme];
-              }
-              return <Cell key={`cell-${index}`} fill={fillColor} />;
-            })}
-          </RadialBar>
-          <Tooltip content={<CustomTooltip />} />
-        </RadialBarChart>
-      </ResponsiveContainer>
-    );
-  };
-
-  // Render radial stacked chart
-  const renderRadialStackedChart = () => {
-    // Calculate angle for each segment based on its proportion
-    const sortedData = [...treeMapData].sort((a, b) => b.value - a.value);
-    const total = sortedData.reduce((sum, item) => sum + item.value, 0);
-    
-    // Define different radiuses for each segment
-    const segments = sortedData.map((entry, index) => {
-      const innerRadius = 40 + (10 * index);
-      const outerRadius = 60 + (10 * index);
-      
-      // Get color based on asset
-      let fillColor = DEFAULT_COLOR;
-      if (isAssetTicker(entry.name) && ASSETS[entry.name]) {
-        fillColor = ASSETS[entry.name].theme[effectiveTheme];
-      }
-      
-      return {
-        ...entry,
-        innerRadius: `${innerRadius}%`,
-        outerRadius: `${outerRadius}%`,
-        fill: fillColor
-      };
-    });
-
-    return (
-      <ResponsiveContainer width="100%" height="100%">
-        <RadialBarChart 
-          cx="50%" 
-          cy="50%" 
-          innerRadius="30%" 
-          outerRadius="100%" 
-          barSize={10} 
-          data={segments}
-          startAngle={90}
-          endAngle={-270}
-        >
-          <RadialBar
-            dataKey="size"
-            nameKey="name"
-            background={{ fill: 'hsl(var(--muted))' }}
-            label={false}
+          <Tooltip 
+            content={<CustomTooltip />} 
+            cursor={<CustomCursor />}
+            position={{ x: 'auto', y: 'auto' }}
+            wrapperStyle={{ transition: 'transform 0.2s ease-out, opacity 0.2s ease-out' }}
+            isAnimationActive={true}
+            animationDuration={200}
+            animationEasing="ease-out"
+            // Only show tooltip when showAllTooltips is true or when hovering
+            isActive={(props) => showAllTooltips || (props.active && props.payload && props.payload.length > 0)}
           />
-          <Tooltip content={<CustomTooltip />} />
-        </RadialBarChart>
+        </PieChart>
       </ResponsiveContainer>
     );
   };
@@ -1054,7 +1026,7 @@ const Breakdown: React.FC<{
     >
       <div 
         className="h-full w-full rounded-xl bg-card overflow-hidden"
-        onClick={(e) => {
+        onClick={() => {
           // Toggle tooltip visibility when clicking anywhere in the container
           setShowAllTooltips(!showAllTooltips);
         }}
@@ -1083,14 +1055,14 @@ const Breakdown: React.FC<{
                   isAnimationActive={true}
                   animationDuration={200}
                   animationEasing="ease-out"
+                  // Consistent tooltip visibility behavior
+                  isActive={(props) => showAllTooltips || (props.active && props.payload && props.payload.length > 0)}
                 />
               </Treemap>
             </ResponsiveContainer>
           )}
           
           {viewMode === 'donut' && renderDonutChart()}
-          {viewMode === 'radial-grid' && renderRadialGridChart()}
-          {viewMode === 'radial-stacked' && renderRadialStackedChart()}
         </div>
       </div>
     </WidgetContainer>
