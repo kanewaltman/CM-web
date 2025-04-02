@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { format, parseISO, isToday, startOfDay, isSameDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon, Type } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { 
   Pagination, 
@@ -9,6 +9,15 @@ import {
 } from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
 import { RemovableWidgetProps } from '@/types/widgets';
+import { ASSETS, AssetTicker } from '@/assets/AssetTicker';
+import { AssetPriceTooltip } from './AssetPriceTooltip';
+import { useTheme } from 'next-themes';
+import { Slider } from '@/components/ui/slider';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 // Types from CM-Intel
 interface Citation {
@@ -63,6 +72,29 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [usingFallback, setUsingFallback] = useState(false);
   const [marketSentiment, setMarketSentiment] = useState<MarketSentiment>('neutral');
+  const { theme, resolvedTheme } = useTheme();
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
+  const [contentParts, setContentParts] = useState<React.ReactNode[]>([]);
+  
+  // Load font size from localStorage with a default of 14px
+  const [fontSize, setFontSize] = useState<number>(() => {
+    try {
+      const savedFontSize = localStorage.getItem(`insight_font_size_${widgetId}`);
+      return savedFontSize ? parseInt(savedFontSize, 10) : 14;
+    } catch (e) {
+      return 14;
+    }
+  });
+  
+  // Load line height from localStorage with a default of 1.5
+  const [lineHeight, setLineHeight] = useState<number>(() => {
+    try {
+      const savedLineHeight = localStorage.getItem(`insight_line_height_${widgetId}`);
+      return savedLineHeight ? parseFloat(savedLineHeight) : 1.5;
+    } catch (e) {
+      return 1.5;
+    }
+  });
 
   // Fetch all available market digests
   const fetchDigests = useCallback(async () => {
@@ -150,16 +182,38 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     return 'neutral';
   };
 
-  // Format crypto symbols in text
-  const formatCryptoTokens = (text: string) => {
-    // First sanitize the input text to prevent HTML injection and raw tags from showing
-    let sanitizedText = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+  // Detect theme from document class list
+  useEffect(() => {
+    const updateTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      setCurrentTheme(isDark ? 'dark' : 'light');
+    };
+
+    // Initial theme detection
+    updateTheme();
+
+    // Watch for theme changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          updateTheme();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  // New approach: Split text into parts with asset components
+  const formatContentWithAssets = useCallback((text: string) => {
+    if (!text) return [];
     
+    // Create a map of token patterns
     const cryptoRegexPatterns = [
       { symbol: 'BTC', pattern: /\b(Bitcoin|BTC)\b/g },
       { symbol: 'ETH', pattern: /\b(Ethereum|ETH)\b/g },
@@ -173,47 +227,148 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       { symbol: 'LINK', pattern: /\b(Chainlink|LINK)\b/g }
     ];
 
-    // Replace crypto tokens with styled versions
-    let formattedText = sanitizedText;
-    let citations: {index: number, citation: Citation}[] = [];
-    
-    // Find citation references like [1] and store them
-    if (currentDigest?.citations) {
-      const citationPattern = /\[(\d+)\]/g;
+    // Create an array of all matches with their positions
+    type Match = {
+      startIndex: number;
+      endIndex: number;
+      asset: string;
+      text: string;
+      type: 'asset' | 'citation';
+    };
+
+    const matches: Match[] = [];
+
+    // Find all crypto token matches
+    cryptoRegexPatterns.forEach(({ symbol, pattern }) => {
       let match;
-      
-      while ((match = citationPattern.exec(sanitizedText)) !== null) {
-        const citationNum = parseInt(match[1], 10);
+      while ((match = pattern.exec(text)) !== null) {
+        // Check if the asset exists in our configuration
+        if (ASSETS[symbol as AssetTicker]) {
+          matches.push({
+            startIndex: match.index,
+            endIndex: match.index + match[0].length,
+            asset: symbol,
+            text: match[0],
+            type: 'asset'
+          });
+        }
+      }
+    });
+
+    // Find all citation references like [1]
+    const citationPattern = /\[(\d+)\]/g;
+    let citMatch;
+    
+    if (currentDigest?.citations) {
+      while ((citMatch = citationPattern.exec(text)) !== null) {
+        const citationNum = parseInt(citMatch[1], 10);
         const citation = currentDigest.citations.find(c => c.number === citationNum);
         
         if (citation) {
-          citations.push({
-            index: match.index,
-            citation
+          matches.push({
+            startIndex: citMatch.index,
+            endIndex: citMatch.index + citMatch[0].length,
+            asset: '',
+            text: citMatch[0],
+            type: 'citation'
           });
         }
       }
     }
-    
-    // Format crypto tokens first
-    cryptoRegexPatterns.forEach(({ symbol, pattern }) => {
-      formattedText = formattedText.replace(pattern, (match) => {
-        return `<span class="font-semibold text-primary">${match}</span>`;
-      });
-    });
-    
-    // Now replace citation references with styled links, careful to maintain indices
-    // Sort citations by index in descending order to avoid messing up indices
-    citations.sort((a, b) => b.index - a.index);
-    
-    citations.forEach(({ index, citation }) => {
-      const before = formattedText.substring(0, index);
-      const after = formattedText.substring(index + `[${citation.number}]`.length);
-      formattedText = `${before}<a href="${citation.url}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">[${citation.number}]</a>${after}`;
-    });
 
-    return formattedText;
-  };
+    // Sort matches by startIndex
+    matches.sort((a, b) => a.startIndex - b.startIndex);
+
+    // Build content parts array
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    
+    matches.forEach((match, index) => {
+      // Add text before the match
+      if (match.startIndex > lastIndex) {
+        parts.push(text.substring(lastIndex, match.startIndex));
+      }
+      
+      // Add the match component
+      if (match.type === 'asset') {
+        const asset = match.asset as AssetTicker;
+        const assetConfig = ASSETS[asset];
+        const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+        
+        parts.push(
+          <AssetPriceTooltip key={`asset-${index}`} asset={asset}>
+            <span 
+              className="inline-asset-button font-jakarta rounded-md hover:cursor-pointer"
+              style={{
+                display: 'inline-block',
+                fontWeight: 500,
+                margin: '0 0.05em',
+                padding: '0 0.15em',
+                color: assetColor,
+                backgroundColor: `${assetColor}14`,
+                transition: 'all 0.15s ease-in-out',
+                cursor: 'pointer',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'text',
+                userSelect: 'text'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = assetColor;
+                e.currentTarget.style.color = 'hsl(var(--color-widget-bg))';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = `${assetColor}14`;
+                e.currentTarget.style.color = assetColor;
+              }}
+              onMouseDown={(e) => {
+                if (e.detail > 1) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              {match.text}
+            </span>
+          </AssetPriceTooltip>
+        );
+      } else if (match.type === 'citation') {
+        const citationNum = parseInt(match.text.replace(/[\[\]]/g, ''), 10);
+        const citation = currentDigest?.citations?.find(c => c.number === citationNum);
+        
+        if (citation) {
+          parts.push(
+            <a 
+              key={`citation-${index}`}
+              href={citation.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              {match.text}
+            </a>
+          );
+        } else {
+          parts.push(match.text);
+        }
+      }
+      
+      lastIndex = match.endIndex;
+    });
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+    
+    return parts;
+  }, [currentDigest, currentTheme]);
+
+  // Update content parts when digest changes
+  useEffect(() => {
+    if (currentDigest) {
+      const parts = formatContentWithAssets(currentDigest.content);
+      setContentParts(parts);
+    }
+  }, [currentDigest, formatContentWithAssets]);
 
   // Handle pagination navigation
   const goToNext = () => {
@@ -303,10 +458,60 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     };
   }, [fetchDigests, widgetId]);
 
+  // Add event listener for font size changes
+  useEffect(() => {
+    const handleFontSizeEvent = (event: Event) => {
+      // Check if this font size change event is for this widget
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.widgetId === widgetId) {
+        const newFontSize = customEvent.detail.fontSize;
+        setFontSize(newFontSize);
+        
+        // Save to localStorage
+        try {
+          localStorage.setItem(`insight_font_size_${widgetId}`, newFontSize.toString());
+        } catch (e) {
+          console.warn('Failed to save font size preference to localStorage', e);
+        }
+      }
+    };
+    
+    document.addEventListener('insight-widget-fontsize', handleFontSizeEvent);
+    
+    return () => {
+      document.removeEventListener('insight-widget-fontsize', handleFontSizeEvent);
+    };
+  }, [widgetId]);
+  
+  // Add event listener for line height changes
+  useEffect(() => {
+    const handleLineHeightEvent = (event: Event) => {
+      // Check if this line height change event is for this widget
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.widgetId === widgetId) {
+        const newLineHeight = customEvent.detail.lineHeight;
+        setLineHeight(newLineHeight);
+        
+        // Save to localStorage
+        try {
+          localStorage.setItem(`insight_line_height_${widgetId}`, newLineHeight.toString());
+        } catch (e) {
+          console.warn('Failed to save line height preference to localStorage', e);
+        }
+      }
+    };
+    
+    document.addEventListener('insight-widget-lineheight', handleLineHeightEvent);
+    
+    return () => {
+      document.removeEventListener('insight-widget-lineheight', handleLineHeightEvent);
+    };
+  }, [widgetId]);
+
   return (
     <div className={`flex flex-col h-full ${className}`}>
       {/* Main content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto scrollbar-thin p-4">
         {loading ? (
           <div className="flex flex-col space-y-2 animate-pulse">
             <div className="h-4 bg-muted rounded w-3/4"></div>
@@ -332,9 +537,15 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
               )}
             </div>
             
-            {/* Content */}
-            <div className="text-sm leading-relaxed select-text">
-              <p dangerouslySetInnerHTML={{ __html: formatCryptoTokens(currentDigest.content) }}></p>
+            {/* Content with enhanced asset formatting and dynamic font size */}
+            <div 
+              className="text-sm leading-relaxed select-text"
+              style={{ 
+                fontSize: `${fontSize}px`,
+                lineHeight: lineHeight
+              }}
+            >
+              <p>{contentParts}</p>
             </div>
             
             {/* Citations */}
@@ -405,6 +616,28 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
 
 // Create a refresh control component to be used in widget header
 export const InsightWidgetControls: React.FC<{ widgetId: string }> = ({ widgetId }) => {
+  const [open, setOpen] = useState(false);
+  
+  // Initialize slider value from localStorage or default to 14
+  const [fontSizeValue, setFontSizeValue] = useState<number[]>(() => {
+    try {
+      const savedFontSize = localStorage.getItem(`insight_font_size_${widgetId}`);
+      return savedFontSize ? [parseInt(savedFontSize, 10)] : [14];
+    } catch (e) {
+      return [14];
+    }
+  });
+  
+  // Initialize line height value from localStorage or default to 1.5
+  const [lineHeightValue, setLineHeightValue] = useState<number[]>(() => {
+    try {
+      const savedLineHeight = localStorage.getItem(`insight_line_height_${widgetId}`);
+      return savedLineHeight ? [parseFloat(savedLineHeight)] : [1.5];
+    } catch (e) {
+      return [1.5];
+    }
+  });
+  
   const handleRefresh = () => {
     // Dispatch an event to refresh the insight widget with the given ID
     const event = new CustomEvent('insight-widget-refresh', { 
@@ -412,17 +645,115 @@ export const InsightWidgetControls: React.FC<{ widgetId: string }> = ({ widgetId
     });
     document.dispatchEvent(event);
   };
+  
+  const handleFontSizeChange = (newValue: number[]) => {
+    setFontSizeValue(newValue);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(`insight_font_size_${widgetId}`, newValue[0].toString());
+    } catch (e) {
+      console.warn('Failed to save font size preference to localStorage', e);
+    }
+    
+    // Dispatch an event to update font size in the insight widget with the given ID
+    const event = new CustomEvent('insight-widget-fontsize', { 
+      detail: { 
+        widgetId,
+        fontSize: newValue[0]
+      } 
+    });
+    document.dispatchEvent(event);
+  };
+  
+  const handleLineHeightChange = (newValue: number[]) => {
+    setLineHeightValue(newValue);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(`insight_line_height_${widgetId}`, newValue[0].toString());
+    } catch (e) {
+      console.warn('Failed to save line height preference to localStorage', e);
+    }
+    
+    // Dispatch an event to update line height in the insight widget with the given ID
+    const event = new CustomEvent('insight-widget-lineheight', { 
+      detail: { 
+        widgetId,
+        lineHeight: newValue[0]
+      } 
+    });
+    document.dispatchEvent(event);
+  };
 
   return (
-    <Button 
-      variant="ghost" 
-      size="icon" 
-      onClick={handleRefresh}
-      className="h-8 w-8"
-      title="Refresh market insight"
-    >
-      <RefreshCcw className="h-4 w-4" />
-    </Button>
+    <>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={handleRefresh}
+        className="h-8 w-8"
+        title="Refresh market insight"
+      >
+        <RefreshCcw className="h-4 w-4" />
+      </Button>
+      
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8"
+            title="Adjust text appearance"
+          >
+            <Type className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80">
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <h4 className="font-medium text-sm">Text Size</h4>
+              <div className="px-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">Small</span>
+                  <span className="text-xs text-muted-foreground">Large</span>
+                </div>
+                <Slider 
+                  min={12} 
+                  max={24} 
+                  step={1}
+                  value={fontSizeValue} 
+                  onValueChange={handleFontSizeChange} 
+                />
+              </div>
+              <div className="text-xs text-center text-muted-foreground mt-2">
+                {fontSizeValue[0]}px
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <h4 className="font-medium text-sm">Line Spacing</h4>
+              <div className="px-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">Compact</span>
+                  <span className="text-xs text-muted-foreground">Spacious</span>
+                </div>
+                <Slider 
+                  min={1.2} 
+                  max={2.0} 
+                  step={0.1}
+                  value={lineHeightValue} 
+                  onValueChange={handleLineHeightChange} 
+                />
+              </div>
+              <div className="text-xs text-center text-muted-foreground mt-2">
+                {lineHeightValue[0].toFixed(1)}×
+              </div>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 };
 
