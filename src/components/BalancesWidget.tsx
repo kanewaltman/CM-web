@@ -15,6 +15,11 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { AssetPriceTooltip } from './AssetPriceTooltip';
+import coinGeckoService from '@/services/coinGeckoService';
+import { 
+  ChevronUp,
+  ChevronDown as ChevronDownIcon
+} from 'lucide-react';
 
 // Set this to false to disable logging
 const ENABLE_LOGGING = false;
@@ -393,7 +398,57 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
   // Memoize the fetch prices function to prevent recreating it on every render
   const fetchPrices = useCallback(async () => {
     if (dataSource === 'sample') {
-      setPrices(SAMPLE_PRICES);
+      try {
+        setIsUpdating(true);
+        
+        // Use CoinGecko API for sample data
+        const exchangeRates = await coinGeckoService.fetchExchangeRates();
+        
+        // Transform the exchange rates into the format expected by the component
+        const priceData: PriceData = {};
+        
+        // Process each asset in our balances
+        for (const balance of balances) {
+          const assetTicker = balance.asset;
+          const rateInfo = exchangeRates[assetTicker];
+          
+          if (rateInfo) {
+            // Get EUR price and calculate 24h change
+            const currentPrice = rateInfo.eur || 0;
+            
+            // For sample data, generate a random change between -5% and +5%
+            const randomChange = (Math.random() * 10) - 5;
+            const change24h = rateInfo.last_updated ? randomChange : 0;
+            
+            priceData[`${assetTicker}EUR`] = {
+              price: currentPrice,
+              change24h: change24h
+            };
+          } else {
+            // Fallback to sample data if the asset is not found in CoinGecko
+            const assetKey = `${assetTicker}EUR`;
+            priceData[assetKey] = SAMPLE_PRICES[assetKey as keyof typeof SAMPLE_PRICES] || {
+              price: 0,
+              change24h: 0
+            };
+          }
+        }
+        
+        // Add EUR with no change
+        priceData['EUREUR'] = {
+          price: 1,
+          change24h: 0,
+          lastDayPrice: 1
+        };
+        
+        setPrices(priceData);
+      } catch (error) {
+        log.error('Error fetching prices from CoinGecko:', error);
+        // Fallback to sample data if CoinGecko fails
+        setPrices(SAMPLE_PRICES);
+      } finally {
+        setIsUpdating(false);
+      }
       return;
     }
 
@@ -611,10 +666,25 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           <TableHeader className="sticky top-0 z-20">
             <TableRow className="bg-[hsl(var(--color-widget-header))]">
               <TableHead 
-                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap"
+                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                onClick={() => handleSort('asset')}
                 style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
               >
-                <div className="px-0 py-1">Asset</div>
+                <div className="relative">
+                  <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+                  <div className="relative z-10 flex items-center justify-start gap-1">
+                    <span className="truncate text-left">Asset</span>
+                    {sortField === 'asset' && (
+                      <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                        {sortDirection === 'asc' ? (
+                          <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                        ) : (
+                          <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </TableHead>
               <TableHead 
                 className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
@@ -623,9 +693,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 <div className="relative">
                   <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 flex items-center justify-end gap-1">
-                    Balance
+                    <span className="truncate text-right">Balance</span>
                     {sortField === 'balance' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                        {sortDirection === 'asc' ? (
+                          <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                        ) : (
+                          <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -639,9 +715,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     <div className="relative">
                       <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                       <div className="relative z-10 flex items-center justify-end gap-1">
-                        Value (EUR)
+                        <span className="truncate text-right">Value (EUR)</span>
                         {sortField === 'value' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                            {sortDirection === 'asc' ? (
+                              <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -653,9 +735,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     <div className="relative">
                       <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                       <div className="relative z-10 flex items-center justify-end gap-1">
-                        24h Change
+                        <span className="truncate text-right">24h Change</span>
                         {sortField === 'change24h' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                            {sortDirection === 'asc' ? (
+                              <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -667,9 +755,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     <div className="relative">
                       <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                       <div className="relative z-10 flex items-center justify-end gap-1">
-                        Available
+                        <span className="truncate text-right">Available</span>
                         {sortField === 'available' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                            {sortDirection === 'asc' ? (
+                              <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
