@@ -182,6 +182,7 @@ const TreeMapSkeleton = () => {
 export const BreakdownWrapper: React.FC<{
   className?: string;
   onRemove?: () => void;
+  onViewModeChange?: (mode: BreakdownViewMode) => void;
 }> = (props) => {
   const { resolvedTheme } = useTheme();
   const [key, setKey] = useState(Date.now());
@@ -237,7 +238,13 @@ export const BreakdownWrapper: React.FC<{
   console.log(`BreakdownWrapper rendering with key: ${key}, forced theme: ${forcedTheme}, onRemove available: ${!!props.onRemove}`);
   
   // Pass the onRemove directly to Breakdown
-  return <Breakdown key={key} forceTheme={forcedTheme} className={props.className} onRemove={props.onRemove} />;
+  return <Breakdown 
+    key={key} 
+    forceTheme={forcedTheme} 
+    className={props.className} 
+    onRemove={props.onRemove} 
+    onViewModeChange={props.onViewModeChange}
+  />;
 };
 
 // The actual implementation of Breakdown stays focused on data
@@ -245,7 +252,8 @@ const Breakdown: React.FC<{
   className?: string;
   onRemove?: () => void;
   forceTheme?: 'light' | 'dark';
-}> = ({ className, onRemove, forceTheme }) => {
+  onViewModeChange?: (mode: BreakdownViewMode) => void;
+}> = ({ className, onRemove, forceTheme, onViewModeChange }) => {
   // Add debug logging
   console.log('Breakdown component received props:', {
     hasOnRemove: !!onRemove,
@@ -801,28 +809,11 @@ const Breakdown: React.FC<{
       console.error('Failed to save view mode to localStorage:', error);
     }
     
-    // Save to layout data if we're in a gridstack context
-    try {
-      const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
-      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-      if (savedLayout) {
-        const layout = JSON.parse(savedLayout);
-        const widgetIndex = layout.findIndex((item: any) => item.id === 'treemap'); // widget id is 'treemap'
-        if (widgetIndex !== -1) {
-          layout[widgetIndex] = {
-            ...layout[widgetIndex],
-            viewState: {
-              ...layout[widgetIndex].viewState,
-              viewMode: mode
-            }
-          };
-          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-        }
-      }
-    } catch (error) {
-      console.error('Failed to save widget view state:', error);
+    // Notify parent of view mode change if callback is provided
+    if (onViewModeChange) {
+      onViewModeChange(mode);
     }
-  }, []);
+  }, [onViewModeChange]);
 
   // Initialize view mode from localStorage on mount
   useEffect(() => {
