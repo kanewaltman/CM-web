@@ -870,3 +870,72 @@ number-flow-react {
 number-flow-react::part(group-decimal) {
   margin-left: 0.1em;
 }
+
+/* Ensure specific rules to handle text selection in grid items */
+.grid-stack-item .grid-stack-item-content {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  pointer-events: auto !important;
+}
+
+/* Keep the header as the only element that can be used for dragging */
+.grid-stack-item .widget-header {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  cursor: move !important;
+}
+
+/* Ensure content is selectable but doesn't interfere with drag */
+.grid-stack-item .widget-content {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  cursor: auto !important;
+  pointer-events: auto !important;
+}
+
+/* Add this new rule to improve text selection behavior */
+.grid-stack-item-content p, 
+.grid-stack-item-content div:not(.widget-header),
+.grid-stack-item-content span,
+.grid-stack-item-content h1,
+.grid-stack-item-content h2,
+.grid-stack-item-content h3,
+.grid-stack-item-content h4,
+.grid-stack-item-content h5,
+.grid-stack-item-content h6,
+.grid-stack-item-content input,
+.grid-stack-item-content textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important; 
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  cursor: auto !important;
+}
+
+/* Make text selection visually clearer */
+::selection {
+  background: rgba(59, 130, 246, 0.3); /* Blue color with better opacity */
+  color: currentColor;
+}
+
+.dark ::selection {
+  background: rgba(96, 165, 250, 0.4); /* Brighter blue for dark mode */
+  color: currentColor;
+}
+
+/* Make text selection use the orange from the logo */
+::selection {
+  background: hsl(var(--color-warning) / 0.08); /* Orange at 8% opacity */
+  color: hsl(var(--color-warning)); /* Full orange for text */
+}
+
+.dark ::selection {
+  background: hsl(var(--color-warning) / 0.08); /* Orange at 8% opacity */
+  color: hsl(var(--color-warning)); /* Full orange for text */
+}

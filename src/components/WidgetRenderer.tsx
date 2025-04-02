@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
 import { PerformanceWidgetWrapper } from './PerformanceWidgetWrapper';
+import { InsightWidgetControls } from './InsightWidget';
 import { 
   CreateWidgetParams, 
   ExtendedGridStackWidget,
@@ -164,8 +165,26 @@ export const renderWidgetIntoElement = (
           </DataSourceProvider>
         </React.StrictMode>
       );
+    } else if (widgetType === 'insight') {
+      // For market insight widget with refresh control in header
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={onRemove}
+              headerControls={<InsightWidgetControls widgetId={widgetId} />}
+            >
+              <WidgetComponent 
+                widgetId={widgetId} 
+                onRemove={onRemove} 
+              />
+            </WidgetContainer>
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
     } else {
-      // For non-performance widgets
+      // For other non-performance widgets
       root.render(
         <React.StrictMode>
           <DataSourceProvider>

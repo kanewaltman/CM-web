@@ -44,7 +44,8 @@ function AppContent() {
     handleResetLayout,
     handleCopyLayout,
     handlePasteLayout,
-    handleAddWidget
+    handleAddWidget,
+    toggleLayoutLock
   } = useGridStack({
     isMobile,
     currentPage,
@@ -199,7 +200,15 @@ function AppContent() {
     // Add drop event handlers with proper types
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
-      e.dataTransfer!.dropEffect = 'copy';
+      
+      // Check if this is a widget drag (not text selection)
+      // Only proceed if we have widget type data
+      if (!e.dataTransfer?.types.includes('widget/type')) {
+        cleanupPreview();
+        return;
+      }
+      
+      e.dataTransfer.dropEffect = 'copy';
 
       // Check if we're over the dropdown menu
       const dropdownMenu = document.querySelector('[role="menu"]');
@@ -298,6 +307,11 @@ function AppContent() {
 
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
+      
+      // Ensure this is a widget drag operation and not a text selection drag
+      if (!e.dataTransfer?.types.includes('widget/type')) {
+        return;
+      }
       
       const widgetType = e.dataTransfer?.getData('widget/type') || '';
       if (!widgetType || !gridRef.current) {
@@ -429,6 +443,7 @@ function AppContent() {
                 updateWidgetsDataSource(grid, source, handleRemoveWidget);
               }
             }}
+            onToggleLayoutLock={toggleLayoutLock}
           />
           <div 
             ref={gridElementRef} 

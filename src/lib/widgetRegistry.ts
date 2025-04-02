@@ -9,6 +9,7 @@ import { PerformanceWidget } from '@/components/PerformanceWidget/PerformanceWid
 import { Breakdown } from '@/components/Breakdown';
 import MarketsWidget from '@/components/MarketsWidget';
 import { TransactionsWidget } from '@/components/TransactionsWidget';
+import { InsightWidget } from '@/components/InsightWidget';
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
 
 // Widget Registry - Single source of truth for widget configuration
@@ -90,6 +91,14 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     title: 'Transactions',
     component: TransactionsWidget,
     defaultSize: { w: 8, h: 6 },
+    minSize: { w: 4, h: 4 },
+    maxSize: { w: 12, h: 9 }
+  },
+  'insight': {
+    id: 'insight',
+    title: 'Market Insight',
+    component: InsightWidget,
+    defaultSize: { w: 6, h: 6 },
     minSize: { w: 4, h: 4 },
     maxSize: { w: 12, h: 9 }
   }
