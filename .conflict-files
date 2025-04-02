@@ -1,0 +1,3 @@
+ancestorEntries = ["src/components/WidgetRenderer.tsx"]
+ourEntries = ["src/components/WidgetRenderer.tsx"]
+theirEntries = ["src/components/WidgetRenderer.tsx"]
