@@ -186,58 +186,55 @@ const SkeletonRow: React.FC = () => (
 // Draggable Table Header Component
 const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
   const isNarrowColumn = header.column.id === 'favorite'; // Identify narrow columns
+  const isPairColumn = header.column.id === 'pair'; // Identify pair column for left alignment
+  const isSorted = header.column.getIsSorted();
+
+  // Handler for clicking the entire header
+  const handleHeaderClick = () => {
+    if (header.column.getCanSort()) {
+      header.column.toggleSorting();
+    }
+  };
 
   return (
     <TableHead
       className={cn(
-        "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80",
+        "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80 group",
         isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
       )}
       style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
+      onClick={handleHeaderClick}
       aria-sort={
-        header.column.getIsSorted() === "asc"
+        isSorted === "asc"
           ? "ascending"
-          : header.column.getIsSorted() === "desc"
+          : isSorted === "desc"
             ? "descending"
             : "none"
       }
     >
       <div className="relative">
         <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-        <div className="relative z-10 flex items-center justify-end gap-1">
-          <span className={cn("grow truncate", isNarrowColumn && "sr-only")}>
+        <div className={cn(
+          "relative z-10 flex items-center gap-1",
+          isPairColumn ? "justify-start" : "justify-end"
+        )}>
+          <span className={cn(
+            "truncate", 
+            isPairColumn ? "text-left" : "text-right", 
+            isNarrowColumn && "sr-only"
+          )}>
             {header.isPlaceholder
               ? null
               : flexRender(header.column.columnDef.header, header.getContext())}
           </span>
-          {header.column.getCanSort() && !isNarrowColumn && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="group -mr-1 h-7 w-7 shadow-none"
-              onClick={(e) => {
-                e.stopPropagation();
-                header.column.getToggleSortingHandler()?.(e);
-              }}
-              onKeyDown={(e) => {
-                if (header.column.getCanSort() && (e.key === "Enter" || e.key === " ")) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  header.column.getToggleSortingHandler()?.(e);
-                }
-              }}
-            >
-              {{
-                asc: <ChevronUp className="shrink-0 opacity-60" size={16} aria-hidden="true" />,
-                desc: <ChevronDownIcon className="shrink-0 opacity-60" size={16} aria-hidden="true" />,
-              }[header.column.getIsSorted() as string] ?? (
-                <ChevronUp
-                  className="shrink-0 opacity-0 group-hover:opacity-60"
-                  size={16}
-                  aria-hidden="true"
-                />
+          {header.column.getCanSort() && !isNarrowColumn && isSorted && (
+            <div className="ml-1 h-4 w-4 flex items-center justify-center">
+              {isSorted === "asc" ? (
+                <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+              ) : (
+                <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
               )}
-            </Button>
+            </div>
           )}
         </div>
       </div>
