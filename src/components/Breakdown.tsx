@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Treemap, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import * as d3 from 'd3';
 import { WidgetContainer } from './WidgetContainer';
 import { SAMPLE_BALANCES } from './BalancesWidget';
 import { useTheme } from 'next-themes';
@@ -268,8 +267,8 @@ const Breakdown: React.FC<{
   const [balances, setBalances] = useState<any>(SAMPLE_BALANCES);
   const [error, setError] = useState<string | null>(null);
   const [clickedItemId, setClickedItemId] = useState<string | null>(null);
-  // Track whether any item has been clicked
-  const [showAllTooltips, setShowAllTooltips] = useState(false);
+  // Track whether treemap tooltips should be shown
+  const [showTreemapTooltips, setShowTreemapTooltips] = useState(false);
   // Track current view mode
   const [viewMode, setViewMode] = useState<BreakdownViewMode>('treemap');
   // Track hovered donut segment
@@ -289,7 +288,7 @@ const Breakdown: React.FC<{
       const isSmallSection = width <= 80 || height <= 50;
       
       // Show all tooltips when showAllTooltips is true or if it's a small section
-      if (!isSmallSection && !showAllTooltips) {
+      if (!isSmallSection && !showTreemapTooltips) {
         return null; // Don't show tooltip for larger sections unless user has clicked
       }
       
@@ -420,8 +419,9 @@ const Breakdown: React.FC<{
     
     // Get color directly based on asset and current theme
     let fillColor = DEFAULT_COLOR;
-    if (isAssetTicker(item.name) && ASSETS[item.name]) {
-      fillColor = ASSETS[item.name].theme[currentTheme];
+    if (isAssetTicker(item.name) && item.name in ASSETS) {
+      const asset = ASSETS[item.name as keyof typeof ASSETS];
+      fillColor = asset.theme[currentTheme];
     }
     
     // Apply opacity only to the fill color, not to stroke or text
@@ -485,8 +485,8 @@ const Breakdown: React.FC<{
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={() => {
-          // Toggle global tooltip visibility
-          setShowAllTooltips(true);
+          // Only update treemap tooltip visibility
+          setShowTreemapTooltips(true);
         }}
         // style={{ cursor: 'pointer' }} // Removed cursor styling
       >
@@ -513,7 +513,6 @@ const Breakdown: React.FC<{
             className="pointer-events-none"
           >
             <div
-              xmlns="http://www.w3.org/1999/xhtml"
               className="w-full h-full flex items-center justify-center"
             >
               <img
@@ -539,7 +538,6 @@ const Breakdown: React.FC<{
             className="overflow-visible pointer-events-none"
           >
             <div 
-              xmlns="http://www.w3.org/1999/xhtml"
               className="flex items-center justify-between w-full h-full"
             >
               {/* Asset button at bottom left */}
@@ -693,21 +691,18 @@ const Breakdown: React.FC<{
             if (keys.length === 1) {
               // If there's only one non-currency key, it might be the asset quantity
               const possibleAmount = balance[keys[0]];
-              if (typeof possibleAmount === 'string' || typeof possibleAmount === 'number') {
+              if (typeof possibleAmount === 'string') {
                 assetBalance = parseFloat(possibleAmount);
+              } else if (typeof possibleAmount === 'number') {
+                assetBalance = possibleAmount;
               }
             }
           }
-          
           // If we still don't have a balance but we have EUR value and price, calculate it
           if (assetBalance === 0 && value > 0) {
             if (balance.price && balance.price.EUR) {
               // Calculate from price
-              const price = parseFloat(balance.price.EUR);
-              assetBalance = price > 0 ? value / price : 0;
-            } else if (ASSETS[asset as AssetTicker]?.price) {
-              // Try to get price from ASSETS if available
-              const price = parseFloat(ASSETS[asset as AssetTicker].price);
+              const price = parseFloat(balance.price?.EUR || '0');
               assetBalance = price > 0 ? value / price : 0;
             }
           }
@@ -871,7 +866,7 @@ const Breakdown: React.FC<{
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <PieChart onClick={() => setShowAllTooltips(!showAllTooltips)}>
+        <PieChart>
           <Pie
             data={treeMapData}
             dataKey="size"
@@ -889,8 +884,8 @@ const Breakdown: React.FC<{
             {treeMapData.map((entry, index) => {
               // Get color based on asset
               let fillColor = DEFAULT_COLOR;
-              if (isAssetTicker(entry.name) && ASSETS[entry.name]) {
-                fillColor = ASSETS[entry.name].theme[effectiveTheme];
+              if (isAssetTicker(entry.name) && entry.name in ASSETS) {
+                fillColor = ASSETS[entry.name as keyof typeof ASSETS].theme[effectiveTheme];
               }
               
               // Check if this segment is currently hovered
@@ -917,13 +912,10 @@ const Breakdown: React.FC<{
           <Tooltip 
             content={<CustomTooltip />} 
             cursor={<CustomCursor />}
-            position={{ x: 'auto', y: 'auto' }}
             wrapperStyle={{ transition: 'transform 0.2s ease-out, opacity 0.2s ease-out' }}
             isAnimationActive={true}
             animationDuration={200}
             animationEasing="ease-out"
-            // Only show tooltip when showAllTooltips is true or when hovering
-            isActive={(props) => showAllTooltips || (props.active && props.payload && props.payload.length > 0)}
           />
         </PieChart>
       </ResponsiveContainer>
@@ -1020,8 +1012,10 @@ const Breakdown: React.FC<{
       <div 
         className="h-full w-full rounded-xl bg-card overflow-hidden border"
         onClick={() => {
-          // Toggle tooltip visibility when clicking anywhere in the container
-          setShowAllTooltips(!showAllTooltips);
+          // Only toggle treemap tooltips when in treemap view
+          if (viewMode === 'treemap') {
+            setShowTreemapTooltips(!showTreemapTooltips);
+          }
         }}
       >
         <div className="h-full w-full">
@@ -1032,7 +1026,7 @@ const Breakdown: React.FC<{
                 data={treeMapData}
                 dataKey="size"
                 nameKey="name"
-                idKey="id"
+                key="id"
                 stroke="transparent"
                 animationDuration={0}
                 isAnimationActive={false}
@@ -1043,13 +1037,11 @@ const Breakdown: React.FC<{
                 <Tooltip 
                   content={<CustomTooltip />} 
                   cursor={false}
-                  position={{ x: 'auto', y: 'auto' }}
                   wrapperStyle={{ transition: 'transform 0.2s ease-out, opacity 0.2s ease-out' }}
                   isAnimationActive={true}
                   animationDuration={200}
                   animationEasing="ease-out"
-                  // Consistent tooltip visibility behavior
-                  isActive={(props) => showAllTooltips || (props.active && props.payload && props.payload.length > 0)}
+                  active={showTreemapTooltips}
                 />
               </Treemap>
             </ResponsiveContainer>
