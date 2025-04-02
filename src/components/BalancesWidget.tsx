@@ -16,6 +16,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import { useDataSource } from '@/lib/DataSourceContext';
 import { AssetPriceTooltip } from './AssetPriceTooltip';
 import coinGeckoService from '@/services/coinGeckoService';
+import { 
+  ChevronUp,
+  ChevronDown as ChevronDownIcon
+} from 'lucide-react';
 
 // Set this to false to disable logging
 const ENABLE_LOGGING = false;
@@ -662,10 +666,25 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
           <TableHeader className="sticky top-0 z-20">
             <TableRow className="bg-[hsl(var(--color-widget-header))]">
               <TableHead 
-                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap"
+                className="sticky left-0 top-0 bg-[hsl(var(--color-widget-header))] z-30 whitespace-nowrap cursor-pointer hover:text-foreground/80"
+                onClick={() => handleSort('asset')}
                 style={{ width: `${assetColumnWidth}px`, minWidth: `${assetColumnWidth}px` }}
               >
-                <div className="px-0 py-1">Asset</div>
+                <div className="relative">
+                  <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+                  <div className="relative z-10 flex items-center justify-start gap-1">
+                    <span className="truncate text-left">Asset</span>
+                    {sortField === 'asset' && (
+                      <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                        {sortDirection === 'asc' ? (
+                          <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                        ) : (
+                          <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </TableHead>
               <TableHead 
                 className="sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 text-right whitespace-nowrap cursor-pointer hover:text-foreground/80"
@@ -674,9 +693,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                 <div className="relative">
                   <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                   <div className="relative z-10 flex items-center justify-end gap-1">
-                    Balance
+                    <span className="truncate text-right">Balance</span>
                     {sortField === 'balance' && (
-                      <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                        {sortDirection === 'asc' ? (
+                          <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                        ) : (
+                          <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -690,9 +715,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     <div className="relative">
                       <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                       <div className="relative z-10 flex items-center justify-end gap-1">
-                        Value (EUR)
+                        <span className="truncate text-right">Value (EUR)</span>
                         {sortField === 'value' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                            {sortDirection === 'asc' ? (
+                              <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -704,9 +735,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     <div className="relative">
                       <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                       <div className="relative z-10 flex items-center justify-end gap-1">
-                        24h Change
+                        <span className="truncate text-right">24h Change</span>
                         {sortField === 'change24h' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                            {sortDirection === 'asc' ? (
+                              <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -718,9 +755,15 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                     <div className="relative">
                       <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
                       <div className="relative z-10 flex items-center justify-end gap-1">
-                        Available
+                        <span className="truncate text-right">Available</span>
                         {sortField === 'available' && (
-                          <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                            {sortDirection === 'asc' ? (
+                              <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
