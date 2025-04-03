@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { AssetTicker } from '@/assets/AssetTicker';
 import { MarketsWidgetHeader } from './MarketsWidgetHeader';
 import { MarketsWidgetMenu } from './MarketsWidgetMenu';
@@ -93,6 +93,36 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   const [secondaryCurrency, setSecondaryCurrency] = useState(widgetState.secondaryCurrency);
   const [quoteAssets, setQuoteAssets] = useState(widgetState.quoteAssets);
   
+  // Add synchronization effect
+  useEffect(() => {
+    // When the component mounts, synchronize its state with the registry
+    const state = marketsWidgetRegistry.get(widgetId);
+    if (state) {
+      setSearchQuery(state.searchQuery);
+      setSelectedQuoteAsset(state.selectedQuoteAsset);
+      setSecondaryCurrency(state.secondaryCurrency);
+      setQuoteAssets(state.quoteAssets);
+    }
+
+    // Listen for changes in the registry state
+    const interval = setInterval(() => {
+      const updatedState = marketsWidgetRegistry.get(widgetId);
+      if (updatedState) {
+        if (updatedState.searchQuery !== searchQuery) {
+          setSearchQuery(updatedState.searchQuery);
+        }
+        if (updatedState.selectedQuoteAsset !== selectedQuoteAsset) {
+          setSelectedQuoteAsset(updatedState.selectedQuoteAsset);
+        }
+        if (updatedState.secondaryCurrency !== secondaryCurrency) {
+          setSecondaryCurrency(updatedState.secondaryCurrency);
+        }
+      }
+    }, 100); // Check for changes every 100ms
+
+    return () => clearInterval(interval);
+  }, [widgetId, searchQuery, selectedQuoteAsset, secondaryCurrency]);
+  
   // Handlers that update both local state and registry
   const handleSearchQueryChange = useCallback((value: string) => {
     setSearchQuery(value);
@@ -112,10 +142,40 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   }, [widgetId]);
   
   const handleSecondaryCurrencyChange = useCallback((value: AssetTicker | null) => {
+    console.log('Wrapper changing secondary currency to:', value);
     setSecondaryCurrency(value);
     const state = marketsWidgetRegistry.get(widgetId);
     if (state) {
       state.secondaryCurrency = value;
+      
+      // Force refresh data to trigger UI update - more aggressively
+      if (state.tableRef.current) {
+        const table = state.tableRef.current.getTable();
+        if (table) {
+          // Try multiple refresh strategies
+          table.setColumnVisibility({...table.getState().columnVisibility});
+          
+          // Force re-sorting to trigger a re-render
+          const currentSorting = table.getState().sorting;
+          if (currentSorting.length > 0) {
+            table.setSorting([...currentSorting]);
+          } else {
+            // If no sorting active, toggle it briefly
+            const firstSortableColumn = table.getAllColumns().find(col => col.getCanSort());
+            if (firstSortableColumn) {
+              table.setSorting([{ id: firstSortableColumn.id, desc: false }]);
+              setTimeout(() => {
+                table.setSorting([]);
+              }, 10);
+            }
+          }
+          
+          // Additional trigger for re-render
+          setTimeout(() => {
+            table.setColumnVisibility({...table.getState().columnVisibility});
+          }, 50);
+        }
+      }
     }
     setStoredValue(STORAGE_KEYS.SECONDARY_CURRENCY, value);
   }, [widgetId]);

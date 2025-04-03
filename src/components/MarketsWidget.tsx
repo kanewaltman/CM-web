@@ -127,6 +127,43 @@ const memoizedFormatLargeNumber = (value: number) => {
   return result;
 };
 
+// Add the conversion rate as a constant at file level
+const CURRENCY_CONVERSION_RATES = {
+  EUR_USD: 1.08,
+  USD_EUR: 0.93,
+  GBP_USD: 1.25,
+  USD_GBP: 0.80,
+};
+
+// Helper to get the right conversion rate between currencies
+const getConversionRate = (from: AssetTicker, to: AssetTicker | null): number => {
+  if (!to) return 1; // No conversion needed if no secondary currency
+  if (from === to) return 1;
+  
+  console.log(`Converting from ${from} to ${to}`);
+  
+  // First check direct conversions
+  if (from === 'EUR' && to === 'USD') return CURRENCY_CONVERSION_RATES.EUR_USD;
+  if (from === 'USD' && to === 'EUR') return CURRENCY_CONVERSION_RATES.USD_EUR;
+  if (from === 'GBP' && to === 'USD') return CURRENCY_CONVERSION_RATES.GBP_USD;
+  if (from === 'USD' && to === 'GBP') return CURRENCY_CONVERSION_RATES.USD_GBP;
+  
+  // For pairs involving BTC, which might need a two-step conversion
+  if (from === 'BTC' && to === 'USD') return 38000; // Example BTC to USD rate
+  if (from === 'BTC' && to === 'EUR') return 35000; // Example BTC to EUR rate
+  if (from === 'BTC' && to === 'GBP') return 30000; // Example BTC to GBP rate
+  
+  // For alt-coins or stablecoins to major fiat
+  if (to === 'USD' || to === 'EUR' || to === 'GBP') {
+    // Return some sample conversion rate based on the asset type
+    return 1.0; // Default conversion
+  }
+  
+  // For other pairs, use a default rate (this should be replaced with real data)
+  console.log(`No direct conversion rate found for ${from} to ${to}, using default`);
+  return 1.0;
+};
+
 interface MarketData {
   pair: string;
   baseAsset: AssetTicker;
@@ -610,6 +647,41 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   // Add a separate state for tracking dynamic column visibility based on container width
   const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
 
+  // Force rerender when secondary currency changes
+  const [forceRenderKey, setForceRenderKey] = useState(0);
+  useEffect(() => {
+    console.log('Secondary currency changed to:', secondaryCurrency);
+    // Force a complete re-render by changing the key
+    setForceRenderKey(prev => prev + 1);
+  }, [secondaryCurrency]);
+  
+  // Dynamic key for table to force complete re-renders
+  const tableKey = `table-${forceRenderKey}-${secondaryCurrency || 'none'}`;
+
+  useEffect(() => {
+    if (externalSelectedQuoteAsset !== undefined) {
+      console.log('External quote asset changed:', externalSelectedQuoteAsset);
+    } else {
+      console.log('Internal quote asset changed:', internalSelectedQuoteAsset);
+    }
+  }, [externalSelectedQuoteAsset, internalSelectedQuoteAsset]);
+
+  useEffect(() => {
+    if (externalSearchQuery !== undefined) {
+      console.log('External search query changed:', externalSearchQuery);
+    } else {
+      console.log('Internal search query changed:', internalSearchQuery);
+    }
+  }, [externalSearchQuery, internalSearchQuery]);
+
+  useEffect(() => {
+    if (externalSecondaryCurrency !== undefined) {
+      console.log('External secondary currency changed:', externalSecondaryCurrency);
+    } else {
+      console.log('Internal secondary currency changed:', internalSecondaryCurrency);
+    }
+  }, [externalSecondaryCurrency, internalSecondaryCurrency]);
+
   useEffect(() => {
     if (externalSelectedQuoteAsset === undefined) {
       setStoredValue(STORAGE_KEYS.SELECTED_QUOTE_ASSET, internalSelectedQuoteAsset);
@@ -727,6 +799,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 
   // Filter market data based on selected quote asset and search query
   const filteredMarketData = useMemo(() => {
+    console.log(`Filtering with selectedQuoteAsset: ${selectedQuoteAsset}, searchQuery: ${searchQuery}`);
     // First apply quote asset filter
     let filtered = selectedQuoteAsset === 'ALL' 
       ? marketData 
@@ -739,9 +812,17 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     
     return filtered;
   }, [marketData, selectedQuoteAsset, searchQuery, assetMatchesSearch]);
+  
+  // Update the table with filtered data whenever filters change
+  useEffect(() => {
+    console.log('Filtered data updated:', filteredMarketData.length);
+  }, [filteredMarketData]);
 
   // Define columns for the table with deep comparison memoization
-  const columns = useDeepCompareMemo<ColumnDef<MarketData>[]>(() => [
+  const columns = useDeepCompareMemo<ColumnDef<MarketData>[]>(() => {
+    console.log('Rebuilding columns with secondaryCurrency:', secondaryCurrency);
+    
+    return [
     {
       id: 'pair',
       header: 'Pair',
@@ -750,7 +831,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
         const baseAssetConfig = ASSETS[row.original.baseAsset];
         const quoteAssetConfig = ASSETS[row.original.quoteAsset];
         const marginMultiplier = row.original.marginMultiplier;
-        const pair = row.original.pair;
         
         return (
           <div className="flex items-center gap-2">
@@ -793,22 +873,24 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       header: 'Price',
       accessorKey: 'price',
       cell: ({ row }) => {
-        const pricePrefix = secondaryCurrency ? 
-          (secondaryCurrency === 'EUR' ? '€' : 
-           secondaryCurrency === 'USD' ? '$' :
-           secondaryCurrency === 'GBP' ? '£' : '') :
-          (row.original.quoteAsset === 'EUR' ? '€' : 
-           row.original.quoteAsset === 'USD' ? '$' :
-           row.original.quoteAsset === 'GBP' ? '£' : '');
+        // Display in secondary currency if set, otherwise use quote asset currency
+        const displayCurrency = secondaryCurrency || row.original.quoteAsset;
+        
+        const pricePrefix = displayCurrency === 'EUR' ? '€' : 
+                          displayCurrency === 'USD' ? '$' :
+                          displayCurrency === 'GBP' ? '£' : '';
+        
+        // Get conversion rate
+        const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
         
         // Use original price or converted price based on secondary currency
         const displayPrice = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
-          row.original.price * 1.08 : // Example conversion rate
+          row.original.price * conversionRate : 
           row.original.price;
         
         return (
           <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%]">
-            {pricePrefix}{formatPrice(displayPrice)}
+            {pricePrefix}{memoizedFormatPrice(displayPrice)}
           </div>
         );
       },
@@ -851,22 +933,24 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       header: 'Market Cap',
       accessorKey: 'marketCap',
       cell: ({ row }) => {
-        const pricePrefix = secondaryCurrency ? 
-          (secondaryCurrency === 'EUR' ? '€' : 
-           secondaryCurrency === 'USD' ? '$' :
-           secondaryCurrency === 'GBP' ? '£' : '') :
-          (row.original.quoteAsset === 'EUR' ? '€' : 
-           row.original.quoteAsset === 'USD' ? '$' :
-           row.original.quoteAsset === 'GBP' ? '£' : '');
+        // Display in secondary currency if set, otherwise use quote asset currency
+        const displayCurrency = secondaryCurrency || row.original.quoteAsset;
+        
+        const pricePrefix = displayCurrency === 'EUR' ? '€' : 
+                          displayCurrency === 'USD' ? '$' :
+                          displayCurrency === 'GBP' ? '£' : '';
+        
+        // Get conversion rate
+        const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
         
         // Use original marketCap or converted marketCap based on secondary currency
         const displayMarketCap = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
-          row.original.marketCap * 1.08 : // Example conversion rate
+          row.original.marketCap * conversionRate : 
           row.original.marketCap;
         
         return (
           <div className="text-right font-jakarta font-semibold text-sm leading-[150%]">
-            {displayMarketCap > 0 ? `${pricePrefix}${formatLargeNumber(displayMarketCap)}` : '-'}
+            {displayMarketCap > 0 ? `${pricePrefix}${memoizedFormatLargeNumber(displayMarketCap)}` : '-'}
           </div>
         );
       },
@@ -877,28 +961,30 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       header: 'Volume (24h)',
       accessorKey: 'volume',
       cell: ({ row }) => {
-        const pricePrefix = secondaryCurrency ? 
-          (secondaryCurrency === 'EUR' ? '€' : 
-           secondaryCurrency === 'USD' ? '$' :
-           secondaryCurrency === 'GBP' ? '£' : '') :
-          (row.original.quoteAsset === 'EUR' ? '€' : 
-           row.original.quoteAsset === 'USD' ? '$' :
-           row.original.quoteAsset === 'GBP' ? '£' : '');
+        // Display in secondary currency if set, otherwise use quote asset currency
+        const displayCurrency = secondaryCurrency || row.original.quoteAsset;
+        
+        const pricePrefix = displayCurrency === 'EUR' ? '€' : 
+                          displayCurrency === 'USD' ? '$' :
+                          displayCurrency === 'GBP' ? '£' : '';
+        
+        // Get conversion rate
+        const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
         
         // Use original volume or converted volume based on secondary currency
         const displayVolume = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
-          row.original.volume * 1.08 : // Example conversion rate
+          row.original.volume * conversionRate : 
           row.original.volume;
         
         return (
           <div className="text-right font-jakarta font-semibold text-sm leading-[150%]">
-            {pricePrefix}{formatLargeNumber(displayVolume)}
+            {pricePrefix}{memoizedFormatLargeNumber(displayVolume)}
           </div>
         );
       },
       size: columnSizes.volume,
     }
-  ], [columnSizes, secondaryCurrency]);
+  ]}, [columnSizes, secondaryCurrency]);
 
   // Setup column order
   const [columnOrder, setColumnOrder] = useState<string[]>(
@@ -1274,7 +1360,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       <div className="flex-1 min-h-0 relative w-full">
         <div className="absolute left-[8px] right-[16px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         <div className="h-full w-full overflow-x-auto">
-          <Table className="w-full table-fixed">
+          <Table className="w-full table-fixed" key={tableKey}>
             <TableHeader className="sticky top-0 z-20">
               <TableRow className="bg-[hsl(var(--color-widget-header))]">
                 {table.getHeaderGroups()[0].headers
