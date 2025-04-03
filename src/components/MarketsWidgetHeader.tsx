@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 import { AssetTicker } from '@/assets/AssetTicker';
 import { 
   ChevronDown as ChevronDownIcon, 
-  Star, 
   Search, 
   X
 } from 'lucide-react';
@@ -21,8 +20,6 @@ import { useReactTable } from '@tanstack/react-table';
 interface MarketsWidgetHeaderProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
-  showOnlyFavorites: boolean;
-  onShowOnlyFavoritesChange: (value: boolean) => void;
   selectedQuoteAsset: AssetTicker | 'ALL';
   onSelectedQuoteAssetChange: (value: AssetTicker | 'ALL') => void;
   secondaryCurrency: AssetTicker | null;
@@ -33,8 +30,6 @@ interface MarketsWidgetHeaderProps {
 export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   searchQuery,
   onSearchQueryChange,
-  showOnlyFavorites,
-  onShowOnlyFavoritesChange,
   selectedQuoteAsset,
   onSelectedQuoteAssetChange,
   secondaryCurrency,
@@ -62,25 +57,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
           </button>
         )}
       </div>
-
-      <Button 
-        variant={showOnlyFavorites ? "default" : "outline"} 
-        size="sm"
-        onClick={() => onShowOnlyFavoritesChange(!showOnlyFavorites)}
-        className={cn(
-          "h-7 px-2.5 text-xs whitespace-nowrap",
-          showOnlyFavorites ? "bg-yellow-500 hover:bg-yellow-600 text-black" : ""
-        )}
-      >
-        <Star
-          size={12}
-          className={cn(
-            "mr-1 transition-colors",
-            showOnlyFavorites ? "fill-black" : "fill-none"
-          )}
-        />
-        Favorites
-      </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

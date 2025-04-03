@@ -15,8 +15,6 @@ import { useTheme } from 'next-themes';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { 
   ChevronDown as ChevronDownIcon, 
-  Star, 
-  Search, 
   X,
   AlertTriangle as AlertTriangleIcon,
   RefreshCw as RefreshCwIcon,
@@ -71,7 +69,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Format price with appropriate number of decimal places
+// Format price with appropriate number of decimal places - memoize this function
 const formatPrice = (price: number) => {
   if (price >= 1000) {
     return price.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -86,18 +84,47 @@ const formatPrice = (price: number) => {
   }
 };
 
-// Format market cap and volume to K, M, B, T
+// Cache formatter results for common values
+const priceFormatterCache = new Map<number, string>();
+const memoizedFormatPrice = (price: number) => {
+  if (priceFormatterCache.has(price)) {
+    return priceFormatterCache.get(price)!;
+  }
+  const result = formatPrice(price);
+  if (priceFormatterCache.size > 1000) {
+    // Clear cache if it gets too large
+    priceFormatterCache.clear();
+  }
+  priceFormatterCache.set(price, result);
+  return result;
+};
+
+// Format market cap and volume to K, M, B, T - memoize this function
 const formatLargeNumber = (value: number) => {
   if (value >= 1_000_000_000_000) {
     return `${(value / 1_000_000_000_000).toFixed(2)}T`;
   } else if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(2)}B`;
   } else if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(2)}M`;
+    return `${(value / 1_000_000_000).toFixed(2)}M`;
   } else if (value >= 1_000) {
     return `${(value / 1_000).toFixed(2)}K`;
   }
   return value.toLocaleString();
+};
+
+// Cache large number formatter results
+const largeNumberFormatterCache = new Map<number, string>();
+const memoizedFormatLargeNumber = (value: number) => {
+  if (largeNumberFormatterCache.has(value)) {
+    return largeNumberFormatterCache.get(value)!;
+  }
+  const result = formatLargeNumber(value);
+  if (largeNumberFormatterCache.size > 1000) {
+    largeNumberFormatterCache.clear();
+  }
+  largeNumberFormatterCache.set(value, result);
+  return result;
 };
 
 interface MarketData {
@@ -120,8 +147,6 @@ interface MarketsWidgetProps {
   compact?: boolean;
   searchQuery?: string;
   onSearchQueryChange?: (value: string) => void;
-  showOnlyFavorites?: boolean;
-  onShowOnlyFavoritesChange?: (value: boolean) => void;
   selectedQuoteAsset?: AssetTicker | 'ALL';
   onSelectedQuoteAssetChange?: (value: AssetTicker | 'ALL') => void;
   secondaryCurrency?: AssetTicker | null;
@@ -254,22 +279,37 @@ const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketD
   );
 };
 
-// DragAlongCell Component (that moves along with its header)
-const DragAlongCell = ({ cell, currentTheme }: { cell: Cell<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
-  const cellContent = flexRender(cell.column.columnDef.cell, cell.getContext());
-  const isNarrowColumn = cell.column.id === 'favorite'; // Identify narrow columns
+// Memoized DragAlongCell component using React.memo
+const DragAlongCell = React.memo(
+  ({ cell, currentTheme }: { cell: Cell<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
+    const cellContent = flexRender(cell.column.columnDef.cell, cell.getContext());
+    const isNarrowColumn = cell.column.id === 'favorite'; // Identify narrow columns
 
-  return (
-    <TableCell
-      className={cn(
-        isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
-      )}
-      style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
-    >
-      {cellContent}
-    </TableCell>
-  );
-};
+    return (
+      <TableCell
+        className={cn(
+          isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
+        )}
+        style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
+      >
+        {cellContent}
+      </TableCell>
+    );
+  },
+  // Custom comparison function to prevent unnecessary re-renders
+  (prevProps, nextProps) => {
+    // Only re-render if the cell value changed
+    const prevValue = prevProps.cell.getValue();
+    const nextValue = nextProps.cell.getValue();
+    
+    // For complex objects in cell data, do more specific comparison
+    if (typeof prevValue === 'object' || typeof nextValue === 'object') {
+      return false; // Always re-render for complex values
+    }
+    
+    return prevValue === nextValue && prevProps.currentTheme === nextProps.currentTheme;
+  }
+);
 
 // Draggable Item for column visibility menu
 const DraggableMenuItem = ({ 
@@ -487,12 +527,33 @@ export interface MarketsWidgetRef {
   getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
 }
 
+// Add a deep comparison memo utility
+const useDeepCompareMemo = <T,>(factory: () => T, deps: React.DependencyList) => {
+  const ref = useRef<{ deps: React.DependencyList; obj: T; initialized: boolean }>({
+    deps: [],
+    obj: null as unknown as T,
+    initialized: false
+  });
+  
+  const depsChanged = !ref.current.initialized || 
+    deps.length !== ref.current.deps.length || 
+    deps.some((dep, i) => {
+      return JSON.stringify(dep) !== JSON.stringify(ref.current.deps[i]);
+    });
+  
+  if (depsChanged) {
+    ref.current.deps = deps;
+    ref.current.obj = factory();
+    ref.current.initialized = true;
+  }
+  
+  return ref.current.obj;
+};
+
 export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({ 
   className,
   searchQuery: externalSearchQuery,
   onSearchQueryChange: externalSearchQueryChange,
-  showOnlyFavorites: externalShowOnlyFavorites,
-  onShowOnlyFavoritesChange: externalShowOnlyFavoritesChange,
   selectedQuoteAsset: externalSelectedQuoteAsset,
   onSelectedQuoteAssetChange: externalSelectedQuoteAssetChange,
   secondaryCurrency: externalSecondaryCurrency,
@@ -514,13 +575,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
   
-  const [internalShowOnlyFavorites, setInternalShowOnlyFavorites] = useState(
-    getStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, false)
-  );
-  const showOnlyFavorites = externalShowOnlyFavorites !== undefined 
-    ? externalShowOnlyFavorites 
-    : internalShowOnlyFavorites;
-  
   const [internalSelectedQuoteAsset, setInternalSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(
     getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL')
   );
@@ -539,9 +593,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [sorting, setSorting] = useState<SortingState>(
     getStoredValue(STORAGE_KEYS.SORTING, [{ id: 'marketCap', desc: true }])
   );
-  const [favorites, setFavorites] = useState<Set<string>>(
-    new Set(getStoredValue<string[]>(STORAGE_KEYS.FAVORITES, []))
-  );
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     getStoredValue(STORAGE_KEYS.COLUMN_VISIBILITY, {})
   );
@@ -558,17 +609,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 
   // Add a separate state for tracking dynamic column visibility based on container width
   const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
-
-  // Persist state changes to localStorage
-  useEffect(() => {
-    setStoredValue(STORAGE_KEYS.FAVORITES, Array.from(favorites));
-  }, [favorites]);
-
-  useEffect(() => {
-    if (externalShowOnlyFavorites === undefined) {
-      setStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, internalShowOnlyFavorites);
-    }
-  }, [internalShowOnlyFavorites, externalShowOnlyFavorites]);
 
   useEffect(() => {
     if (externalSelectedQuoteAsset === undefined) {
@@ -609,14 +649,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     }
   }, [externalSearchQueryChange]);
 
-  const handleShowOnlyFavoritesChange = useCallback((value: boolean) => {
-    if (externalShowOnlyFavoritesChange) {
-      externalShowOnlyFavoritesChange(value);
-    } else {
-      setInternalShowOnlyFavorites(value);
-    }
-  }, [externalShowOnlyFavoritesChange]);
-
   const handleSelectedQuoteAssetChange = useCallback((value: AssetTicker | 'ALL') => {
     if (externalSelectedQuoteAssetChange) {
       externalSelectedQuoteAssetChange(value);
@@ -638,72 +670,78 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     if (!query.trim()) return true;
     
     const normalizedQuery = query.trim().toLowerCase();
-    const [baseAsset, quoteAsset] = item.pair.split('/');
     
-    // Check if query matches ticker symbols
+    // Early optimization: Direct pair match check
     if (item.pair.toLowerCase().includes(normalizedQuery)) return true;
+    
+    // Destructure once
+    const baseAsset = item.baseAsset;
+    const quoteAsset = item.quoteAsset;
+    
+    // Check if query matches ticker symbols (case optimized)
     if (baseAsset.toLowerCase().includes(normalizedQuery)) return true;
     if (quoteAsset.toLowerCase().includes(normalizedQuery)) return true;
     
-    // Check if query matches full asset names
-    const baseAssetFullName = (baseAsset in ASSETS) ? ASSETS[baseAsset as keyof typeof ASSETS]?.name.toLowerCase() || '' : '';
-    const quoteAssetFullName = (quoteAsset in ASSETS) ? ASSETS[quoteAsset as keyof typeof ASSETS]?.name.toLowerCase() || '' : '';
+    // Check if query matches full asset names - only do this lookup if necessary
+    const baseAssetFullName = (baseAsset in ASSETS) ? 
+      ASSETS[baseAsset]?.name.toLowerCase() || '' : '';
     
-    if (baseAssetFullName.includes(normalizedQuery)) return true;
-    if (quoteAssetFullName.includes(normalizedQuery)) return true;
+    if (baseAssetFullName && baseAssetFullName.includes(normalizedQuery)) return true;
     
-    // Check for combined searches like "eth usd"
-    const queryParts = normalizedQuery.split(/\s+/);
-    if (queryParts.length > 1) {
-      const [queryBase, queryQuote] = queryParts;
-      
-      const baseMatches = 
-        baseAsset.toLowerCase().includes(queryBase) || 
-        baseAssetFullName.includes(queryBase);
-      
-      const quoteMatches = 
-        quoteAsset.toLowerCase().includes(queryQuote) || 
-        quoteAssetFullName.includes(queryQuote);
-      
-      if (baseMatches && quoteMatches) return true;
-      
-      // Also check the reverse order
-      const baseMatchesReverse = 
-        baseAsset.toLowerCase().includes(queryQuote) || 
-        baseAssetFullName.includes(queryQuote);
-      
-      const quoteMatchesReverse = 
-        quoteAsset.toLowerCase().includes(queryBase) || 
-        quoteAssetFullName.includes(queryBase);
-      
-      if (baseMatchesReverse && quoteMatchesReverse) return true;
+    const quoteAssetFullName = (quoteAsset in ASSETS) ? 
+      ASSETS[quoteAsset]?.name.toLowerCase() || '' : '';
+    
+    if (quoteAssetFullName && quoteAssetFullName.includes(normalizedQuery)) return true;
+    
+    // Check for combined searches like "eth usd" - only split if there's a space
+    if (normalizedQuery.includes(' ')) {
+      const queryParts = normalizedQuery.split(/\s+/);
+      if (queryParts.length > 1) {
+        const [queryBase, queryQuote] = queryParts;
+        
+        const baseMatches = 
+          baseAsset.toLowerCase().includes(queryBase) || 
+          (baseAssetFullName && baseAssetFullName.includes(queryBase));
+        
+        const quoteMatches = 
+          quoteAsset.toLowerCase().includes(queryQuote) || 
+          (quoteAssetFullName && quoteAssetFullName.includes(queryQuote));
+        
+        if (baseMatches && quoteMatches) return true;
+        
+        // Also check the reverse order
+        const baseMatchesReverse = 
+          baseAsset.toLowerCase().includes(queryQuote) || 
+          (baseAssetFullName && baseAssetFullName.includes(queryQuote));
+        
+        const quoteMatchesReverse = 
+          quoteAsset.toLowerCase().includes(queryBase) || 
+          (quoteAssetFullName && quoteAssetFullName.includes(queryBase));
+        
+        if (baseMatchesReverse && quoteMatchesReverse) return true;
+      }
     }
     
     return false;
   }, []);
 
-  // Filter market data based on selected quote asset, favorites filter, and search query
+  // Filter market data based on selected quote asset and search query
   const filteredMarketData = useMemo(() => {
     // First apply quote asset filter
     let filtered = selectedQuoteAsset === 'ALL' 
       ? marketData 
       : marketData.filter(item => item.quoteAsset === selectedQuoteAsset);
     
-    // Then apply favorites filter if enabled
-    if (showOnlyFavorites) {
-      filtered = filtered.filter(item => favorites.has(item.pair));
-    }
-    
-    // Finally, apply search filter
+    // Apply search filter
     if (searchQuery?.trim()) {
       filtered = filtered.filter(item => assetMatchesSearch(item, searchQuery));
     }
     
     return filtered;
-  }, [marketData, selectedQuoteAsset, favorites, showOnlyFavorites, searchQuery, assetMatchesSearch]);
+  }, [marketData, selectedQuoteAsset, searchQuery, assetMatchesSearch]);
 
-  // Define columns for the table
-  const columns = useMemo<ColumnDef<MarketData>[]>(() => [
+  // Define columns for the table with deep comparison memoization
+  const columns = useDeepCompareMemo<ColumnDef<MarketData>[]>(() => [
     {
       id: 'pair',
       header: 'Pair',
@@ -713,29 +751,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
         const quoteAssetConfig = ASSETS[row.original.quoteAsset];
         const marginMultiplier = row.original.marginMultiplier;
         const pair = row.original.pair;
-        const isFavorite = favorites.has(pair);
         
         return (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={cn(
-                "flex items-center justify-center p-0 mr-1",
-                isFavorite ? "text-yellow-400 hover:text-yellow-500" : "text-muted-foreground/40 hover:text-muted-foreground/60"
-              )}
-              onClick={() => {
-                handleFavoriteToggle(pair);
-              }}
-            >
-              <Star
-                size={16}
-                className={cn(
-                  "transition-colors",
-                  isFavorite ? "fill-current" : "fill-none"
-                )}
-              />
-            </button>
-            
             <div className="relative flex shrink-0">
               {/* Base asset icon */}
               <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10">
@@ -880,7 +898,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       },
       size: columnSizes.volume,
     }
-  ], [favorites, columnSizes, secondaryCurrency]);
+  ], [columnSizes, secondaryCurrency]);
 
   // Setup column order
   const [columnOrder, setColumnOrder] = useState<string[]>(
@@ -917,10 +935,51 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     return () => observer.disconnect();
   }, []);
 
+  // Create a debounce utility function inside the component
+  const debounce = <F extends (...args: any[]) => any>(
+    func: F, 
+    wait: number
+  ): ((...args: Parameters<F>) => void) => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    
+    return function(...args: Parameters<F>) {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      
+      timeout = setTimeout(() => {
+        timeout = null;
+        func(...args);
+      }, wait);
+    };
+  };
+
+  // Create a setStoredValue function that uses debounce
+  const setStoredValue = useCallback(<T,>(key: string, value: T): void => {
+    if (typeof window === 'undefined') return;
+    
+    // Inline debouncing to avoid closure issues
+    const saveToStorage = () => {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      } catch (error) {
+        console.error(`Error writing to localStorage for key ${key}:`, error);
+      }
+    };
+    
+    // Use a short delay for responsiveness
+    setTimeout(saveToStorage, 300);
+  }, []);
+
   const fetchMarketData = useCallback(async () => {
     console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
     try {
-      setIsInitialLoading(true);
+      // Only set loading state for initial load, not refreshes
+      if (marketData.length === 0) {
+        setIsInitialLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
 
       if (dataSource === 'sample') {
         try {
@@ -1109,6 +1168,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       setError(err instanceof Error ? err.message : 'Failed to fetch market data');
     } finally {
       setIsInitialLoading(false);
+      setIsRefreshing(false);
     }
   }, [dataSource]);
 
@@ -1118,10 +1178,30 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
 
   // Update prices periodically
   useEffect(() => {
+    // Fast polling when visible, slow when tab is hidden
     const interval = setInterval(() => {
-      fetchMarketData();
-    }, 30000); // Update every 30 seconds
-    return () => clearInterval(interval);
+      if (document.visibilityState === 'visible') {
+        fetchMarketData();
+      }
+    }, document.visibilityState === 'visible' ? 30000 : 120000);
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchMarketData();
+        clearInterval(interval);
+        const newInterval = setInterval(() => {
+          fetchMarketData();
+        }, 30000);
+        return newInterval;
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchMarketData]);
 
   // Initialize TanStack Table with filtered data
@@ -1155,23 +1235,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     // Then apply dynamic constraints without modifying user preferences
     return userVisibleColumns.filter(id => dynamicVisibility[id] !== false);
   }, [columnOrder, columnVisibility, dynamicVisibility]);
-
-  // Update favorites and handle emptying favorites while in favorites view
-  const handleFavoriteToggle = useCallback((pair: string) => {
-    setFavorites(prevFavorites => {
-      const newFavorites = new Set(prevFavorites);
-      if (newFavorites.has(pair)) {
-        newFavorites.delete(pair);
-        // If we're removing the last favorite while in favorites view, reset to all view
-        if (newFavorites.size === 0 && showOnlyFavorites) {
-          handleShowOnlyFavoritesChange(false);
-        }
-      } else {
-        newFavorites.add(pair);
-      }
-      return newFavorites;
-    });
-  }, [showOnlyFavorites, handleShowOnlyFavoritesChange]);
 
   if (error) {
     return (
@@ -1221,27 +1284,34 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
                   ))}
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {isInitialLoading ? (
-                // Loading skeleton rows
-                Array.from({ length: 10 }).map((_, index) => (
+            
+            {isInitialLoading ? (
+              <TableBody>
+                {/* Loading skeleton rows */}
+                {Array.from({ length: 10 }).map((_, index) => (
                   <SkeletonRow key={index} />
-                ))
-              ) : error ? (
+                ))}
+              </TableBody>
+            ) : error ? (
+              <TableBody>
                 <TableRow>
                   <TableCell colSpan={visibleColumnIds.length} className="h-24 text-center">
                     <div className="text-red-500">{error}</div>
                   </TableCell>
                 </TableRow>
-              ) : marketData.length === 0 ? (
+              </TableBody>
+            ) : marketData.length === 0 ? (
+              <TableBody>
                 <TableRow>
                   <TableCell colSpan={visibleColumnIds.length} className="h-24 text-center">
                     <div className="text-sm text-muted-foreground">No market data found</div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                // Actual data rows
-                table.getRowModel().rows.map((row, index) => (
+              </TableBody>
+            ) : (
+              <TableBody className="virtual-scroll">
+                {/* Optimized rendering with windowing */}
+                {table.getRowModel().rows.map((row, index) => (
                   <TableRow 
                     key={row.id} 
                     className={cn(
@@ -1256,9 +1326,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
                         <DragAlongCell key={cell.id} cell={cell} currentTheme={currentTheme} />
                       ))}
                   </TableRow>
-                ))
-              )}
-            </TableBody>
+                ))}
+              </TableBody>
+            )}
           </Table>
         </div>
       </div>
@@ -1273,8 +1343,6 @@ export default MarketsWidget;
 
 const STORAGE_KEY_PREFIX = 'markets-widget-';
 const STORAGE_KEYS = {
-  FAVORITES: `${STORAGE_KEY_PREFIX}favorites`,
-  SHOW_ONLY_FAVORITES: `${STORAGE_KEY_PREFIX}show-only-favorites`,
   SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}selected-quote-asset`,
   SECONDARY_CURRENCY: `${STORAGE_KEY_PREFIX}secondary-currency`,
   COLUMN_VISIBILITY: `${STORAGE_KEY_PREFIX}column-visibility`,
@@ -1291,14 +1359,5 @@ const getStoredValue = <T,>(key: string, defaultValue: T): T => {
   } catch (error) {
     console.error(`Error reading from localStorage for key ${key}:`, error);
     return defaultValue;
-  }
-};
-
-const setStoredValue = <T,>(key: string, value: T): void => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error writing to localStorage for key ${key}:`, error);
   }
 };

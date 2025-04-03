@@ -66,6 +66,7 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.51.0",
     "react-resizable-panels": "^2.0.9",
+    "react-virtuoso": "^4.12.6",
     "recharts": "^2.12.2",
     "sonner": "^1.4.3",
     "tailwind-merge": "^2.2.1",

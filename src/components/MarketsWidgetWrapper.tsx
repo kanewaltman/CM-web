@@ -8,8 +8,6 @@ import { useReactTable } from '@tanstack/react-table';
 // Constants for localStorage keys
 const STORAGE_KEY_PREFIX = 'markets-widget-';
 const STORAGE_KEYS = {
-  FAVORITES: `${STORAGE_KEY_PREFIX}favorites`,
-  SHOW_ONLY_FAVORITES: `${STORAGE_KEY_PREFIX}show-only-favorites`,
   SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}selected-quote-asset`,
   SECONDARY_CURRENCY: `${STORAGE_KEY_PREFIX}secondary-currency`,
   COLUMN_VISIBILITY: `${STORAGE_KEY_PREFIX}column-visibility`,
@@ -42,7 +40,6 @@ const setStoredValue = <T,>(key: string, value: T): void => {
 // Registry to keep track of widget state
 const marketsWidgetRegistry = new Map<string, {
   searchQuery: string;
-  showOnlyFavorites: boolean;
   selectedQuoteAsset: AssetTicker | 'ALL';
   secondaryCurrency: AssetTicker | null;
   quoteAssets: AssetTicker[];
@@ -74,7 +71,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       // Create new state with defaults
       state = {
         searchQuery: '',
-        showOnlyFavorites: getStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, false),
         selectedQuoteAsset: getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL'),
         secondaryCurrency: getStoredValue<AssetTicker | null>(STORAGE_KEYS.SECONDARY_CURRENCY, null),
         quoteAssets: [],
@@ -93,7 +89,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   
   // Local state for this instance (header or content)
   const [searchQuery, setSearchQuery] = useState(widgetState.searchQuery);
-  const [showOnlyFavorites, setShowOnlyFavorites] = useState(widgetState.showOnlyFavorites);
   const [selectedQuoteAsset, setSelectedQuoteAsset] = useState(widgetState.selectedQuoteAsset);
   const [secondaryCurrency, setSecondaryCurrency] = useState(widgetState.secondaryCurrency);
   const [quoteAssets, setQuoteAssets] = useState(widgetState.quoteAssets);
@@ -105,15 +100,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
     if (state) {
       state.searchQuery = value;
     }
-  }, [widgetId]);
-  
-  const handleShowOnlyFavoritesChange = useCallback((value: boolean) => {
-    setShowOnlyFavorites(value);
-    const state = marketsWidgetRegistry.get(widgetId);
-    if (state) {
-      state.showOnlyFavorites = value;
-    }
-    setStoredValue(STORAGE_KEYS.SHOW_ONLY_FAVORITES, value);
   }, [widgetId]);
   
   const handleSelectedQuoteAssetChange = useCallback((value: AssetTicker | 'ALL') => {
@@ -156,8 +142,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       <MarketsWidgetHeader
         searchQuery={searchQuery}
         onSearchQueryChange={handleSearchQueryChange}
-        showOnlyFavorites={showOnlyFavorites}
-        onShowOnlyFavoritesChange={handleShowOnlyFavoritesChange}
         selectedQuoteAsset={selectedQuoteAsset}
         onSelectedQuoteAssetChange={handleSelectedQuoteAssetChange}
         secondaryCurrency={secondaryCurrency}
@@ -173,8 +157,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       ref={tableRef}
       searchQuery={searchQuery}
       onSearchQueryChange={handleSearchQueryChange}
-      showOnlyFavorites={showOnlyFavorites}
-      onShowOnlyFavoritesChange={handleShowOnlyFavoritesChange}
       selectedQuoteAsset={selectedQuoteAsset}
       onSelectedQuoteAssetChange={handleSelectedQuoteAssetChange}
       secondaryCurrency={secondaryCurrency}
