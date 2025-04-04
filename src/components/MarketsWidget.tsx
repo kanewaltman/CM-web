@@ -225,7 +225,7 @@ const SAMPLE_MARKET_DATA: Record<string, {
 };
 
 // SkeletonRow component for loading state
-const SkeletonRow: React.FC = () => (
+const SkeletonRow: React.FC<{ isCompact?: boolean }> = ({ isCompact = false }) => (
   <TableRow isHeader={false}>
     <TableCell className="bg-[hsl(var(--color-widget-header))] z-10">
       <div className="w-5 h-5 rounded bg-white/5 animate-pulse" />
@@ -240,20 +240,34 @@ const SkeletonRow: React.FC = () => (
       </div>
     </TableCell>
     <TableCell className="text-right">
-      <div className="w-24 h-5 ml-auto rounded bg-white/5 animate-pulse" />
+      <div className="flex flex-col items-end">
+        <div className="w-24 h-5 ml-auto rounded bg-white/5 animate-pulse" />
+        {isCompact && (
+          <div className="w-16 h-3 mt-1 ml-auto rounded bg-white/5 animate-pulse" />
+        )}
+      </div>
     </TableCell>
     <TableCell className="text-right">
-      <div className="w-16 h-5 ml-auto rounded bg-white/5 animate-pulse" />
+      <div className="flex flex-col items-end">
+        <div className="w-16 h-5 ml-auto rounded bg-white/5 animate-pulse" />
+        {isCompact && (
+          <div className="w-12 h-3 mt-1 ml-auto rounded bg-white/5 animate-pulse" />
+        )}
+      </div>
     </TableCell>
-    <TableCell className="text-right">
-      <div className="w-16 h-5 ml-auto rounded bg-white/5 animate-pulse" />
-    </TableCell>
-    <TableCell className="text-right">
-      <div className="w-20 h-5 ml-auto rounded bg-white/5 animate-pulse" />
-    </TableCell>
-    <TableCell className="text-right">
-      <div className="w-20 h-5 ml-auto rounded bg-white/5 animate-pulse" />
-    </TableCell>
+    {!isCompact && (
+      <>
+        <TableCell className="text-right">
+          <div className="w-16 h-5 ml-auto rounded bg-white/5 animate-pulse" />
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="w-20 h-5 ml-auto rounded bg-white/5 animate-pulse" />
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="w-20 h-5 ml-auto rounded bg-white/5 animate-pulse" />
+        </TableCell>
+      </>
+    )}
   </TableRow>
 );
 
@@ -596,6 +610,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   secondaryCurrency: externalSecondaryCurrency,
   onSecondaryCurrencyChange: externalSecondaryCurrencyChange,
   onQuoteAssetsChange,
+  compact = false,
 }, ref) => {
   const { theme, resolvedTheme } = useTheme();
   const { dataSource } = useDataSource();
@@ -606,7 +621,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isCompact, setIsCompact] = useState(false);
+  const [isCompact, setIsCompact] = useState(compact);
   
   // Use external state if provided, otherwise use local state
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
@@ -818,7 +833,83 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     console.log('Filtered data updated:', filteredMarketData.length);
   }, [filteredMarketData]);
 
-  // Define columns for the table with deep comparison memoization
+  // Check for container width to determine compact mode and which columns to show
+  useEffect(() => {
+    // Define column priorities (from lowest to highest priority)
+    // Columns will be hidden in this order as the container width decreases
+    const columnPriorities = ['volume', 'marketCap', 'change7d'];
+    
+    // Calculate the minimum widths needed for different column combinations
+    const calculateMinWidth = () => {
+      const buffer = 20; // Buffer for padding, borders, etc.
+      
+      // Always visible core columns
+      let coreWidth = columnSizes.pair + columnSizes.price + columnSizes.change24h + buffer;
+      
+      // Width thresholds for progressively hiding columns
+      const thresholds: Record<string, number> = {
+        // All columns visible
+        all: coreWidth + columnSizes.change7d + columnSizes.marketCap + columnSizes.volume
+      };
+      
+      // Calculate thresholds for each level of column hiding
+      let runningWidth = thresholds.all;
+      
+      columnPriorities.forEach((columnId, index) => {
+        const prevColumns = columnPriorities.slice(0, index);
+        const key = index === 0 ? 'first' : prevColumns.join('_');
+        runningWidth -= columnSizes[columnId as keyof typeof columnSizes] || 0;
+        thresholds[key] = runningWidth;
+      });
+      
+      return thresholds;
+    };
+
+    const checkWidth = () => {
+      if (!containerRef.current) return;
+      
+      const containerWidth = containerRef.current.clientWidth;
+      const widthThresholds = calculateMinWidth();
+      
+      // Create new dynamic visibility state based on available width
+      const newDynamicVisibility: VisibilityState = {};
+      
+      // Set compact mode if we need to hide any columns
+      let isInCompactMode = compact || containerWidth < widthThresholds.all;
+      
+      // Progressively hide columns based on available width
+      for (let i = 0; i < columnPriorities.length; i++) {
+        const thresholdKey = i === 0 ? 'first' : columnPriorities.slice(0, i).join('_');
+        const columnToHide = columnPriorities[i];
+        
+        if (containerWidth < widthThresholds[thresholdKey]) {
+          newDynamicVisibility[columnToHide] = false;
+        }
+      }
+      
+      setIsCompact(isInCompactMode);
+      setDynamicVisibility(newDynamicVisibility);
+    };
+    
+    // Initial check
+    checkWidth();
+    
+    // Set up resize observer
+    const resizeObserver = new ResizeObserver(checkWidth);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    
+    // Also add window resize event listener as backup
+    window.addEventListener('resize', checkWidth);
+    
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', checkWidth);
+    };
+  }, [columnSizes, compact]);
+
+  // Modify the pair column cell to show more info in compact mode
   const columns = useDeepCompareMemo<ColumnDef<MarketData>[]>(() => {
     console.log('Rebuilding columns with secondaryCurrency:', secondaryCurrency);
     
@@ -887,10 +978,41 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
         const displayPrice = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
           row.original.price * conversionRate : 
           row.original.price;
+
+        // Use original volume or converted volume based on secondary currency
+        const displayVolume = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+          row.original.volume * conversionRate : 
+          row.original.volume;
         
         return (
           <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%]">
-            {pricePrefix}{memoizedFormatPrice(displayPrice)}
+            {isCompact ? (
+              <div className="flex flex-col items-end">
+                <span>{pricePrefix}{memoizedFormatPrice(displayPrice)}</span>
+                
+                {/* Show the most important hidden info in compact mode */}
+                {dynamicVisibility.volume === false && row.original.volume > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Vol: {pricePrefix}{memoizedFormatLargeNumber(displayVolume)}
+                  </span>
+                )}
+                
+                {/* Show market cap if both volume and market cap columns are hidden */}
+                {dynamicVisibility.marketCap === false && 
+                 dynamicVisibility.volume === false && 
+                 row.original.marketCap > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    MCap: {pricePrefix}{memoizedFormatLargeNumber(
+                      secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+                      row.original.marketCap * conversionRate : 
+                      row.original.marketCap
+                    )}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span>{pricePrefix}{memoizedFormatPrice(displayPrice)}</span>
+            )}
           </div>
         );
       },
@@ -900,16 +1022,37 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       id: 'change24h',
       header: '24h %',
       accessorKey: 'change24h',
-      cell: ({ row }) => (
-        <div className={cn(
-          "text-right whitespace-nowrap font-mono",
-          row.original.change24h > 0 ? "text-price-up" : 
-          row.original.change24h < 0 ? "text-price-down" : 
-          "text-muted-foreground/80"
-        )}>
-          {row.original.change24h > 0 ? '+' : ''}{row.original.change24h.toFixed(2)}%
-        </div>
-      ),
+      cell: ({ row }) => {
+        // Get the 24h and 7d change values
+        const change24h = row.original.change24h;
+        const change7d = row.original.change7d;
+        
+        return (
+          <div className={cn(
+            "text-right whitespace-nowrap font-mono",
+            change24h > 0 ? "text-price-up" : 
+            change24h < 0 ? "text-price-down" : 
+            "text-muted-foreground/80"
+          )}>
+            {isCompact && dynamicVisibility.change7d === false ? (
+              <div className="flex flex-col items-end">
+                <span>{change24h > 0 ? '+' : ''}{change24h.toFixed(2)}%</span>
+                {/* Show 7d change when the 7d column is hidden */}
+                <span className={cn(
+                  "text-xs",
+                  change7d > 0 ? "text-price-up/80" : 
+                  change7d < 0 ? "text-price-down/80" : 
+                  "text-muted-foreground"
+                )}>
+                  7d: {change7d > 0 ? '+' : ''}{change7d.toFixed(2)}%
+                </span>
+              </div>
+            ) : (
+              <span>{change24h > 0 ? '+' : ''}{change24h.toFixed(2)}%</span>
+            )}
+          </div>
+        );
+      },
       size: columnSizes.change24h,
     },
     {
@@ -1375,7 +1518,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
               <TableBody>
                 {/* Loading skeleton rows */}
                 {Array.from({ length: 10 }).map((_, index) => (
-                  <SkeletonRow key={index} />
+                  <SkeletonRow key={index} isCompact={isCompact} />
                 ))}
               </TableBody>
             ) : error ? (
