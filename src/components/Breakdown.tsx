@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { AssetPriceTooltip } from './AssetPriceTooltip';
 
 // Default color for assets not found in ASSETS
 const DEFAULT_COLOR = '#4f46e5';
@@ -92,26 +93,28 @@ const AssetButton = ({
   const showHoverState = isHovered || isActive;
   
   return (
-    <div
-      className={cn("font-jakarta font-bold rounded-md px-1 relative z-20", className)}
-      style={{ 
-        color: showHoverState ? 'hsl(var(--color-widget-bg))' : assetColor,
-        backgroundColor: showHoverState ? assetColor : `${assetColor}14`,
-        cursor: 'default',
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'text',
-        userSelect: 'text',
-        fontSize: `${fontSize}px`,
-        pointerEvents: 'auto',
-        ...style
-      }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {asset}
-    </div>
+    <AssetPriceTooltip asset={asset as AssetTicker}>
+      <div
+        className={cn("font-jakarta font-bold rounded-md px-1 relative z-20 asset-button-container", className)}
+        style={{ 
+          color: showHoverState ? 'hsl(var(--color-widget-bg))' : assetColor,
+          backgroundColor: showHoverState ? assetColor : `${assetColor}14`,
+          cursor: 'pointer !important',
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+          fontSize: `${fontSize}px`,
+          pointerEvents: 'auto',
+          ...style
+        }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {asset}
+      </div>
+    </AssetPriceTooltip>
   );
-}
+};
 
 // The skeleton loader component with better theme integration
 const TreeMapSkeleton = () => {
@@ -488,7 +491,7 @@ const Breakdown: React.FC<{
           // Only update treemap tooltip visibility
           setShowTreemapTooltips(true);
         }}
-        // style={{ cursor: 'pointer' }} // Removed cursor styling
+        style={{ cursor: 'default' }}
       >
         <path 
           d={pathData}
@@ -499,6 +502,7 @@ const Breakdown: React.FC<{
           strokeOpacity={0.8} // Use constant stroke opacity
           style={{
             transition: 'fill 0.2s ease-out',
+            pointerEvents: 'none',
             // animation: isClicked ? 'pulse-border 2s infinite' : 'none', // Commented out pulse animation
           }}
         />
@@ -535,7 +539,7 @@ const Breakdown: React.FC<{
             y={safeY + safeHeight - 36} // Position at bottom with some padding
             width={safeWidth - 16} // Allow space for padding on both sides
             height={30} // Height for the row
-            className="overflow-visible pointer-events-none"
+            className="overflow-visible"
           >
             <div 
               className="flex items-center justify-between w-full h-full"
@@ -1011,9 +1015,13 @@ const Breakdown: React.FC<{
     >
       <div 
         className="h-full w-full rounded-xl bg-card overflow-hidden border"
-        onClick={() => {
-          // Only toggle treemap tooltips when in treemap view
-          if (viewMode === 'treemap') {
+        onClick={(e) => {
+          // Only toggle treemap tooltips when in treemap view and
+          // only if the click is not on an asset button
+          const target = e.target as HTMLElement;
+          const isAssetButtonClick = target.closest('.asset-button-container') !== null;
+          
+          if (viewMode === 'treemap' && !isAssetButtonClick) {
             setShowTreemapTooltips(!showTreemapTooltips);
           }
         }}
