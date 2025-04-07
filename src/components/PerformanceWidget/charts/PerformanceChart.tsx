@@ -375,6 +375,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const popoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isKeyboardFocus, setIsKeyboardFocus] = useState(false);
   
   // Store the current date range for comparison
   const prevDateRangeRef = useRef<{ from?: Date; to?: Date; instanceId?: number; dateRangeStr?: string }>({});
@@ -949,17 +950,24 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                       <button
                         type="button"
                         className="font-jakarta font-bold text-sm rounded-md px-2 h-5 transition-all duration-150 flex items-center gap-1 bg-muted hover:bg-muted/80"
-                        onMouseEnter={() => {
+                        onMouseEnter={(e) => {
+                          e.stopPropagation(); // Stop event propagation to prevent price tooltip
                           if (popoverTimeoutRef.current) {
                             clearTimeout(popoverTimeoutRef.current);
                             popoverTimeoutRef.current = null;
                           }
                           setIsPopoverOpen(true);
+                          setIsKeyboardFocus(false);
                         }}
-                        onMouseLeave={() => {
+                        onMouseLeave={(e) => {
+                          e.stopPropagation(); // Stop event propagation
                           popoverTimeoutRef.current = setTimeout(() => {
                             setIsPopoverOpen(false);
                           }, 150);
+                        }}
+                        onFocus={() => {
+                          // When trigger is focused with keyboard, set keyboard focus mode
+                          setIsKeyboardFocus(true);
                         }}
                       >
                         <MoreHorizontal className="w-4 h-4" />
@@ -984,16 +992,37 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                       className="w-auto p-2"
                       sideOffset={4}
                       align="start"
-                      onMouseEnter={() => {
+                      onMouseEnter={(e) => {
+                        e.stopPropagation(); // Stop event propagation
                         if (popoverTimeoutRef.current) {
                           clearTimeout(popoverTimeoutRef.current);
                           popoverTimeoutRef.current = null;
                         }
+                        // When mouse enters the popover, we're not using keyboard focus
+                        setIsKeyboardFocus(false);
                       }}
-                      onMouseLeave={() => {
+                      onMouseLeave={(e) => {
+                        e.stopPropagation(); // Stop event propagation
                         popoverTimeoutRef.current = setTimeout(() => {
                           setIsPopoverOpen(false);
                         }, 150);
+                      }}
+                      onFocusCapture={() => {
+                        // When focus enters via keyboard, set keyboard focus mode
+                        setIsKeyboardFocus(true);
+                      }}
+                      onKeyDown={(e) => {
+                        // Support keyboard navigation
+                        if (e.key === 'Escape') {
+                          setIsPopoverOpen(false);
+                        } else if (e.key === 'Enter' || e.key === ' ') {
+                          // Get the focused element
+                          const focusedElement = document.activeElement;
+                          // If it's a button, trigger its click
+                          if (focusedElement instanceof HTMLButtonElement) {
+                            focusedElement.click();
+                          }
+                        }
                       }}
                     >
                       <div className="flex flex-col gap-1">
@@ -1003,7 +1032,12 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           const isEnabled = enabledTruncatedAssets.has(asset);
                           const isActive = hoverValues?.activeLine === asset;
                           return (
-                            <AssetPriceTooltip key={asset} asset={asset} delayDuration={300}>
+                            <AssetPriceTooltip 
+                              key={asset} 
+                              asset={asset} 
+                              delayDuration={300}
+                              disabled={isKeyboardFocus}
+                            >
                               <button
                                 type="button"
                                 className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"
@@ -1016,8 +1050,14 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                                   userSelect: 'text',
                                   opacity: isEnabled ? 1 : 0.5
                                 }}
-                                onClick={() => toggleTruncatedAsset(asset)}
+                                onClick={(e) => {
+                                  // We want the click to toggle the asset but not trigger other events
+                                  e.stopPropagation();
+                                  toggleTruncatedAsset(asset);
+                                }}
                                 onMouseEnter={(e) => {
+                                  // Allow the hover to work for this button but not trigger parent handlers
+                                  e.stopPropagation();
                                   if (hoverTimeoutRef.current) {
                                     clearTimeout(hoverTimeoutRef.current);
                                     hoverTimeoutRef.current = null;
@@ -1026,8 +1066,19 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                                   target.style.backgroundColor = assetColor;
                                   target.style.color = 'hsl(var(--color-widget-bg))';
                                   setHoveredAsset(asset);
+                                  setIsKeyboardFocus(false);
+                                }}
+                                onFocus={(e) => {
+                                  // Don't style on initial focus, only when keyboard navigating
+                                  if (!isKeyboardFocus) return;
+                                  
+                                  const target = e.currentTarget;
+                                  target.style.backgroundColor = assetColor;
+                                  target.style.color = 'hsl(var(--color-widget-bg))';
                                 }}
                                 onMouseLeave={(e) => {
+                                  // Allow the hover to end for this button but not trigger parent handlers
+                                  e.stopPropagation();
                                   const target = e.currentTarget;
                                   if (!isActive) {
                                     target.style.backgroundColor = `${assetColor}14`;
@@ -1037,6 +1088,16 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                                   hoverTimeoutRef.current = setTimeout(() => {
                                     setHoveredAsset(null);
                                   }, 150);
+                                }}
+                                onBlur={(e) => {
+                                  // Only handle blur styling when we're in keyboard focus mode
+                                  if (!isKeyboardFocus) return;
+                                  
+                                  const target = e.currentTarget;
+                                  if (!isActive) {
+                                    target.style.backgroundColor = `${assetColor}14`;
+                                    target.style.color = assetColor;
+                                  }
                                 }}
                               >
                                 {assetConfig.name}

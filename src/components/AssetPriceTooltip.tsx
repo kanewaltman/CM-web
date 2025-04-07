@@ -353,12 +353,14 @@ interface AssetPriceTooltipProps {
   asset: AssetTicker;
   children: React.ReactNode;
   delayDuration?: number;
+  disabled?: boolean;
 }
 
 export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ 
   asset, 
   children,
-  delayDuration = 0
+  delayDuration = 0,
+  disabled = false
 }) => {
   const { theme } = useTheme();
   const { dataSource } = useDataSource();
@@ -395,6 +397,9 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({
   
   // Handle tooltip open state changes
   const handleTooltipOpenChange = (open: boolean) => {
+    // Don't open tooltip if disabled
+    if (disabled && open) return;
+    
     if (open && currentPrice > 0 && !animationStarted.current) {
       // Only set up animation if it hasn't been started yet
       const lastPrice = lastSeenPrices[asset];
@@ -587,7 +592,7 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({
   // Always render tooltip content, but show appropriate state
   return (
     <TooltipProvider delayDuration={delayDuration}>
-      <Tooltip onOpenChange={handleTooltipOpenChange}>
+      <Tooltip onOpenChange={handleTooltipOpenChange} open={disabled ? false : undefined}>
         <TooltipTrigger asChild>
           {children}
         </TooltipTrigger>
