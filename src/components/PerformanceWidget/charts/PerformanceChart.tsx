@@ -1003,7 +1003,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                           const isEnabled = enabledTruncatedAssets.has(asset);
                           const isActive = hoverValues?.activeLine === asset;
                           return (
-                            <AssetPriceTooltip key={asset} asset={asset}>
+                            <AssetPriceTooltip key={asset} asset={asset} delayDuration={300}>
                               <button
                                 type="button"
                                 className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 flex items-center gap-1"

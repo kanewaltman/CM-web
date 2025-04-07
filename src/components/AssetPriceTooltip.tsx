@@ -352,9 +352,14 @@ const PriceDisplay = ({
 interface AssetPriceTooltipProps {
   asset: AssetTicker;
   children: React.ReactNode;
+  delayDuration?: number;
 }
 
-export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, children }) => {
+export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ 
+  asset, 
+  children,
+  delayDuration = 0
+}) => {
   const { theme } = useTheme();
   const { dataSource } = useDataSource();
   const assetConfig = ASSETS[asset];
@@ -581,7 +586,7 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
 
   // Always render tooltip content, but show appropriate state
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={delayDuration}>
       <Tooltip onOpenChange={handleTooltipOpenChange}>
         <TooltipTrigger asChild>
           {children}
