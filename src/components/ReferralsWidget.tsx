@@ -76,12 +76,25 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
           const layout = JSON.parse(savedLayout);
           const widgetData = layout.find((item: any) => item.id === props.widgetId);
           
-          if (widgetData?.viewState?.viewMode && Object.keys(viewLabels).includes(widgetData.viewState.viewMode)) {
+          // Valid referral view modes
+          const validModes = Object.keys(viewLabels);
+          
+          // Check for the referral-specific view mode first
+          if (widgetData?.viewState?.referralViewMode && validModes.includes(widgetData.viewState.referralViewMode)) {
+            initialViewMode = widgetData.viewState.referralViewMode as ReferralsViewMode;
+            console.log(`Restored referral-specific view mode from layout: ${initialViewMode}`);
+          } 
+          // Then check the generic viewMode if it's valid for referrals
+          else if (widgetData?.viewState?.viewMode && validModes.includes(widgetData.viewState.viewMode)) {
             initialViewMode = widgetData.viewState.viewMode as ReferralsViewMode;
             console.log(`Restored view mode from layout: ${initialViewMode}`);
-          } else if (widgetData?.viewState?.referralViewMode && Object.keys(viewLabels).includes(widgetData.viewState.referralViewMode)) {
-            initialViewMode = widgetData.viewState.referralViewMode as ReferralsViewMode;
-            console.log(`Restored referral view mode from layout: ${initialViewMode}`);
+          }
+          // Handle performance widget view modes gracefully
+          else if (widgetData?.viewState?.viewMode === 'split' || 
+                   widgetData?.viewState?.viewMode === 'cumulative' || 
+                   widgetData?.viewState?.viewMode === 'combined') {
+            console.warn(`Ignoring performance widget view mode "${widgetData.viewState.viewMode}" for referral widget`);
+            // Keep default view mode
           }
         }
         
@@ -246,6 +259,27 @@ const Referrals: React.FC<{
 
   // Render the appropriate view based on current viewMode
   const renderContent = () => {
+    // Check if we received a performance widget view mode by mistake
+    const performanceViewModes = ['split', 'cumulative', 'combined'];
+    if (performanceViewModes.includes(viewMode as string)) {
+      console.warn(`Referrals widget received performance view mode: ${viewMode}, falling back to 'warp'`);
+      // Trigger view mode change to fix the state
+      setTimeout(() => onViewModeChange('warp'), 0);
+      // Return warp view for immediate rendering
+      return (
+        <WarpBackground className="h-full w-full border-none p-6">
+          <div className="flex items-center justify-center h-full w-full">
+            <div className="text-center">
+              <h3 className="text-xl font-bold mb-2">Warp Background</h3>
+              <p className="text-sm text-muted-foreground">
+                Referral program with dynamic space-warping effects
+              </p>
+            </div>
+          </div>
+        </WarpBackground>
+      );
+    }
+    
     switch (viewMode) {
       case 'warp':
         return (
