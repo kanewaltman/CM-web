@@ -6,7 +6,7 @@ import { TradingViewChart } from '@/components/TradingViewChart';
 import { RecentTrades } from '@/components/RecentTrades';
 import { BalancesWidget } from '@/components/BalancesWidget';
 import { PerformanceWidget } from '@/components/PerformanceWidget/PerformanceWidget';
-import { Breakdown } from '@/components/Breakdown';
+import { BreakdownWrapper } from '@/components/Breakdown';
 import MarketsWidget from '@/components/MarketsWidget';
 import { TransactionsWidget } from '@/components/TransactionsWidget';
 import { InsightWidget } from '@/components/InsightWidget';
@@ -82,7 +82,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
   'treemap': {
     id: 'treemap',
     title: 'Breakdown',
-    component: Breakdown,
+    component: BreakdownWrapper,
     defaultSize: { w: 6, h: 6 },
     minSize: { w: 3, h: 2 },
     maxSize: { w: 12, h: 9 }

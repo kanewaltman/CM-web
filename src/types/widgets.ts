@@ -8,6 +8,7 @@ export interface BaseWidgetProps {
 }
 
 export interface RemovableWidgetProps extends BaseWidgetProps {
+  widgetId: string;
   onRemove?: () => void;
 }
 

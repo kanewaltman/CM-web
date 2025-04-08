@@ -185,6 +185,7 @@ export const BreakdownWrapper: React.FC<{
   className?: string;
   onRemove?: () => void;
   onViewModeChange?: (mode: BreakdownViewMode) => void;
+  widgetId?: string;
 }> = (props) => {
   const { resolvedTheme } = useTheme();
   const [key, setKey] = useState(Date.now());
@@ -194,7 +195,8 @@ export const BreakdownWrapper: React.FC<{
   console.log('BreakdownWrapper received props:', { 
     hasOnRemove: !!props.onRemove,
     onRemoveType: typeof props.onRemove, 
-    className: props.className 
+    className: props.className,
+    widgetId: props.widgetId
   });
   
   // Check theme directly from DOM
@@ -239,13 +241,14 @@ export const BreakdownWrapper: React.FC<{
   
   console.log(`BreakdownWrapper rendering with key: ${key}, forced theme: ${forcedTheme}, onRemove available: ${!!props.onRemove}`);
   
-  // Pass the onRemove directly to Breakdown
+  // Pass all props including widgetId to Breakdown
   return <Breakdown 
     key={key} 
     forceTheme={forcedTheme} 
     className={props.className} 
-    onRemove={props.onRemove} 
+    onRemove={props.onRemove}
     onViewModeChange={props.onViewModeChange}
+    widgetId={props.widgetId}
   />;
 };
 
@@ -255,7 +258,8 @@ const Breakdown: React.FC<{
   onRemove?: () => void;
   forceTheme?: 'light' | 'dark';
   onViewModeChange?: (mode: BreakdownViewMode) => void;
-}> = ({ className, onRemove, forceTheme, onViewModeChange }) => {
+  widgetId?: string;
+}> = ({ className, onRemove, forceTheme, onViewModeChange, widgetId }) => {
   // Add debug logging
   console.log('Breakdown component received props:', {
     hasOnRemove: !!onRemove,
@@ -285,14 +289,16 @@ const Breakdown: React.FC<{
     if (active && payload && payload.length > 0) {
       const data = payload[0].payload;
       
-      // Show tooltip for small sections or when any section has been clicked
+      // Show tooltip for small sections or when tooltips are enabled globally
       const width = data.width || 0;
       const height = data.height || 0;
       const isSmallSection = width <= 80 || height <= 50;
       
-      // Show all tooltips when showAllTooltips is true or if it's a small section
+      // Always show tooltip if:
+      // 1. It's a small section
+      // 2. Global tooltips are enabled
       if (!isSmallSection && !showTreemapTooltips) {
-        return null; // Don't show tooltip for larger sections unless user has clicked
+        return null;
       }
       
       // Get asset-specific color for styling accents
@@ -403,6 +409,12 @@ const Breakdown: React.FC<{
     const safeX = x + padding;
     const safeY = y + padding;
     
+    // Determine if this is a small section
+    const isSmallSection = width <= 80 || height <= 50;
+    
+    // Determine if this section should show tooltip
+    const shouldShowTooltip = isSmallSection || showTreemapTooltips || isHovered;
+    
     // Determine if this portion is at a corner of the container
     // We need to check if it's at one of the edges of the root area
     const isAtTopEdge = y <= padding * 2;
@@ -445,76 +457,69 @@ const Breakdown: React.FC<{
       }
     };
     
-    const fillOpacity = getOpacity();
-    const fillColorWithOpacity = adjustOpacity(fillColor, fillOpacity);
+    // Calculate fill color with opacity
+    const fillColorWithOpacity = adjustOpacity(fillColor, getOpacity());
     
-    // Dynamically adjust text size and visibility based on box size
-    const showLabel = width > 80 && height > 50; // Increased size threshold
-    const showPercentage = width > 80 && height > 50;
-    const showIcon = width > 30 && height > 30; // Only show icon if there's enough space
-    const fontSize = Math.min(12, Math.max(8, width / 10)); // Responsive font size
+    // Determine if we should show the label and icon based on section size
+    const showLabel = safeWidth >= 80 && safeHeight >= 50;
+    const showIcon = safeWidth >= 40 && safeHeight >= 40;
+    const showPercentage = safeWidth >= 100;
     
-    // Calculate adaptive icon size based on available space
-    const iconSize = Math.min(
-      Math.max(24, Math.min(width, height) * 0.25), // At least 24px, at most 25% of smallest dimension
-      Math.min(64, width * 0.4, height * 0.4) // Upper limit of 64px or 40% of the dimension
-    );
+    // Calculate font size based on section size
+    const fontSize = Math.min(12, Math.max(10, Math.floor(Math.min(safeWidth, safeHeight) / 8)));
     
-    // Set specific corner radii
-    const topLeftRadius = isTopLeft ? cornerRadius : defaultRadius;
-    const topRightRadius = isTopRight ? cornerRadius : defaultRadius;
-    const bottomLeftRadius = isBottomLeft ? cornerRadius : defaultRadius;
-    const bottomRightRadius = isBottomRight ? cornerRadius : defaultRadius;
+    // Calculate icon size based on section size (max 24px, min 16px)
+    const iconSize = Math.min(24, Math.max(16, Math.floor(Math.min(safeWidth, safeHeight) / 4)));
     
-    // Create SVG path for rectangle with variable corner radii
+    // Create path data for rounded corners where needed
     const pathData = `
-      M ${safeX + topLeftRadius} ${safeY}
-      H ${safeX + safeWidth - topRightRadius}
-      Q ${safeX + safeWidth} ${safeY} ${safeX + safeWidth} ${safeY + topRightRadius}
-      V ${safeY + safeHeight - bottomRightRadius}
-      Q ${safeX + safeWidth} ${safeY + safeHeight} ${safeX + safeWidth - bottomRightRadius} ${safeY + safeHeight}
-      H ${safeX + bottomLeftRadius}
-      Q ${safeX} ${safeY + safeHeight} ${safeX} ${safeY + safeHeight - bottomLeftRadius}
-      V ${safeY + topLeftRadius}
-      Q ${safeX} ${safeY} ${safeX + topLeftRadius} ${safeY}
-      Z
+      M ${safeX + (isTopLeft ? cornerRadius : defaultRadius)} ${safeY}
+      H ${safeX + safeWidth - (isTopRight ? cornerRadius : defaultRadius)}
+      Q ${safeX + safeWidth} ${safeY} ${safeX + safeWidth} ${safeY + (isTopRight ? cornerRadius : defaultRadius)}
+      V ${safeY + safeHeight - (isBottomRight ? cornerRadius : defaultRadius)}
+      Q ${safeX + safeWidth} ${safeY + safeHeight} ${safeX + safeWidth - (isBottomRight ? cornerRadius : defaultRadius)} ${safeY + safeHeight}
+      H ${safeX + (isBottomLeft ? cornerRadius : defaultRadius)}
+      Q ${safeX} ${safeY + safeHeight} ${safeX} ${safeY + safeHeight - (isBottomLeft ? cornerRadius : defaultRadius)}
+      V ${safeY + (isTopLeft ? cornerRadius : defaultRadius)}
+      Q ${safeX} ${safeY} ${safeX + (isTopLeft ? cornerRadius : defaultRadius)} ${safeY}
     `;
-    
-    // Create a unique id for this item to use with foreignObject
-    const foreignObjectId = `asset-button-${item.id || Math.random().toString(36).substring(2, 9)}`;
     
     return (
       <g
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onClick={() => {
-          // Only update treemap tooltip visibility
-          setShowTreemapTooltips(true);
+        onMouseEnter={() => {
+          setIsHovered(true);
         }}
-        style={{ cursor: 'default' }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+        }}
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent container click from triggering
+          // Toggle global tooltip visibility
+          setShowTreemapTooltips(!showTreemapTooltips);
+        }}
+        style={{ cursor: 'pointer' }}
+        className="group"
       >
         <path 
           d={pathData}
           fill={fillColorWithOpacity}
           stroke={fillColor}
-          strokeWidth={1} // Removed conditional styling for clicked items
-          // strokeDasharray={isClicked ? "4,2" : "none"} // Commented out dashed stroke for clicked items
-          strokeOpacity={0.8} // Use constant stroke opacity
+          strokeWidth={1}
+          strokeOpacity={0.8}
           style={{
             transition: 'fill 0.2s ease-out',
-            pointerEvents: 'none',
-            // animation: isClicked ? 'pulse-border 2s infinite' : 'none', // Commented out pulse animation
+            pointerEvents: 'all',
           }}
         />
         
         {/* Subtle asset icon in the top left corner with adaptive size */}
         {showIcon && isAssetTicker(item.name) && ASSETS[item.name as AssetTicker]?.icon && (
           <foreignObject
-            x={safeX + 6} // Position at top left with small padding
+            x={safeX + 6}
             y={safeY + 6} 
             width={iconSize}
             height={iconSize}
-            className="pointer-events-none"
+            style={{ pointerEvents: 'none' }}
           >
             <div
               className="w-full h-full flex items-center justify-center"
@@ -527,6 +532,7 @@ const Breakdown: React.FC<{
                   opacity: isHovered ? 1 : 0.1,
                   filter: `grayscale(${isHovered ? '0%' : '50%'})`,
                   transition: 'all 0.2s ease-out',
+                  pointerEvents: 'none',
                 }}
               />
             </div>
@@ -535,14 +541,15 @@ const Breakdown: React.FC<{
         
         {showLabel && (
           <foreignObject
-            x={safeX + 8} // Left padding
-            y={safeY + safeHeight - 36} // Position at bottom with some padding
-            width={safeWidth - 16} // Allow space for padding on both sides
-            height={30} // Height for the row
-            className="overflow-visible"
+            x={safeX + 8}
+            y={safeY + safeHeight - 36}
+            width={safeWidth - 16}
+            height={30}
+            style={{ pointerEvents: 'none' }}
           >
             <div 
               className="flex items-center justify-between w-full h-full"
+              style={{ pointerEvents: 'none' }}
             >
               {/* Asset button at bottom left */}
               <AssetButton
@@ -558,7 +565,8 @@ const Breakdown: React.FC<{
                   className="text-white font-semibold"
                   style={{ 
                     fontSize: `${fontSize - 1}px`,
-                    opacity: 0.9
+                    opacity: 0.9,
+                    pointerEvents: 'none'
                   }}
                 >
                   {item.formattedPercentage}
@@ -951,19 +959,39 @@ const Breakdown: React.FC<{
     </DropdownMenu>
   );
 
+  // Handle removal with grid integration
+  const handleRemove = useCallback(() => {
+    console.log('Breakdown: onRemove called directly');
+    
+    // First try the onRemove prop
+    if (onRemove) {
+      const result = onRemove();
+      console.log('Breakdown: onRemove result:', result);
+    }
+    
+    // Then dispatch the widget-remove event
+    if (widgetId) {
+      console.log('Breakdown: Dispatching widget-remove event for:', widgetId);
+      const event = new CustomEvent('widget-remove', {
+        detail: { widgetId, id: widgetId },
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(event);
+      return true;
+    }
+    
+    return false;
+  }, [onRemove, widgetId]);
+
   if (isLoading) {
     return (
       <WidgetContainer 
         title="Breakdown"
-        onRemove={() => {
-          console.log('Breakdown: onRemove called directly');
-          if (onRemove) {
-            const result = onRemove();
-            console.log('Breakdown: onRemove result:', result);
-            return result;
-          }
-          return true;
-        }}
+        onRemove={handleRemove}
+        extraControls={viewController}
+        className={className}
+        id={widgetId}
       >
         <div className="h-full w-full rounded-xl bg-card overflow-hidden">
           <TreeMapSkeleton />
@@ -976,15 +1004,10 @@ const Breakdown: React.FC<{
     return (
       <WidgetContainer 
         title="Breakdown"
-        onRemove={() => {
-          console.log('Breakdown: onRemove called directly');
-          if (onRemove) {
-            const result = onRemove();
-            console.log('Breakdown: onRemove result:', result);
-            return result;
-          }
-          return true;
-        }}
+        onRemove={handleRemove}
+        extraControls={viewController}
+        className={className}
+        id={widgetId}
       >
         <div className="flex items-center justify-center h-full flex-col">
           <p className="text-muted-foreground">{error || "No balance data available"}</p>
@@ -1002,16 +1025,10 @@ const Breakdown: React.FC<{
   return (
     <WidgetContainer 
       title="Breakdown"
-      onRemove={() => {
-        console.log('Breakdown: onRemove called directly');
-        if (onRemove) {
-          const result = onRemove();
-          console.log('Breakdown: onRemove result:', result);
-          return result;
-        }
-        return true;
-      }}
+      onRemove={handleRemove}
       extraControls={viewController}
+      className={className}
+      id={widgetId}
     >
       <div 
         className="h-full w-full rounded-xl bg-card overflow-hidden border"
@@ -1049,7 +1066,6 @@ const Breakdown: React.FC<{
                   isAnimationActive={true}
                   animationDuration={200}
                   animationEasing="ease-out"
-                  active={showTreemapTooltips}
                 />
               </Treemap>
             </ResponsiveContainer>
