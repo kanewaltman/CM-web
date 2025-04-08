@@ -283,14 +283,16 @@ const Referrals: React.FC<{
     switch (viewMode) {
       case 'warp':
         return (
-          <WarpBackground className="h-full w-full border-none p-6">
-            <div className="flex items-center justify-center h-full w-full">
-              <div className="text-center">
-                <h3 className="text-xl font-bold mb-2">Warp Background</h3>
-                <p className="text-sm text-muted-foreground">
-                  Referral program with dynamic space-warping effects
-                </p>
-              </div>
+          <WarpBackground 
+            className="flex-1 w-full border-none flex items-center justify-center"
+            gridColor="rgba(43, 43, 43, 0.3)"
+            beamsPerSide={3}
+          >
+            <div className="text-center px-6">
+              <h3 className="text-xl font-bold mb-2">Warp Background</h3>
+              <p className="text-sm text-muted-foreground">
+                Referral program with dynamic space-warping effects
+              </p>
             </div>
           </WarpBackground>
         );
@@ -381,7 +383,7 @@ const Referrals: React.FC<{
       onRemove={onRemove}
       extraControls={viewController}
     >
-      <div className="h-full w-full rounded-xl bg-card overflow-hidden border">
+      <div className="h-full w-full rounded-xl bg-card overflow-hidden border flex">
         {renderContent()}
       </div>
     </WidgetContainer>
