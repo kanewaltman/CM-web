@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { WidgetContainer } from './WidgetContainer';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
@@ -41,8 +41,25 @@ export interface ReferralsWidgetProps {
 
 export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
   const { resolvedTheme } = useTheme();
-  const [key, setKey] = useState(`referrals-${Date.now()}`);
   const [forcedTheme, setForcedTheme] = useState<'light' | 'dark' | undefined>(undefined);
+  
+  // Track initialization to prevent unnecessary resets
+  const isInitialized = useRef(false);
+  // Add a loading state to prevent premature synchronization
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Add a safety timeout to prevent loading state from getting stuck
+  useEffect(() => {
+    // Always reset loading state after max 2 seconds no matter what
+    const safetyTimer = setTimeout(() => {
+      if (isLoading) {
+        console.log("⚠️ Safety timeout triggered - forcing loading state to false");
+        setIsLoading(false);
+      }
+    }, 2000);
+    
+    return () => clearTimeout(safetyTimer);
+  }, [isLoading]);
 
   // Function to check and update the theme
   const checkTheme = useCallback(() => {
@@ -63,57 +80,84 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     };
   }, [checkTheme]);
 
+  // Validate an incoming view mode to ensure it's a valid referrals mode
+  const validateReferralsViewMode = useCallback((mode: string): ReferralsViewMode => {
+    const validModes = Object.keys(viewLabels);
+    
+    if (validModes.includes(mode)) {
+      return mode as ReferralsViewMode;
+    }
+    
+    // Handle performance widget modes that can cause invalid states
+    if (mode === 'split' || mode === 'cumulative' || mode === 'combined') {
+      console.warn(`Invalid performance view mode "${mode}" rejected for referrals widget - using default`);
+      return props.defaultViewMode || 'warp';
+    }
+    
+    // For any other invalid mode
+    console.warn(`Unknown view mode "${mode}" rejected for referrals widget - using default`);
+    return props.defaultViewMode || 'warp';
+  }, [props.defaultViewMode]);
+
   // Get or create widget state
   const widgetState = React.useMemo(() => {
+    // If we're already initialized, just return the existing state to prevent refresh issues
     let state = widgetStateRegistry.get(props.widgetId) as ReferralsWidgetState;
+    
     if (!state) {
+      console.log(`Creating new ReferralsWidgetState for ${props.widgetId}`);
       // Try to restore view mode from localStorage
-      let initialViewMode: ReferralsViewMode = 'warp';
+      let initialViewMode: ReferralsViewMode = props.defaultViewMode || 'warp';
+      
       try {
-        // First, try to get the view mode from the DASHBOARD_LAYOUT_KEY
-        const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-        if (savedLayout) {
-          const layout = JSON.parse(savedLayout);
-          const widgetData = layout.find((item: any) => item.id === props.widgetId);
-          
-          // Valid referral view modes
-          const validModes = Object.keys(viewLabels);
-          
-          // Check for the referral-specific view mode first
-          if (widgetData?.viewState?.referralViewMode && validModes.includes(widgetData.viewState.referralViewMode)) {
-            initialViewMode = widgetData.viewState.referralViewMode as ReferralsViewMode;
-            console.log(`Restored referral-specific view mode from layout: ${initialViewMode}`);
-          } 
-          // Then check the generic viewMode if it's valid for referrals
-          else if (widgetData?.viewState?.viewMode && validModes.includes(widgetData.viewState.viewMode)) {
-            initialViewMode = widgetData.viewState.viewMode as ReferralsViewMode;
-            console.log(`Restored view mode from layout: ${initialViewMode}`);
-          }
-          // Handle performance widget view modes gracefully
-          else if (widgetData?.viewState?.viewMode === 'split' || 
-                   widgetData?.viewState?.viewMode === 'cumulative' || 
-                   widgetData?.viewState?.viewMode === 'combined') {
-            console.warn(`Ignoring performance widget view mode "${widgetData.viewState.viewMode}" for referral widget`);
-            // Keep default view mode
-          }
-        }
-        
-        // If not found in layout, try widget-specific key
-        if (initialViewMode === 'warp') {
-          const storedWidgetMode = localStorage.getItem(`widget_${props.widgetId}_view_mode`);
-          if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode)) {
-            initialViewMode = storedWidgetMode as ReferralsViewMode;
-            console.log(`Restored view mode from widget-specific key: ${initialViewMode}`);
-          }
-        }
-        
-        // If still not found, try generic key as fallback
-        if (initialViewMode === 'warp') {
+        // PRIORITY 1: First check widget-specific key (highest priority)
+        const storedWidgetMode = localStorage.getItem(`widget_${props.widgetId}_view_mode`);
+        if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode)) {
+          initialViewMode = storedWidgetMode as ReferralsViewMode;
+          console.log(`Priority 1: Using view mode from widget-specific key: ${initialViewMode}`);
+        } 
+        // PRIORITY 2: Check generic key if widget-specific not found
+        else {
           const storedMode = localStorage.getItem('referrals_widget_view_mode');
           if (storedMode && Object.keys(viewLabels).includes(storedMode)) {
             initialViewMode = storedMode as ReferralsViewMode;
-            console.log(`Restored view mode from generic key: ${initialViewMode}`);
+            console.log(`Priority 2: Using view mode from generic key: ${initialViewMode}`);
           }
+          // PRIORITY 3: Only use layout if no localStorage keys found
+          else {
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              const layout = JSON.parse(savedLayout);
+              const widgetData = layout.find((item: any) => item.id === props.widgetId);
+              
+              // Valid referral view modes
+              const validModes = Object.keys(viewLabels);
+              
+              // Check for the referral-specific view mode first
+              if (widgetData?.viewState?.referralViewMode && validModes.includes(widgetData.viewState.referralViewMode)) {
+                initialViewMode = widgetData.viewState.referralViewMode as ReferralsViewMode;
+                console.log(`Priority 3: Using referral-specific view mode from layout: ${initialViewMode}`);
+              } 
+              // Then check the generic viewMode if it's valid for referrals
+              else if (widgetData?.viewState?.viewMode && validModes.includes(widgetData.viewState.viewMode)) {
+                initialViewMode = widgetData.viewState.viewMode as ReferralsViewMode;
+                console.log(`Priority 3: Using generic view mode from layout: ${initialViewMode}`);
+              }
+              // Handle performance widget view modes gracefully
+              else if (widgetData?.viewState?.viewMode === 'split' || 
+                      widgetData?.viewState?.viewMode === 'cumulative' || 
+                      widgetData?.viewState?.viewMode === 'combined') {
+                console.warn(`Ignoring performance widget view mode "${widgetData.viewState.viewMode}" for referral widget`);
+                // Keep default view mode
+              }
+            }
+          }
+        }
+        
+        // Final validation to ensure we have a valid view mode
+        if (!Object.keys(viewLabels).includes(initialViewMode)) {
+          console.warn(`Invalid view mode detected: ${initialViewMode}, using default 'warp' instead`);
+          initialViewMode = 'warp';
         }
       } catch (error) {
         console.error('Error retrieving view mode from localStorage:', error);
@@ -121,23 +165,274 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
       
       state = createDefaultReferralsWidgetState(initialViewMode, props.widgetId);
       widgetStateRegistry.set(props.widgetId, state);
+      
+      // Always sync the widget's true view mode back to layout to ensure consistency
+      setTimeout(() => {
+        if (state && state.viewMode) {
+          console.log(`Ensuring layout consistency with actual widget mode: ${state.viewMode}`);
+          setIsLoading(false); // Mark loading as complete before synchronizing
+          synchronizeViewModeToLayout(state.viewMode, props.widgetId);
+        }
+      }, 100);
+    } else {
+      // State exists, check if we should update it from localStorage
+      try {
+        // First check widget-specific localStorage key (highest priority)
+        const storedWidgetMode = localStorage.getItem(`widget_${props.widgetId}_view_mode`);
+        if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode)) {
+          const savedMode = storedWidgetMode as ReferralsViewMode;
+          if (savedMode !== state.viewMode) {
+            console.log(`Updating existing widget state with stored view mode (priority source): ${savedMode}`);
+            state.setViewMode(savedMode);
+          }
+        }
+        // Then check layout only if widget-specific key wasn't found
+        else {
+          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          if (savedLayout) {
+            const layout = JSON.parse(savedLayout);
+            const widgetData = layout.find((item: any) => item.id === props.widgetId);
+            const validModes = Object.keys(viewLabels);
+            let viewModeFound = false;
+            
+            // Check for referral-specific view mode first
+            if (widgetData?.viewState?.referralViewMode && validModes.includes(widgetData.viewState.referralViewMode)) {
+              const layoutMode = widgetData.viewState.referralViewMode as ReferralsViewMode;
+              if (layoutMode !== state.viewMode) {
+                console.log(`Updating widget state with layout referralViewMode (secondary source): ${layoutMode}`);
+                state.setViewMode(layoutMode);
+                viewModeFound = true;
+              }
+            }
+            // Then check generic viewMode
+            else if (!viewModeFound && widgetData?.viewState?.viewMode && validModes.includes(widgetData.viewState.viewMode)) {
+              const layoutMode = widgetData.viewState.viewMode as ReferralsViewMode;
+              if (layoutMode !== state.viewMode) {
+                console.log(`Updating widget state with layout viewMode (tertiary source): ${layoutMode}`);
+                state.setViewMode(layoutMode);
+              }
+            }
+          }
+        }
+        
+        // Final validation to ensure the widget state has a valid view mode
+        if (!Object.keys(viewLabels).includes(state.viewMode)) {
+          console.warn(`Invalid view mode detected in existing widget state: ${state.viewMode}, resetting to last known good mode`);
+          // Try to find the last known good mode from widget-specific key
+          const storedWidgetMode = localStorage.getItem(`widget_${props.widgetId}_view_mode`);
+          if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode)) {
+            state.setViewMode(storedWidgetMode as ReferralsViewMode);
+          } else {
+            state.setViewMode('warp');
+          }
+        }
+        
+        // Always sync the widget's true view mode back to layout to ensure consistency
+        setTimeout(() => {
+          if (state && state.viewMode) {
+            console.log(`Ensuring layout consistency with actual widget mode: ${state.viewMode}`);
+            setIsLoading(false); // Mark loading as complete before synchronizing
+            synchronizeViewModeToLayout(state.viewMode, props.widgetId);
+          }
+        }, 100);
+      } catch (error) {
+        console.error('Error checking stored view mode for existing state:', error);
+        setIsLoading(false); // Ensure we mark loading as complete even if there's an error
+      }
     }
+    
+    isInitialized.current = true;
     return state;
-  }, [props.widgetId]);
+  }, [props.widgetId, props.defaultViewMode, validateReferralsViewMode]);
+
+  // Ensure loading state is properly reset after initialization
+  useEffect(() => {
+    // If widgetState is available, ensure we're not stuck in loading state
+    if (widgetState) {
+      console.log("🔄 Ensuring loading state is reset");
+      // Short timeout to allow other initialization processes to complete
+      setTimeout(() => {
+        if (isLoading) {
+          console.log("🔄 Forcing loading state to false");
+          setIsLoading(false);
+        }
+      }, 300);
+    }
+  }, [widgetState, isLoading]);
 
   // Use state from widget state
-  const [viewMode, setViewMode] = useState<ReferralsViewMode>(widgetState.viewMode);
+  const [viewMode, setViewMode] = useState<ReferralsViewMode>(() => {
+    // Validate the initial view mode to prevent invalid states
+    return validateReferralsViewMode(widgetState.viewMode);
+  });
 
   // Subscribe to widget state changes
   useEffect(() => {
     return widgetState.subscribe(() => {
-      setViewMode(widgetState.viewMode);
+      // Validate view mode before updating component state
+      const validatedMode = validateReferralsViewMode(widgetState.viewMode);
+      setViewMode(validatedMode);
     });
-  }, [widgetState]);
+  }, [widgetState, validateReferralsViewMode]);
+  
+  // Fix for refresh issue - explicitly check localStorage at mount time
+  useEffect(() => {
+    // This effect runs only once when component mounts
+    const storedWidgetMode = localStorage.getItem(`widget_${props.widgetId}_view_mode`);
+    
+    if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode) && 
+        storedWidgetMode !== widgetState.viewMode) {
+      console.log(`📌 REFRESH FIX: Found mismatch between localStorage (${storedWidgetMode}) and state (${widgetState.viewMode})`);
+      console.log(`📌 REFRESH FIX: Forcing update to localStorage value: ${storedWidgetMode}`);
+      
+      // Force update to the localStorage value
+      widgetState.setViewMode(storedWidgetMode as ReferralsViewMode);
+      
+      // Also ensure registry is updated
+      if (widgetStateRegistry.has(props.widgetId)) {
+        const registryState = widgetStateRegistry.get(props.widgetId) as ReferralsWidgetState;
+        registryState.setViewMode(storedWidgetMode as ReferralsViewMode);
+      }
+      
+      // Update component state
+      setViewMode(storedWidgetMode as ReferralsViewMode);
+      
+      // Wait for loading to complete, then synchronize
+      setTimeout(() => {
+        setIsLoading(false);
+        synchronizeViewModeToLayout(storedWidgetMode as ReferralsViewMode, props.widgetId);
+      }, 100);
+    }
+  }, [props.widgetId]);
+
+  // Validate view mode when component mounts
+  useEffect(() => {
+    // Safety check to ensure viewMode is valid on mount
+    if (!Object.keys(viewLabels).includes(viewMode)) {
+      console.warn(`Invalid view mode detected on mount: ${viewMode}, resetting to 'warp'`);
+      handleViewModeChange('warp');
+    }
+  }, []);
+  
+  // Helper function to synchronize the current view mode to the layout
+  const synchronizeViewModeToLayout = useCallback((viewMode: ReferralsViewMode, widgetId: string = props.widgetId) => {
+    console.log(`ReferralsWrapper: Synchronizing ${viewMode} to layout`);
+    try {
+      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+      if (savedLayout) {
+        console.log(`ReferralsWrapper: Updating layout in localStorage`);
+        const layout = JSON.parse(savedLayout);
+        const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+        
+        if (widgetIndex !== -1) {
+          console.log(`ReferralsWrapper: Found widget at index ${widgetIndex} in layout`);
+          
+          // Create or update the viewState property to include our view mode
+          const currentViewState = layout[widgetIndex].viewState || {};
+          layout[widgetIndex] = {
+            ...layout[widgetIndex],
+            viewState: {
+              ...currentViewState,
+              // Save both for maximum compatibility and persistence
+              referralViewMode: viewMode,
+              viewMode: viewMode
+            }
+          };
+          
+          // Save the updated layout back to localStorage
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+          console.log(`ReferralsWrapper: Layout updated with view mode ${viewMode}`);
+          
+          // Also update the widget-specific storage to ensure consistency
+          localStorage.setItem(`widget_${widgetId}_view_mode`, viewMode);
+        } else {
+          console.warn(`ReferralsWrapper: Widget not found in layout`);
+        }
+      } else {
+        console.log(`ReferralsWrapper: No saved layout found in localStorage`);
+        
+        // Fallback - ensure widget-specific localStorage key is at least set
+        localStorage.setItem(`widget_${widgetId}_view_mode`, viewMode);
+      }
+    } catch (error) {
+      console.error('Failed to synchronize view mode to layout:', error);
+      // Fallback - ensure widget-specific localStorage key is at least set
+      localStorage.setItem(`widget_${widgetId}_view_mode`, viewMode);
+    }
+  }, [props.widgetId]);
+
+  // Listen for widget resize events and sync the state to layout
+  useEffect(() => {
+    const syncLayoutAfterResize = () => {
+      // Ensure view mode is saved to layout after resize stops
+      if (widgetState && widgetState.viewMode) {
+        // Force update both the layout and widget-specific localStorage key
+        localStorage.setItem(`widget_${props.widgetId}_view_mode`, widgetState.viewMode);
+        synchronizeViewModeToLayout(widgetState.viewMode, props.widgetId);
+        
+        // Also update GridStack's internal widget state registry for consistency
+        if (widgetStateRegistry.has(props.widgetId)) {
+          const registryState = widgetStateRegistry.get(props.widgetId) as ReferralsWidgetState;
+          if (registryState && registryState.viewMode !== widgetState.viewMode) {
+            console.log(`Ensuring widget registry state is up to date: ${widgetState.viewMode}`);
+            registryState.setViewMode(widgetState.viewMode);
+          }
+        }
+      }
+    };
+
+    // Debounced resize handler
+    let resizeTimer: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      // Use a longer timeout for better stability
+      resizeTimer = setTimeout(syncLayoutAfterResize, 300);
+    };
+
+    // Track GridStack resize events specifically for widget resizing
+    const handleGridStackResize = (event: Event) => {
+      if (event.target && (event.target as Element).closest('.grid-stack-item')) {
+        handleResize();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Add specific listener for GridStack resize events
+    document.addEventListener('resize', handleGridStackResize, true);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('resize', handleGridStackResize, true);
+      clearTimeout(resizeTimer);
+    };
+  }, [props.widgetId, widgetState, synchronizeViewModeToLayout]);
+  
+  // Ensure the view mode is synchronized with layout when component mounts
+  useEffect(() => {
+    // Sync current mode to layout when component is fully initialized and not loading
+    if (isInitialized.current && !isLoading && widgetState && widgetState.viewMode) {
+      console.log(`ReferralsWrapper: Component mounted, syncing mode ${widgetState.viewMode} to layout`);
+      synchronizeViewModeToLayout(widgetState.viewMode, props.widgetId);
+    }
+  }, [synchronizeViewModeToLayout, widgetState, props.widgetId, isLoading]);
 
   // Handle view mode change
   const handleViewModeChange = useCallback((mode: ReferralsViewMode) => {
-    console.log(`ReferralsWrapper: View mode change requested to ${mode}`);
+    // Skip processing during very initial render only
+    // Don't block on isLoading which might get stuck
+    if (!isInitialized.current) {
+      console.log(`Skipping view mode change to ${mode} during initialization`);
+      return;
+    }
+    
+    // If we're loading but it's a user-initiated change, allow it to proceed
+    if (isLoading) {
+      console.log(`View mode change requested while loading, but will proceed anyway: ${mode}`);
+      // Force loading state to false since user is clearly interacting
+      setIsLoading(false);
+    } else {
+      console.log(`ReferralsWrapper: View mode change requested to ${mode}`);
+    }
     
     // Verify the mode is valid
     if (!Object.keys(viewLabels).includes(mode)) {
@@ -149,6 +444,15 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     console.log(`ReferralsWrapper: Updating widget state to ${mode}`);
     widgetState.setViewMode(mode);
     
+    // Explicitly ensure the registry is immediately updated
+    if (widgetStateRegistry.has(props.widgetId)) {
+      const registryState = widgetStateRegistry.get(props.widgetId) as ReferralsWidgetState;
+      if (registryState && 'setViewMode' in registryState) {
+        registryState.setViewMode(mode);
+        console.log(`ReferralsWrapper: Explicitly updated registry state to ${mode}`);
+      }
+    }
+    
     // Save to widget-specific localStorage key for persistence
     try {
       console.log(`ReferralsWrapper: Saving view mode to localStorage keys`);
@@ -156,31 +460,12 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
       localStorage.setItem('referrals_widget_view_mode', mode);
       
       // Update view state in layout
-      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-      if (savedLayout) {
-        console.log(`ReferralsWrapper: Updating layout in localStorage`);
-        const layout = JSON.parse(savedLayout);
-        const widgetIndex = layout.findIndex((item: any) => item.id === props.widgetId);
-        
-        if (widgetIndex !== -1) {
-          console.log(`ReferralsWrapper: Found widget at index ${widgetIndex} in layout`);
-          layout[widgetIndex] = {
-            ...layout[widgetIndex],
-            viewState: {
-              ...(layout[widgetIndex].viewState || {}),
-              viewMode: mode,
-              referralViewMode: mode
-            }
-          };
-          
-          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-          console.log(`ReferralsWrapper: Layout updated in localStorage`);
-        } else {
-          console.warn(`ReferralsWrapper: Widget not found in layout`);
-        }
-      } else {
-        console.log(`ReferralsWrapper: No saved layout found in localStorage`);
-      }
+      synchronizeViewModeToLayout(mode, props.widgetId);
+      
+      // Also schedule a delayed update in case there are other state updates in progress
+      setTimeout(() => {
+        synchronizeViewModeToLayout(mode, props.widgetId);
+      }, 100);
     } catch (error) {
       console.error('Failed to save view mode to localStorage:', error);
     }
@@ -197,16 +482,16 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     console.log(`ReferralsWrapper: Directly updating component state`);
     setViewMode(mode);
     
-  }, [props.widgetId, props.onViewModeChange, widgetState]);
+  }, [props.widgetId, props.onViewModeChange, widgetState, synchronizeViewModeToLayout]);
 
   // Pass the props and state to Referrals
   return <Referrals 
-    key={key} 
     forceTheme={forcedTheme} 
     className={props.className} 
     onRemove={props.onRemove}
     viewMode={viewMode}
     onViewModeChange={handleViewModeChange}
+    widgetId={props.widgetId}
   />;
 };
 
@@ -217,17 +502,68 @@ const Referrals: React.FC<{
   forceTheme?: 'light' | 'dark';
   viewMode: ReferralsViewMode;
   onViewModeChange: (mode: ReferralsViewMode) => void;
-}> = ({ className, onRemove, forceTheme, viewMode, onViewModeChange }) => {
+  widgetId: string;
+}> = ({ className, onRemove, forceTheme, viewMode, onViewModeChange, widgetId }) => {
   const { resolvedTheme } = useTheme();
   
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
   
+  // Track first mount to prevent unnecessary view mode changes during initialization
+  const isFirstMount = useRef(true);
+  
   // Debug the current viewMode and onViewModeChange handler
   useEffect(() => {
     console.log('Referrals component - current view mode:', viewMode);
     console.log('Referrals component - has view mode handler:', !!onViewModeChange);
-  }, [viewMode, onViewModeChange]);
+    
+    // Safety check - if received an invalid view mode, set it to warp
+    // But only if this isn't the first time (to prevent loops during initialization)
+    const validModes = Object.keys(viewLabels);
+    if (!validModes.includes(viewMode)) {
+      // Only log during the first mount to avoid log spam
+      if (isFirstMount.current) {
+        console.warn(`Referrals received invalid view mode during initialization: ${viewMode}, will change to 'warp'`);
+      } else {
+        console.warn(`Referrals received invalid view mode after initialization: ${viewMode}, changing to 'warp'`);
+      }
+      
+      // Try to get the stored view mode first before defaulting to warp
+      const storedMode = localStorage.getItem(`widget_${widgetId}_view_mode`);
+      
+      // Check if storedMode exists and is valid
+      if (storedMode && validModes.includes(storedMode)) {
+        console.log(`Referrals component - Using stored view mode from localStorage: ${storedMode}`);
+        const fallbackMode = storedMode as ReferralsViewMode;
+        
+        // Use a timeout to break potential render loops during initialization
+        if (!isFirstMount.current) {
+          // Only process view mode changes after the component is fully mounted
+          onViewModeChange(fallbackMode);
+        } else {
+          // During first mount, schedule the change for the next tick after initialization completes
+          setTimeout(() => {
+            onViewModeChange(fallbackMode);
+          }, 0);
+        }
+      } else {
+        // No valid stored mode, fall back to 'warp'
+        const fallbackMode = 'warp' as ReferralsViewMode;
+        
+        // Use a timeout to break potential render loops
+        if (!isFirstMount.current) {
+          onViewModeChange(fallbackMode);
+        } else {
+          setTimeout(() => {
+            onViewModeChange(fallbackMode);
+          }, 0);
+        }
+      }
+    }
+    
+    // No longer first mount
+    isFirstMount.current = false;
+  }, [viewMode, onViewModeChange, widgetId]);
   
   // Create the view controller dropdown
   const viewController = (
@@ -243,6 +579,15 @@ const Referrals: React.FC<{
             key={key}
             onClick={() => {
               console.log('Dropdown item clicked, changing to:', key);
+              // Direct update to localStorage as a backup
+              try {
+                localStorage.setItem(`widget_${widgetId}_view_mode`, key);
+                // Add a direct log about the localStorage update
+                console.log(`Direct localStorage update for widget ${widgetId}: ${key}`);
+              } catch (e) {
+                console.error('Failed to update localStorage directly:', e);
+              }
+              // Normal handler call
               onViewModeChange(key as ReferralsViewMode);
             }}
             className={cn(
@@ -259,28 +604,19 @@ const Referrals: React.FC<{
 
   // Render the appropriate view based on current viewMode
   const renderContent = () => {
-    // Check if we received a performance widget view mode by mistake
-    const performanceViewModes = ['split', 'cumulative', 'combined'];
-    if (performanceViewModes.includes(viewMode as string)) {
-      console.warn(`Referrals widget received performance view mode: ${viewMode}, falling back to 'warp'`);
-      // Trigger view mode change to fix the state
-      setTimeout(() => onViewModeChange('warp'), 0);
-      // Return warp view for immediate rendering
-      return (
-        <WarpBackground className="h-full w-full border-none p-6">
-          <div className="flex items-center justify-center h-full w-full">
-            <div className="text-center">
-              <h3 className="text-xl font-bold mb-2">Warp Background</h3>
-              <p className="text-sm text-muted-foreground">
-                Referral program with dynamic space-warping effects
-              </p>
-            </div>
-          </div>
-        </WarpBackground>
-      );
+    // Ensure we have a valid view mode before rendering
+    const validViewMode = Object.keys(viewLabels).includes(viewMode) ? viewMode : 'warp';
+    
+    if (validViewMode !== viewMode) {
+      console.warn(`Rendering with corrected view mode: ${validViewMode} instead of ${viewMode}`);
+      // Don't trigger state changes during render, defer to next tick
+      // But only if this isn't the first render to avoid loop
+      if (!isFirstMount.current) {
+        setTimeout(() => onViewModeChange(validViewMode as ReferralsViewMode), 0);
+      }
     }
     
-    switch (viewMode) {
+    switch (validViewMode) {
       case 'warp':
         return (
           <WarpBackground 

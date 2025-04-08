@@ -183,6 +183,32 @@ export const createWidget = ({
         </DataSourceProvider>
       );
     }
+    // For breakdown widget, use the BreakdownWrapper directly
+    else if (widgetType === 'treemap') {
+      component = (
+        <DataSourceProvider>
+          <WidgetComponent
+            widgetId={widgetId}
+            onRemove={() => {
+              console.log('Breakdown widget header remove callback triggered');
+              // Try both event approaches for maximum compatibility
+              document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+              
+              // Direct call fallback if window.handleRemoveWidget is available
+              try {
+                if ((window as any).handleGridStackWidgetRemove) {
+                  (window as any).handleGridStackWidgetRemove(widgetId);
+                }
+              } catch (e) {
+                console.error('Direct removal fallback failed:', e);
+              }
+              
+              return true;
+            }}
+          />
+        </DataSourceProvider>
+      );
+    }
     // For all other widgets, use standard wrapper
     else {
       component = (

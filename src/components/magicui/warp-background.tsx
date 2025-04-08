@@ -40,13 +40,29 @@ const Beam = ({
         } as React.CSSProperties
       }
       className={`absolute left-[var(--x)] top-0 [aspect-ratio:1/var(--aspect-ratio)] [background:var(--background)] [width:var(--width)]`}
-      initial={{ y: "100cqmax", x: "-50%" }}
-      animate={{ y: "-100%", x: "-50%" }}
+      initial={{ y: "100cqmax", x: "-50%", opacity: 0 }}
+      animate={{ y: "-100%", x: "-50%", opacity: 1 }}
       transition={{
-        duration,
-        delay,
-        repeat: Infinity,
-        ease: "linear",
+        y: {
+          duration,
+          delay,
+          repeat: Infinity,
+          ease: "linear",
+        },
+        x: {
+          duration,
+          delay,
+          repeat: Infinity,
+          ease: "linear",
+        },
+        opacity: {
+          duration: Math.min(0.5, duration * 0.2),
+          delay,
+          repeat: Infinity,
+          repeatType: "loop",
+          repeatDelay: duration - Math.min(0.5, duration * 0.2),
+          ease: "easeOut",
+        },
       }}
     />
   );
