@@ -97,6 +97,9 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
   // Track last logged variant to prevent excessive logging
   const lastLoggedVariant = useRef<string | null>(null);
   
+  // Track last refresh timestamps to prevent refresh cascades
+  const lastRefreshTimestamps = useRef<Record<string, number>>({});
+  
   // Define date range presets
   const yesterday = {
     from: subDays(today, 1),
@@ -262,7 +265,7 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     // Handle variant change events for widget sync
     const handleVariantChangeEvent = (event: Event) => {
       const customEvent = event as CustomEvent;
-      const { variant, widgetId: eventWidgetId, timestamp } = customEvent.detail;
+      const { variant, widgetId: eventWidgetId, timestamp, forceRefresh } = customEvent.detail;
       
       // Skip if we've already processed this exact variant recently (prevents loops)
       const variantKey = `${eventWidgetId}-${variant}-${timestamp}`;
@@ -272,20 +275,60 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       
       // Only update if this event is for our widget ID 
       if (widgetId === eventWidgetId) {
-        // Skip if no actual change
-        if (selectedVariant === variant) {
+        // Implement a cooldown for refreshes to prevent cascades
+        const now = Date.now();
+        const isSameVariant = variant === selectedVariant;
+        
+        if (isSameVariant && forceRefresh) {
+          const lastRefresh = lastRefreshTimestamps.current[widgetId] || 0;
+          const cooldownPeriod = 2000; // 2 second cooldown between forced refreshes
+          
+          if (now - lastRefresh < cooldownPeriod) {
+            console.log(`PerformanceWidget: Skipping repeated refresh for ${widgetId}, too soon (${now - lastRefresh}ms)`);
+            return;
+          }
+          
+          // Also check global refresh timestamp
+          const globalRefreshKey = `widget-refresh-${widgetId}`;
+          const globalLastRefresh = (window as any)[globalRefreshKey] || 0;
+          
+          if (now - globalLastRefresh < cooldownPeriod) {
+            console.log(`PerformanceWidget: Global cooldown active for ${widgetId}, skipping (${now - globalLastRefresh}ms)`);
+            return;
+          }
+          
+          // Update the refresh timestamps
+          lastRefreshTimestamps.current[widgetId] = now;
+          (window as any)[globalRefreshKey] = now;
+        }
+        
+        // Update last processed to prevent loops
+        lastProcessedVariant.current = variantKey;
+        
+        // Skip if no actual change and not forcing a refresh
+        if (selectedVariant === variant && !forceRefresh) {
           return;
         }
+        
+        // Add a tracking mechanism to prevent excessive updates in short time frames
+        // This is in addition to the cooldown we already have
+        const lastStateUpdateKey = `last-state-update-${widgetId}`;
+        const lastStateUpdate = (window as any)[lastStateUpdateKey] || 0;
+        const stateUpdateCooldown = 1000; // 1 second cooldown on state updates
+        
+        if (now - lastStateUpdate < stateUpdateCooldown) {
+          console.log(`PerformanceWidget: State update cooldown active for ${widgetId}, skipping`);
+          return;
+        }
+        (window as any)[lastStateUpdateKey] = now;
         
         // Log the variant change only if it's meaningful
         console.log('PerformanceWidget received variant change event:', {
           current: selectedVariant,
           new: variant,
-          widgetId
+          widgetId,
+          forceRefresh: forceRefresh && isSameVariant
         });
-        
-        // Update last processed to prevent loops
-        lastProcessedVariant.current = variantKey;
         
         // Force update the variant in the local state
         setSelectedVariant(variant as ChartVariant);
@@ -303,6 +346,11 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
         const chartComponent = document.querySelector(`[data-chart-variant="${selectedVariant}"]`);
         if (chartComponent) {
           chartComponent.setAttribute('data-chart-variant', variant);
+          
+          // Add a timestamp attribute to force browser to recognize the DOM change
+          if (isSameVariant && forceRefresh) {
+            chartComponent.setAttribute('data-refresh-time', now.toString());
+          }
         }
       }
     };
@@ -355,6 +403,17 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     // Only run once
     if (!widgetId) return;
     
+    // Add a global tracking mechanism to ensure we never initialize a widget more than once
+    // This prevents initialization loops that can occur with rapid localStorage changes
+    const initKey = `widget-init-${widgetId}`;
+    if ((window as any)[initKey]) {
+      // Skip if this widget has already been initialized once
+      return;
+    }
+    
+    // Mark this widget as initialized for the lifetime of the app
+    (window as any)[initKey] = true;
+    
     try {
       // Check localStorage for the correct variant
       const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
@@ -397,6 +456,64 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       console.error('Error initializing variant from localStorage:', error);
     }
   }, [widgetId, onVariantChange, onTitleChange, chartLabels]);
+  
+  // Ensure widget has proper viewState in localStorage after mounting
+  // This handles reset/default layouts where the widget might not have viewState yet
+  useEffect(() => {
+    if (!widgetId) return;
+    
+    // Track if this effect has run for this specific widget
+    const effectRunKey = `init-effect-${widgetId}`;
+    if ((window as any)[effectRunKey]) return;
+    (window as any)[effectRunKey] = true;
+    
+    // Check if this is a dynamically created widget
+    const isDynamicWidget = widgetId.includes('-');
+    
+    // Add a slight delay to ensure this runs after layout initialization
+    const timer = setTimeout(() => {
+      try {
+        const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+        const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+        if (!savedLayout) return;
+        
+        const layout = JSON.parse(savedLayout);
+        const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+        
+        if (widgetIndex !== -1) {
+          // Check if widget is missing viewState or has incomplete viewState
+          if (!layout[widgetIndex].viewState || 
+              !layout[widgetIndex].viewState.chartVariant) {
+              
+            console.log(`Initializing missing viewState for widget ${widgetId}`, {
+              currentVariant: selectedVariant,
+              currentViewMode: viewMode,
+              isDynamicWidget
+            });
+            
+            // Update the widget with current state values
+            layout[widgetIndex] = {
+              ...layout[widgetIndex],
+              viewState: {
+                ...layout[widgetIndex].viewState,
+                chartVariant: selectedVariant,
+                viewMode: viewMode,
+                initialized: true, // Mark as initialized to prevent repeated processing
+                lastInitAt: Date.now() // Add timestamp to track initialization
+              }
+            };
+            
+            localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+            console.log('Created missing viewState in layout for widget:', widgetId);
+          }
+        }
+      } catch (error) {
+        console.error('Error ensuring viewState in localStorage:', error);
+      }
+    }, isDynamicWidget ? 1000 : 500); // Longer delay for dynamic widgets
+    
+    return () => clearTimeout(timer);
+  }, [widgetId, selectedVariant, viewMode]);
 
   // Update local state when defaultVariant changes from parent props
   useEffect(() => {
@@ -596,20 +713,53 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
 
   // Memoize event handlers to prevent unnecessary re-renders
   const handleVariantChange = useCallback((value: ChartVariant) => {
+    // Skip operations during layout reset
+    if ((window as any).isResettingLayout) {
+      console.log('PerformanceWidget: Skipping variant change during layout reset');
+      return;
+    }
+    
     // Log when a view is selected
     console.log('Performance Widget View Selected:', {
       selectedView: value,
       previousView: selectedVariant
     });
     
+    // Force re-render even when selecting the same variant
+    const isSameVariant = value === selectedVariant;
+    
+    // Prevent rapid re-refreshes with global cooldown
+    if (isSameVariant) {
+      const now = Date.now();
+      const globalRefreshKey = `widget-refresh-${widgetId}`;
+      const globalLastRefresh = (window as any)[globalRefreshKey] || 0;
+      const cooldownPeriod = 2000; // 2 second cooldown
+      
+      if (now - globalLastRefresh < cooldownPeriod) {
+        console.log(`Skipping same-variant refresh for ${widgetId}, global cooldown active (${now - globalLastRefresh}ms)`);
+        return;
+      }
+      
+      // Update the global timestamp
+      (window as any)[globalRefreshKey] = now;
+    }
+    
+    // Always set the variant to trigger state updates
     setSelectedVariant(value);
     onVariantChange?.(value);
+    
+    // Force refresh if selecting the same variant to ensure chart updates
+    if (isSameVariant) {
+      // Force re-render by updating the forceUpdate state
+      setForceUpdate(prev => prev + 1);
+    }
     
     // Log the new state after selection
     console.log('Performance Widget View Updated:', {
       title: chartLabels[value],
       chartVariant: value,
-      viewMode: viewMode
+      viewMode: viewMode,
+      forceRefresh: isSameVariant
     });
     
     // Force an update to the widget to ensure changes are reflected immediately
@@ -620,7 +770,8 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           detail: { 
             variant: value,
             widgetId,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            forceRefresh: isSameVariant // Explicitly force refresh when selecting same variant
           } 
         });
         document.dispatchEvent(event);
@@ -632,7 +783,172 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
           widgetContainer.classList.add('variant-updating');
           setTimeout(() => {
             widgetContainer.classList.remove('variant-updating');
+            
+            // Force a more aggressive refresh for same-variant selections
+            if (isSameVariant) {
+              widgetContainer.classList.add('force-refresh');
+              setTimeout(() => {
+                widgetContainer.classList.remove('force-refresh');
+              }, 50);
+            }
           }, 10);
+          
+          // Force chart component to re-render by updating data attributes
+          const chartComponents = widgetContainer.querySelectorAll('[data-chart-variant]');
+          chartComponents.forEach(component => {
+            // Toggle attributes to force browser to recognize DOM changes
+            const currentVariant = component.getAttribute('data-chart-variant');
+            component.setAttribute('data-chart-variant', 'refreshing');
+            setTimeout(() => {
+              component.setAttribute('data-chart-variant', value);
+              component.setAttribute('data-refresh-timestamp', Date.now().toString());
+            }, 0);
+          });
+          
+          // Fix bug: When view is changed after layout reset, ensure widget isn't locked
+          // Find the GridStack instance and make this widget movable again
+          try {
+            const toggleNoMove = (canMove: boolean) => {
+              try {
+                // More robust grid instance retrieval with additional fallbacks
+                let grid = (window as any).gridstack?.el?.gridstack || 
+                           (window as any).grid || 
+                           (window as any).gridstack ||
+                           (window as any).GridStack?.instance;
+                
+                // Check if grid is actually available
+                if (!grid) {
+                  // Try to find gridstack by directly querying for a grid element
+                  const gridEl = document.querySelector('.grid-stack');
+                  if (gridEl && (gridEl as any).gridstack) {
+                    grid = (gridEl as any).gridstack;
+                  }
+                }
+                
+                // Only proceed if we have grid with all required properties
+                if (grid && typeof grid === 'object' && grid.engine && Array.isArray(grid.engine.nodes)) {
+                  const gridItem = grid.engine.nodes.find((n: any) => n && n.id === widgetId);
+                  if (gridItem) {
+                    gridItem.noMove = !canMove;
+                    gridItem.noResize = !canMove;
+                  }
+                }
+              } catch (error) {
+                console.error('Error toggling widget move state:', error);
+              }
+            };
+            
+            // Also define the function to force layout updates with the current widget state
+            const forceLayoutUpdate = (widgetState: any) => {
+              console.log("Forcing performance widget update...", widgetState);
+              try {
+                // More robust grid instance retrieval with additional fallbacks
+                let grid = (window as any).gridstack?.el?.gridstack || 
+                           (window as any).grid || 
+                           (window as any).gridstack ||
+                           (window as any).GridStack?.instance;
+                
+                // Check if grid is actually available
+                if (!grid) {
+                  // Try to find gridstack by directly querying for a grid element
+                  const gridEl = document.querySelector('.grid-stack');
+                  if (gridEl && (gridEl as any).gridstack) {
+                    grid = (gridEl as any).gridstack;
+                  }
+                }
+                
+                // Only proceed if we have grid with all required properties
+                if (grid && typeof grid === 'object' && grid.engine && Array.isArray(grid.engine.nodes)) {
+                  // Find the grid item for this widget
+                  const gridItem = grid.engine.nodes.find((n: any) => n && n.id === widgetId);
+                  if (gridItem) {
+                    // Only re-enable movement if we're on dashboard and not mobile
+                    const isMobile = window.innerWidth <= 768;
+                    const currentPage = document.body.dataset.currentPage || 'dashboard';
+                    const shouldEnableInteraction = !isMobile && currentPage === 'dashboard';
+                    const isLayoutLocked = Boolean((window as any).isLayoutLocked);
+                    
+                    if (shouldEnableInteraction && !isLayoutLocked) {
+                      // Enable movement on this specific widget at node level
+                      gridItem.noMove = false;
+                      gridItem.noResize = false;
+                      gridItem.locked = false;
+                      
+                      // Find the actual widget element
+                      let widgetElement = widgetContainer;
+                      
+                      // If not found directly, try querying for it
+                      if (!widgetElement || !widgetElement.classList.contains('grid-stack-item')) {
+                        widgetElement = document.querySelector(`.grid-stack-item[gs-id="${widgetId}"]`);
+                      }
+                      
+                      if (widgetElement) {
+                        try {
+                          // Force grid to reset internal state
+                          const wasStatic = grid.opts.staticGrid;
+                          grid.setStatic(true);
+                          
+                          setTimeout(() => {
+                            // Re-enable all grid functionality
+                            grid.setStatic(wasStatic);
+                            
+                            // Explicitly enable this specific widget
+                            if (typeof grid.movable === 'function') {
+                              grid.movable(widgetElement, true);
+                              grid.resizable(widgetElement, true);
+                            }
+                            
+                            console.log(`Re-enabled movement for widget ${widgetId} after view change`);
+                          }, 50);
+                        } catch (err) {
+                          console.error('Error re-enabling widget movement:', err);
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Error accessing GridStack instance:', error);
+              }
+            };
+            
+            // Call the functions as needed
+            toggleNoMove(true);
+            // Call forceLayoutUpdate with the current widget state
+            forceLayoutUpdate({
+              chartVariant: selectedVariant,
+              viewMode: viewMode
+            });
+          } catch (err) {
+            console.error('Error accessing GridStack instance:', err);
+          }
+        }
+        
+        // Ensure the layout in localStorage is properly updated
+        const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+        try {
+          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          if (savedLayout) {
+            const layout = JSON.parse(savedLayout);
+            const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+            
+            if (widgetIndex !== -1) {
+              // Ensure the viewState exists for this widget
+              layout[widgetIndex] = {
+                ...layout[widgetIndex],
+                viewState: {
+                  ...(layout[widgetIndex].viewState || {}),
+                  chartVariant: value,
+                  viewMode: viewMode,
+                  lastUpdated: Date.now() // Add timestamp to force updates
+                }
+              };
+              localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+              console.log('Updated layout in localStorage for widget:', widgetId);
+            }
+          }
+        } catch (error) {
+          console.error('Error updating layout in localStorage:', error);
         }
       } catch (error) {
         console.error('Error forcing widget variant update:', error);
