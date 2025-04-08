@@ -24,7 +24,7 @@
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
   --radius-full: 9999px;
-  
+
   /* Grid customization */
   --grid-item-border-radius: 24px;
   --grid-margin: 8px;
@@ -35,7 +35,7 @@
   --color-bg-surface: 0 0% 96%;      /* Surface background - #F5F5F5 */
   --color-bg-inset: 0 0% 92%;         /* Inset background - slightly darker */
   --color-bg-elevated: 0 0% 100%;     /* Elevated background - White #FFFFFF */
-  
+
   /* Widget Specific */
   --color-widget-bg: 0 0% 96%;       /* Widget background - #F5F5F5 */
   --color-widget-header: 0 0% 100%;   /* Widget header - White */
@@ -43,7 +43,7 @@
   --color-widget-inset: 0 0% 92%;     /* Widget inset areas - slightly darker */
   --color-widget-inset-border: 0 0% 90% / 0.0;  /* Widget inset border color */
   --color-widget-hover: 0 0% 94%;     /* Widget hover state - neutral */
-  
+
   /* Background Derivatives */
   --color-background-default: var(--color-bg-base);
   --color-background-subtle: var(--color-bg-subtle);
@@ -51,46 +51,46 @@
   --color-background-inset: var(--color-bg-inset);
   --color-background-elevated: var(--color-bg-elevated);
   --color-background-overlay: var(--color-bg-elevated);
-  
+
   --color-foreground-default: 222.2 84% 4.9%;
   --color-foreground-muted: 215.4 16.3% 46.9%;
   --color-foreground-subtle: 0 0% 45%;
-  
+
   --color-border-default: 214.3 31.8% 91.4%;
   --color-border-muted: 0 0% 85%;
-  
+
   --color-primary-default: 222.2 47.4% 11.2%;
   --color-primary-foreground: 210 40% 98%;
-  
+
   --color-accent-default: 210 40% 96.1%;
   --color-accent-foreground: 222.2 47.4% 11.2%;
-  
+
   --color-success-default: 142 72% 29%;
   --color-success-foreground: 0 0% 98%;
-  
+
   --color-info-default: 199 89% 48%;
   --color-info-foreground: 0 0% 98%;
-  
+
   --color-warning-default: 25 95% 53%;
   --color-warning-foreground: 0 0% 98%;
-  
+
   --color-destructive-default: 0 84.2% 60.2%;
   --color-destructive-foreground: 210 40% 98%;
-  
+
   /* Trading Colors */
   --color-price-up: 34 197 94;      /* green-500 */
   --color-price-down: 239 68 68;    /* red-500 */
   --color-price-unchanged: 215.4 16.3% 46.9%;  /* text-muted-foreground */
-  
+
   /* Component Specific */
   --color-input-background: var(--color-bg-inset);
   --color-input-border: 214.3 31.8% 91.4%;
   --color-input-ring: 222.2 84% 4.9%;
-  
+
   /* Focus & Interactive States */
   --color-focus-ring: 222.2 84% 4.9%;
   --color-hover-overlay: 0 0% 0%;
-  
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -135,7 +135,7 @@
   /* Global colors */
   --pure-white: 0 0% 100%;
   --black: 0 0% 0%;
-  
+
   /* Light Theme Variables */
   /* Core UI colors */
   --color-bg: 0 0% 100%;                  /* Main background - white */
@@ -148,7 +148,7 @@
   --color-warning: 33 100% 50%;           /* Warning indicators - orange */
   --color-error: 0 88% 60%;               /* Error indicators - red */
   --color-separator: 220 13% 91%;         /* Border separators - light gray */
-  
+
   /* Widget theme */
   --color-widget-bg: 0 0% 96%;       /* Widget background - #F5F5F5 */
   --color-widget-header: 0 0% 100%;   /* Widget header - White */
@@ -166,13 +166,13 @@
   --color-bg-elevated: 0 0% 10%;      /* Elevated components */
   --color-bg-inset: 0 0% 8%;          /* Inset areas */
   --color-bg-subtle: 0 0% 6%;         /* Subtle backgrounds */
-  
+
   /* Widget Specific - Proper contrast */
   --color-widget-bg: 0 0% 6%;         /* Widget background - #0F0F0F */
   --color-widget-header: 0 0% 8%;     /* Widget header - slightly elevated */
   --color-widget-content: 0 0% 6%;    /* Widget content area */
   --color-widget-inset: 0 0% 10%;     /* Widget inset areas (scrollable) */
-  
+
   /* Explicitly set card variable for consistent dark mode */
   --card: 0 0% 8%;
 
@@ -184,26 +184,26 @@
   --color-background-elevated: var(--color-bg-elevated);
   --color-background-subtle: var(--color-bg-subtle);
   --color-background-overlay: var(--color-bg-elevated);
-  
+
   --color-foreground-default: 0 0% 98%;
   --color-foreground-muted: 0 0% 64%;
   --color-foreground-subtle: 0 0% 50%;
-  
+
   --color-border-default: 0 0% 8%;
   --color-border-muted: 0 0% 20%;
-  
+
   --color-primary-default: 0 0% 98%;
   --color-primary-foreground: 0 0% 9%;
-  
+
   --color-accent-default: 0 0% 20%;    /* Lighter accent for hover effect */
   --color-accent-foreground: 0 0% 98%;
-  
+
   --color-success-default: 142 72% 29%;
   --color-success-foreground: 0 0% 98%;
-  
+
   --color-warning-default: 38 92% 50%;
   --color-warning-foreground: 0 0% 98%;
-  
+
   --color-destructive-default: 0 63% 31%;
   --color-destructive-foreground: 0 0% 98%;
 
@@ -216,7 +216,7 @@
   --color-input-background: var(--color-bg-inset);
   --color-input-border: 0 0% 15%;
   --color-input-ring: 0 0% 83%;
-  
+
   /* Focus & Interactive States */
   --color-focus-ring: 0 0% 83%;
   --color-hover-overlay: 0 0% 100%;
@@ -253,7 +253,7 @@
   --color-warning: 33 100% 50%;            /* Warning indicators - orange */
   --color-error: 0 88% 60%;                /* Error indicators - red */
   --color-separator: 220 13% 15%;          /* Border separators - dark gray */
-  
+
   /* Widget theme */
   --color-widget-bg: 0 0% 6%;         /* Widget background - #0F0F0F */
   --color-widget-header: 0 0% 8%;     /* Widget header - slightly elevated */
@@ -466,6 +466,9 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+  }
+  .theme {
+    --animate-ripple: ripple var(--duration,2s) ease calc(var(--i, 0)*.2s) infinite;
   }
 }
 
@@ -938,4 +941,15 @@ number-flow-react::part(group-decimal) {
 .dark ::selection {
   background: hsl(var(--color-warning) / 0.08); /* Orange at 8% opacity */
   color: hsl(var(--color-warning)); /* Full orange for text */
+}
+
+@theme inline {
+  @keyframes ripple {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    }
+  50% {
+    transform: translate(-50%, -50%) scale(0.9);
+    }
+  }
 }

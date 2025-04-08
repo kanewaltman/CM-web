@@ -342,23 +342,36 @@ function AppContent() {
         const baseWidgetId = widgetIds[widgetType];
         const widgetId = `${baseWidgetId}-${Date.now()}`;
         
+        // Get widget configuration from registry
+        const widgetConfig = WIDGET_REGISTRY[widgetType];
+        if (!widgetConfig) {
+          console.warn('Missing widget configuration for type:', widgetType);
+          return;
+        }
+        
         const widgetElement = createWidget({
           widgetType,
           widgetId,
           x: previewX,
-          y: previewY
+          y: previewY,
+          w: widgetConfig.defaultSize.w,
+          h: widgetConfig.defaultSize.h,
+          minW: widgetConfig.minSize.w,
+          minH: widgetConfig.minSize.h
         });
 
         if (widgetElement) {
-          // Add widget with consistent settings
+          // Add widget with size constraints from registry
           grid.addWidget({
             el: widgetElement, 
             x: previewX,
             y: previewY,
-            w: 3,
-            h: 4,
-            minW: 2,
-            minH: 2,
+            w: widgetConfig.defaultSize.w,
+            h: widgetConfig.defaultSize.h,
+            minW: widgetConfig.minSize.w,
+            minH: widgetConfig.minSize.h,
+            maxW: widgetConfig.maxSize.w,
+            maxH: widgetConfig.maxSize.h,
             id: widgetId,
             autoPosition: false,
             noMove: isMobile || currentPage !== 'dashboard',

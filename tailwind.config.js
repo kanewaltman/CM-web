@@ -73,10 +73,22 @@ export default {
             height: '0',
           },
         },
+        'ripple': {
+          '0%': {
+            transform: 'translate(-50%, -50%) scale(1)',
+          },
+          '30%': {
+            transform: 'translate(-50%, -50%) scale(0.5)',
+          },
+          '100%': {
+            transform: 'translate(-50%, -50%) scale(1)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'ripple': 'ripple var(--duration, 12s) ease calc(var(--i, 0) * 0.2s) infinite',
       },
     },
   },

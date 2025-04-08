@@ -127,7 +127,14 @@ export const WidgetContainer = memo(function WidgetContainer({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => {
                     console.log('Remove button clicked for widget:', title, 'onRemove function:', !!onRemove);
-                    if (onRemove) onRemove();
+                    if (onRemove) {
+                      try {
+                        const result = onRemove();
+                        console.log('onRemove function result:', result);
+                      } catch (error) {
+                        console.error('Error in onRemove function:', error);
+                      }
+                    }
                   }} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2 opacity-50" />
                     <span>Remove Widget</span>

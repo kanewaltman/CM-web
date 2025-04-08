@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { GridStack, GridStackNode, GridStackOptions } from 'gridstack';
 import { ExtendedGridStackWidget, LayoutWidget, DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
 import { widgetStateRegistry } from '@/lib/widgetState';
@@ -30,7 +30,23 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     
     const widget = grid.getGridItems().find(w => w.gridstackNode?.id === widgetId);
     if (!widget) {
-      console.error('Widget not found for removal:', widgetId);
+      console.error('Widget not found for removal:', widgetId, 'Available widgets:', grid.getGridItems().map(w => w.gridstackNode?.id));
+      
+      // Special case: try to find the widget by DOM selector instead
+      const widgetElement = document.querySelector(`[gs-id="${widgetId}"]`);
+      if (widgetElement && widgetElement.parentElement) {
+        console.log('Found widget element by DOM selector:', widgetId);
+        try {
+          grid.removeWidget(widgetElement.parentElement as HTMLElement, false);
+          widgetElement.parentElement.remove();
+          widgetStateRegistry.delete(widgetId);
+          saveLayout(grid);
+          return;
+        } catch (error) {
+          console.error('Error removing widget by DOM selector:', error);
+        }
+      }
+      
       return;
     }
 
@@ -47,6 +63,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
         grid.float(false);
         
         // Remove the specific widget
+        console.log('Removing widget:', widgetId, widget);
         grid.removeWidget(widget, false);
         
         // Unmount React component if it exists
@@ -89,9 +106,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
   
   // Custom grid compaction
   const compactGrid = useCallback((grid: GridStack, verticalOnly: boolean = false) => {
-    if (!grid.engine?.nodes) return;
+    if (!grid || !grid.engine || !Array.isArray(grid.engine.nodes)) return;
     
-    const nodes = [...grid.engine.nodes];
+    // Create a defensive copy of nodes
+    const nodes = [...grid.engine.nodes].filter(Boolean);
     if (nodes.length === 0) return;
 
     try {
@@ -182,10 +200,26 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
         const baseId = node.id.split('-')[0];
         const widgetType = widgetTypes[baseId];
         const widgetConfig = WIDGET_REGISTRY[widgetType];
-        const viewState = widgetStateRegistry.get(node.id) ? {
-          chartVariant: widgetStateRegistry.get(node.id)!.variant,
-          viewMode: widgetStateRegistry.get(node.id)!.viewMode
-        } : undefined;
+        const widgetState = widgetStateRegistry.get(node.id);
+        
+        // Initialize an empty viewState object
+        let viewState: LayoutWidget['viewState'] = {};
+        
+        // Handle different widget types differently
+        if (widgetState) {
+          if (widgetType === 'performance' && 'variant' in widgetState && 'viewMode' in widgetState) {
+            // For Performance widget
+            viewState = {
+              chartVariant: widgetState.variant,
+              viewMode: widgetState.viewMode
+            };
+          } else if (widgetType === 'referrals' && 'viewMode' in widgetState) {
+            // For Referrals widget
+            viewState = {
+              referralViewMode: widgetState.viewMode
+            };
+          }
+        }
 
         return {
           id: node.id,
@@ -210,11 +244,28 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
   const handleResetLayout = useCallback(() => {
     if (!gridRef.current) return;
     
+    // Add a global cooldown to prevent frequent resets
+    const now = Date.now();
+    const lastResetKey = 'last-layout-reset-time';
+    const lastReset = (window as any)[lastResetKey] || 0;
+    const resetCooldown = 3000; // 3 second cooldown between layout resets
+    
+    if (now - lastReset < resetCooldown) {
+      console.log(`Layout reset cooldown active, please wait ${Math.ceil((resetCooldown - (now - lastReset))/1000)}s`);
+      return;
+    }
+    
+    // Update last reset time
+    (window as any)[lastResetKey] = now;
+    
     const grid = gridRef.current;
     
     try {
       grid.batchUpdate();
       try {
+        // Set a global flag to indicate we're in a reset operation
+        (window as any).isResettingLayout = true;
+        
         // Use the appropriate layout based on device type
         const layoutToApply = isMobile ? mobileLayout : defaultLayout;
         console.log('🔄 Reset to layout:', { 
@@ -223,11 +274,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           layout: layoutToApply,
           widgetCount: layoutToApply.length
         });
-        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
         
         // First, remove all existing widgets and their DOM elements
+        console.log('🧹 Removing existing widgets');
         const currentWidgets = grid.getGridItems();
-        console.log('🧹 Removing existing widgets:', currentWidgets.length);
         currentWidgets.forEach(widget => {
           if (widget.gridstackNode?.id) {
             // Clean up widget state
@@ -246,6 +296,62 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           remainingWidgets.forEach(widget => widget.remove());
         }
         
+        // Store the final layout in localStorage without preserving old viewStates
+        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
+        
+        // Pre-mark all widgets as initialized to prevent refresh loops
+        layoutToApply.forEach(item => {
+          const initKey = `widget-init-${item.id}`;
+          (window as any)[initKey] = true;
+        });
+        
+        // Clear the reset flag after a short delay to allow for initialization
+        setTimeout(() => {
+          (window as any).isResettingLayout = false;
+          console.log('Layout reset completed');
+          
+          // Ensure widgets are properly movable after reset
+          if (gridRef.current && !isMobile && currentPage === 'dashboard') {
+            const grid = gridRef.current;
+            try {
+              // Re-enable movement for all widgets
+              grid.batchUpdate();
+              try {
+                // Make sure widgets are not locked unless the whole grid is locked
+                const isGloballyLocked = Boolean((window as any).isLayoutLocked);
+                if (!isGloballyLocked) {
+                  grid.enableMove(true);
+                  grid.enableResize(true);
+                  grid.setStatic(false);
+                  
+                  // Update each individual widget node with added safety checks
+                  if (grid.engine && Array.isArray(grid.engine.nodes)) {
+                    grid.engine.nodes.forEach(node => {
+                      if (node && (node.noMove || node.locked)) {
+                        node.noMove = false;
+                        node.locked = false;
+                        
+                        // Update DOM element classes if needed
+                        const el = document.querySelector(`[gs-id="${node.id}"]`)?.parentElement;
+                        if (el && el.classList.contains('ui-draggable-disabled')) {
+                          el.classList.remove('ui-draggable-disabled');
+                          el.classList.add('ui-draggable');
+                        }
+                      }
+                    });
+                  }
+                  
+                  console.log('Re-enabled widget movement after reset');
+                }
+              } finally {
+                grid.commit();
+              }
+            } catch (err) {
+              console.error('Error re-enabling widget movement:', err);
+            }
+          }
+        }, 1000);
+
         // Now add all widgets from the appropriate layout
         layoutToApply.forEach(node => {
           const baseWidgetId = node.id.split('-')[0];
@@ -282,33 +388,23 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             if (widgetElement) {
               console.log(`✅ Created widget element: ${node.id} (${widgetType}) at (${node.x},${node.y})`);
               
-              // Apply viewState to widget state registry if it exists
-              if (node.viewState) {
-                const widgetState = widgetStateRegistry.get(node.id);
-                if (widgetState) {
-                  console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
-                  widgetState.setVariant(node.viewState.chartVariant);
-                  if (node.viewState.viewMode) {
-                    widgetState.setViewMode(node.viewState.viewMode);
-                  }
-                } else {
-                  // If widget state doesn't exist yet, ensure we set it
-                  console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
-                  widgetStateRegistry.set(node.id, {
-                    variant: node.viewState.chartVariant,
-                    viewMode: node.viewState.viewMode || 'split',
-                    title: getPerformanceTitle(node.viewState.chartVariant),
-                    dateRange: {
-                      from: new Date(),
-                      to: new Date()
-                    },
-                    setVariant: () => {},  // Will be replaced when component mounts
-                    setViewMode: () => {},  // Will be replaced when component mounts
-                    setTitle: () => {},    // Will be replaced when component mounts
-                    setDateRange: () => {}, // Will be replaced when component mounts
-                    subscribe: () => { return () => {}; }  // Add placeholder subscribe method
-                  });
-                }
+              // For performance widgets, initialize with layout's viewState
+              if (baseWidgetId === 'performance' && node.viewState) {
+                console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
+                widgetStateRegistry.set(node.id, {
+                  variant: node.viewState.chartVariant,
+                  viewMode: node.viewState.viewMode || 'split',
+                  title: getPerformanceTitle(node.viewState.chartVariant),
+                  dateRange: {
+                    from: new Date(),
+                    to: new Date()
+                  },
+                  setVariant: () => {},
+                  setViewMode: () => {},
+                  setTitle: () => {},
+                  setDateRange: () => {},
+                  subscribe: () => { return () => {}; }
+                });
               }
               
               // Add widget with enforced sizes
@@ -324,9 +420,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                 maxW: widgetConfig.maxSize.w,
                 maxH: widgetConfig.maxSize.h,
                 autoPosition: false,
-                noMove: isMobile || currentPage !== 'dashboard',
-                noResize: isMobile || currentPage !== 'dashboard',
-                locked: isMobile || currentPage !== 'dashboard'
+                // Only lock if on mobile or not on dashboard or globally locked
+                noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
               } as ExtendedGridStackWidget);
             }
           } catch (error) {
@@ -517,9 +614,18 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
               if (node.viewState) {
                 const widgetState = widgetStateRegistry.get(node.id);
                 if (widgetState) {
-                  widgetState.setVariant(node.viewState.chartVariant);
-                  if (node.viewState.viewMode) {
-                    widgetState.setViewMode(node.viewState.viewMode);
+                  // Handle performance widget state
+                  if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                    if (node.viewState.chartVariant) {
+                      widgetState.setVariant(node.viewState.chartVariant);
+                    }
+                  }
+                  
+                  // Handle referrals widget state
+                  if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
+                    if (node.viewState.referralViewMode) {
+                      widgetState.setViewMode(node.viewState.referralViewMode);
+                    }
                   }
                 }
               }
@@ -556,18 +662,28 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                     minW: widgetConfig.minSize.w,
                     minH: widgetConfig.minSize.h,
                     autoPosition: false,
-                    noMove: isMobile || currentPage !== 'dashboard',
-                    noResize: isMobile || currentPage !== 'dashboard',
-                    locked: isMobile || currentPage !== 'dashboard'
+                    // Only lock if on mobile or not on dashboard or globally locked
+                    noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                    noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                    locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
                   } as ExtendedGridStackWidget);
 
                   // Update widget state if it exists
                   if (node.viewState) {
                     const widgetState = widgetStateRegistry.get(node.id);
                     if (widgetState) {
-                      widgetState.setVariant(node.viewState.chartVariant);
-                      if (node.viewState.viewMode) {
-                        widgetState.setViewMode(node.viewState.viewMode);
+                      // Handle performance widget state
+                      if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                        if (node.viewState.chartVariant) {
+                          widgetState.setVariant(node.viewState.chartVariant);
+                        }
+                      }
+                      
+                      // Handle referrals widget state
+                      if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
+                        if (node.viewState.referralViewMode) {
+                          widgetState.setViewMode(node.viewState.referralViewMode);
+                        }
                       }
                     }
                   }
@@ -839,9 +955,14 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
 
     // Listen for custom widget remove events
     const handleWidgetRemove = (event: CustomEvent) => {
-      const widgetId = event.detail?.widgetId;
+      // Support both widgetId and id in the event detail for backwards compatibility
+      const widgetId = event.detail?.widgetId || event.detail?.id;
+      console.log('Widget remove event received:', { event, widgetId });
+      
       if (widgetId) {
         handleRemoveWidget(widgetId);
+      } else {
+        console.error('Widget removal failed: no widgetId in event', event);
       }
     };
 
@@ -967,9 +1088,18 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   const widgetState = widgetStateRegistry.get(node.id);
                   if (widgetState) {
                     console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
-                    widgetState.setVariant(node.viewState.chartVariant);
-                    if (node.viewState.viewMode) {
-                      widgetState.setViewMode(node.viewState.viewMode);
+                    // Handle performance widget state
+                    if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                      if (node.viewState.chartVariant) {
+                        widgetState.setVariant(node.viewState.chartVariant);
+                      }
+                    }
+                    
+                    // Handle referrals widget state
+                    if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
+                      if (node.viewState.referralViewMode) {
+                        widgetState.setViewMode(node.viewState.referralViewMode);
+                      }
                     }
                   } else {
                     // If widget state doesn't exist yet, ensure we set it
@@ -1004,9 +1134,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   maxW: widgetConfig.maxSize.w,
                   maxH: widgetConfig.maxSize.h,
                   autoPosition: false,
-                  noMove: isMobile || currentPage !== 'dashboard',
-                  noResize: isMobile || currentPage !== 'dashboard',
-                  locked: isMobile || currentPage !== 'dashboard'
+                  // Only lock if on mobile or not on dashboard or globally locked
+                  noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                  noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                  locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
                 });
               } else {
                 console.error('Failed to create widget element:', node.id);
@@ -1055,12 +1186,34 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     
     const grid = gridRef.current;
     
+    // Store the lock state globally for other components to access
+    (window as any).isLayoutLocked = locked;
+    
     // Update GridStack settings based on lock state
     if (locked) {
       // Lock the layout - disable drag and resize
       grid.setStatic(true);
       grid.enableMove(false);
       grid.enableResize(false);
+      
+      // Also directly update all grid nodes to ensure they're locked
+      if (grid.engine && grid.engine.nodes) {
+        grid.engine.nodes.forEach(node => {
+          if (node.id && node.el) {
+            node.locked = true;
+            node.noMove = true;
+            node.noResize = true;
+            
+            // Also update DOM element classes
+            if (node.el.classList) {
+              node.el.classList.add('ui-draggable-disabled');
+              node.el.classList.add('ui-resizable-disabled');
+              node.el.classList.remove('ui-draggable');
+              node.el.classList.remove('ui-resizable');
+            }
+          }
+        });
+      }
     } else {
       // Unlock the layout - enable drag and resize if we're on dashboard and not mobile
       const shouldEnableInteraction = !isMobile && currentPage === 'dashboard';
@@ -1068,8 +1221,45 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
       grid.setStatic(false);
       grid.enableMove(shouldEnableInteraction);
       grid.enableResize(shouldEnableInteraction);
+      
+      // Also directly update all grid nodes to ensure they're unlocked
+      if (shouldEnableInteraction && grid.engine && grid.engine.nodes) {
+        grid.engine.nodes.forEach(node => {
+          if (node.id && node.el) {
+            node.locked = false;
+            node.noMove = false;
+            node.noResize = false;
+            
+            // Also update DOM element classes
+            if (node.el.classList) {
+              node.el.classList.remove('ui-draggable-disabled');
+              node.el.classList.remove('ui-resizable-disabled');
+              if (!node.el.classList.contains('ui-draggable')) {
+                node.el.classList.add('ui-draggable');
+              }
+              if (!node.el.classList.contains('ui-resizable')) {
+                node.el.classList.add('ui-resizable');
+              }
+            }
+            
+            // Force re-initialization of draggable
+            if (typeof grid.movable === 'function') {
+              grid.movable(node.el, true);
+              grid.resizable(node.el, true);
+            }
+          }
+        });
+      }
     }
   }, [gridRef, isMobile, currentPage]);
+
+  // Set global reference for widget removal
+  useEffect(() => {
+    (window as any).handleGridStackWidgetRemove = handleRemoveWidget;
+    return () => {
+      delete (window as any).handleGridStackWidgetRemove;
+    };
+  }, [handleRemoveWidget]);
 
   return {
     grid,
