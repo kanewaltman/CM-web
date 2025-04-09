@@ -32,12 +32,17 @@ export const Ripple = React.memo(function Ripple({
       }
     };
     
-    updateDimensions();
+    // Defer initial measurement until after the first paint
+    const animationFrameId = requestAnimationFrame(() => {
+      updateDimensions();
+    });
     
     const resizeObserver = new ResizeObserver(updateDimensions);
     resizeObserver.observe(containerRef.current);
     
     return () => {
+      // Cancel the animation frame if the component unmounts before it runs
+      cancelAnimationFrame(animationFrameId);
       if (containerRef.current) {
         resizeObserver.unobserve(containerRef.current);
       }
@@ -46,18 +51,24 @@ export const Ripple = React.memo(function Ripple({
   
   // Calculate the increment size based on container dimensions
   const getIncrementSize = () => {
-    const minDimension = 320; // Minimum reference dimension
+    const minDimensionRef = 320; // Minimum reference dimension for scaling start
     const maxFactor = 2.5; // Maximum multiplier for the increment
-    
-    const maxDimension = Math.max(containerDimensions.width, containerDimensions.height);
-    
-    if (maxDimension <= minDimension) return baseIncrementSize;
-    
-    const scaleFactor = Math.min(maxFactor, 1 + (maxDimension - minDimension) / 1000);
+
+    // Use the smaller dimension to determine the scaling, ensuring ripples fit well
+    const relevantDimension = Math.min(containerDimensions.width, containerDimensions.height);
+
+    if (relevantDimension <= minDimensionRef) return baseIncrementSize;
+
+    // Calculate scale factor based on how much the smaller dimension exceeds the reference
+    // Adjusted the divisor to make scaling less aggressive
+    const scaleFactor = Math.min(maxFactor, 1 + (relevantDimension - minDimensionRef) / 1000); 
     return baseIncrementSize * scaleFactor;
   };
   
   const incrementSize = getIncrementSize();
+
+  // Only render ripples if container dimensions are valid
+  const shouldRenderRipples = containerDimensions.width > 0 && containerDimensions.height > 0;
 
   return (
     <div
@@ -68,7 +79,7 @@ export const Ripple = React.memo(function Ripple({
       )}
       {...props}
     >
-      {Array.from({ length: numCircles }, (_, i) => {
+      {shouldRenderRipples && Array.from({ length: numCircles }, (_, i) => {
         const size = mainCircleSize + i * incrementSize;
         const opacity = mainCircleOpacity - i * 0.03;
         const animationDelay = `${i * 0.06}s`;
