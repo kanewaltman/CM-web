@@ -504,7 +504,7 @@ const Referrals: React.FC<{
   onViewModeChange: (mode: ReferralsViewMode) => void;
   widgetId: string;
 }> = ({ className, onRemove, forceTheme, viewMode, onViewModeChange, widgetId }) => {
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme, theme: specificTheme } = useTheme();
   
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
@@ -621,13 +621,13 @@ const Referrals: React.FC<{
         return (
           <WarpBackground 
             className="flex-1 w-full border-none flex items-center justify-center"
-            gridColor="rgba(43, 43, 43, 0.3)"
+            themeVariant={specificTheme}
             beamsPerSide={3}
           >
             <div className="text-center px-6">
-              <h3 className="text-xl font-bold mb-2">Warp Background</h3>
+              <h3 className="text-xl font-bold mb-2">Trade like you have a time machine</h3>
               <p className="text-sm text-muted-foreground">
-                Referral program with dynamic space-warping effects
+                Insights for the future, digested by AI.
               </p>
             </div>
           </WarpBackground>
@@ -676,9 +676,9 @@ const Referrals: React.FC<{
             />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center relative z-10 px-6 py-4">
-                <h3 className="text-xl font-bold mb-2">Ripple Effect</h3>
+                <h3 className="text-xl font-bold mb-2">Give a friend the gift of Pro Trading</h3>
                 <p className="text-sm text-muted-foreground">
-                  Referral program with ripple animation effects
+                  Earn when they trade.
                 </p>
               </div>
             </div>
