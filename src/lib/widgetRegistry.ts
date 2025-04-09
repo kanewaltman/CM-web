@@ -66,7 +66,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     title: 'Markets',
     component: MarketsWidget,
     defaultSize: { w: 8, h: 4 },
-    minSize: { w: 3, h: 3 },
+    minSize: { w: 2, h: 3 },
     maxSize: { w: 12, h: 9 }
   },
   'performance': {
