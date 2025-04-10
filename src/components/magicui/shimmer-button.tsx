@@ -70,17 +70,17 @@ export const ShimmerButton = React.forwardRef<
             "!cursor-pointer",
 
             // Base shadow adjusted for light/dark themes
-            "text-sm font-medium shadow-[inset_0_-8px_10px_#00000033] dark:shadow-[inset_0_-8px_10px_#ffffff0d]",
+            "text-sm font-medium shadow-[inset_0_-8px_10px_#ffffff43] dark:shadow-[inset_0_-8px_10px_#ffffff16]",
             "[border-radius:var(--radius)]",
 
             // transition
             "transform-gpu transition-all duration-300 ease-in-out",
 
             // on hover - adjusted for light/dark themes
-            "group-hover:shadow-[inset_0_-6px_10px_#00000040] dark:group-hover:shadow-[inset_0_-6px_10px_#ffffff26]",
+            "group-hover:shadow-[inset_0_-6px_10px_#ffffff74] dark:group-hover:shadow-[inset_0_-6px_10px_#ffffff22]",
 
             // on click - adjusted for light/dark themes
-            "group-active:shadow-[inset_0_-10px_10px_#0000004d] dark:group-active:shadow-[inset_0_-10px_10px_#ffffff33]",
+            "group-active:shadow-[inset_0_-10px_10px_#ffffff4d] dark:group-active:shadow-[inset_0_-10px_10px_#ffffff33]",
           )}
         />
 
