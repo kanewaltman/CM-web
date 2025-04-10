@@ -23,12 +23,15 @@ import { ShimmerButton } from './magicui/shimmer-button';
 import { TextAnimate } from "./magicui/text-animate";
 
 // Define view modes for the Referrals widget
-export type ReferralsViewMode = 'warp' | 'flickering' | 'grid' | 'ripple' | 'dots';
+export type ReferralsViewMode = 'warp' | 'grid' | 'ripple' | 'dots';
 
 // View mode labels for dropdown
-const viewLabels: Record<ReferralsViewMode, string> = {
+type ViewLabels = {
+  [key in ReferralsViewMode]: string;
+};
+
+const viewLabels: ViewLabels = {
   'warp': 'Warp Background',
-  'flickering': 'Flickering Grid',
   'grid': 'Animated Grid',
   'ripple': 'Ripple Effect',
   'dots': 'Dot Pattern'
@@ -642,7 +645,7 @@ const Referrals: React.FC<{
           Trade like you have a time machine
         </TextAnimate>
         <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
-          Insights into the future, powered by Coinmetro.
+          Insight into the future, powered by Coinmetro.
         </TextAnimate>
       </div>
     ), [textAnimateProps]); // Now correctly depends on the stable props object
@@ -661,6 +664,7 @@ const Referrals: React.FC<{
             {warpTextContent}
             {/* ShimmerButton is NOT wrapped - Now wrapped with motion.div */}
             <motion.div
+              key={`warp-${viewMode}`}
               initial={{ opacity: 0, y: 20 }} // Start invisible and slightly down
               animate={{ opacity: 1, y: 0 }}   // Fade in and slide up
               transition={{ delay: 1.2, duration: 0.5 }} // Start after text (approx 0.7s + 0.5s duration), duration 0.5s
@@ -679,40 +683,39 @@ const Referrals: React.FC<{
             </motion.div>
           </WarpBackground>
         );
-      case 'flickering':
-        return (
-          <div className="h-full w-full">
-            <FlickeringGrid 
-              className="h-full w-full p-6"
-            >
-              <div className="flex items-center justify-center h-full w-full">
-                <div className="text-center">
-                   <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
-                     Flickering Grid
-                   </TextAnimate>
-                   <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground">
-                     Referral program with dynamic flickering grid effects
-                   </TextAnimate>
-                </div>
-              </div>
-            </FlickeringGrid>
-          </div>
-        );
       case 'grid':
         return (
           <div className="h-full w-full relative flex items-center justify-center">
             <AnimatedGridPattern
-              className="absolute inset-0 h-full w-full"
+              className="absolute inset-0 h-full w-full opacity-10"
               numSquares={60}
               duration={3}
             />
-            <div className="text-center relative z-10">
-              <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
+            <div className="text-center relative z-10 px-6 flex flex-col items-center">
+              <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
                 Animated Grid
               </TextAnimate>
-              <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground">
+              <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
                 Referral program with animated grid pattern
               </TextAnimate>
+              <motion.div
+                key={`grid-${viewMode}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.2, duration: 0.5 }}
+                className="flex justify-center"
+              >
+                <ShimmerButton
+                  shimmerColor={shimmerColor}
+                  shimmerSize="0.05em"
+                  shimmerDuration="6s"
+                  borderRadius="8px"
+                  background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                  className="mx-auto text-sm"
+                >
+                  Get Started
+                </ShimmerButton>
+              </motion.div>
             </div>
           </div>
         );
@@ -727,14 +730,20 @@ const Referrals: React.FC<{
             />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center relative z-10 px-6 py-4 flex flex-col items-center">
-                 <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
-                   Give a friend the gift of Pro Trading
-                 </TextAnimate>
-                 <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground mb-4">
-                   Earn when they trade.
-                 </TextAnimate>
-                 {/* ShimmerButton is NOT wrapped */}
-                 <ShimmerButton 
+                <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+                  Give a friend the gift of Pro Trading
+                </TextAnimate>
+                <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+                  & Earn on your combined trading volume.
+                </TextAnimate>
+                <motion.div
+                  key={`ripple-${viewMode}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.2, duration: 0.5 }}
+                  className="flex justify-center"
+                >
+                  <ShimmerButton
                     shimmerColor="#fff"
                     shimmerSize="0.05em"
                     shimmerDuration="6s"
@@ -742,8 +751,9 @@ const Referrals: React.FC<{
                     background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
                     className="mx-auto text-sm"
                   >
-                    Invite Friends
+                    + Invite Friends
                   </ShimmerButton>
+                </motion.div>
               </div>
             </div>
           </div>
@@ -752,7 +762,7 @@ const Referrals: React.FC<{
         return (
           <div className="h-full w-full relative flex items-center justify-center">
             <DotPattern
-              className="absolute inset-0"
+              className="absolute inset-0 opacity-10"
               width={24}
               height={24}
               cx={1.5}
@@ -760,13 +770,31 @@ const Referrals: React.FC<{
               cr={1.5}
               glow={true}
             />
-            <div className="text-center relative z-10">
-               <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
-                 Dot Pattern
-               </TextAnimate>
-               <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground">
-                 Referral program with glowing dot pattern
-               </TextAnimate>
+            <div className="text-center relative z-10 px-6 flex flex-col items-center">
+              <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+                Dot Pattern
+              </TextAnimate>
+              <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+                Referral program with glowing dot pattern
+              </TextAnimate>
+              <motion.div
+                key={`dots-${viewMode}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.2, duration: 0.5 }}
+                className="flex justify-center"
+              >
+                <ShimmerButton
+                  shimmerColor={shimmerColor}
+                  shimmerSize="0.05em"
+                  shimmerDuration="6s"
+                  borderRadius="8px"
+                  background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                  className="mx-auto text-sm"
+                >
+                  Get Started
+                </ShimmerButton>
+              </motion.div>
             </div>
           </div>
         );
@@ -786,7 +814,7 @@ const Referrals: React.FC<{
       extraControls={viewController}
     >
       <div className="h-full w-full rounded-xl bg-card overflow-hidden border flex">
-        {renderContent()}
+        {renderContent() as React.ReactNode}
       </div>
     </WidgetContainer>
   );
