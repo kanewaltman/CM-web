@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { WidgetContainer } from './WidgetContainer';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
@@ -19,6 +20,7 @@ import { AnimatedGridPattern } from './magicui/animated-grid-pattern';
 import { Ripple } from './magicui/ripple';
 import { DotPattern } from './magicui/dot-pattern';
 import { ShimmerButton } from './magicui/shimmer-button';
+import { TextAnimate } from "./magicui/text-animate";
 
 // Define view modes for the Referrals widget
 export type ReferralsViewMode = 'warp' | 'flickering' | 'grid' | 'ripple' | 'dots';
@@ -508,6 +510,12 @@ const Referrals: React.FC<{
   const { resolvedTheme, theme: specificTheme } = useTheme();
   const [shimmerColor, setShimmerColor] = useState<string>('#ffffff'); // Initial color
 
+  // Define constant animation props outside the component render cycle
+  const textAnimateProps = useMemo(() => ({
+    animation: "fadeIn" as const,
+    once: true,
+  }), []);
+
   // Handler to update shimmer color based on hue from WarpBackground
   const handleActiveHueChange = useCallback((hue: number) => {
     const newColor = `hsl(${hue} 80% 70%)`; // Lighter color for shimmer
@@ -624,6 +632,21 @@ const Referrals: React.FC<{
       }
     }
     
+    // Base props for animation - now using the memoized props object
+    // const textAnimateProps = { ... }; // Removed from here
+
+    // Memoize the text content for the warp view
+    const warpTextContent = useMemo(() => (
+      <div className="text-center px-6 flex flex-col items-center">
+        <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+          Trade like you have a time machine
+        </TextAnimate>
+        <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+          Insights into the future, powered by Coinmetro.
+        </TextAnimate>
+      </div>
+    ), [textAnimateProps]); // Now correctly depends on the stable props object
+
     switch (validViewMode) {
       case 'warp':
         return (
@@ -631,24 +654,29 @@ const Referrals: React.FC<{
             className="flex-1 w-full border-none flex items-center justify-center"
             themeVariant={specificTheme}
             beamsPerSide={3}
+            beamSize={3}
             onActiveHueChange={handleActiveHueChange}
           >
-            <div className="text-center px-6">
-              <h3 className="text-xl font-bold mb-2">Trade like you have a time machine</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Insights for the future, provided by Coinmetro.
-              </p>
+            {/* Render the memoized text content */}
+            {warpTextContent}
+            {/* ShimmerButton is NOT wrapped - Now wrapped with motion.div */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }} // Start invisible and slightly down
+              animate={{ opacity: 1, y: 0 }}   // Fade in and slide up
+              transition={{ delay: 1.2, duration: 0.5 }} // Start after text (approx 0.7s + 0.5s duration), duration 0.5s
+              className="flex justify-center" // Add flex container for centering if needed
+            >
               <ShimmerButton
                 shimmerColor={shimmerColor}
                 shimmerSize="0.05em"
                 shimmerDuration="6s"
                 borderRadius="8px"
                 background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
-                className="mx-auto text-sm"
+                className="mx-auto text-sm" // mx-auto might already handle centering
               >
                 Get Started
               </ShimmerButton>
-            </div>
+            </motion.div>
           </WarpBackground>
         );
       case 'flickering':
@@ -659,10 +687,12 @@ const Referrals: React.FC<{
             >
               <div className="flex items-center justify-center h-full w-full">
                 <div className="text-center">
-                  <h3 className="text-xl font-bold mb-2">Flickering Grid</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Referral program with dynamic flickering grid effects
-                  </p>
+                   <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
+                     Flickering Grid
+                   </TextAnimate>
+                   <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground">
+                     Referral program with dynamic flickering grid effects
+                   </TextAnimate>
                 </div>
               </div>
             </FlickeringGrid>
@@ -677,10 +707,12 @@ const Referrals: React.FC<{
               duration={3}
             />
             <div className="text-center relative z-10">
-              <h3 className="text-xl font-bold mb-2">Animated Grid</h3>
-              <p className="text-sm text-muted-foreground">
+              <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
+                Animated Grid
+              </TextAnimate>
+              <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground">
                 Referral program with animated grid pattern
-              </p>
+              </TextAnimate>
             </div>
           </div>
         );
@@ -694,21 +726,24 @@ const Referrals: React.FC<{
               numCircles={4}
             />
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center relative z-10 px-6 py-4">
-                <h3 className="text-xl font-bold mb-2">Give a friend the gift of Pro Trading</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Earn when they trade.
-                </p>
-                <ShimmerButton 
-                  shimmerColor="#fff"
-                  shimmerSize="0.05em"
-                  shimmerDuration="6s"
-                  borderRadius="8px"
-                  background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
-                  className="mx-auto text-sm"
-                >
-                  Invite Friends
-                </ShimmerButton>
+              <div className="text-center relative z-10 px-6 py-4 flex flex-col items-center">
+                 <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
+                   Give a friend the gift of Pro Trading
+                 </TextAnimate>
+                 <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground mb-4">
+                   Earn when they trade.
+                 </TextAnimate>
+                 {/* ShimmerButton is NOT wrapped */}
+                 <ShimmerButton 
+                    shimmerColor="#fff"
+                    shimmerSize="0.05em"
+                    shimmerDuration="6s"
+                    borderRadius="8px"
+                    background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                    className="mx-auto text-sm"
+                  >
+                    Invite Friends
+                  </ShimmerButton>
               </div>
             </div>
           </div>
@@ -726,10 +761,12 @@ const Referrals: React.FC<{
               glow={true}
             />
             <div className="text-center relative z-10">
-              <h3 className="text-xl font-bold mb-2">Dot Pattern</h3>
-              <p className="text-sm text-muted-foreground">
-                Referral program with glowing dot pattern
-              </p>
+               <TextAnimate {...textAnimateProps} by="line" delay={0} as="h3" className="text-xl font-bold mb-2">
+                 Dot Pattern
+               </TextAnimate>
+               <TextAnimate {...textAnimateProps} by="line" delay={0.1} as="p" className="text-sm text-muted-foreground">
+                 Referral program with glowing dot pattern
+               </TextAnimate>
             </div>
           </div>
         );
