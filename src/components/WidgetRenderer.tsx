@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
@@ -18,6 +18,57 @@ import {
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
+import { useReactTable } from '@tanstack/react-table';
+
+// Create a wrapper component for Markets widget to use hooks properly
+const MarketsWidgetContainer = ({ 
+  widgetId, 
+  WidgetComponent, 
+  title, 
+  onRemove 
+}: { 
+  widgetId: string, 
+  WidgetComponent: React.FC<any>, 
+  title: string, 
+  onRemove: () => boolean 
+}) => {
+  // Now hooks are used inside a functional component
+  const [marketTable, setMarketTable] = useState<ReturnType<typeof useReactTable<any>> | null>(null);
+  
+  const getMarketTable = (table: ReturnType<typeof useReactTable<any>> | null) => {
+    setMarketTable(table);
+  };
+
+  return (
+    <WidgetContainer
+      title={title}
+      onRemove={onRemove}
+      headerControls={
+        <MarketsWidgetWrapper 
+          isHeader 
+          widgetId={widgetId} 
+          widgetComponent={WidgetComponent} 
+          onRemove={onRemove}
+          getTable={getMarketTable}
+        />
+      }
+      widgetMenu={
+        <MarketsWidgetWrapper 
+          isMenu 
+          widgetId={widgetId} 
+          widgetComponent={WidgetComponent} 
+          onRemove={onRemove} 
+        />
+      }
+    >
+      <MarketsWidgetWrapper 
+        widgetId={widgetId} 
+        widgetComponent={WidgetComponent} 
+        onRemove={onRemove} 
+      />
+    </WidgetContainer>
+  );
+};
 
 /**
  * Creates a new widget DOM element for GridStack
@@ -116,12 +167,14 @@ export const createWidget = ({
                 isHeader 
                 widgetId={widgetId} 
                 widgetComponent={WidgetComponent}
+                onRemove={() => true}
               />
             }
           >
             <PerformanceWidgetWrapper
               widgetId={widgetId}
               widgetComponent={WidgetComponent}
+              onRemove={() => true}
             />
           </WidgetContainer>
         </DataSourceProvider>
@@ -206,6 +259,36 @@ export const createWidget = ({
               
               return true;
             }}
+          />
+        </DataSourceProvider>
+      );
+    }
+    // For markets widget, use MarketsWidgetWrapper
+    else if (widgetType === 'markets') {
+      const handleRemove = () => {
+        console.log('Markets widget header remove callback triggered');
+        // Try both event approaches for maximum compatibility
+        document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+        
+        // Direct call fallback if window.handleRemoveWidget is available
+        try {
+          if ((window as any).handleGridStackWidgetRemove) {
+            (window as any).handleGridStackWidgetRemove(widgetId);
+          }
+        } catch (e) {
+          console.error('Direct removal fallback failed:', e);
+        }
+        
+        return true;
+      };
+      
+      component = (
+        <DataSourceProvider>
+          <MarketsWidgetContainer
+            widgetId={widgetId}
+            WidgetComponent={WidgetComponent}
+            title={widgetTitles[widgetType]}
+            onRemove={handleRemove}
           />
         </DataSourceProvider>
       );
@@ -320,32 +403,16 @@ export const renderWidgetIntoElement = (
         </React.StrictMode>
       );
     } else if (widgetType === 'markets') {
-      // Use MarketsWidgetWrapper for markets widgets
+      // Use MarketsWidgetContainer for markets widgets
       root.render(
         <React.StrictMode>
           <DataSourceProvider>
-            <WidgetContainer
+            <MarketsWidgetContainer
+              widgetId={widgetId}
+              WidgetComponent={WidgetComponent}
               title={widgetTitles[widgetType]}
               onRemove={onRemove}
-              headerControls={<MarketsWidgetWrapper 
-                isHeader 
-                widgetId={widgetId} 
-                widgetComponent={WidgetComponent} 
-                onRemove={onRemove} 
-              />}
-              widgetMenu={<MarketsWidgetWrapper 
-                isMenu 
-                widgetId={widgetId} 
-                widgetComponent={WidgetComponent} 
-                onRemove={onRemove} 
-              />}
-            >
-              <MarketsWidgetWrapper 
-                widgetId={widgetId} 
-                widgetComponent={WidgetComponent} 
-                onRemove={onRemove} 
-              />
-            </WidgetContainer>
+            />
           </DataSourceProvider>
         </React.StrictMode>
       );
@@ -384,7 +451,7 @@ export const updateWidgetsDataSource = (
   
   const items = grid.getGridItems();
   
-  items.forEach(item => {
+  items.forEach((item: any) => {
     const node = item.gridstackNode;
     if (!node?.id) return;
     

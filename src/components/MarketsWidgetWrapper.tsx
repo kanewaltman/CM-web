@@ -4,6 +4,7 @@ import { MarketsWidgetHeader } from './MarketsWidgetHeader';
 import { MarketsWidgetMenu } from './MarketsWidgetMenu';
 import { MarketData } from './MarketsWidget';
 import { useReactTable } from '@tanstack/react-table';
+import { MarketsWidgetFilter } from './MarketsWidgetFilter';
 
 // Constants for localStorage keys
 const STORAGE_KEY_PREFIX = 'markets-widget-';
@@ -52,6 +53,9 @@ interface MarketsWidgetWrapperProps {
   widgetComponent: React.FC<any>;
   onRemove?: () => void;
   isMenu?: boolean;
+  isFilterContent?: boolean;
+  onFilterDropdownClose?: () => void;
+  getTable?: (table: ReturnType<typeof useReactTable<any>> | null) => void;
 }
 
 export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
@@ -59,7 +63,10 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   widgetId,
   widgetComponent: WidgetComponent,
   onRemove,
-  isMenu
+  isMenu,
+  isFilterContent,
+  onFilterDropdownClose,
+  getTable
 }) => {
   // Initialize state either from registry or with defaults
   const initializeWidgetState = () => {
@@ -191,22 +198,43 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   // Use the table ref from the registry
   const tableRef = widgetState.tableRef;
   
+  // Expose the table to parent components if needed
+  useEffect(() => {
+    if (getTable && tableRef.current) {
+      const table = tableRef.current.getTable();
+      getTable(table);
+    }
+  }, [getTable, tableRef]);
+  
   // If this is a menu component request, render the menu
   if (isMenu) {
     return <MarketsWidgetMenu tableRef={tableRef} />;
+  }
+  
+  // If this is the filter content component request
+  if (isFilterContent) {
+    return (
+      <MarketsWidgetFilter 
+        widgetId={widgetId}
+        onSearchQueryChange={handleSearchQueryChange}
+        onSelectedQuoteAssetChange={handleSelectedQuoteAssetChange}
+        onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
+        quoteAssets={quoteAssets}
+        onCloseDropdown={onFilterDropdownClose}
+      />
+    );
   }
   
   // If this is the header component, render the header controls
   if (isHeader) {
     return (
       <MarketsWidgetHeader
-        searchQuery={searchQuery}
         onSearchQueryChange={handleSearchQueryChange}
-        selectedQuoteAsset={selectedQuoteAsset}
         onSelectedQuoteAssetChange={handleSelectedQuoteAssetChange}
-        secondaryCurrency={secondaryCurrency}
         onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
         quoteAssets={quoteAssets}
+        widgetId={widgetId}
+        tableRef={tableRef}
       />
     );
   }

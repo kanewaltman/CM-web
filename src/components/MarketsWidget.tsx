@@ -545,7 +545,7 @@ export const MarketsWidgetColumnVisibility: React.FC<{
 
   return (
     <>
-      <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+      <DropdownMenuLabel>Customize Columns</DropdownMenuLabel>
       <DropdownMenuSeparator />
       <div className="max-h-[300px] overflow-auto py-1">
         <DndContext
@@ -1640,18 +1640,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     >
       <div className="flex-1 min-h-0 relative w-full">
         <div className="h-full w-full relative">
-          <div className="p-2 border-b border-border">
-            <MarketsWidgetHeader
-              onSearchQueryChange={handleSearchQueryChange}
-              onSelectedQuoteAssetChange={handleSelectedQuoteAssetChange}
-              onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
-              quoteAssets={quoteAssets}
-              widgetId={marketWidgetId}
-              table={table}
-            />
-          </div>
+          {/* Remove the MarketsWidgetHeader since it's now in the widget container header */}
           <div 
-            className="h-[calc(100%-40px)] overflow-y-auto overflow-x-auto scrollbar-thin" 
+            className="h-full overflow-y-auto overflow-x-auto scrollbar-thin" 
             ref={tableContainerRef}
           >
             {isInitialLoading ? (
