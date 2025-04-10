@@ -41,7 +41,7 @@ export const MarketsWidgetMenu: React.FC<MarketsWidgetMenuProps> = ({ tableRef }
     return <DropdownMenuSeparator />;
   }
 
-  // Render column visibility controls directly in the dropdown menu
+  // Render column visibility controls directly in the dropdown menu<
   return (
     <>
       <MarketsWidgetColumnVisibility table={table} />
