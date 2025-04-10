@@ -1,4 +1,5 @@
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
+import { ReferralsViewMode } from '@/components/ReferralsWidget';
 
 // Widget State Management
 export class WidgetState {
@@ -91,8 +92,91 @@ export class WidgetState {
   }
 }
 
+// Referrals Widget State Class
+export class ReferralsWidgetState {
+  private listeners: Set<() => void> = new Set();
+  private _viewMode: ReferralsViewMode;
+  private _title: string;
+  private _widgetId: string;
+
+  constructor(
+    initialViewMode: ReferralsViewMode = 'warp',
+    initialTitle: string = 'Referrals',
+    widgetId: string = ''
+  ) {
+    this._viewMode = initialViewMode;
+    this._title = initialTitle;
+    this._widgetId = widgetId;
+    console.log(`ReferralsWidgetState: Created with view mode ${initialViewMode} for widget ${widgetId || 'unknown'}`);
+  }
+
+  get viewMode(): ReferralsViewMode {
+    return this._viewMode;
+  }
+
+  get title(): string {
+    return this._title;
+  }
+
+  get widgetId(): string {
+    return this._widgetId;
+  }
+
+  setViewMode(newViewMode: ReferralsViewMode) {
+    if (!newViewMode) {
+      console.warn('ReferralsWidgetState: Attempted to set undefined view mode');
+      return;
+    }
+    
+    console.log(`ReferralsWidgetState: Setting view mode from ${this._viewMode} to ${newViewMode}`);
+    const oldViewMode = this._viewMode;
+    this._viewMode = newViewMode;
+    
+    if (oldViewMode !== newViewMode) {
+      console.log(`ReferralsWidgetState: View mode changed, notifying ${this.listeners.size} listeners`);
+      this.notifyListeners();
+    } else {
+      console.log('ReferralsWidgetState: View mode unchanged, skipping notification');
+    }
+  }
+
+  setTitle(newTitle: string) {
+    if (!newTitle) return;
+    console.log(`ReferralsWidgetState: Setting title from "${this._title}" to "${newTitle}"`);
+    this._title = newTitle;
+    this.notifyListeners();
+  }
+
+  subscribe(listener: () => void) {
+    if (!listener) {
+      console.warn('ReferralsWidgetState: Attempted to subscribe undefined listener');
+      return () => {};
+    }
+    
+    console.log(`ReferralsWidgetState: Adding listener, total count: ${this.listeners.size + 1}`);
+    this.listeners.add(listener);
+    
+    // Return unsubscribe function
+    return () => {
+      console.log(`ReferralsWidgetState: Removing listener, new count: ${this.listeners.size - 1}`);
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyListeners() {
+    console.log(`ReferralsWidgetState: Notifying ${this.listeners.size} listeners about state change`);
+    this.listeners.forEach(listener => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Error in referrals widget state listener:', error);
+      }
+    });
+  }
+}
+
 // Global widget state registry
-export const widgetStateRegistry = new Map<string, WidgetState>();
+export const widgetStateRegistry = new Map<string, WidgetState | ReferralsWidgetState>();
 
 // Create a default state for a widget
 export const createDefaultWidgetState = (
@@ -108,6 +192,15 @@ export const createDefaultWidgetState = (
   };
   
   return new WidgetState(variant, getPerformanceTitle(variant), viewMode, defaultDateRange);
+};
+
+// Create a default state for a referrals widget
+export const createDefaultReferralsWidgetState = (
+  viewMode: ReferralsViewMode = 'warp',
+  widgetId: string = ''
+): ReferralsWidgetState => {
+  console.log(`Creating default ReferralsWidgetState with view mode: ${viewMode}, widgetId: ${widgetId || 'unknown'}`);
+  return new ReferralsWidgetState(viewMode, 'Referrals', widgetId);
 };
 
 // Helper function for performance titles

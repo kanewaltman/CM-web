@@ -1,4 +1,5 @@
 import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette, Sun, Moon, Monitor } from '../components/ui-icons';
+import { Lock, Unlock } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -50,6 +51,9 @@ interface ControlBarProps {
   // Add new prop for data source
   dataSource: 'demo' | 'sample';
   onDataSourceChange?: (source: 'demo' | 'sample') => void;
+  // Add new prop for controlling layout lock
+  onToggleLayoutLock?: (locked: boolean) => void;
+  initialLayoutLocked?: boolean;
 }
 
 export function ControlBar({ 
@@ -61,7 +65,9 @@ export function ControlBar({
   defaultIsAppearanceOpen = false,
   onAddWidget,
   dataSource,
-  onDataSourceChange
+  onDataSourceChange,
+  onToggleLayoutLock,
+  initialLayoutLocked = false
 }: ControlBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const colors = getThemeValues(resolvedTheme || theme, 0, 0, 0);
@@ -69,6 +75,7 @@ export function ControlBar({
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(defaultIsAppearanceOpen);
   const [gridStyle, setGridStyle] = useState<GridStyle>(initialGridStyle);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
+  const [isLayoutLocked, setIsLayoutLocked] = useState(initialLayoutLocked);
 
   // Check if we're in Tauri environment
   useEffect(() => {
@@ -293,6 +300,19 @@ export function ControlBar({
     toast.success(`Switched to ${source === 'demo' ? 'Demo API' : 'Sample Data'}`);
   };
 
+  const handleToggleLayoutLock = () => {
+    const newLockedState = !isLayoutLocked;
+    setIsLayoutLocked(newLockedState);
+    if (onToggleLayoutLock) {
+      onToggleLayoutLock(newLockedState);
+    }
+    toast.success(newLockedState ? "Layout locked" : "Layout unlocked", {
+      description: newLockedState 
+        ? "Widgets cannot be moved or resized" 
+        : "Widgets can now be moved and resized"
+    });
+  };
+
   return (
     <div className={cn(
       "w-full py-4",
@@ -370,6 +390,21 @@ export function ControlBar({
                         <p>Paste Layout</p>
                       </TooltipContent>
                     </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handleToggleLayoutLock}>
+                          {isLayoutLocked ? (
+                            <Lock className="h-4 w-4 opacity-80" />
+                          ) : (
+                            <Unlock className="h-4 w-4 opacity-80" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="tooltip-content">
+                        <p>{isLayoutLocked ? "Unlock Layout" : "Lock Layout"}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </TooltipProvider>
                 </div>
 
@@ -382,7 +417,7 @@ export function ControlBar({
               <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
               <div className="px-1 py-1 pb-2">
                 {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
-                  .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions')
+                  .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions' || type === 'insight' || type === 'referrals')
                   .map(([type, config]) => (
                   <div
                     key={type}

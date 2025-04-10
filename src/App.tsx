@@ -44,7 +44,8 @@ function AppContent() {
     handleResetLayout,
     handleCopyLayout,
     handlePasteLayout,
-    handleAddWidget
+    handleAddWidget,
+    toggleLayoutLock
   } = useGridStack({
     isMobile,
     currentPage,
@@ -199,7 +200,15 @@ function AppContent() {
     // Add drop event handlers with proper types
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
-      e.dataTransfer!.dropEffect = 'copy';
+      
+      // Check if this is a widget drag (not text selection)
+      // Only proceed if we have widget type data
+      if (!e.dataTransfer?.types.includes('widget/type')) {
+        cleanupPreview();
+        return;
+      }
+      
+      e.dataTransfer.dropEffect = 'copy';
 
       // Check if we're over the dropdown menu
       const dropdownMenu = document.querySelector('[role="menu"]');
@@ -299,6 +308,11 @@ function AppContent() {
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       
+      // Ensure this is a widget drag operation and not a text selection drag
+      if (!e.dataTransfer?.types.includes('widget/type')) {
+        return;
+      }
+      
       const widgetType = e.dataTransfer?.getData('widget/type') || '';
       if (!widgetType || !gridRef.current) {
         return;
@@ -328,23 +342,36 @@ function AppContent() {
         const baseWidgetId = widgetIds[widgetType];
         const widgetId = `${baseWidgetId}-${Date.now()}`;
         
+        // Get widget configuration from registry
+        const widgetConfig = WIDGET_REGISTRY[widgetType];
+        if (!widgetConfig) {
+          console.warn('Missing widget configuration for type:', widgetType);
+          return;
+        }
+        
         const widgetElement = createWidget({
           widgetType,
           widgetId,
           x: previewX,
-          y: previewY
+          y: previewY,
+          w: widgetConfig.defaultSize.w,
+          h: widgetConfig.defaultSize.h,
+          minW: widgetConfig.minSize.w,
+          minH: widgetConfig.minSize.h
         });
 
         if (widgetElement) {
-          // Add widget with consistent settings
+          // Add widget with size constraints from registry
           grid.addWidget({
             el: widgetElement, 
             x: previewX,
             y: previewY,
-            w: 3,
-            h: 4,
-            minW: 2,
-            minH: 2,
+            w: widgetConfig.defaultSize.w,
+            h: widgetConfig.defaultSize.h,
+            minW: widgetConfig.minSize.w,
+            minH: widgetConfig.minSize.h,
+            maxW: widgetConfig.maxSize.w,
+            maxH: widgetConfig.maxSize.h,
             id: widgetId,
             autoPosition: false,
             noMove: isMobile || currentPage !== 'dashboard',
@@ -429,6 +456,7 @@ function AppContent() {
                 updateWidgetsDataSource(grid, source, handleRemoveWidget);
               }
             }}
+            onToggleLayoutLock={toggleLayoutLock}
           />
           <div 
             ref={gridElementRef} 

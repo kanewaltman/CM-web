@@ -1,12 +1,14 @@
 import { GridStack, GridStackWidget, GridStackNode, GridStackElement } from 'gridstack';
 import React from 'react';
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
+import { ReferralsViewMode } from '@/components/ReferralsWidget';
 
 export interface BaseWidgetProps {
   className?: string;
 }
 
 export interface RemovableWidgetProps extends BaseWidgetProps {
+  widgetId: string;
   onRemove?: () => void;
 }
 
@@ -22,10 +24,16 @@ export interface PerformanceWidgetProps extends RemovableWidgetProps {
   dateRange?: { from: Date; to: Date };
 }
 
+export interface ReferralsWidgetProps extends RemovableWidgetProps {
+  widgetId: string;
+  defaultViewMode?: ReferralsViewMode;
+  onViewModeChange?: (mode: ReferralsViewMode) => void;
+}
+
 export interface WidgetConfig {
   id: string;
   title: string;
-  component: React.FC<RemovableWidgetProps | PerformanceWidgetProps>;
+  component: React.FC<RemovableWidgetProps | PerformanceWidgetProps | ReferralsWidgetProps>;
   defaultSize: { w: number; h: number };
   minSize: { w: number; h: number };
   maxSize: { w: number; h: number };
@@ -38,8 +46,8 @@ export interface WidgetComponentProps {
   onRemove?: () => void;
   defaultVariant?: ChartVariant;
   onVariantChange?: (variant: ChartVariant) => void;
-  defaultViewMode?: 'split' | 'cumulative' | 'combined';
-  onViewModeChange?: (mode: 'split' | 'cumulative' | 'combined') => void;
+  defaultViewMode?: 'split' | 'cumulative' | 'combined' | ReferralsViewMode;
+  onViewModeChange?: (mode: 'split' | 'cumulative' | 'combined' | ReferralsViewMode) => void;
   onTitleChange?: (title: string) => void;
   onDateRangeChange?: (dateRange: { from: Date; to: Date } | undefined) => void;
   dateRange?: { from: Date; to: Date };
@@ -54,8 +62,9 @@ export interface LayoutWidget {
   minW?: number;
   minH?: number;
   viewState?: {
-    chartVariant: ChartVariant;
+    chartVariant?: ChartVariant;
     viewMode?: 'split' | 'cumulative' | 'combined';
+    referralViewMode?: ReferralsViewMode;
   };
 }
 

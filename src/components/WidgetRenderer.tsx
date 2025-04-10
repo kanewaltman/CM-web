@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
 import { PerformanceWidgetWrapper } from './PerformanceWidgetWrapper';
+import { InsightWidgetControls } from './InsightWidget';
+import { ReferralsWrapper } from './ReferralsWidget';
 import { MarketsWidgetWrapper } from './MarketsWidgetWrapper';
 import { 
   CreateWidgetParams, 
@@ -15,7 +17,7 @@ import {
   widgetComponents,
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
-import { widgetStateRegistry, WidgetState, getPerformanceTitle } from '@/lib/widgetState';
+import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
 
 /**
  * Creates a new widget DOM element for GridStack
@@ -75,25 +77,177 @@ export const createWidget = ({
   widgetElement.setAttribute('gs-min-h', String(effectiveMinH));
   widgetElement.setAttribute('gs-max-w', String(effectiveMaxW));
   widgetElement.setAttribute('gs-max-h', String(effectiveMaxH));
+  
+  const widgetContent = document.createElement('div');
+  widgetContent.className = 'grid-stack-item-content p-0';
+  widgetElement.appendChild(widgetContent);
 
-  // Create the content wrapper
-  const contentElement = document.createElement('div');
-  contentElement.className = 'grid-stack-item-content';
-  widgetElement.appendChild(contentElement);
-
-  // Render the React component into the widget
-  renderWidgetIntoElement(
-    contentElement, 
-    widgetId, 
-    widgetType, 
-    widgetElement,
-    () => {
-      // Create a direct removeHandler function for consistent behavior
-      const event = new CustomEvent('widget-remove', { detail: { widgetId } });
-      document.dispatchEvent(event);
-      return true; // Always return true to indicate success
+  try {
+    // Create wrapper for special components or use generic wrapper
+    let component;
+    
+    // For performance widget, use specialized wrapper with header controls
+    if (widgetType === 'performance') {
+      // Get correct title from localStorage for performance widgets
+      const widgetTitle = getPerformanceWidgetTitle(widgetId);
+      
+      component = (
+        <DataSourceProvider>
+          <WidgetContainer
+            title={widgetTitle}
+            onRemove={() => {
+              console.log('Performance widget header remove callback triggered');
+              // Try both event approaches for maximum compatibility
+              document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+              
+              // Direct call fallback if window.handleRemoveWidget is available
+              try {
+                if ((window as any).handleGridStackWidgetRemove) {
+                  (window as any).handleGridStackWidgetRemove(widgetId);
+                }
+              } catch (e) {
+                console.error('Direct removal fallback failed:', e);
+              }
+              
+              return true;
+            }}
+            headerControls={
+              <PerformanceWidgetWrapper 
+                isHeader 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent}
+              />
+            }
+          >
+            <PerformanceWidgetWrapper
+              widgetId={widgetId}
+              widgetComponent={WidgetComponent}
+            />
+          </WidgetContainer>
+        </DataSourceProvider>
+      );
     }
-  );
+    // For insight widget with refresh control in header
+    else if (widgetType === 'insight') {
+      component = (
+        <DataSourceProvider>
+          <WidgetContainer
+            title={widgetTitles[widgetType]}
+            onRemove={() => {
+              console.log('Insight widget header remove callback triggered');
+              // Try both event approaches for maximum compatibility
+              document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+              
+              // Direct call fallback if window.handleRemoveWidget is available
+              try {
+                if ((window as any).handleGridStackWidgetRemove) {
+                  (window as any).handleGridStackWidgetRemove(widgetId);
+                }
+              } catch (e) {
+                console.error('Direct removal fallback failed:', e);
+              }
+              
+              return true;
+            }}
+            headerControls={<InsightWidgetControls widgetId={widgetId} />}
+          >
+            <WidgetComponent 
+              widgetId={widgetId} 
+            />
+          </WidgetContainer>
+        </DataSourceProvider>
+      );
+    }
+    // For referrals widget, use the ReferralsWrapper directly
+    else if (widgetType === 'referrals') {
+      component = (
+        <DataSourceProvider>
+          <ReferralsWrapper
+            widgetId={widgetId}
+            onRemove={() => {
+              console.log('Referrals widget header remove callback triggered');
+              // Try both event approaches for maximum compatibility
+              document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+              
+              // Direct call fallback if window.handleRemoveWidget is available
+              try {
+                if ((window as any).handleGridStackWidgetRemove) {
+                  (window as any).handleGridStackWidgetRemove(widgetId);
+                }
+              } catch (e) {
+                console.error('Direct removal fallback failed:', e);
+              }
+              
+              return true;
+            }}
+          />
+        </DataSourceProvider>
+      );
+    }
+    // For breakdown widget, use the BreakdownWrapper directly
+    else if (widgetType === 'treemap') {
+      component = (
+        <DataSourceProvider>
+          <WidgetComponent
+            widgetId={widgetId}
+            onRemove={() => {
+              console.log('Breakdown widget header remove callback triggered');
+              // Try both event approaches for maximum compatibility
+              document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+              
+              // Direct call fallback if window.handleRemoveWidget is available
+              try {
+                if ((window as any).handleGridStackWidgetRemove) {
+                  (window as any).handleGridStackWidgetRemove(widgetId);
+                }
+              } catch (e) {
+                console.error('Direct removal fallback failed:', e);
+              }
+              
+              return true;
+            }}
+          />
+        </DataSourceProvider>
+      );
+    }
+    // For all other widgets, use standard wrapper
+    else {
+      component = (
+        <DataSourceProvider>
+          <WidgetContainer
+            title={widgetTitles[widgetType]}
+            onRemove={() => {
+              console.log('Widget header remove callback triggered');
+              // Try both event approaches for maximum compatibility
+              document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+              
+              // Direct call fallback if window.handleRemoveWidget is available
+              try {
+                if ((window as any).handleGridStackWidgetRemove) {
+                  (window as any).handleGridStackWidgetRemove(widgetId);
+                }
+              } catch (e) {
+                console.error('Direct removal fallback failed:', e);
+              }
+              
+              return true;
+            }}
+          >
+            <WidgetComponent
+              widgetId={widgetId}
+            />
+          </WidgetContainer>
+        </DataSourceProvider>
+      );
+    }
+
+    // Render the component to the widget content
+    createRoot(widgetContent).render(component);
+
+  } catch (error) {
+    console.error('Error rendering widget:', error);
+    widgetContent.innerHTML = `<div class="p-4 text-red-500">Failed to load widget: ${error}</div>`;
+  }
 
   return widgetElement;
 };
@@ -234,32 +388,59 @@ export const updateWidgetsDataSource = (
     const node = item.gridstackNode;
     if (!node?.id) return;
     
-    const widgetContainer = document.querySelector(`[gs-id="${node.id}"]`);
-    if (widgetContainer) {
-      const contentElement = widgetContainer.querySelector('.grid-stack-item-content');
-      if (contentElement) {
-        const prevReactRoot = (widgetContainer as any)._reactRoot;
-        
-        if (prevReactRoot) {
-          prevReactRoot.unmount();
-        }
-        
-        const baseId = node.id.split('-')[0];
-        const widgetType = widgetTypes[baseId];
-        
-        if (widgetType) {
-          renderWidgetIntoElement(
-            contentElement, 
-            node.id, 
-            widgetType, 
-            widgetContainer as HTMLElement,
-            () => {
-              handleRemoveWidget(node.id);
-              return true;
-            }
-          );
+    const widgetElement = document.querySelector(`[gs-id="${node.id}"]`);
+    if (!widgetElement) return;
+    
+    // Remove existing content
+    const existingContent = widgetElement.querySelector('.grid-stack-item-content');
+    if (existingContent) {
+      // Clean up React roots if they exist
+      const root = (existingContent as any)._reactRoot;
+      if (root) {
+        try {
+          root.unmount();
+        } catch (error) {
+          console.error('Error unmounting React root:', error);
         }
       }
+      existingContent.remove();
+    }
+    
+    // Create a new widget content element
+    const widgetContent = document.createElement('div');
+    widgetContent.className = 'grid-stack-item-content p-0';
+    widgetElement.appendChild(widgetContent);
+    
+    // Get widget type and component
+    const baseId = node.id.split('-')[0];
+    const widgetType = widgetTypes[baseId];
+    
+    if (!widgetType) {
+      console.error('Unknown widget type for ID:', node.id);
+      return;
+    }
+    
+    // Re-render the widget with the same logic as createWidget
+    try {
+      const params: CreateWidgetParams = {
+        widgetType,
+        widgetId: node.id,
+        x: node.x || 0,
+        y: node.y || 0,
+        w: node.w,
+        h: node.h
+      };
+      
+      // Remove the old element and replace with a new one
+      const parent = widgetElement.parentElement;
+      if (parent) {
+        const newElement = createWidget(params);
+        if (newElement) {
+          parent.replaceChild(newElement, widgetElement);
+        }
+      }
+    } catch (error) {
+      console.error('Error re-rendering widget:', error);
     }
   });
 }; 

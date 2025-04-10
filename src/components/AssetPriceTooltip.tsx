@@ -207,12 +207,21 @@ const PriceDisplay = ({
   const [key, setKey] = useState(0);
   const [animationComplete, setAnimationComplete] = useState(false);
   const animationTimer = useRef<NodeJS.Timeout | null>(null);
+  const colorFadeTimer = useRef<NodeJS.Timeout | null>(null);
+  const [showColor, setShowColor] = useState(false);
+  
+  // Track if price increased or decreased for color styling
+  const priceIncreasing = startValue !== null && isAnimated ? price > startValue : false;
+  const priceDecreasing = startValue !== null && isAnimated ? price < startValue : false;
   
   // Clean up any timers when component unmounts
   useEffect(() => {
     return () => {
       if (animationTimer.current) {
         clearTimeout(animationTimer.current);
+      }
+      if (colorFadeTimer.current) {
+        clearTimeout(colorFadeTimer.current);
       }
     };
   }, []);
@@ -224,6 +233,17 @@ const PriceDisplay = ({
       clearTimeout(animationTimer.current);
       animationTimer.current = null;
     }
+    if (colorFadeTimer.current) {
+      clearTimeout(colorFadeTimer.current);
+      colorFadeTimer.current = null;
+    }
+    
+    // Only show color if we're animating and there's a meaningful difference
+    const shouldShowColor = isAnimated && 
+      startValue !== null && 
+      Math.abs(price - startValue) / price > 0.0001;
+    
+    setShowColor(shouldShowColor);
     
     if (isAnimated && startValue !== null) {
       // Reset animation state
@@ -244,6 +264,7 @@ const PriceDisplay = ({
     } else {
       setDisplayValue(price);
       setAnimationComplete(true);
+      setShowColor(false); // Don't show color if not animating
     }
   }, [price, startValue, isAnimated]);
   
@@ -253,11 +274,27 @@ const PriceDisplay = ({
     animationTimer.current = setTimeout(() => {
       setAnimationComplete(true);
       animationTimer.current = null;
+      
+      // Keep the color for a bit after animation completes, then fade it
+      if (showColor) {
+        colorFadeTimer.current = setTimeout(() => {
+          setShowColor(false);
+          colorFadeTimer.current = null;
+        }, 1500);
+      }
     }, 800); // A bit shorter than 1s, but still gives time for visual settling
   };
   
   // Format static display the same way
   const formattedStatic = price.toLocaleString(undefined, format);
+  
+  // Determine color style based on price movement
+  const getDynamicColor = () => {
+    if (!showColor) return '';
+    if (priceIncreasing) return 'text-[#00C853]'; // Green for increasing
+    if (priceDecreasing) return 'text-[#FF5252]'; // Red for decreasing
+    return '';
+  };
   
   return (
     <div className="font-tabular-nums" style={{ display: 'flex', alignItems: 'center', height: '1.2em' }}>
@@ -271,7 +308,8 @@ const PriceDisplay = ({
             height: '100%',
             display: 'flex',
             alignItems: 'center'
-          }}>
+          }}
+          className={getDynamicColor()}>
             <NumberFlow
               key={key}
               value={displayValue}
@@ -298,11 +336,12 @@ const PriceDisplay = ({
           position: !animationComplete ? 'absolute' : 'static',
           inset: 0,
           zIndex: 1,
-          transition: 'opacity 300ms ease-in',
+          transition: 'opacity 300ms ease-in, color 500ms ease-out',
           display: 'flex',
           alignItems: 'center',
           height: '100%'
-        }}>
+        }}
+        className={getDynamicColor()}>
           {formattedStatic}
         </div>
       </div>
@@ -313,9 +352,16 @@ const PriceDisplay = ({
 interface AssetPriceTooltipProps {
   asset: AssetTicker;
   children: React.ReactNode;
+  delayDuration?: number;
+  disabled?: boolean;
 }
 
-export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, children }) => {
+export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ 
+  asset, 
+  children,
+  delayDuration = 0,
+  disabled = false
+}) => {
   const { theme } = useTheme();
   const { dataSource } = useDataSource();
   const assetConfig = ASSETS[asset];
@@ -351,6 +397,9 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
   
   // Handle tooltip open state changes
   const handleTooltipOpenChange = (open: boolean) => {
+    // Don't open tooltip if disabled
+    if (disabled && open) return;
+    
     if (open && currentPrice > 0 && !animationStarted.current) {
       // Only set up animation if it hasn't been started yet
       const lastPrice = lastSeenPrices[asset];
@@ -376,6 +425,9 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
           console.log(`Animating ${asset} from ${startingValue} to ${currentPrice} (diff: ${priceDiff.toFixed(6)})`);
         } else {
           console.log(`No significant change for ${asset}, skipping animation (diff: ${priceDiff.toFixed(6)})`);
+          // Explicitly set to not animate without color
+          setShouldAnimate(false);
+          setAnimationStartValue(currentPrice); // Same as current to prevent color
         }
       }
       
@@ -539,8 +591,8 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ asset, chi
 
   // Always render tooltip content, but show appropriate state
   return (
-    <TooltipProvider delayDuration={0}>
-      <Tooltip onOpenChange={handleTooltipOpenChange}>
+    <TooltipProvider delayDuration={delayDuration}>
+      <Tooltip onOpenChange={handleTooltipOpenChange} open={disabled ? false : undefined}>
         <TooltipTrigger asChild>
           {children}
         </TooltipTrigger>

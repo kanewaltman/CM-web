@@ -95,6 +95,45 @@ export const WidgetContainer = memo(function WidgetContainer({
     }
   }, [title]);
 
+  const handleRemove = () => {
+    console.log('Remove button clicked for widget:', title, 'onRemove function:', !!onRemove);
+    
+    // First try the onRemove prop if provided
+    if (onRemove) {
+      const result = onRemove();
+      console.log('onRemove function result:', result);
+    }
+    
+    // Always dispatch the widget-remove event as a backup
+    // Find the closest grid-stack-item to get the widget ID
+    const gridItem = containerRef.current?.closest('.grid-stack-item');
+    const widgetId = gridItem?.getAttribute('gs-id') || gridItem?.id;
+    
+    if (widgetId) {
+      console.log('Dispatching widget-remove event for:', widgetId);
+      const event = new CustomEvent('widget-remove', {
+        detail: { widgetId, id: widgetId },
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(event);
+    } else {
+      console.warn('Could not find widget ID for removal');
+      // Try to find any ID attribute on parent elements
+      const parentWithId = containerRef.current?.closest('[id]');
+      if (parentWithId) {
+        const fallbackId = parentWithId.id;
+        console.log('Using fallback widget ID for removal:', fallbackId);
+        const event = new CustomEvent('widget-remove', {
+          detail: { widgetId: fallbackId, id: fallbackId },
+          bubbles: true,
+          cancelable: true
+        });
+        document.dispatchEvent(event);
+      }
+    }
+  };
+
   return (
     <div ref={containerRef} className="grid-stack-item-content">
       <div className="widget-inner-container flex flex-col h-full">
@@ -134,10 +173,7 @@ export const WidgetContainer = memo(function WidgetContainer({
                       <DropdownMenuSeparator />
                     </>
                   )}
-                  <DropdownMenuItem onClick={() => {
-                    console.log('Remove button clicked for widget:', title, 'onRemove function:', !!onRemove);
-                    if (onRemove) onRemove();
-                  }} className="text-destructive">
+                  <DropdownMenuItem onClick={handleRemove} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2 opacity-50" />
                     <span>Remove Widget</span>
                   </DropdownMenuItem>
@@ -148,7 +184,7 @@ export const WidgetContainer = memo(function WidgetContainer({
         </div>
 
         {/* Content wrapper */}
-        <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1">
+        <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 select-text">
           {children}
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { GridStack, GridStackNode, GridStackOptions } from 'gridstack';
 import { ExtendedGridStackWidget, LayoutWidget, DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
 import { widgetStateRegistry } from '@/lib/widgetState';
@@ -28,10 +28,51 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     const grid = gridRef.current;
     console.log('handleRemoveWidget called for widgetId:', widgetId, 'grid exists:', !!grid);
     
-    const widget = grid.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+    // First try to find by gridstackNode.id
+    let widget = grid.getGridItems().find(w => w.gridstackNode?.id === widgetId);
+    
+    // If not found, try to find by gs-id attribute
     if (!widget) {
-      console.error('Widget not found for removal:', widgetId);
-      return;
+      console.log('Widget not found by gridstackNode.id, trying gs-id attribute...');
+      widget = grid.getGridItems().find(w => {
+        const gsId = w.getAttribute('gs-id');
+        return gsId === widgetId;
+      });
+    }
+    
+    // If still not found, try to find by DOM selector
+    if (!widget) {
+      console.log('Widget not found by gs-id, trying DOM selector...');
+      // Try multiple selectors to find the widget
+      const selectors = [
+        `[gs-id="${widgetId}"]`,
+        `[data-gs-id="${widgetId}"]`,
+        `#${widgetId}`,
+        `.grid-stack-item[gs-id="${widgetId}"]`
+      ];
+      
+      for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          console.log(`Found widget element using selector: ${selector}`);
+          const gridItem = element.closest('.grid-stack-item');
+          if (gridItem) {
+            widget = gridItem as HTMLElement;
+            break;
+          }
+        }
+      }
+      
+      if (!widget) {
+        console.error('Widget not found for removal:', widgetId, 'Available widgets:', 
+          grid.getGridItems().map(w => ({
+            id: w.gridstackNode?.id,
+            gsId: w.getAttribute('gs-id'),
+            classes: w.className
+          }))
+        );
+        return;
+      }
     }
 
     // Store the previous grid state for animations and float
@@ -47,6 +88,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
         grid.float(false);
         
         // Remove the specific widget
+        console.log('Removing widget:', widgetId, widget);
         grid.removeWidget(widget, false);
         
         // Unmount React component if it exists
@@ -55,11 +97,15 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           reactRoot.unmount();
         }
         
-        // Clean up widget state for performance widgets
+        // Clean up widget state
         widgetStateRegistry.delete(widgetId);
         
         // Remove the DOM element to ensure clean removal
         (widget as unknown as HTMLElement).remove();
+        
+        // Also remove any orphaned elements with this ID
+        const orphanedElements = document.querySelectorAll(`[gs-id="${widgetId}"]`);
+        orphanedElements.forEach(el => el.remove());
         
         // Compact the grid to fill gaps
         grid.compact();
@@ -89,9 +135,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
   
   // Custom grid compaction
   const compactGrid = useCallback((grid: GridStack, verticalOnly: boolean = false) => {
-    if (!grid.engine?.nodes) return;
+    if (!grid || !grid.engine || !Array.isArray(grid.engine.nodes)) return;
     
-    const nodes = [...grid.engine.nodes];
+    // Create a defensive copy of nodes
+    const nodes = [...grid.engine.nodes].filter(Boolean);
     if (nodes.length === 0) return;
 
     try {
@@ -170,10 +217,14 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     }
   }, []);
   
-  const saveLayout = useCallback((grid: GridStack) => {
-    if (!grid || currentPage !== 'dashboard') return;
+  const saveLayout = useCallback((grid: GridStack, widgetStates?: Map<string, any>) => {
+    console.log('Saving layout...');
+    if (!grid) return;
     
-    const items = grid.getGridItems();
+    // Get all grid items
+    const items = Array.from(grid.el.querySelectorAll('.grid-stack-item'));
+    if (!items.length) return;
+    
     const serializedLayout = items
       .map((item): LayoutWidget | null => {
         const node = item.gridstackNode;
@@ -182,10 +233,43 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
         const baseId = node.id.split('-')[0];
         const widgetType = widgetTypes[baseId];
         const widgetConfig = WIDGET_REGISTRY[widgetType];
-        const viewState = widgetStateRegistry.get(node.id) ? {
-          chartVariant: widgetStateRegistry.get(node.id)!.variant,
-          viewMode: widgetStateRegistry.get(node.id)!.viewMode
-        } : undefined;
+        
+        // Use either provided state or get from registry
+        const widgetState = widgetStates?.get(node.id) || widgetStateRegistry.get(node.id);
+        
+        // Initialize an empty viewState object
+        let viewState: LayoutWidget['viewState'] = {};
+        
+        // Handle different widget types differently
+        if (widgetState) {
+          if (widgetStates?.has(node.id)) {
+            // Use directly provided states first (for resize/move events)
+            const state = widgetStates.get(node.id);
+            if (state.type === 'performance') {
+              viewState = {
+                chartVariant: state.chartVariant,
+                viewMode: state.viewMode
+              };
+            } else if (state.type === 'referrals') {
+              viewState = {
+                referralViewMode: state.viewMode,
+                viewMode: state.viewMode // Save both for backward compatibility
+              };
+            }
+          } else if (widgetType === 'performance' && 'variant' in widgetState && 'viewMode' in widgetState) {
+            // For Performance widget
+            viewState = {
+              chartVariant: widgetState.variant,
+              viewMode: widgetState.viewMode
+            };
+          } else if (widgetType === 'referrals' && 'viewMode' in widgetState) {
+            // For Referrals widget - ensure we save both fields
+            viewState = {
+              referralViewMode: widgetState.viewMode,
+              viewMode: widgetState.viewMode // Save both for backward compatibility
+            };
+          }
+        }
 
         return {
           id: node.id,
@@ -210,11 +294,28 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
   const handleResetLayout = useCallback(() => {
     if (!gridRef.current) return;
     
+    // Add a global cooldown to prevent frequent resets
+    const now = Date.now();
+    const lastResetKey = 'last-layout-reset-time';
+    const lastReset = (window as any)[lastResetKey] || 0;
+    const resetCooldown = 3000; // 3 second cooldown between layout resets
+    
+    if (now - lastReset < resetCooldown) {
+      console.log(`Layout reset cooldown active, please wait ${Math.ceil((resetCooldown - (now - lastReset))/1000)}s`);
+      return;
+    }
+    
+    // Update last reset time
+    (window as any)[lastResetKey] = now;
+    
     const grid = gridRef.current;
     
     try {
       grid.batchUpdate();
       try {
+        // Set a global flag to indicate we're in a reset operation
+        (window as any).isResettingLayout = true;
+        
         // Use the appropriate layout based on device type
         const layoutToApply = isMobile ? mobileLayout : defaultLayout;
         console.log('🔄 Reset to layout:', { 
@@ -223,11 +324,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           layout: layoutToApply,
           widgetCount: layoutToApply.length
         });
-        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
         
         // First, remove all existing widgets and their DOM elements
+        console.log('🧹 Removing existing widgets');
         const currentWidgets = grid.getGridItems();
-        console.log('🧹 Removing existing widgets:', currentWidgets.length);
         currentWidgets.forEach(widget => {
           if (widget.gridstackNode?.id) {
             // Clean up widget state
@@ -246,6 +346,62 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           remainingWidgets.forEach(widget => widget.remove());
         }
         
+        // Store the final layout in localStorage without preserving old viewStates
+        localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
+        
+        // Pre-mark all widgets as initialized to prevent refresh loops
+        layoutToApply.forEach(item => {
+          const initKey = `widget-init-${item.id}`;
+          (window as any)[initKey] = true;
+        });
+        
+        // Clear the reset flag after a short delay to allow for initialization
+        setTimeout(() => {
+          (window as any).isResettingLayout = false;
+          console.log('Layout reset completed');
+          
+          // Ensure widgets are properly movable after reset
+          if (gridRef.current && !isMobile && currentPage === 'dashboard') {
+            const grid = gridRef.current;
+            try {
+              // Re-enable movement for all widgets
+              grid.batchUpdate();
+              try {
+                // Make sure widgets are not locked unless the whole grid is locked
+                const isGloballyLocked = Boolean((window as any).isLayoutLocked);
+                if (!isGloballyLocked) {
+                  grid.enableMove(true);
+                  grid.enableResize(true);
+                  grid.setStatic(false);
+                  
+                  // Update each individual widget node with added safety checks
+                  if (grid.engine && Array.isArray(grid.engine.nodes)) {
+                    grid.engine.nodes.forEach(node => {
+                      if (node && (node.noMove || node.locked)) {
+                        node.noMove = false;
+                        node.locked = false;
+                        
+                        // Update DOM element classes if needed
+                        const el = document.querySelector(`[gs-id="${node.id}"]`)?.parentElement;
+                        if (el && el.classList.contains('ui-draggable-disabled')) {
+                          el.classList.remove('ui-draggable-disabled');
+                          el.classList.add('ui-draggable');
+                        }
+                      }
+                    });
+                  }
+                  
+                  console.log('Re-enabled widget movement after reset');
+                }
+              } finally {
+                grid.commit();
+              }
+            } catch (err) {
+              console.error('Error re-enabling widget movement:', err);
+            }
+          }
+        }, 1000);
+
         // Now add all widgets from the appropriate layout
         layoutToApply.forEach(node => {
           const baseWidgetId = node.id.split('-')[0];
@@ -287,27 +443,65 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                 const widgetState = widgetStateRegistry.get(node.id);
                 if (widgetState) {
                   console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
-                  widgetState.setVariant(node.viewState.chartVariant);
-                  if (node.viewState.viewMode) {
-                    widgetState.setViewMode(node.viewState.viewMode);
+                  // Handle performance widget state
+                  if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                    if (node.viewState.chartVariant) {
+                      widgetState.setVariant(node.viewState.chartVariant);
+                    }
+                    if (node.viewState.viewMode) {
+                      widgetState.setViewMode(node.viewState.viewMode);
+                    }
+                  }
+                  
+                  // Handle referrals widget state - only apply referralViewMode for referrals widgets
+                  if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
+                    // Use referralViewMode with precedence over viewMode
+                    const referralsMode = node.viewState.referralViewMode || 
+                                         (Object.prototype.hasOwnProperty.call(viewLabels, node.viewState.viewMode) ? 
+                                          node.viewState.viewMode : null);
+                    
+                    if (referralsMode) {
+                      console.log(`📊 Setting referrals view mode to ${referralsMode}`);
+                      widgetState.setViewMode(referralsMode);
+                      
+                      // Ensure both viewMode and referralViewMode are set in viewState for consistency
+                      node.viewState.viewMode = referralsMode;
+                      node.viewState.referralViewMode = referralsMode;
+                    }
                   }
                 } else {
-                  // If widget state doesn't exist yet, ensure we set it
-                  console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
-                  widgetStateRegistry.set(node.id, {
-                    variant: node.viewState.chartVariant,
-                    viewMode: node.viewState.viewMode || 'split',
-                    title: getPerformanceTitle(node.viewState.chartVariant),
-                    dateRange: {
-                      from: new Date(),
-                      to: new Date()
-                    },
-                    setVariant: () => {},  // Will be replaced when component mounts
-                    setViewMode: () => {},  // Will be replaced when component mounts
-                    setTitle: () => {},    // Will be replaced when component mounts
-                    setDateRange: () => {}, // Will be replaced when component mounts
-                    subscribe: () => { return () => {}; }  // Add placeholder subscribe method
-                  });
+                  // If widget state doesn't exist yet, ensure we set it with type-appropriate fields
+                  if (widgetType === 'performance') {
+                    console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
+                    widgetStateRegistry.set(node.id, {
+                      variant: node.viewState.chartVariant,
+                      viewMode: node.viewState.viewMode || 'split',
+                      title: getPerformanceTitle(node.viewState.chartVariant),
+                      dateRange: {
+                        from: new Date(),
+                        to: new Date()
+                      },
+                      setVariant: () => {},  // Placeholder - will be replaced by actual component
+                      setViewMode: () => {},  // Placeholder - will be replaced by actual component
+                      setTitle: () => {},    // Will be replaced when component mounts
+                      setDateRange: () => {}, // Will be replaced when component mounts
+                      subscribe: () => { return () => {}; }  // Add placeholder subscribe method
+                    });
+                  } else if (widgetType === 'referrals') {
+                    // Handle referrals widget specifically
+                    // Default to 'warp' for referrals widgets if not specified properly
+                    const referralsViewMode = node.viewState.referralViewMode || 'warp';
+                    console.log(`📊 Setting initial referrals viewState for ${node.id}: ${referralsViewMode}`);
+                    
+                    // Empty placeholder state that will be replaced when component mounts
+                    widgetStateRegistry.set(node.id, {
+                      viewMode: referralsViewMode,
+                      title: 'Referrals',
+                      setViewMode: () => {},
+                      setTitle: () => {},
+                      subscribe: () => { return () => {}; }
+                    });
+                  }
                 }
               }
               
@@ -324,9 +518,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                 maxW: widgetConfig.maxSize.w,
                 maxH: widgetConfig.maxSize.h,
                 autoPosition: false,
-                noMove: isMobile || currentPage !== 'dashboard',
-                noResize: isMobile || currentPage !== 'dashboard',
-                locked: isMobile || currentPage !== 'dashboard'
+                // Only lock if on mobile or not on dashboard or globally locked
+                noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
               } as ExtendedGridStackWidget);
             }
           } catch (error) {
@@ -517,9 +712,28 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
               if (node.viewState) {
                 const widgetState = widgetStateRegistry.get(node.id);
                 if (widgetState) {
-                  widgetState.setVariant(node.viewState.chartVariant);
-                  if (node.viewState.viewMode) {
-                    widgetState.setViewMode(node.viewState.viewMode);
+                  // Handle performance widget state
+                  if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                    if (node.viewState.chartVariant) {
+                      widgetState.setVariant(node.viewState.chartVariant);
+                    }
+                  }
+                  
+                  // Handle referrals widget state
+                  if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
+                    if (node.viewState.referralViewMode) {
+                      widgetState.setViewMode(node.viewState.referralViewMode);
+                      
+                      // Also ensure both viewMode and referralViewMode are saved in layout
+                      if (node.viewState && !node.viewState.viewMode) {
+                        node.viewState.viewMode = node.viewState.referralViewMode;
+                      }
+                    } else if (node.viewState.viewMode) {
+                      widgetState.setViewMode(node.viewState.viewMode);
+                      
+                      // Also ensure referralViewMode is set
+                      node.viewState.referralViewMode = node.viewState.viewMode;
+                    }
                   }
                 }
               }
@@ -556,18 +770,38 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                     minW: widgetConfig.minSize.w,
                     minH: widgetConfig.minSize.h,
                     autoPosition: false,
-                    noMove: isMobile || currentPage !== 'dashboard',
-                    noResize: isMobile || currentPage !== 'dashboard',
-                    locked: isMobile || currentPage !== 'dashboard'
+                    // Only lock if on mobile or not on dashboard or globally locked
+                    noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                    noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                    locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
                   } as ExtendedGridStackWidget);
 
                   // Update widget state if it exists
                   if (node.viewState) {
                     const widgetState = widgetStateRegistry.get(node.id);
                     if (widgetState) {
-                      widgetState.setVariant(node.viewState.chartVariant);
-                      if (node.viewState.viewMode) {
-                        widgetState.setViewMode(node.viewState.viewMode);
+                      // Handle performance widget state
+                      if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                        if (node.viewState.chartVariant) {
+                          widgetState.setVariant(node.viewState.chartVariant);
+                        }
+                      }
+                      
+                      // Handle referrals widget state
+                      if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
+                        if (node.viewState.referralViewMode) {
+                          widgetState.setViewMode(node.viewState.referralViewMode);
+                          
+                          // Also ensure both viewMode and referralViewMode are saved in layout
+                          if (node.viewState && !node.viewState.viewMode) {
+                            node.viewState.viewMode = node.viewState.referralViewMode;
+                          }
+                        } else if (node.viewState.viewMode) {
+                          widgetState.setViewMode(node.viewState.viewMode);
+                          
+                          // Also ensure referralViewMode is set
+                          node.viewState.referralViewMode = node.viewState.viewMode;
+                        }
                       }
                     }
                   }
@@ -828,20 +1062,113 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           } else {
             el.el.classList.remove('size-limit');
           }
+          
+          // For referrals widget, immediately capture and preserve the current view mode
+          if (widgetType === 'referrals') {
+            // Start a short delay timer to ensure we capture the most recent view mode
+            // This is necessary because the resize might happen right after a view mode change
+            setTimeout(() => {
+              const widgetState = widgetStateRegistry.get(el.id);
+              if (widgetState && 'viewMode' in widgetState) {
+                // Create a map with just this widget's state to update the layout
+                const widgetStates = new Map<string, any>();
+                widgetStates.set(el.id, {
+                  type: 'referrals',
+                  viewMode: widgetState.viewMode,
+                  referralViewMode: widgetState.viewMode, // Ensure both properties are set consistently
+                  // Store the current view mode from localStorage as well for verification
+                  storedViewMode: localStorage.getItem(`widget_${el.id}_view_mode`)
+                });
+                
+                // Immediately save layout with the current view mode
+                console.log(`Preserving referrals view mode during resize: ${widgetState.viewMode}`);
+                
+                // Force update the layout in localStorage directly to ensure persistence
+                try {
+                  const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+                  if (savedLayout) {
+                    const layout = JSON.parse(savedLayout);
+                    const widgetIndex = layout.findIndex((item: any) => item.id === el.id);
+                    
+                    if (widgetIndex !== -1) {
+                      console.log(`Updating layout at index ${widgetIndex} with view mode: ${widgetState.viewMode}`);
+                      layout[widgetIndex] = {
+                        ...layout[widgetIndex],
+                        viewState: {
+                          ...(layout[widgetIndex].viewState || {}),
+                          referralViewMode: widgetState.viewMode,
+                          viewMode: widgetState.viewMode // Also update general viewMode to ensure consistency
+                        }
+                      };
+                      
+                      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error updating layout during resize:', error);
+                }
+                
+                // Also save via the normal method as a backup
+                saveLayout(g, widgetStates);
+              }
+            }, 50); // Short delay to ensure we get the most recent state
+          }
         }
       }
     });
 
     // Add change event handler to save layout
     g.on('change', () => {
-      saveLayout(g);
+      // After any change, ensure we get the most recent widget states
+      setTimeout(() => {
+        // Collect all widget states after a brief delay to ensure they're current
+        const widgetStates = new Map<string, any>();
+        
+        if (g.engine && Array.isArray(g.engine.nodes)) {
+          g.engine.nodes.forEach(node => {
+            if (node.id) {
+              const baseId = node.id.split('-')[0];
+              const widgetType = widgetTypes[baseId];
+              const widgetState = widgetStateRegistry.get(node.id);
+              
+              if (widgetState) {
+                if (widgetType === 'referrals' && 'viewMode' in widgetState) {
+                  // For referrals, explicitly log the current view mode to help with debugging
+                  console.log(`Collecting referrals state for ${node.id}: viewMode=${widgetState.viewMode}`);
+                  widgetStates.set(node.id, {
+                    type: 'referrals',
+                    viewMode: widgetState.viewMode,
+                    referralViewMode: widgetState.viewMode, // Ensure both properties are set consistently
+                    // Store the current view mode from localStorage as well for verification
+                    storedViewMode: localStorage.getItem(`widget_${node.id}_view_mode`)
+                  });
+                } else if (widgetType === 'performance' && 'variant' in widgetState && 'viewMode' in widgetState) {
+                  widgetStates.set(node.id, {
+                    type: 'performance',
+                    chartVariant: widgetState.variant,
+                    viewMode: widgetState.viewMode
+                  });
+                }
+              }
+            }
+          });
+        }
+        
+        // Then save the layout with collected states
+        saveLayout(g, widgetStates);
+      }, 50); // Wait a short moment to ensure state is current
     });
 
     // Listen for custom widget remove events
     const handleWidgetRemove = (event: CustomEvent) => {
-      const widgetId = event.detail?.widgetId;
+      // Support both widgetId and id in the event detail for backwards compatibility
+      const widgetId = event.detail?.widgetId || event.detail?.id;
+      console.log('Widget remove event received:', { event, widgetId });
+      
       if (widgetId) {
         handleRemoveWidget(widgetId);
+      } else {
+        console.error('Widget removal failed: no widgetId in event', event);
       }
     };
 
@@ -967,27 +1294,65 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   const widgetState = widgetStateRegistry.get(node.id);
                   if (widgetState) {
                     console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
-                    widgetState.setVariant(node.viewState.chartVariant);
-                    if (node.viewState.viewMode) {
-                      widgetState.setViewMode(node.viewState.viewMode);
+                    // Handle performance widget state
+                    if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                      if (node.viewState.chartVariant) {
+                        widgetState.setVariant(node.viewState.chartVariant);
+                      }
+                      if (node.viewState.viewMode) {
+                        widgetState.setViewMode(node.viewState.viewMode);
+                      }
+                    }
+                    
+                    // Handle referrals widget state - only apply referralViewMode for referrals widgets
+                    if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
+                      // Use referralViewMode with precedence over viewMode
+                      const referralsMode = node.viewState.referralViewMode || 
+                                           (Object.prototype.hasOwnProperty.call(viewLabels, node.viewState.viewMode) ? 
+                                            node.viewState.viewMode : null);
+                      
+                      if (referralsMode) {
+                        console.log(`📊 Setting referrals view mode to ${referralsMode}`);
+                        widgetState.setViewMode(referralsMode);
+                        
+                        // Ensure both viewMode and referralViewMode are set in viewState for consistency
+                        node.viewState.viewMode = referralsMode;
+                        node.viewState.referralViewMode = referralsMode;
+                      }
                     }
                   } else {
-                    // If widget state doesn't exist yet, ensure we set it
-                    console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
-                    widgetStateRegistry.set(node.id, {
-                      variant: node.viewState.chartVariant,
-                      viewMode: node.viewState.viewMode || 'split',
-                      title: getPerformanceTitle(node.viewState.chartVariant),
-                      dateRange: {
-                        from: new Date(),
-                        to: new Date()
-                      },
-                      setVariant: () => {},  // Placeholder - will be replaced by actual component
-                      setViewMode: () => {},  // Placeholder - will be replaced by actual component
-                      setTitle: () => {},    // Will be replaced when component mounts
-                      setDateRange: () => {}, // Will be replaced when component mounts
-                      subscribe: () => { return () => {}; }  // Add placeholder subscribe method
-                    });
+                    // If widget state doesn't exist yet, ensure we set it with type-appropriate fields
+                    if (widgetType === 'performance') {
+                      console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
+                      widgetStateRegistry.set(node.id, {
+                        variant: node.viewState.chartVariant,
+                        viewMode: node.viewState.viewMode || 'split',
+                        title: getPerformanceTitle(node.viewState.chartVariant),
+                        dateRange: {
+                          from: new Date(),
+                          to: new Date()
+                        },
+                        setVariant: () => {},  // Placeholder - will be replaced by actual component
+                        setViewMode: () => {},  // Placeholder - will be replaced by actual component
+                        setTitle: () => {},    // Will be replaced when component mounts
+                        setDateRange: () => {}, // Will be replaced when component mounts
+                        subscribe: () => { return () => {}; }  // Add placeholder subscribe method
+                      });
+                    } else if (widgetType === 'referrals') {
+                      // Handle referrals widget specifically
+                      // Default to 'warp' for referrals widgets if not specified properly
+                      const referralsViewMode = node.viewState.referralViewMode || 'warp';
+                      console.log(`📊 Setting initial referrals viewState for ${node.id}: ${referralsViewMode}`);
+                      
+                      // Empty placeholder state that will be replaced when component mounts
+                      widgetStateRegistry.set(node.id, {
+                        viewMode: referralsViewMode,
+                        title: 'Referrals',
+                        setViewMode: () => {},
+                        setTitle: () => {},
+                        subscribe: () => { return () => {}; }
+                      });
+                    }
                   }
                 }
                 
@@ -1004,9 +1369,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   maxW: widgetConfig.maxSize.w,
                   maxH: widgetConfig.maxSize.h,
                   autoPosition: false,
-                  noMove: isMobile || currentPage !== 'dashboard',
-                  noResize: isMobile || currentPage !== 'dashboard',
-                  locked: isMobile || currentPage !== 'dashboard'
+                  // Only lock if on mobile or not on dashboard or globally locked
+                  noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                  noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                  locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
                 });
               } else {
                 console.error('Failed to create widget element:', node.id);
@@ -1050,6 +1416,86 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     getLayoutForPage
   ]);
 
+  const toggleLayoutLock = useCallback((locked: boolean) => {
+    if (!gridRef.current) return;
+    
+    const grid = gridRef.current;
+    
+    // Store the lock state globally for other components to access
+    (window as any).isLayoutLocked = locked;
+    
+    // Update GridStack settings based on lock state
+    if (locked) {
+      // Lock the layout - disable drag and resize
+      grid.setStatic(true);
+      grid.enableMove(false);
+      grid.enableResize(false);
+      
+      // Also directly update all grid nodes to ensure they're locked
+      if (grid.engine && grid.engine.nodes) {
+        grid.engine.nodes.forEach(node => {
+          if (node.id && node.el) {
+            node.locked = true;
+            node.noMove = true;
+            node.noResize = true;
+            
+            // Also update DOM element classes
+            if (node.el.classList) {
+              node.el.classList.add('ui-draggable-disabled');
+              node.el.classList.add('ui-resizable-disabled');
+              node.el.classList.remove('ui-draggable');
+              node.el.classList.remove('ui-resizable');
+            }
+          }
+        });
+      }
+    } else {
+      // Unlock the layout - enable drag and resize if we're on dashboard and not mobile
+      const shouldEnableInteraction = !isMobile && currentPage === 'dashboard';
+      
+      grid.setStatic(false);
+      grid.enableMove(shouldEnableInteraction);
+      grid.enableResize(shouldEnableInteraction);
+      
+      // Also directly update all grid nodes to ensure they're unlocked
+      if (shouldEnableInteraction && grid.engine && grid.engine.nodes) {
+        grid.engine.nodes.forEach(node => {
+          if (node.id && node.el) {
+            node.locked = false;
+            node.noMove = false;
+            node.noResize = false;
+            
+            // Also update DOM element classes
+            if (node.el.classList) {
+              node.el.classList.remove('ui-draggable-disabled');
+              node.el.classList.remove('ui-resizable-disabled');
+              if (!node.el.classList.contains('ui-draggable')) {
+                node.el.classList.add('ui-draggable');
+              }
+              if (!node.el.classList.contains('ui-resizable')) {
+                node.el.classList.add('ui-resizable');
+              }
+            }
+            
+            // Force re-initialization of draggable
+            if (typeof grid.movable === 'function') {
+              grid.movable(node.el, true);
+              grid.resizable(node.el, true);
+            }
+          }
+        });
+      }
+    }
+  }, [gridRef, isMobile, currentPage]);
+
+  // Set global reference for widget removal
+  useEffect(() => {
+    (window as any).handleGridStackWidgetRemove = handleRemoveWidget;
+    return () => {
+      delete (window as any).handleGridStackWidgetRemove;
+    };
+  }, [handleRemoveWidget]);
+
   return {
     grid,
     gridRef,
@@ -1059,6 +1505,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     handleCopyLayout,
     handlePasteLayout,
     handleAddWidget,
+    toggleLayoutLock,
     compactGrid,
     saveLayout
   };

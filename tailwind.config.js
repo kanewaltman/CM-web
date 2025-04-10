@@ -73,10 +73,37 @@ export default {
             height: '0',
           },
         },
+        'ripple': {
+          '0%': {
+            transform: 'translate(-50%, -50%) scale(1)',
+          },
+          '30%': {
+            transform: 'translate(-50%, -50%) scale(0.5)',
+          },
+          '100%': {
+            transform: 'translate(-50%, -50%) scale(1)',
+          },
+        },
+        'shimmer-slide': {
+          to: {
+            transform: 'translateY(-120%)',
+          },
+        },
+        'spin-around': {
+          from: {
+            transform: 'rotate(0deg)',
+          },
+          to: {
+            transform: 'rotate(360deg)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'ripple': 'ripple var(--duration, 12s) ease calc(var(--i, 0) * 0.2s) infinite',
+        'shimmer-slide': 'shimmer-slide calc(var(--speed, 3s) * 1.5) infinite alternate ease-in-out',
+        'spin-around': 'spin-around var(--speed, 3s) infinite linear',
       },
     },
   },
