@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import React, { HTMLAttributes, useCallback, useMemo } from "react";
+import React, { HTMLAttributes, useCallback, useMemo, useEffect, useState, useRef } from "react";
 
 interface WarpBackgroundProps extends HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
@@ -14,6 +14,8 @@ interface WarpBackgroundProps extends HTMLAttributes<HTMLDivElement> {
   beamDelayMin?: number;
   beamDuration?: number;
   gridColor?: string;
+  onActiveHueChange?: (hue: number) => void;
+  hueCycleInterval?: number;
 }
 
 const Beam = ({
@@ -22,15 +24,23 @@ const Beam = ({
   delay,
   duration,
   gridColor = "var(--border)",
+  onHueGenerated,
 }: {
   width: string | number;
   x: string | number;
   delay: number;
   duration: number;
   gridColor?: string;
+  onHueGenerated?: (hue: number) => void;
 }) => {
-  const hue = Math.floor(Math.random() * 360);
-  const ar = Math.floor(Math.random() * 10) + 1;
+  const hue = useMemo(() => Math.floor(Math.random() * 360), []);
+  const ar = useMemo(() => Math.floor(Math.random() * 10) + 1, []);
+
+  useEffect(() => {
+    if (onHueGenerated) {
+      onHueGenerated(hue);
+    }
+  }, [hue, onHueGenerated]);
 
   return (
     <motion.div
@@ -82,9 +92,49 @@ export const WarpBackground: React.FC<WarpBackgroundProps> = ({
   beamDelayMin = 0,
   beamDuration = 3,
   gridColor = "var(--border)",
+  onActiveHueChange,
+  hueCycleInterval = 1500,
   ...props
 }) => {
-  // Map theme variants to hardcoded grid colors
+  const [generatedHues, setGeneratedHues] = useState<number[]>([]);
+  const [activeHueIndex, setActiveHueIndex] = useState<number>(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleHueGenerated = useCallback((hue: number) => {
+    setGeneratedHues((prevHues) => {
+      if (!prevHues.includes(hue)) {
+        return [...prevHues, hue];
+      }
+      return prevHues;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    if (generatedHues.length > 0 && onActiveHueChange) {
+      onActiveHueChange(generatedHues[activeHueIndex]);
+
+      intervalRef.current = setInterval(() => {
+        setActiveHueIndex((prevIndex) => {
+          const nextIndex = (prevIndex + 1) % generatedHues.length;
+          if (onActiveHueChange) {
+            onActiveHueChange(generatedHues[nextIndex]);
+          }
+          return nextIndex;
+        });
+      }, hueCycleInterval);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [generatedHues, activeHueIndex, onActiveHueChange, hueCycleInterval]);
+
   const getGridColorForVariant = (variant?: string): string => {
     switch (variant) {
       case 'dark-0led': return '#555555';
@@ -93,7 +143,7 @@ export const WarpBackground: React.FC<WarpBackgroundProps> = ({
       case 'light-cool': return '#D0D0D8';
       case 'light-default': return '#CCCCCC';
       case 'light-warm': return '#D8D8D0';
-      default: return '#CCCCCC'; // Fallback
+      default: return '#CCCCCC';
     }
   };
 
@@ -139,6 +189,7 @@ export const WarpBackground: React.FC<WarpBackgroundProps> = ({
               delay={beam.delay}
               duration={beamDuration}
               gridColor={gridColor}
+              onHueGenerated={handleHueGenerated}
             />
           ))}
         </div>
@@ -152,6 +203,7 @@ export const WarpBackground: React.FC<WarpBackgroundProps> = ({
               delay={beam.delay}
               duration={beamDuration}
               gridColor={gridColor}
+              onHueGenerated={handleHueGenerated}
             />
           ))}
         </div>
@@ -165,6 +217,7 @@ export const WarpBackground: React.FC<WarpBackgroundProps> = ({
               delay={beam.delay}
               duration={beamDuration}
               gridColor={gridColor}
+              onHueGenerated={handleHueGenerated}
             />
           ))}
         </div>
@@ -178,6 +231,7 @@ export const WarpBackground: React.FC<WarpBackgroundProps> = ({
               delay={beam.delay}
               duration={beamDuration}
               gridColor={gridColor}
+              onHueGenerated={handleHueGenerated}
             />
           ))}
         </div>

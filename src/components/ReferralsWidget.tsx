@@ -506,7 +506,14 @@ const Referrals: React.FC<{
   widgetId: string;
 }> = ({ className, onRemove, forceTheme, viewMode, onViewModeChange, widgetId }) => {
   const { resolvedTheme, theme: specificTheme } = useTheme();
-  
+  const [shimmerColor, setShimmerColor] = useState<string>('#ffffff'); // Initial color
+
+  // Handler to update shimmer color based on hue from WarpBackground
+  const handleActiveHueChange = useCallback((hue: number) => {
+    const newColor = `hsl(${hue} 80% 70%)`; // Lighter color for shimmer
+    setShimmerColor(newColor);
+  }, []);
+
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
   
@@ -620,18 +627,19 @@ const Referrals: React.FC<{
     switch (validViewMode) {
       case 'warp':
         return (
-          <WarpBackground 
+          <WarpBackground
             className="flex-1 w-full border-none flex items-center justify-center"
             themeVariant={specificTheme}
             beamsPerSide={3}
+            onActiveHueChange={handleActiveHueChange}
           >
             <div className="text-center px-6">
               <h3 className="text-xl font-bold mb-2">Trade like you have a time machine</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Insights for the future, provided by Coinmetro.
               </p>
-              <ShimmerButton 
-                shimmerColor="#fff"
+              <ShimmerButton
+                shimmerColor={shimmerColor}
                 shimmerSize="0.05em"
                 shimmerDuration="6s"
                 borderRadius="8px"
@@ -692,14 +700,14 @@ const Referrals: React.FC<{
                   Earn when they trade.
                 </p>
                 <ShimmerButton 
-                  shimmerColor="#8b5cf6" 
+                  shimmerColor="#fff"
                   shimmerSize="0.05em"
-                  shimmerDuration="4s"
+                  shimmerDuration="6s"
                   borderRadius="8px"
                   background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
                   className="mx-auto text-sm"
                 >
-                  Join Now
+                  Invite Friends
                 </ShimmerButton>
               </div>
             </div>

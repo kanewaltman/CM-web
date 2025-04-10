@@ -58,7 +58,7 @@ export const ShimmerButton = React.forwardRef<
           {/* spark */}
           <div className="absolute inset-0 [border-radius:0] [mask:none]">
             {/* spark before - Updated conic-gradient for fading effect */}
-            <div className="absolute -inset-full w-auto rotate-0 animate-spin-around [background:conic-gradient(from_calc(270deg-(var(--spread)*0.5)),transparent_0,transparent_calc(var(--spread)*0.1),var(--shimmer-color)_calc(var(--spread)*0.5),transparent_calc(var(--spread)*0.9),transparent_var(--spread))] [translate:0_0]" />
+            <div className="absolute -inset-full w-auto rotate-0 animate-spin-around [background:conic-gradient(from_calc(270deg-(var(--spread)*0.5)),transparent_0,transparent_calc(var(--spread)*0.1),var(--shimmer-color)_calc(var(--spread)*0.5),transparent_calc(var(--spread)*0.9),transparent_var(--spread))] [translate:0_0] transition-[background]" />
           </div>
         </div>
         {children}
