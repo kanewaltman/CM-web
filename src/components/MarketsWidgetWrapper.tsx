@@ -55,7 +55,6 @@ interface MarketsWidgetWrapperProps {
   isMenu?: boolean;
   isFilterContent?: boolean;
   onFilterDropdownClose?: () => void;
-  getTable?: (table: ReturnType<typeof useReactTable<any>> | null) => void;
 }
 
 export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
@@ -66,7 +65,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   isMenu,
   isFilterContent,
   onFilterDropdownClose,
-  getTable
 }) => {
   // Initialize state either from registry or with defaults
   const initializeWidgetState = () => {
@@ -197,14 +195,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   
   // Use the table ref from the registry
   const tableRef = widgetState.tableRef;
-  
-  // Expose the table to parent components if needed
-  useEffect(() => {
-    if (getTable && tableRef.current) {
-      const table = tableRef.current.getTable();
-      getTable(table);
-    }
-  }, [getTable, tableRef]);
   
   // If this is a menu component request, render the menu
   if (isMenu) {

@@ -32,13 +32,6 @@ const MarketsWidgetContainer = ({
   title: string, 
   onRemove: () => boolean 
 }) => {
-  // Now hooks are used inside a functional component
-  const [marketTable, setMarketTable] = useState<ReturnType<typeof useReactTable<any>> | null>(null);
-  
-  const getMarketTable = (table: ReturnType<typeof useReactTable<any>> | null) => {
-    setMarketTable(table);
-  };
-
   return (
     <WidgetContainer
       title={title}
@@ -49,7 +42,6 @@ const MarketsWidgetContainer = ({
           widgetId={widgetId} 
           widgetComponent={WidgetComponent} 
           onRemove={onRemove}
-          getTable={getMarketTable}
         />
       }
       widgetMenu={

@@ -77,124 +77,42 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   table,
   tableRef
 }) => {
-  // Unique localStorage keys based on widgetId
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false);
+  
+  // Get actual table instance - simplified access pattern
+  const actualTable = table || tableRef?.current?.getTable() || null;
+
+  // Check if filters are active by getting stored values
   const storageKeys = {
     search: `marketsWidget_${widgetId}_searchQuery`,
     quoteAsset: `marketsWidget_${widgetId}_selectedQuoteAsset`,
     secondaryCurrency: `marketsWidget_${widgetId}_secondaryCurrency`,
   };
-
-  // Local state for filters, initialized from localStorage or defaults
-  const [localSearchQuery, setLocalSearchQuery] = useState<string>(() => 
-    getLocalStorageItem(storageKeys.search, '')
-  );
-  const [localSelectedQuoteAsset, setLocalSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(() => 
-    getLocalStorageItem(storageKeys.quoteAsset, 'ALL')
-  );
-  const [localSecondaryCurrency, setLocalSecondaryCurrency] = useState<AssetTicker | null>(() => 
-    getLocalStorageItem(storageKeys.secondaryCurrency, null)
-  );
-
-  // State for main dropdown visibility
-  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
-  const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // --- Persistence and Sync Logic ---
-
+  
+  const [isFiltersActive, setIsFiltersActive] = useState(false);
+  
+  // Check if any filters are active
   useEffect(() => {
-    onSearchQueryChange(localSearchQuery);
-    onSelectedQuoteAssetChange(localSelectedQuoteAsset);
-    onSecondaryCurrencyChange(localSecondaryCurrency);
-  }, []);
-
-  useEffect(() => {
-    setLocalStorageItem(storageKeys.search, localSearchQuery);
-    onSearchQueryChange(localSearchQuery);
-  }, [localSearchQuery, storageKeys.search]);
-
-  useEffect(() => {
-    setLocalStorageItem(storageKeys.quoteAsset, localSelectedQuoteAsset);
-    onSelectedQuoteAssetChange(localSelectedQuoteAsset);
-  }, [localSelectedQuoteAsset, storageKeys.quoteAsset]);
-
-  useEffect(() => {
-    setLocalStorageItem(storageKeys.secondaryCurrency, localSecondaryCurrency);
-    onSecondaryCurrencyChange(localSecondaryCurrency);
-  }, [localSecondaryCurrency, storageKeys.secondaryCurrency]);
-
-  useEffect(() => {
-    if (filterDropdownOpen) {
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 50);
+    try {
+      const searchQuery = localStorage.getItem(storageKeys.search) ? JSON.parse(localStorage.getItem(storageKeys.search) || '') : '';
+      const selectedQuoteAsset = localStorage.getItem(storageKeys.quoteAsset) ? JSON.parse(localStorage.getItem(storageKeys.quoteAsset) || '') : 'ALL';
+      const secondaryCurrency = localStorage.getItem(storageKeys.secondaryCurrency) ? JSON.parse(localStorage.getItem(storageKeys.secondaryCurrency) || '') : null;
+      
+      const active = searchQuery !== '' || selectedQuoteAsset !== 'ALL' || secondaryCurrency !== null;
+      setIsFiltersActive(active);
+    } catch (error) {
+      console.error('Error checking filter state:', error);
+      setIsFiltersActive(false);
     }
-  }, [filterDropdownOpen]);
-
-  const isFiltered = 
-    localSearchQuery !== '' || 
-    localSelectedQuoteAsset !== 'ALL' || 
-    localSecondaryCurrency !== null;
-
-  const availableQuoteAssets = quoteAssets.length > 0 
-    ? quoteAssets 
-    : ['EUR', 'USD', 'USDT', 'USDC', 'BTC'] as AssetTicker[];
-
-  // Prepare options for dropdowns, including icons
-  const quoteAssetOptions = [
-    { value: 'ALL', label: 'All Pairs', icon: <ListIcon className="h-3.5 w-3.5 opacity-80" /> },
-    ...availableQuoteAssets.map(asset => {
-      const assetConfig = ASSETS[asset];
-      return {
-        value: asset,
-        label: `${asset}`,
-        icon: assetConfig?.icon // Get icon URL from ASSETS
-      };
-    })
-  ];
-
-  const secondaryCurrencyOptions = [
-    { value: '', label: 'None', icon: <BanIcon className="h-3.5 w-3.5 opacity-80" /> },
-    ...(['USD', 'EUR', 'GBP'] as const).map(currency => {
-      const assetConfig = ASSETS[currency];
-      return {
-        value: currency,
-        label: `Show in ${currency}`,
-        icon: assetConfig?.icon // Get icon URL from ASSETS
-      };
-    })
-  ];
-
-  // Handler to prevent dropdown closing when clicking inside search input wrapper
-  const handleSearchWrapperInteraction = (e: React.MouseEvent | React.FocusEvent) => {
-    e.stopPropagation();
-  };
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalSearchQuery(e.target.value);
-  };
-  const handleClearSearch = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setLocalSearchQuery('');
-    searchInputRef.current?.focus();
-  };
-
-  // Handler to clear all filters
-  const handleClearAllFilters = () => {
-    setLocalSearchQuery('');
-    setLocalSelectedQuoteAsset('ALL');
-    setLocalSecondaryCurrency(null);
-    setFilterDropdownOpen(false); // Close the dropdown after clearing
-  };
-
-  // Get actual table instance
-  const actualTable = table || (tableRef?.current?.getTable() || null);
+  }, [widgetId]);
 
   return (
     <div className="flex items-center gap-2">
       <DropdownMenu open={filterDropdownOpen} onOpenChange={setFilterDropdownOpen}>
         <DropdownMenuTrigger asChild>
           <Button 
-            variant="outline" 
+            variant={isFiltersActive ? "default" : "outline"}
             size="sm" 
             className="h-8 px-3 text-xs whitespace-nowrap flex items-center gap-1.5"
           >
@@ -205,9 +123,33 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
         <DropdownMenuContent className="w-64 p-1" align="start">
           <MarketsWidgetFilter 
             widgetId={widgetId}
-            onSearchQueryChange={onSearchQueryChange}
-            onSelectedQuoteAssetChange={onSelectedQuoteAssetChange}
-            onSecondaryCurrencyChange={onSecondaryCurrencyChange}
+            onSearchQueryChange={(val) => {
+              onSearchQueryChange(val);
+              // Update active state when filter changes
+              setIsFiltersActive(
+                val !== '' || 
+                JSON.parse(localStorage.getItem(storageKeys.quoteAsset) || '"ALL"') !== 'ALL' || 
+                JSON.parse(localStorage.getItem(storageKeys.secondaryCurrency) || 'null') !== null
+              );
+            }}
+            onSelectedQuoteAssetChange={(val) => {
+              onSelectedQuoteAssetChange(val);
+              // Update active state when filter changes
+              setIsFiltersActive(
+                JSON.parse(localStorage.getItem(storageKeys.search) || '""') !== '' || 
+                val !== 'ALL' || 
+                JSON.parse(localStorage.getItem(storageKeys.secondaryCurrency) || 'null') !== null
+              );
+            }}
+            onSecondaryCurrencyChange={(val) => {
+              onSecondaryCurrencyChange(val);
+              // Update active state when filter changes
+              setIsFiltersActive(
+                JSON.parse(localStorage.getItem(storageKeys.search) || '""') !== '' || 
+                JSON.parse(localStorage.getItem(storageKeys.quoteAsset) || '"ALL"') !== 'ALL' || 
+                val !== null
+              );
+            }}
             quoteAssets={quoteAssets}
             onCloseDropdown={() => setFilterDropdownOpen(false)}
           />
