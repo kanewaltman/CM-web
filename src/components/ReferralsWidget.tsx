@@ -18,6 +18,7 @@ import { FlickeringGrid } from './magicui/flickering-grid';
 import { AnimatedGridPattern } from './magicui/animated-grid-pattern';
 import { Ripple } from './magicui/ripple';
 import { DotPattern } from './magicui/dot-pattern';
+import { ShimmerButton } from './magicui/shimmer-button';
 
 // Define view modes for the Referrals widget
 export type ReferralsViewMode = 'warp' | 'flickering' | 'grid' | 'ripple' | 'dots';
@@ -626,9 +627,19 @@ const Referrals: React.FC<{
           >
             <div className="text-center px-6">
               <h3 className="text-xl font-bold mb-2">Trade like you have a time machine</h3>
-              <p className="text-sm text-muted-foreground">
-                Insights for the future, digested by AI.
+              <p className="text-sm text-muted-foreground mb-4">
+                Insights for the future, provided by Coinmetro.
               </p>
+              <ShimmerButton 
+                shimmerColor="#fff"
+                shimmerSize="0.05em"
+                shimmerDuration="6s"
+                borderRadius="8px"
+                background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                className="mx-auto text-sm"
+              >
+                Get Started
+              </ShimmerButton>
             </div>
           </WarpBackground>
         );
@@ -677,9 +688,19 @@ const Referrals: React.FC<{
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center relative z-10 px-6 py-4">
                 <h3 className="text-xl font-bold mb-2">Give a friend the gift of Pro Trading</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground mb-4">
                   Earn when they trade.
                 </p>
+                <ShimmerButton 
+                  shimmerColor="#8b5cf6" 
+                  shimmerSize="0.05em"
+                  shimmerDuration="4s"
+                  borderRadius="8px"
+                  background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                  className="mx-auto text-sm"
+                >
+                  Join Now
+                </ShimmerButton>
               </div>
             </div>
           </div>
