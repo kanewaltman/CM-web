@@ -34,6 +34,7 @@ import {
 } from './ui/dropdown-menu';
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
+import { MarketsWidgetHeader } from './MarketsWidgetHeader';
 
 // TanStack Table imports
 import {
@@ -599,17 +600,19 @@ const useDeepCompareMemo = <T,>(factory: () => T, deps: React.DependencyList) =>
   return ref.current.obj;
 };
 
-export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({ 
-  className,
-  searchQuery: externalSearchQuery,
-  onSearchQueryChange: externalSearchQueryChange,
-  selectedQuoteAsset: externalSelectedQuoteAsset,
-  onSelectedQuoteAssetChange: externalSelectedQuoteAssetChange,
-  secondaryCurrency: externalSecondaryCurrency,
-  onSecondaryCurrencyChange: externalSecondaryCurrencyChange,
-  onQuoteAssetsChange,
-  compact = false,
-}, ref) => {
+export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((props, ref) => {
+  const { 
+    className,
+    searchQuery: externalSearchQuery,
+    onSearchQueryChange: externalSearchQueryChange,
+    selectedQuoteAsset: externalSelectedQuoteAsset,
+    onSelectedQuoteAssetChange: externalSelectedQuoteAssetChange,
+    secondaryCurrency: externalSecondaryCurrency,
+    onSecondaryCurrencyChange: externalSecondaryCurrencyChange,
+    onQuoteAssetsChange,
+    compact = false,
+  } = props;
+  
   const { theme, resolvedTheme } = useTheme();
   const { dataSource } = useDataSource();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
@@ -619,6 +622,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Generate a stable ID for this widget instance
+  const marketWidgetId = useId();
   
   // Use external state if provided, otherwise use local state
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
@@ -1409,6 +1415,11 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     enableSortingRemoval: false,
   });
 
+  // Expose table instance via ref
+  useImperativeHandle(ref, () => ({
+    getTable: () => table
+  }), [table]);
+
   // Set up virtualization for rows
   const { rows } = table.getRowModel();
   
@@ -1576,8 +1587,18 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     >
       <div className="flex-1 min-h-0 relative w-full">
         <div className="h-full w-full relative">
+          <div className="p-2 border-b border-border">
+            <MarketsWidgetHeader
+              onSearchQueryChange={handleSearchQueryChange}
+              onSelectedQuoteAssetChange={handleSelectedQuoteAssetChange}
+              onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
+              quoteAssets={quoteAssets}
+              widgetId={marketWidgetId}
+              table={table}
+            />
+          </div>
           <div 
-            className="h-full overflow-y-auto overflow-x-auto" 
+            className="h-[calc(100%-40px)] overflow-y-auto overflow-x-auto" 
             ref={tableContainerRef}
           >
             {isInitialLoading ? (
