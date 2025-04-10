@@ -48,6 +48,9 @@ import {
   VisibilityState
 } from '@tanstack/react-table';
 
+// TanStack Virtual import for virtualization
+import { useVirtualizer } from '@tanstack/react-virtual';
+
 // DnD Kit imports
 import {
   DndContext,
@@ -644,6 +647,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
   );
   
   const containerRef = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   
   // Debounce utility function
   const debounce = <F extends (...args: any[]) => any>(
@@ -684,6 +688,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     volume: 1.1
   };
   
+  // Add a separate state for tracking dynamic column visibility based on container width
+  const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
+  
   // Dynamic column sizes that adapt to container width
   const [columnSizes, setColumnSizes] = useState(minColumnWidths);
   
@@ -693,14 +700,20 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     
     const containerWidth = containerRef.current.clientWidth;
     const padding = 20; // Buffer for borders, padding
-    const columnIds = Object.keys(minColumnWidths) as (keyof typeof minColumnWidths)[];
     
-    // Calculate total minimum width needed
-    const totalMinWidth = columnIds.reduce((total, id) => 
+    // Get only visible columns based on both user preferences and dynamic visibility
+    const visibleColumnIds = Object.keys(minColumnWidths)
+      .filter(id => 
+        columnVisibility[id] !== false && 
+        dynamicVisibility[id] !== false
+      ) as (keyof typeof minColumnWidths)[];
+    
+    // Calculate total minimum width needed for visible columns only
+    const totalMinWidth = visibleColumnIds.reduce((total, id) => 
       total + minColumnWidths[id], 0) + padding;
     
-    // Calculate total flex weight
-    const totalFlexWeight = columnIds.reduce((total, id) => 
+    // Calculate total flex weight for visible columns only
+    const totalFlexWeight = visibleColumnIds.reduce((total, id) => 
       total + columnFlexWeights[id], 0);
     
     // If we have extra space, distribute it proportionally based on flex weights
@@ -708,8 +721,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       const extraSpace = containerWidth - totalMinWidth;
       const newSizes = {...minColumnWidths};
       
-      // Distribute extra space proportionally
-      columnIds.forEach(id => {
+      // Distribute extra space proportionally to visible columns
+      visibleColumnIds.forEach(id => {
         const proportion = columnFlexWeights[id] / totalFlexWeight;
         newSizes[id] = Math.floor(minColumnWidths[id] + (extraSpace * proportion));
       });
@@ -719,7 +732,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       // If space is constrained, use minimum widths
       setColumnSizes(minColumnWidths);
     }
-  }, []);
+  }, [columnVisibility, dynamicVisibility]);
   
   // Debounce resize operations to improve performance
   const debouncedUpdateColumnSizes = useCallback(debounce(updateColumnSizes, 100), [updateColumnSizes]);
@@ -746,9 +759,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       window.removeEventListener('resize', debouncedUpdateColumnSizes);
     };
   }, [updateColumnSizes, debouncedUpdateColumnSizes]);
-
-  // Add a separate state for tracking dynamic column visibility based on container width
-  const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
 
   // Force rerender when secondary currency changes
   const [forceRenderKey, setForceRenderKey] = useState(0);
@@ -1399,12 +1409,37 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
     enableSortingRemoval: false,
   });
 
-  // Expose the table instance via ref
-  useImperativeHandle(ref, () => ({
-    getTable: () => table
-  }), [table]);
+  // Set up virtualization for rows
+  const { rows } = table.getRowModel();
+  
+  // Configure the virtualizer
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 48, // Estimate row height in pixels
+    overscan: 10, // Number of items to render before/after visible area
+  });
 
-  // Add responsive column hiding effect after table is initialized
+  // Create refs to store calculated widths for DOM measurement
+  const headerRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  // Calculate total width of all columns to ensure consistency
+  const getTotalColumnsWidth = useCallback(() => {
+    const visibleColumns = table.getVisibleLeafColumns().filter(column => {
+      const columnId = column.id;
+      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
+    });
+    
+    return visibleColumns.reduce(
+      (total, column) => {
+        const columnId = column.id as keyof typeof columnSizes;
+        return total + (columnSizes[columnId] || 100);
+      },
+      0
+    );
+  }, [table, columnSizes, columnVisibility, dynamicVisibility]);
+
+  // Apply improved dynamic column hiding based on widget registry sizes
   useEffect(() => {
     const checkWidth = () => {
       try {
@@ -1412,100 +1447,97 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
         
         const containerWidth = containerRef.current.clientWidth;
         
-        // Define breakpoints for different responsive layouts
-        const breakpoints = {
-          xs: 480,  // Very small screens - minimum columns
-          sm: 640,  // Small screens
-          md: 768,  // Medium screens
-          lg: 992,  // Large screens
-          xl: 1200, // Extra large - all columns
+        // Define column display priorities (lower number = higher priority)
+        const columnPriorities = {
+          pair: 1,      // Always show pair
+          price: 2,     // Price is second most important
+          change24h: 3, // 24h change is important
+          change7d: 4,  // 7d change comes next
+          marketCap: 5, // Market cap is less critical
+          volume: 6,    // Volume is lowest priority
         };
         
-        // Create a new visibility state based on breakpoints
-        const newDynamicVisibility: VisibilityState = {};
+        // Define breakpoints more precisely based on actual measurement
+        // Width ranges based on real-world testing with the component
+        const breakpoints = {
+          xs: 320,  // Minimum width for the widget (2-3 units)
+          sm: 480,  // Small width (~4-5 units)
+          md: 640,  // Medium width (~6-7 units)
+          lg: 800,  // Large width (~8-9 units)
+          xl: 1000, // Extra large width (10+ units)
+        };
         
-        // Get current user-defined column order and visibility preferences
+        // Determine how many columns to show based on available width
+        let columnsToShowCount: number;
+        
+        if (containerWidth < breakpoints.xs) {
+          columnsToShowCount = 2; // At minimum width, only show pair and price
+        } else if (containerWidth < breakpoints.sm) {
+          columnsToShowCount = 3; // Show 3 columns at small sizes
+        } else if (containerWidth < breakpoints.md) {
+          columnsToShowCount = 4; // Show 4 columns at medium sizes
+        } else if (containerWidth < breakpoints.lg) {
+          columnsToShowCount = 5; // Show 5 columns at large sizes
+        } else {
+          columnsToShowCount = 6; // Show all columns at extra large sizes
+        }
+        
+        // Get user's column order and visibility preferences
         const userColumnOrder = table.getState().columnOrder || [];
         const userVisibility = table.getState().columnVisibility || {};
         
-        // Safety check for empty column order
-        if (userColumnOrder.length === 0) {
-          console.warn('Column order is empty, using default columns');
-          return;
-        }
+        // Sort columns by priority (respecting user's order when possible)
+        const columnsByPriority = [...userColumnOrder].sort((a, b) => {
+          // Use priority if available, or default to alphabetical
+          const priorityA = columnPriorities[a as keyof typeof columnPriorities] || 999;
+          const priorityB = columnPriorities[b as keyof typeof columnPriorities] || 999;
+          return priorityA - priorityB;
+        });
         
-        // Calculate how many columns to show based on breakpoint
-        let columnsToShowCount = 2; // Minimum show pair and one more column
+        // Select columns to show based on priority and count
+        const columnsToShow = columnsByPriority.slice(0, columnsToShowCount);
         
-        if (containerWidth < breakpoints.xs) {
-          columnsToShowCount = 2;
-        } else if (containerWidth < breakpoints.sm) {
-          columnsToShowCount = 3;
-        } else if (containerWidth < breakpoints.md) {
-          columnsToShowCount = 4;
-        } else if (containerWidth < breakpoints.lg) {
-          columnsToShowCount = 5;
-        } else {
-          // On xl screens, show all columns
-          columnsToShowCount = userColumnOrder.length;
-        }
+        // Create new visibility state
+        const newDynamicVisibility: VisibilityState = {};
         
-        // Always ensure 'pair' is included in visible columns regardless of user order
-        const columnsToShow = userColumnOrder.includes('pair') ? ['pair'] : [];
-        
-        // If pair column isn't in user's column order, add a warning
-        if (!userColumnOrder.includes('pair')) {
-          console.warn("'pair' column not found in user column order, responsive design may not work as expected");
-        }
-        
-        // Add columns from user's custom order until we reach our count
-        // Skip 'pair' as we already included it and any columns the user has hidden
-        for (const colId of userColumnOrder) {
-          if (colId !== 'pair' && userVisibility[colId] !== false && columnsToShow.length < columnsToShowCount) {
-            columnsToShow.push(colId);
-          }
-        }
-        
-        // Create dynamic visibility state - hide columns not in our list
+        // Hide columns that aren't in the columns to show list
         userColumnOrder.forEach(columnId => {
-          // If user explicitly hid this column or it's not in our columnsToShow list, hide it
           if (userVisibility[columnId] === false || !columnsToShow.includes(columnId)) {
             newDynamicVisibility[columnId] = false;
           }
-          // Otherwise leave it visible (undefined in the visibility state)
         });
         
         // Update dynamic visibility state
         setDynamicVisibility(newDynamicVisibility);
+        
+        // After updating visibility, trigger column size update
+        updateColumnSizes();
+        
+        // Log which columns are visible for debugging
+        console.log(`Width: ${containerWidth}px, Showing ${columnsToShowCount} columns:`, 
+          columnsToShow.join(', '));
+        
       } catch (error) {
         console.error('Error in responsive column hiding:', error);
-        // Don't update visibility in case of error to avoid breaking the UI
       }
     };
     
-    // Debounced version for better performance
-    const debouncedCheckWidth = debounce(checkWidth, 150);
-    
-    // Initial check without debounce
+    // Run it without debounce first
     checkWidth();
     
-    // Set up resize observer with debounced handler
-    const resizeObserver = new ResizeObserver(() => {
-      debouncedCheckWidth();
-    });
+    // Debounced version
+    const debouncedCheckWidth = debounce(checkWidth, 150);
     
+    // Set up resize observer
+    const resizeObserver = new ResizeObserver(debouncedCheckWidth);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
     
-    // Also add window resize event listener as backup
-    window.addEventListener('resize', debouncedCheckWidth);
-    
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener('resize', debouncedCheckWidth);
     };
-  }, [table, debounce]);
+  }, [table, debounce, updateColumnSizes]);
 
   if (error) {
     return (
@@ -1543,32 +1575,45 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
       ref={containerRef}
     >
       <div className="flex-1 min-h-0 relative w-full">
-        <div className="absolute left-[8px] right-[16px] h-[1px] bg-border z-30" style={{ top: '40px' }}></div>
         <div className="h-full w-full relative">
-          <div className="h-full overflow-y-auto overflow-x-auto">
-            <Table className="w-full table-fixed" key={tableKey}>
-              <TableHeader className="sticky top-0 z-20">
-                <TableRow className="bg-[hsl(var(--color-widget-header))]">
-                  {table.getHeaderGroups()[0].headers
-                    .filter(header => {
-                      const columnId = header.column.id;
-                      // Don't show if user has hidden it or if dynamic visibility hides it
-                      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
-                    })
-                    .map((header) => (
-                      <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
-                    ))}
-                </TableRow>
-              </TableHeader>
-              
-              {isInitialLoading ? (
+          <div 
+            className="h-full overflow-y-auto overflow-x-auto" 
+            ref={tableContainerRef}
+          >
+            {isInitialLoading ? (
+              <Table className="w-full table-fixed">
+                <TableHeader className="sticky top-0 z-20">
+                  <TableRow className="bg-[hsl(var(--color-widget-header))]">
+                    {table.getHeaderGroups()[0].headers
+                      .filter(header => {
+                        const columnId = header.column.id;
+                        return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
+                      })
+                      .map((header) => (
+                        <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
+                      ))}
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {/* Loading skeleton rows */}
                   {Array.from({ length: 10 }).map((_, index) => (
                     <SkeletonRow key={index} isMinWidth={dynamicVisibility.change24h === false} />
                   ))}
                 </TableBody>
-              ) : error ? (
+              </Table>
+            ) : error ? (
+              <Table className="w-full table-fixed">
+                <TableHeader className="sticky top-0 z-20">
+                  <TableRow className="bg-[hsl(var(--color-widget-header))]">
+                    {table.getHeaderGroups()[0].headers
+                      .filter(header => {
+                        const columnId = header.column.id;
+                        return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
+                      })
+                      .map((header) => (
+                        <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
+                      ))}
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
                   <TableRow>
                     <TableCell colSpan={Object.keys(columnVisibility).filter(id => columnVisibility[id] !== false).length} className="h-24 text-center">
@@ -1576,7 +1621,21 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
                     </TableCell>
                   </TableRow>
                 </TableBody>
-              ) : marketData.length === 0 ? (
+              </Table>
+            ) : marketData.length === 0 ? (
+              <Table className="w-full table-fixed">
+                <TableHeader className="sticky top-0 z-20">
+                  <TableRow className="bg-[hsl(var(--color-widget-header))]">
+                    {table.getHeaderGroups()[0].headers
+                      .filter(header => {
+                        const columnId = header.column.id;
+                        return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
+                      })
+                      .map((header) => (
+                        <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
+                      ))}
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
                   <TableRow>
                     <TableCell colSpan={Object.keys(columnVisibility).filter(id => columnVisibility[id] !== false).length} className="h-24 text-center">
@@ -1584,34 +1643,162 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>(({
                     </TableCell>
                   </TableRow>
                 </TableBody>
-              ) : (
-                <TableBody className="virtual-scroll">
-                  {/* Optimized rendering with windowing */}
-                  {table.getRowModel().rows.map((row, index) => (
-                    <TableRow 
-                      key={row.id} 
-                      className={cn(
-                        "group hover:bg-[hsl(var(--color-widget-hover))]",
-                        index % 2 === 0 ? "bg-transparent" : "bg-[hsl(var(--color-widget-alt-row))]"
-                      )} 
-                      isHeader={false}
-                    >
-                      {row.getVisibleCells()
-                        .filter(cell => {
+              </Table>
+            ) : (
+              <div className="w-full">
+                <div className="sticky top-0 z-20 w-full flex bg-[hsl(var(--color-widget-header))] border-b border-border">
+                  {table.getHeaderGroups()[0].headers
+                    .filter(header => {
+                      const columnId = header.column.id;
+                      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
+                    })
+                    .map((header) => {
+                      const columnId = header.column.id;
+                      const isPairColumn = columnId === 'pair';
+                      const isNarrowColumn = columnId === 'favorite';
+                      const isSorted = header.column.getIsSorted();
+                      
+                      // Calculate column width to match body cells
+                      const totalWidth = getTotalColumnsWidth();
+                      const visibleColumnsCount = table.getVisibleLeafColumns().length;
+                      const width = columnSizes[columnId as keyof typeof columnSizes] || 
+                                (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
+                                 Math.max(110, totalWidth / visibleColumnsCount));
+                      
+                      return (
+                        <div
+                          key={header.id}
+                          className={cn(
+                            "px-4 py-2 h-10 flex items-center",
+                            isPairColumn ? "justify-start" : "justify-end",
+                            isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
+                            "cursor-pointer hover:text-foreground/80"
+                          )}
+                          style={{
+                            width: isNarrowColumn ? 30 : width,
+                            minWidth: isNarrowColumn ? 30 : width,
+                            flexShrink: 0,
+                          }}
+                          onClick={() => {
+                            if (header.column.getCanSort()) {
+                              header.column.toggleSorting();
+                            }
+                          }}
+                          aria-sort={
+                            isSorted === "asc"
+                              ? "ascending"
+                              : isSorted === "desc"
+                                ? "descending"
+                                : "none"
+                          }
+                        >
+                          <div className="relative w-full">
+                            <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+                            <div className={cn(
+                              "relative z-10 flex items-center gap-1",
+                              isPairColumn ? "justify-start" : "justify-end"
+                            )}>
+                              <span className={cn(
+                                "truncate", 
+                                isPairColumn ? "text-left" : "text-right", 
+                                isNarrowColumn && "sr-only"
+                              )}>
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(header.column.columnDef.header, header.getContext())}
+                              </span>
+                              {header.column.getCanSort() && !isNarrowColumn && isSorted && (
+                                <div className="ml-1 h-4 w-4 flex items-center justify-center">
+                                  {isSorted === "asc" ? (
+                                    <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+                                  ) : (
+                                    <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+                
+                <div 
+                  style={{ 
+                    height: `${rowVirtualizer.getTotalSize()}px`, 
+                    width: '100%', 
+                    position: 'relative',
+                    overflow: 'hidden' 
+                  }}
+                >
+                  {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                    const row = rows[virtualRow.index];
+                    const visibleCells = row.getVisibleCells().filter(cell => {
+                      const columnId = cell.column.id;
+                      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
+                    });
+                    
+                    // Calculate total width to ensure proper alignment
+                    const totalWidth = getTotalColumnsWidth();
+                    
+                    return (
+                      <div
+                        key={row.id}
+                        data-index={virtualRow.index}
+                        className={cn(
+                          "absolute top-0 left-0 flex",
+                          "hover:bg-[hsl(var(--color-widget-hover))]",
+                          virtualRow.index % 2 === 0 ? "bg-transparent" : "bg-[hsl(var(--color-widget-alt-row))]"
+                        )}
+                        style={{
+                          height: `48px`, // Fixed row height
+                          width: '100%',
+                          transform: `translateY(${virtualRow.start}px)`,
+                          display: 'flex',
+                        }}
+                      >
+                        {visibleCells.map(cell => {
                           const columnId = cell.column.id;
-                          // Don't show if user has hidden it or if dynamic visibility hides it
-                          return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
-                        })
-                        .map((cell) => (
-                          <DragAlongCell key={cell.id} cell={cell} currentTheme={currentTheme} />
-                        ))}
-                    </TableRow>
-                  ))}
-                  {/* Add extra bottom padding for last row */}
-                  <TableRow className="h-8 border-0"></TableRow>
-                </TableBody>
-              )}
-            </Table>
+                          const isNarrowColumn = columnId === 'favorite';
+                          const isPairColumn = columnId === 'pair';
+                          
+                          // Get width from columnSizes or calculate proportion of container
+                          const visibleColumnsCount = table.getVisibleLeafColumns().length;
+                          const width = columnSizes[columnId as keyof typeof columnSizes] || 
+                                     (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
+                                      Math.max(110, totalWidth / visibleColumnsCount));
+                          
+                          return (
+                            <div
+                              key={cell.id}
+                              className={cn(
+                                "flex items-center px-4 py-2 overflow-hidden",
+                                isNarrowColumn && "w-[30px] max-w-[30px] p-0",
+                                isPairColumn ? "justify-start" : "justify-end",
+                                "border-b border-border"
+                              )}
+                              style={{
+                                width: isNarrowColumn ? 30 : width,
+                                minWidth: isNarrowColumn ? 30 : width,
+                                flexShrink: 0,
+                              }}
+                              ref={(el) => {
+                                // Store refs to header cells for measurements
+                                if (virtualRow.index === 0) {
+                                  headerRefs.current[columnId] = el;
+                                }
+                              }}
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           {/* Add fade mask at the bottom of the table */}
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[hsl(var(--color-widget-bg))] to-transparent pointer-events-none z-30"></div>
@@ -1626,6 +1813,7 @@ MarketsWidget.displayName = 'MarketsWidget';
 
 export default MarketsWidget; 
 
+// Define storage key prefix for localStorage
 const STORAGE_KEY_PREFIX = 'markets-widget-';
 const STORAGE_KEYS = {
   SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}selected-quote-asset`,
@@ -1635,6 +1823,7 @@ const STORAGE_KEYS = {
   SORTING: `${STORAGE_KEY_PREFIX}sorting`,
 };
 
+// Add the missing getStoredValue function
 const getStoredValue = <T,>(key: string, defaultValue: T): T => {
   if (typeof window === 'undefined') return defaultValue;
   try {
