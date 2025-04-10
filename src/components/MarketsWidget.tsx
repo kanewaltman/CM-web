@@ -286,7 +286,7 @@ const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketD
   return (
     <TableHead
       className={cn(
-        "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80 group",
+        "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80 group text-sm text-muted-foreground",
         isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
       )}
       style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
@@ -403,16 +403,19 @@ const DraggableMenuItem = ({
   }, [attributes, listeners]);
   
   // Separate click handler for checkbox area that doesn't trigger drag
-  const handleCheckboxClick = (e: React.MouseEvent) => {
+  const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     
-    // Update internal state immediately 
+    // Update internal state immediately for responsive UI
     setInternalChecked(!internalChecked);
     
-    // Then update parent state
-    onCheckedChange(!internalChecked);
-  };
+    // Debounce the parent state update to avoid cascading re-renders
+    // This helps prevent flickering when toggling columns
+    requestAnimationFrame(() => {
+      onCheckedChange(!internalChecked);
+    });
+  }, [internalChecked, onCheckedChange]);
   
   return (
     <div 
@@ -508,6 +511,9 @@ export const MarketsWidgetColumnVisibility: React.FC<{
     }
   }
   
+  // Get the updateColumnSizes function from the table context if available
+  const tableRef = (table as any)._getTableOptions?.()?.meta?.updateColumnSizes;
+  
   // Direct column visibility toggle that uses the table API directly
   const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
     // Prevent toggling off the 'pair' column (safety check)
@@ -528,6 +534,13 @@ export const MarketsWidgetColumnVisibility: React.FC<{
     
     // Update the table's visibility state
     table.setColumnVisibility(newState);
+    
+    // If available, update column sizes after a delay to prevent flickering
+    if (typeof tableRef === 'function') {
+      setTimeout(() => {
+        tableRef();
+      }, 50);
+    }
   };
 
   return (
@@ -700,45 +713,67 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   // Dynamic column sizes that adapt to container width
   const [columnSizes, setColumnSizes] = useState(minColumnWidths);
   
+  // Batch column size updates to reduce flickering
+  const batchedColumnSizeUpdate = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Update column sizes based on container width
   const updateColumnSizes = useCallback(() => {
     if (!containerRef.current) return;
     
-    const containerWidth = containerRef.current.clientWidth;
-    const padding = 20; // Buffer for borders, padding
-    
-    // Get only visible columns based on both user preferences and dynamic visibility
-    const visibleColumnIds = Object.keys(minColumnWidths)
-      .filter(id => 
-        columnVisibility[id] !== false && 
-        dynamicVisibility[id] !== false
-      ) as (keyof typeof minColumnWidths)[];
-    
-    // Calculate total minimum width needed for visible columns only
-    const totalMinWidth = visibleColumnIds.reduce((total, id) => 
-      total + minColumnWidths[id], 0) + padding;
-    
-    // Calculate total flex weight for visible columns only
-    const totalFlexWeight = visibleColumnIds.reduce((total, id) => 
-      total + columnFlexWeights[id], 0);
-    
-    // If we have extra space, distribute it proportionally based on flex weights
-    if (containerWidth > totalMinWidth) {
-      const extraSpace = containerWidth - totalMinWidth;
-      const newSizes = {...minColumnWidths};
+    // We'll use requestAnimationFrame to ensure layout calculations happen at the right time
+    // This helps prevent flickering during column visibility changes
+    requestAnimationFrame(() => {
+      const containerWidth = containerRef.current?.clientWidth || 0;
+      const padding = 20; // Buffer for borders, padding
       
-      // Distribute extra space proportionally to visible columns
-      visibleColumnIds.forEach(id => {
-        const proportion = columnFlexWeights[id] / totalFlexWeight;
-        newSizes[id] = Math.floor(minColumnWidths[id] + (extraSpace * proportion));
-      });
+      // Get only visible columns based on both user preferences and dynamic visibility
+      const visibleColumnIds = Object.keys(minColumnWidths)
+        .filter(id => 
+          columnVisibility[id] !== false && 
+          dynamicVisibility[id] !== false
+        ) as (keyof typeof minColumnWidths)[];
       
-      setColumnSizes(newSizes);
-    } else {
-      // If space is constrained, use minimum widths
-      setColumnSizes(minColumnWidths);
-    }
-  }, [columnVisibility, dynamicVisibility]);
+      // Calculate total minimum width needed for visible columns only
+      const totalMinWidth = visibleColumnIds.reduce((total, id) => 
+        total + minColumnWidths[id], 0) + padding;
+      
+      // Calculate total flex weight for visible columns only
+      const totalFlexWeight = visibleColumnIds.reduce((total, id) => 
+        total + columnFlexWeights[id], 0);
+      
+      // If we have extra space, distribute it proportionally based on flex weights
+      if (containerWidth > totalMinWidth) {
+        const extraSpace = containerWidth - totalMinWidth;
+        const newSizes = {...minColumnWidths};
+        
+        // Distribute extra space proportionally to visible columns
+        visibleColumnIds.forEach(id => {
+          const proportion = columnFlexWeights[id] / totalFlexWeight;
+          newSizes[id] = Math.floor(minColumnWidths[id] + (extraSpace * proportion));
+        });
+        
+        // Use a functional update to ensure we're working with latest state
+        setColumnSizes(prev => {
+          // Only update if there's a meaningful difference
+          const hasChanged = visibleColumnIds.some(id => 
+            Math.abs(prev[id] - newSizes[id]) > 2
+          );
+          
+          return hasChanged ? newSizes : prev;
+        });
+      } else {
+        // If space is constrained, use minimum widths
+        setColumnSizes(prev => {
+          // Only update if there's a meaningful difference
+          const hasChanged = visibleColumnIds.some(id => 
+            prev[id] !== minColumnWidths[id]
+          );
+          
+          return hasChanged ? {...minColumnWidths} : prev;
+        });
+      }
+    });
+  }, [columnVisibility, dynamicVisibility, minColumnWidths, columnFlexWeights]);
   
   // Debounce resize operations to improve performance
   const debouncedUpdateColumnSizes = useCallback(debounce(updateColumnSizes, 100), [updateColumnSizes]);
@@ -1411,8 +1446,18 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
     onColumnOrderChange: setColumnOrder,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: (newState) => {
+      setColumnVisibility(newState);
+      // Schedule a column size update after visibility changes
+      setTimeout(() => {
+        updateColumnSizes();
+      }, 50);
+    },
     enableSortingRemoval: false,
+    // Expose the updateColumnSizes function via meta for use in child components
+    meta: {
+      updateColumnSizes,
+    },
   });
 
   // Expose table instance via ref
@@ -1458,16 +1503,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         
         const containerWidth = containerRef.current.clientWidth;
         
-        // Define column display priorities (lower number = higher priority)
-        const columnPriorities = {
-          pair: 1,      // Always show pair
-          price: 2,     // Price is second most important
-          change24h: 3, // 24h change is important
-          change7d: 4,  // 7d change comes next
-          marketCap: 5, // Market cap is less critical
-          volume: 6,    // Volume is lowest priority
-        };
-        
         // Define breakpoints more precisely based on actual measurement
         // Width ranges based on real-world testing with the component
         const breakpoints = {
@@ -1478,54 +1513,72 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           xl: 1000, // Extra large width (10+ units)
         };
         
-        // Determine how many columns to show based on available width
-        let columnsToShowCount: number;
-        
-        if (containerWidth < breakpoints.xs) {
-          columnsToShowCount = 2; // At minimum width, only show pair and price
-        } else if (containerWidth < breakpoints.sm) {
-          columnsToShowCount = 3; // Show 3 columns at small sizes
-        } else if (containerWidth < breakpoints.md) {
-          columnsToShowCount = 4; // Show 4 columns at medium sizes
-        } else if (containerWidth < breakpoints.lg) {
-          columnsToShowCount = 5; // Show 5 columns at large sizes
-        } else {
-          columnsToShowCount = 6; // Show all columns at extra large sizes
-        }
-        
         // Get user's column order and visibility preferences
         const userColumnOrder = table.getState().columnOrder || [];
         const userVisibility = table.getState().columnVisibility || {};
         
-        // Sort columns by priority (respecting user's order when possible)
-        const columnsByPriority = [...userColumnOrder].sort((a, b) => {
-          // Use priority if available, or default to alphabetical
-          const priorityA = columnPriorities[a as keyof typeof columnPriorities] || 999;
-          const priorityB = columnPriorities[b as keyof typeof columnPriorities] || 999;
-          return priorityA - priorityB;
-        });
+        // Always ensure pair is shown first
+        const orderedColumns = userColumnOrder.filter(col => 
+          // Only include visible columns (that the user hasn't manually hidden)
+          userVisibility[col] !== false
+        );
         
-        // Select columns to show based on priority and count
-        const columnsToShow = columnsByPriority.slice(0, columnsToShowCount);
+        // Always ensure 'pair' is included and is first
+        if (!orderedColumns.includes('pair')) {
+          orderedColumns.unshift('pair');
+        } else if (orderedColumns[0] !== 'pair') {
+          // Move pair to the front if it exists but isn't first
+          orderedColumns.splice(orderedColumns.indexOf('pair'), 1);
+          orderedColumns.unshift('pair');
+        }
+        
+        // Calculate minimum column width requirements (pair + at least one data column)
+        const minPairWidth = 150; // Minimum width for pair column
+        const minDataColWidth = 100; // Minimum width for data columns
+        
+        // Determine maximum number of columns that can fit
+        let maxFittingColumns = Math.max(
+          2, // Always show at least pair + one data column
+          Math.floor((containerWidth - minPairWidth) / minDataColWidth) + 1
+        );
+        
+        // Add a buffer to prevent overflow
+        maxFittingColumns = Math.max(2, maxFittingColumns - 1);
+        
+        // Determine initial columns to show based on available width
+        let columnsToShow = orderedColumns.slice(0, maxFittingColumns);
         
         // Create new visibility state
         const newDynamicVisibility: VisibilityState = {};
         
-        // Hide columns that aren't in the columns to show list
+        // Hide columns that aren't in the columnsToShow list
         userColumnOrder.forEach(columnId => {
-          if (userVisibility[columnId] === false || !columnsToShow.includes(columnId)) {
+          if (!columnsToShow.includes(columnId)) {
             newDynamicVisibility[columnId] = false;
           }
         });
         
-        // Update dynamic visibility state
-        setDynamicVisibility(newDynamicVisibility);
+        // Check if the visibility state has actually changed before updating
+        const hasVisibilityChanged = userColumnOrder.some(columnId => {
+          const isCurrentlyHidden = dynamicVisibility[columnId] === false;
+          const willBeHidden = newDynamicVisibility[columnId] === false;
+          return isCurrentlyHidden !== willBeHidden;
+        });
         
-        // After updating visibility, trigger column size update
-        updateColumnSizes();
+        // Only update if there's a change to avoid unnecessary renders
+        if (hasVisibilityChanged) {
+          // Update dynamic visibility state
+          setDynamicVisibility(newDynamicVisibility);
+          
+          // After updating visibility, trigger column size update
+          // Wait for React to process the state update first
+          setTimeout(() => {
+            updateColumnSizes();
+          }, 50);
+        }
         
         // Log which columns are visible for debugging
-        console.log(`Width: ${containerWidth}px, Showing ${columnsToShowCount} columns:`, 
+        console.log(`Width: ${containerWidth}px, Showing ${columnsToShow.length} columns:`, 
           columnsToShow.join(', '));
         
       } catch (error) {
@@ -1548,7 +1601,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     return () => {
       resizeObserver.disconnect();
     };
-  }, [table, debounce, updateColumnSizes]);
+  }, [table, debounce, updateColumnSizes, dynamicVisibility]);
 
   if (error) {
     return (
@@ -1598,13 +1651,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             />
           </div>
           <div 
-            className="h-[calc(100%-40px)] overflow-y-auto overflow-x-auto" 
+            className="h-[calc(100%-40px)] overflow-y-auto overflow-x-auto scrollbar-thin" 
             ref={tableContainerRef}
           >
             {isInitialLoading ? (
               <Table className="w-full table-fixed">
                 <TableHeader className="sticky top-0 z-20">
-                  <TableRow className="bg-[hsl(var(--color-widget-header))]">
+                  <TableRow className="bg-[hsl(var(--color-widget-header))] text-sm text-muted-foreground">
                     {table.getHeaderGroups()[0].headers
                       .filter(header => {
                         const columnId = header.column.id;
@@ -1624,7 +1677,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             ) : error ? (
               <Table className="w-full table-fixed">
                 <TableHeader className="sticky top-0 z-20">
-                  <TableRow className="bg-[hsl(var(--color-widget-header))]">
+                  <TableRow className="bg-[hsl(var(--color-widget-header))] text-sm text-muted-foreground">
                     {table.getHeaderGroups()[0].headers
                       .filter(header => {
                         const columnId = header.column.id;
@@ -1646,7 +1699,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             ) : marketData.length === 0 ? (
               <Table className="w-full table-fixed">
                 <TableHeader className="sticky top-0 z-20">
-                  <TableRow className="bg-[hsl(var(--color-widget-header))]">
+                  <TableRow className="bg-[hsl(var(--color-widget-header))] text-sm text-muted-foreground">
                     {table.getHeaderGroups()[0].headers
                       .filter(header => {
                         const columnId = header.column.id;
@@ -1690,7 +1743,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                         <div
                           key={header.id}
                           className={cn(
-                            "px-4 py-2 h-10 flex items-center",
+                            "px-4 py-2 h-10 flex items-center text-sm text-muted-foreground",
                             isPairColumn ? "justify-start" : "justify-end",
                             isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
                             "cursor-pointer hover:text-foreground/80"
