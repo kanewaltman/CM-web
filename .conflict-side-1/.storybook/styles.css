@@ -1,0 +1,139 @@
+/* Import theme variables from the main application */
+@import '../src/index.css';
+
+/* Storybook-specific styles */
+.storybook-preview-wrapper {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Override Storybook logo size */
+.css-32o4gv {
+  max-width: 300px !important;
+  max-height: 200px !important;
+}
+
+/* Dark mode specific styles */
+[data-theme='dark'],
+.dark {
+  color-scheme: dark;
+  /* Use the same HSL values as your main app */
+  --color-bg-base: 0 0% 4%;
+  --color-bg-surface: 0 0% 4%;
+  --color-bg-surface-alt: 0 0% 4%;
+  --color-bg-elevated: 0 0% 4%;
+  --color-bg-inset: 0 0% 4%;
+  --color-bg-subtle: 0 0% 4%;
+  --color-foreground-default: 0 0% 98%;
+  
+  --background: var(--color-bg-base);
+  --foreground: var(--color-foreground-default);
+}
+
+/* Light mode specific styles */
+[data-theme='light'],
+.light {
+  color-scheme: light;
+  /* Use the same HSL values as your main app */
+  --color-bg-base: 0 0% 96%;
+  --color-bg-surface: 0 0% 96%;
+  --color-bg-elevated: 0 0% 100%;
+  --color-bg-inset: 0 0% 92%;
+  --color-bg-subtle: 0 0% 92%;
+  --color-foreground-default: 222.2 84% 4.9%;
+  
+  --background: var(--color-bg-base);
+  --foreground: var(--color-foreground-default);
+}
+
+/* Docs container dark mode */
+.docs-container.dark {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Dark mode specific overrides for docs */
+.docs-container.dark {
+  --docs-bg: var(--background);
+  --docs-text: var(--foreground);
+  --docs-border: rgba(255, 255, 255, 0.1);
+}
+
+.docs-container.dark .sbdocs.sbdocs-wrapper {
+  background-color: hsl(var(--docs-bg));
+  color: hsl(var(--docs-text));
+}
+
+.docs-container.dark .sbdocs.sbdocs-content {
+  background-color: hsl(var(--docs-bg));
+  color: hsl(var(--docs-text));
+}
+
+.docs-container.dark .docblock-source {
+  background-color: hsl(var(--docs-bg));
+  border-color: var(--docs-border);
+}
+
+.docs-container.dark .docblock-argstable-head {
+  background-color: hsl(var(--docs-bg));
+}
+
+.docs-container.dark .docblock-argstable-body {
+  background-color: hsl(var(--docs-bg));
+  color: hsl(var(--docs-text));
+}
+
+/* Main docs container setup */
+#storybook-docs {
+  height: 100vh;
+  overflow-y: auto;
+}
+
+/* Ensure docs container expands properly */
+.sbdocs-wrapper {
+  height: auto;
+}
+
+.sbdocs-content {
+  max-width: 1000px;
+  margin: 0 auto;
+  height: auto;
+}
+
+/* Control preview height in docs mode */
+.docs-story {
+  min-height: auto !important;
+  max-height: 400px;
+  overflow: auto;
+}
+
+/* Ensure the preview doesn't push content too far down */
+.sb-story {
+  min-height: auto !important;
+  max-height: 400px;
+  overflow: auto;
+}
+
+/* Add spacing between preview and docs content */
+.docs-story + * {
+  margin-top: 2rem;
+}
+
+/* Ensure content flows properly */
+.docs-wrapper {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Remove iframe constraints */
+#storybook-preview-iframe {
+  height: auto;
+}
+
+/* Ensure proper theme inheritance in stories */
+#storybook-root {
+  color-scheme: inherit;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+} 
