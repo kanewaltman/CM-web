@@ -1125,7 +1125,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       const activeList = customLists.find(list => list.id === activeListId);
       if (activeList) {
         filtered = filtered.filter(item => 
-          activeList.assets.includes(item.baseAsset)
+          // Check if the full trading pair is in the assets list
+          // If it's an old format list (only base assets), still support that
+          activeList.assets.includes(item.pair) || activeList.assets.includes(item.baseAsset)
         );
       }
     }
@@ -1191,7 +1193,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             {/* Add to list button - only visible on hover */}
             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
               <AddToListButton 
-                asset={row.original.baseAsset} 
+                asset={row.original.pair} 
                 size="sm" 
                 variant="ghost"
                 label="+" 

@@ -165,10 +165,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const handleAddPair = (pairToAdd: string = selectedPair) => {
     if (!activeListId || !pairToAdd) return;
     
-    // Extract the base asset from the pair (e.g., "BTC" from "BTC/USD")
-    const baseAsset = pairToAdd.split('/')[0];
-    
-    ListManager.addAssetToList(activeListId, baseAsset);
+    // Store the full trading pair instead of just the base asset
+    // This prevents adding multiple pairs with the same base asset
+    ListManager.addAssetToList(activeListId, pairToAdd);
     setSelectedPair('');
     setPairPopoverOpen(false);
   };
