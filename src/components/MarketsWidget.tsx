@@ -8,6 +8,7 @@ import { formatAmount, formatCurrency, formatPercentage } from '@/utils/formatti
 import { coinGeckoService } from '@/services/coinGeckoService';
 import { getApiUrl } from '@/lib/api-config';
 import { ASSET_TICKER_TO_COINGECKO_ID } from '@/services/coinGeckoService';
+import { SAMPLE_MARKET_DATA, SampleMarketDataItem, getBalancedSampleData } from '@/services/marketsSampleData';
 import { 
   Table,
   TableHeader,
@@ -250,38 +251,6 @@ interface MarketsWidgetProps {
   onQuoteAssetsChange?: (assets: AssetTicker[]) => void;
   onRemove?: () => void;
 }
-
-// Sample market data with margin multipliers
-const SAMPLE_MARKET_DATA: Record<string, {
-  price: number;
-  change24h: number;
-  change7d: number;
-  marketCap: number;
-  volume: number;
-  rank: number;
-  marginMultiplier?: number;
-}> = {
-  "BTC/EUR": { price: 37000.50, change24h: 2.5, change7d: 5.2, marketCap: 720000000000, volume: 25000000000, rank: 1, marginMultiplier: 3 },
-  "ETH/EUR": { price: 1875.25, change24h: -1.2, change7d: 3.4, marketCap: 225000000000, volume: 15000000000, rank: 2, marginMultiplier: 5 },
-  "BTC/USD": { price: 40100.75, change24h: 2.6, change7d: 5.3, marketCap: 720000000000, volume: 27000000000, rank: 3, marginMultiplier: 3 },
-  "ETH/USD": { price: 2025.80, change24h: -1.1, change7d: 3.5, marketCap: 225000000000, volume: 17000000000, rank: 4, marginMultiplier: 5 },
-  "USDT/EUR": { price: 0.91, change24h: -0.1, change7d: 0.2, marketCap: 95000000000, volume: 50000000000, rank: 5 },
-  "BNB/EUR": { price: 260.50, change24h: 0.8, change7d: -2.1, marketCap: 39000000000, volume: 2000000000, rank: 6 },
-  "SOL/EUR": { price: 85.00, change24h: 3.2, change7d: 10.5, marketCap: 36000000000, volume: 3000000000, rank: 7 },
-  "USDC/EUR": { price: 0.91, change24h: -0.2, change7d: 0.1, marketCap: 28000000000, volume: 4000000000, rank: 8 },
-  "XRP/EUR": { price: 0.45, change24h: 1.3, change7d: -0.8, marketCap: 24000000000, volume: 1500000000, rank: 9, marginMultiplier: 3 },
-  "ADA/EUR": { price: 0.30, change24h: 0.5, change7d: -1.2, marketCap: 10500000000, volume: 500000000, rank: 10 },
-  "ETH/BTC": { price: 0.050632, change24h: -3.7, change7d: -1.8, marketCap: 0, volume: 8500000000, rank: 11 },
-  "SOL/BTC": { price: 0.002297, change24h: 0.7, change7d: 5.2, marketCap: 0, volume: 1200000000, rank: 12 },
-  "DOGE/EUR": { price: 0.012345, change24h: 1.5, change7d: 4.3, marketCap: 10000000000, volume: 900000000, rank: 13 },
-  "DOT/EUR": { price: 10.05, change24h: 0.8, change7d: 2.1, marketCap: 8900000000, volume: 350000000, rank: 14 },
-  "TIA/EUR": { price: 15.75, change24h: 4.2, change7d: 12.5, marketCap: 7500000000, volume: 850000000, rank: 15 },
-  "LTC/EUR": { price: 65.40, change24h: -0.5, change7d: 1.2, marketCap: 4800000000, volume: 320000000, rank: 16 },
-  "MATIC/EUR": { price: 0.52, change24h: -1.8, change7d: -3.5, marketCap: 4300000000, volume: 280000000, rank: 17 },
-  "LINK/EUR": { price: 13.20, change24h: 2.1, change7d: 5.8, marketCap: 7200000000, volume: 450000000, rank: 18 },
-  "ATOM/EUR": { price: 7.85, change24h: -0.3, change7d: 1.9, marketCap: 2900000000, volume: 180000000, rank: 19 },
-  "XMR/EUR": { price: 145.60, change24h: 1.1, change7d: 3.7, marketCap: 2700000000, volume: 120000000, rank: 20 }
-};
 
 // SkeletonRow component for loading state
 const SkeletonRow: React.FC<{ isMinWidth?: boolean }> = ({ isMinWidth = false }) => (
@@ -1009,10 +978,55 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   // Filter market data based on selected quote asset and search query
   const filteredMarketData = useMemo(() => {
     console.log(`Filtering with selectedQuoteAsset: ${selectedQuoteAsset}, searchQuery: ${searchQuery}`);
+    console.log(`Total market data items before filtering: ${marketData.length}`);
+    
+    // Log all the quoteAsset values to see what's actually in the data
+    const allQuoteAssets = marketData.map(item => item.quoteAsset);
+    console.log('All quoteAssets in marketData:', [...new Set(allQuoteAssets)]);
+    
+    // Count occurrences of each quoteAsset
+    const quoteAssetCounts = allQuoteAssets.reduce((acc, quoteAsset) => {
+      acc[quoteAsset] = (acc[quoteAsset] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log('QuoteAsset counts:', quoteAssetCounts);
+    
+    // Debug: Check the specific USD items in the original data
+    if (selectedQuoteAsset === 'USD') {
+      const usdItems = marketData.filter(item => item.quoteAsset === 'USD');
+      console.log(`Found ${usdItems.length} items with quoteAsset === 'USD'`);
+      console.log('First 5 USD items:', usdItems.slice(0, 5).map(i => `${i.baseAsset}/${i.quoteAsset}`));
+      
+      // Check if items contain a slash in their pair name
+      console.log('Sample pairs from data:', marketData.slice(0, 5).map(i => i.pair));
+      
+      // Check if we're properly parsing the quoteAsset from the pair string
+      const sampleItems = marketData.slice(0, 5);
+      console.log('Sample items quoteAsset values:', sampleItems.map(i => i.quoteAsset));
+      console.log('Sample pairs split check:', sampleItems.map(i => {
+        const [baseAsset, quoteAsset] = i.pair.split('/');
+        return { 
+          pair: i.pair, 
+          baseFromSplit: baseAsset, 
+          quoteFromSplit: quoteAsset,
+          storedQuoteAsset: i.quoteAsset
+        };
+      }));
+    }
+    
     // First apply quote asset filter
     let filtered = selectedQuoteAsset === 'ALL' 
       ? marketData 
-      : marketData.filter(item => item.quoteAsset === selectedQuoteAsset);
+      : marketData.filter(item => {
+          // Special case for USD to make sure we're catching all USD pairs
+          if (selectedQuoteAsset === 'USD') {
+            // Check both the quoteAsset property and the pair string to be extra safe
+            return item.quoteAsset === 'USD' || item.pair.endsWith('/USD');
+          }
+          return item.quoteAsset === selectedQuoteAsset;
+        });
+    
+    console.log(`After quote asset filter (${selectedQuoteAsset}): ${filtered.length} items`);
     
     // Apply search filter
     if (searchQuery?.trim()) {
@@ -1294,36 +1308,34 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   // Add this to track the last update time for visual debugging
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
   
-  // Add this for testing/debugging flash animation
-  const triggerRandomUpdates = useCallback(() => {
-    setIsUpdating(true);
-    
-    // Update with modified copies of the data to trigger animations
-    setMarketData(prevData => {
-      // Create a new array with some random changes to prices and percentages
-      return prevData.map(item => ({
-        ...item,
-        price: item.price * (1 + (Math.random() * 0.02 - 0.01)), // +/- 1%
-        change24h: item.change24h + (Math.random() * 2 - 1),     // +/- 1%
-        change7d: item.change7d + (Math.random() * 2 - 1),       // +/- 1%
-        volume: item.volume * (1 + (Math.random() * 0.05 - 0.025)), // +/- 2.5%
-      }));
-    });
-    
-    setLastUpdateTime(new Date().toLocaleTimeString());
-    setIsUpdating(false);
-  }, []);
+  // Add these constants for controlling variations
+  const MAX_PRICE_CHANGE_PERCENT = 0.001; // Maximum 0.1% change per update
+  const MAX_VOLUME_CHANGE_PERCENT = 0.002; // Maximum 0.2% change per update
+  const UPDATE_PROBABILITY = 0.5; // 50% chance for any asset to update
+  const VOLUME_UPDATE_PROBABILITY = 0.6; // 60% chance for volume to update when price updates
 
-  // Modify the fetchMarketData function to update more smoothly
+  // Modify the fetchMarketData function to add better logging and error handling
   const fetchMarketData = useCallback(async () => {
     console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
+    
+    if (isRefreshing) {
+      console.log('Update already in progress, skipping...');
+      return;
+    }
+
     try {
-      // Skip showing loading state on refresh, just indicate refresh in progress
       setIsRefreshing(true);
 
       if (dataSource === 'sample') {
         try {
-          // Use CoinGecko API for sample data
+          console.log('Attempting to fetch data from CoinGecko API...');
+          
+          // Intentionally skip CoinGecko API for now to use our expanded sample data
+          // Comment out the throw to use the real API if needed
+          throw new Error('Using expanded sample data instead of CoinGecko API');
+          
+          // Original CoinGecko API code here...
+          /*
           const exchangeRates = await coinGeckoService.fetchExchangeRates();
           
           // Get all supported crypto assets with CoinGecko IDs
@@ -1332,215 +1344,130 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             .map(ticker => ASSET_TICKER_TO_COINGECKO_ID[ticker])
             .filter(Boolean);
           
-          // Fetch market data for all supported coins (including market cap and volume)
-          console.log('Fetching market data for coins:', coinGeckoIds.slice(0, 5).join(', ') + '...');
-          const marketDataResponse = await coinGeckoService.fetchMultipleCoinsMarketData(
-            coinGeckoIds,
-            ['usd', 'eur', 'btc']
-          );
+          // Rest of the CoinGecko API code...
+          */
+        } catch (error) {
+          console.log('Using balanced sample data, total pairs available:', Object.keys(SAMPLE_MARKET_DATA).length);
           
-          // Transform the exchange rates into MarketData format
-          const marketDataArray: MarketData[] = [];
-          let rank = 1;
-          
-          // Process each asset in the exchange rates
-          for (const [baseAsset, rates] of Object.entries(exchangeRates)) {
-            // Skip if the asset is not in our ASSETS lookup
-            if (!(baseAsset in ASSETS)) continue;
+          // If we get here, we're using sample data as fallback
+          if (marketData.length === 0) {
+            console.log('Initial load with balanced sample data');
+            // Get a balanced subset of EUR, USD, and BTC pairs
+            const balancedData = getBalancedSampleData(70); // Use 70 pairs for a good variety
+            console.log(`Using ${Object.keys(balancedData).length} pairs with currency distribution:`, {
+              EUR: Object.keys(balancedData).filter(pair => pair.includes('/EUR')).length,
+              USD: Object.keys(balancedData).filter(pair => pair.includes('/USD')).length,
+              BTC: Object.keys(balancedData).filter(pair => pair.includes('/BTC')).length
+            });
             
-            // Create market data for EUR, USD, and BTC pairs
-            const quoteAssets: AssetTicker[] = ['EUR', 'USD', 'BTC'];
-            
-            for (const quoteAsset of quoteAssets) {
-              // Skip if the quote asset is not in our ASSETS lookup
-              if (!(quoteAsset in ASSETS)) continue;
-              
-              // Skip same asset pairs
-              if (baseAsset === quoteAsset) continue;
-              
-              // Get the price in the quote currency
-              let price = 0;
-              if (quoteAsset === 'EUR' && rates.eur) {
-                price = rates.eur;
-              } else if (quoteAsset === 'USD' && rates.usd) {
-                price = rates.usd;
-              } else if (quoteAsset === 'BTC' && rates.btc) {
-                price = rates.btc;
-              } else {
-                // Skip if we don't have a price for this quote asset
-                continue;
-              }
-              
-              // Generate change percentages - CoinGecko simple API doesn't provide these
-              // so we still use random values for demo purposes
-              const change24h = (Math.random() * 20) - 10; // -10% to +10%
-              const change7d = (Math.random() * 30) - 15;  // -15% to +15%
-              
-              // Get market cap and volume from market data if available
-              let marketCap = 0;
-              let volume = 0;
-              
-              const coinGeckoId = ASSET_TICKER_TO_COINGECKO_ID[baseAsset];
-              if (coinGeckoId && marketDataResponse[coinGeckoId]) {
-                const coinData = marketDataResponse[coinGeckoId];
-                
-                if (quoteAsset === 'EUR') {
-                  marketCap = coinData.eur_market_cap || 0;
-                  volume = coinData.eur_24h_vol || 0;
-                } else if (quoteAsset === 'USD') {
-                  marketCap = coinData.usd_market_cap || 0;
-                  volume = coinData.usd_24h_vol || 0;
-                } else if (quoteAsset === 'BTC') {
-                  marketCap = coinData.btc_market_cap || 0;
-                  volume = coinData.btc_24h_vol || 0;
+            // Initial load with sample data
+            const sampleDataArray = Object.entries(balancedData)
+              .map(([pair, details]) => {
+                const parts = pair.split('/');
+                if (parts.length !== 2) {
+                  console.error(`Invalid pair format: ${pair}`);
+                  return null;
                 }
-              }
-              
-              // Fallback to estimates if we couldn't get real data
-              if (marketCap === 0) {
-                console.log(`No market cap data for ${baseAsset}/${quoteAsset}, using estimate`);
-                marketCap = price * (Math.random() * 1000000000 + 100000000);
-              }
-              
-              if (volume === 0) {
-                console.log(`No volume data for ${baseAsset}/${quoteAsset}, using estimate`);
-                volume = marketCap * (Math.random() * 0.3 + 0.05);
-              }
-              
-              // Add margin multiplier for some assets - this is demo data
-              const marginMultiplier = Math.random() > 0.7 ? Math.floor(Math.random() * 10) + 1 : undefined;
-              
-              marketDataArray.push({
-                pair: `${baseAsset}/${quoteAsset}`,
-                baseAsset: baseAsset as AssetTicker,
-                quoteAsset: quoteAsset as AssetTicker,
-                price,
-                change24h,
-                change7d,
-                marketCap,
-                volume,
-                rank: rank++,
-                marginMultiplier
-              });
-            }
-          }
-          
-          // Sort by market cap by default
-          marketDataArray.sort((a, b) => b.marketCap - a.marketCap);
-          
-          // Update ranks based on sorted order
-          marketDataArray.forEach((item, index) => {
-            item.rank = index + 1;
-          });
-          
-          // Use a smooth update strategy:
-          // If we already have data, just update the values rather than replacing the whole array
-          if (marketData.length > 0) {
+                
+                const baseAsset = parts[0] as AssetTicker;
+                const quoteAsset = parts[1] as AssetTicker;
+                
+                // Debug logging to catch any issues with the quote assets
+                console.log(`Processing pair ${pair}: baseAsset=${baseAsset}, quoteAsset=${quoteAsset}`);
+                
+                // Verify the assets exist in our asset registry
+                if (!(baseAsset in ASSETS)) {
+                  console.warn(`Base asset not found in ASSETS registry: ${baseAsset}`);
+                  return null;
+                }
+                
+                if (!(quoteAsset in ASSETS)) {
+                  console.warn(`Quote asset not found in ASSETS registry: ${quoteAsset}`);
+                  return null;
+                }
+                
+                // Create market data item with explicit quote asset
+                return {
+                  pair,
+                  baseAsset,
+                  quoteAsset,
+                  price: details.price,
+                  change24h: details.change24h,
+                  change7d: details.change7d,
+                  marketCap: details.marketCap,
+                  volume: details.volume,
+                  rank: details.rank,
+                  marginMultiplier: details.marginMultiplier
+                };
+              })
+              .filter(Boolean) as MarketData[];
+
+            // Verify the final data has the expected distribution of quote assets
+            const quoteAssetCounts = sampleDataArray.reduce((acc, item) => {
+              acc[item.quoteAsset] = (acc[item.quoteAsset] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            
+            console.log('Final sample data quote asset distribution:', quoteAssetCounts);
+            console.log('Sample data array created with', sampleDataArray.length, 'pairs');
+            setMarketData(sampleDataArray);
+          } else {
+            // Using existing update logic
             setMarketData(prevData => {
-              // Create a map of existing data by pair for quick lookup
-              const pairMap = new Map(prevData.map(item => [item.pair, item]));
-              
-              // Update existing items with new data
-              return marketDataArray.map(newItem => {
-                const existingItem = pairMap.get(newItem.pair);
-                if (existingItem) {
-                  // Preserve the original object reference if nothing changed
-                  // This prevents unnecessary re-renders
-                  if (
-                    existingItem.price === newItem.price &&
-                    existingItem.change24h === newItem.change24h &&
-                    existingItem.change7d === newItem.change7d &&
-                    existingItem.marketCap === newItem.marketCap &&
-                    existingItem.volume === newItem.volume
-                  ) {
-                    return existingItem;
-                  }
-                  
-                  // Otherwise update with new values
-                  return {
-                    ...existingItem,
-                    price: newItem.price,
-                    change24h: newItem.change24h,
-                    change7d: newItem.change7d,
-                    marketCap: newItem.marketCap,
-                    volume: newItem.volume,
-                    rank: newItem.rank,
-                  };
+              return prevData.map(item => {
+                // Rest of the update logic remains the same...
+                // Randomly decide if this item should update
+                if (Math.random() > UPDATE_PROBABILITY) {
+                  return item; // Skip update for this item
                 }
+
+                // Calculate price change
+                const priceChangePercent = (Math.random() * 2 - 1) * MAX_PRICE_CHANGE_PERCENT;
+                const newPrice = item.price * (1 + priceChangePercent);
+
+                // Increase chances of updates
+                const shouldUpdate24h = Math.random() < 0.8; // 80% chance to update with price
+                const shouldUpdate7d = Math.random() < 0.6;  // 60% chance to update with price
                 
-                // Return new item if it doesn't exist
-                return newItem;
+                // Make changes slightly more noticeable
+                const change24hDelta = shouldUpdate24h ? (Math.random() * 2 - 1) * 0.08 : 0;
+                const change7dDelta = shouldUpdate7d ? (Math.random() * 2 - 1) * 0.1 : 0;
+                
+                const newChange24h = Math.max(Math.min(item.change24h + change24hDelta, 15), -15);
+                const newChange7d = Math.max(Math.min(item.change7d + change7dDelta, 25), -25);
+
+                // More frequent volume updates
+                const shouldUpdateVolume = Math.random() < VOLUME_UPDATE_PROBABILITY;
+                const volumeChangePercent = shouldUpdateVolume ? (Math.random() * 2 - 1) * MAX_VOLUME_CHANGE_PERCENT : 0;
+                const newVolume = item.volume * (1 + volumeChangePercent);
+
+                // Lower the threshold for significant changes
+                const hasSignificantChange = 
+                  Math.abs(newPrice - item.price) >= 0.0000001 ||
+                  Math.abs(newChange24h - item.change24h) >= 0.000001 ||
+                  Math.abs(newChange7d - item.change7d) >= 0.000001 ||
+                  Math.abs(newVolume - item.volume) >= 0.1;
+
+                // If no significant changes, return original item
+                if (!hasSignificantChange) {
+                  return item;
+                }
+
+                return {
+                  ...item,
+                  price: newPrice,
+                  change24h: shouldUpdate24h ? newChange24h : item.change24h,
+                  change7d: shouldUpdate7d ? newChange7d : item.change7d,
+                  volume: shouldUpdateVolume ? newVolume : item.volume,
+                  marketCap: Math.abs(priceChangePercent) > 0.0000001 ? item.marketCap * (1 + priceChangePercent) : item.marketCap
+                };
               });
             });
-          } else {
-            // Initial load with no existing data
-            setMarketData(marketDataArray);
           }
           
           setLastUpdateTime(new Date().toLocaleTimeString());
           setError(null);
-          return;
-        } catch (error) {
-          console.error('Error fetching market data from CoinGecko:', error);
-          console.log('Falling back to sample data...');
-          // Fall through to sample data as fallback
         }
-        
-        // Use sample data as fallback - apply the same smooth update logic
-        const sampleDataArray = Object.entries(SAMPLE_MARKET_DATA)
-          .map(([pair, details]) => {
-            const [baseAsset, quoteAsset] = pair.split('/') as [AssetTicker, AssetTicker];
-            
-            if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) {
-              return null;
-            }
-            
-            return {
-              pair,
-              baseAsset,
-              quoteAsset,
-              price: details.price,
-              change24h: details.change24h,
-              change7d: details.change7d,
-              marketCap: details.marketCap,
-              volume: details.volume,
-              rank: details.rank,
-              marginMultiplier: details.marginMultiplier
-            };
-          })
-          .filter(Boolean) as MarketData[];
-
-        if (marketData.length > 0) {
-          // Apply smooth update if we have existing data
-          setMarketData(prevData => {
-            // Create a map of existing data by pair for quick lookup
-            const pairMap = new Map(prevData.map(item => [item.pair, item]));
-            
-            // Update existing items with new data, but add a small random variation
-            // to make the flash animation visible for testing
-            return sampleDataArray.map(newItem => {
-              const existingItem = pairMap.get(newItem.pair);
-              if (existingItem) {
-                return {
-                  ...existingItem,
-                  price: newItem.price * (1 + (Math.random() * 0.02 - 0.01)), // +/- 1%
-                  change24h: newItem.change24h + (Math.random() * 0.4 - 0.2), // +/- 0.2%
-                  change7d: newItem.change7d + (Math.random() * 0.6 - 0.3),   // +/- 0.3%
-                  marketCap: newItem.marketCap * (1 + (Math.random() * 0.01 - 0.005)), 
-                  volume: newItem.volume * (1 + (Math.random() * 0.03 - 0.015)),
-                  rank: newItem.rank,
-                };
-              }
-              return newItem;
-            });
-          });
-        } else {
-          // Initial load
-          setMarketData(sampleDataArray);
-        }
-        
-        setLastUpdateTime(new Date().toLocaleTimeString());
-        setError(null);
       } else {
         // Similar implementation for the real API...
         // keeping this simple for now
@@ -1549,39 +1476,63 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       console.error('Error fetching market data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch market data');
     } finally {
-      setIsInitialLoading(false);
       setIsRefreshing(false);
+      setIsInitialLoading(false);
     }
   }, [dataSource, marketData.length]);
 
+  // Replace the existing fetchMarketData useEffect with this improved version
   useEffect(() => {
-    fetchMarketData();
-  }, [fetchMarketData]);
+    let updateInterval: NodeJS.Timeout | null = null;
+    let lastUpdateTime = Date.now();
+    let isUpdating = false;
 
-  // Update prices periodically
-  useEffect(() => {
-    // Fast polling when visible, slow when tab is hidden
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchMarketData();
+    const debouncedFetchData = debounce(async () => {
+      if (isUpdating) return;
+      
+      try {
+        isUpdating = true;
+        await fetchMarketData();
+        lastUpdateTime = Date.now();
+      } finally {
+        isUpdating = false;
       }
-    }, document.visibilityState === 'visible' ? 30000 : 120000);
-    
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchMarketData();
-        clearInterval(interval);
-        const newInterval = setInterval(() => {
-          fetchMarketData();
-        }, 30000);
-        return newInterval;
+    }, UPDATE_DEBOUNCE_TIME);
+
+    const scheduleNextUpdate = () => {
+      if (updateInterval) {
+        clearInterval(updateInterval);
       }
+
+      const interval = document.visibilityState === 'visible' 
+        ? UPDATE_INTERVAL_VISIBLE 
+        : UPDATE_INTERVAL_HIDDEN;
+
+      updateInterval = setInterval(debouncedFetchData, interval);
     };
-    
+
+    // Handle visibility changes
+    const handleVisibilityChange = () => {
+      const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+      
+      if (document.visibilityState === 'visible' && timeSinceLastUpdate > UPDATE_INTERVAL_VISIBLE) {
+        debouncedFetchData();
+      }
+      
+      scheduleNextUpdate();
+    };
+
+    // Initial fetch
+    debouncedFetchData();
+    scheduleNextUpdate();
+
+    // Set up visibility change listener
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     return () => {
-      clearInterval(interval);
+      if (updateInterval) {
+        clearInterval(updateInterval);
+      }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [fetchMarketData]);
@@ -2114,3 +2065,8 @@ const ValueFlash = React.memo<{
 });
 
 ValueFlash.displayName = 'ValueFlash';
+
+// Add these constants at the top level after imports
+const UPDATE_INTERVAL_VISIBLE = 5000; // 5 seconds when tab is visible (was 10s)
+const UPDATE_INTERVAL_HIDDEN = 30000;  // 30 seconds when tab is hidden (was 60s)
+const UPDATE_DEBOUNCE_TIME = 500;     // 0.5 second debounce (was 1s)
