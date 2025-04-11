@@ -34,15 +34,6 @@ import { GridStack } from 'gridstack';
 // Import Tauri API
 import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { 
-  DollarSign, 
-  LineChart, 
-  PieChart, 
-  Globe, 
-  Activity, 
-  Users,
-  Sparkles
-} from '../components/ui-icons';
 
 // Custom style types for grid layout
 type GridStyle = 'rounded' | 'dense';
@@ -439,13 +430,7 @@ export function ControlBar({
                       className="bg-background flex size-8 items-center justify-center rounded-md border"
                       aria-hidden="true"
                     >
-                      {type === 'balances' && <DollarSign className="h-4 w-4 opacity-60" />}
-                      {type === 'performance' && <LineChart className="h-4 w-4 opacity-60" />}
-                      {type === 'treemap' && <PieChart className="h-4 w-4 opacity-60" />}
-                      {type === 'markets' && <Globe className="h-4 w-4 opacity-60" />}
-                      {type === 'transactions' && <Activity className="h-4 w-4 opacity-60" />}
-                      {type === 'insight' && <Sparkles className="h-4 w-4 opacity-60" />}
-                      {type === 'referrals' && <Users className="h-4 w-4 opacity-60" />}
+                      <LayoutGrid className="h-4 w-4 opacity-60" />
                     </div>
                     <div>
                       <div className="text-sm font-medium">{config.title}</div>

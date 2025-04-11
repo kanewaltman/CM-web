@@ -12,37 +12,6 @@
       }
     </style>
     <script>
-      // Detect ad blockers
-      (function() {
-        try {
-          // Create a bait element that might trigger ad blockers
-          const bait = document.createElement('div');
-          bait.setAttribute('class', 'ad-unit ad-zone ad-space adsbox');
-          bait.setAttribute('style', 'height: 1px; width: 1px; position: absolute; left: -10000px; top: -10000px;');
-          document.body ? document.body.appendChild(bait) : document.addEventListener('DOMContentLoaded', function() {
-            document.body.appendChild(bait);
-          });
-
-          // Check after a short delay if the bait was hidden or removed
-          setTimeout(function() {
-            let detected = false;
-            if (!bait || bait.offsetHeight === 0 || bait.offsetWidth === 0 || bait.clientHeight === 0) {
-              detected = true;
-            }
-            
-            // Set attribute for React component to read
-            document.documentElement.setAttribute('data-adblocker', detected.toString());
-            
-            // Clean up
-            if (bait && bait.parentNode) {
-              bait.parentNode.removeChild(bait);
-            }
-          }, 100);
-        } catch (e) {
-          console.error('Error in ad blocker detection:', e);
-        }
-      })();
-
       // Synchronously set initial theme values
       (function() {
         const theme = localStorage.getItem('theme') || 
