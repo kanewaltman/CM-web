@@ -18,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { v4 as uuidv4 } from 'uuid';
 
 // Types from CM-Intel
 interface Citation {
@@ -414,7 +415,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
           paragraphParts.push(trimmedSection.substring(lastIndex));
         }
 
-        parts.push(<p key={`paragraph-${globalParagraphIndex}`} style={{ marginBottom: '1em' }}>{paragraphParts}</p>);
+        parts.push(<p key={`paragraph-${uuidv4()}`} style={{ marginBottom: '1em' }}>{paragraphParts}</p>);
         globalParagraphIndex++; // Increment global paragraph index for each paragraph
       }
     });
@@ -425,6 +426,8 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   // Update content parts when digest changes
   useEffect(() => {
     if (currentDigest) {
+      // Clear content parts before setting new content
+      setContentParts([]);
       const parts = formatContentWithAssets(currentDigest.content);
       setContentParts(parts);
     }
