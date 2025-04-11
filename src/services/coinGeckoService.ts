@@ -11,10 +11,9 @@ const COINGECKO_API_URL = import.meta.env.PROD
 
 /**
  * API key for CoinGecko API
- * Uses environment variable for security, but hard-coded for testing
+ * Uses environment variable for security
  */
-const API_KEY = 'CG-bc3TbY6Y8XbV9PoDZX5BZgtQ';
-// In production would use: import.meta.env.VITE_COINGECKO_API_KEY || '';
+const API_KEY = import.meta.env.VITE_COINGECKO_API_KEY || '';
 
 /**
  * Fiat currencies to get exchange rates for
