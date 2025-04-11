@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CM Web</title>
+    <style>
+      /* Hide content until theme is ready */
+      html:not(.theme-ready) {
+        visibility: hidden;
+      }
+    </style>
+    <script>
+      // Detect ad blockers
+      (function() {
+        try {
+          // Create a bait element that might trigger ad blockers
+          const bait = document.createElement('div');
+          bait.setAttribute('class', 'ad-unit ad-zone ad-space adsbox');
+          bait.setAttribute('style', 'height: 1px; width: 1px; position: absolute; left: -10000px; top: -10000px;');
+          document.body ? document.body.appendChild(bait) : document.addEventListener('DOMContentLoaded', function() {
+            document.body.appendChild(bait);
+          });
+
+          // Check after a short delay if the bait was hidden or removed
+          setTimeout(function() {
+            let detected = false;
+            if (!bait || bait.offsetHeight === 0 || bait.offsetWidth === 0 || bait.clientHeight === 0) {
+              detected = true;
+            }
+            
+            // Set attribute for React component to read
+            document.documentElement.setAttribute('data-adblocker', detected.toString());
+            
+            // Clean up
+            if (bait && bait.parentNode) {
+              bait.parentNode.removeChild(bait);
+            }
+          }, 100);
+        } catch (e) {
+          console.error('Error in ad blocker detection:', e);
+        }
+      })();
+
+      // Synchronously set initial theme values
+      (function() {
+        const theme = localStorage.getItem('theme') || 
+          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        
+        // Get saved intensities for the theme
+        const savedIntensities = localStorage.getItem(`theme-intensities-${theme}`);
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0 };
+        
+        // Set theme class
+        document.documentElement.classList.toggle('dark', theme === 'dark' || theme === 'oled');
+        document.documentElement.classList.toggle('oled', theme === 'oled');
+        
+        // Set CSS variables
+        const root = document.documentElement;
+        
+        // Base colors for each theme
+        const baseColors = {
+          light: {
+            bg: '0 0% 100%',
+            widget: '0 0% 98%',
+            border: '0 0% 90%'
+          },
+          dark: {
+            bg: '0 0% 0%',
+            widget: '0 0% 3%',
+            border: '0 0% 10%'
+          },
+          oled: {
+            bg: '0 0% 0%',
+            widget: '0 0% 0%',
+            border: '0 0% 0%'
+          }
+        };
+        
+        // Get base colors for current theme
+        const colors = baseColors[theme] || baseColors.dark;
+        
+        // Set initial CSS variables
+        root.style.setProperty('--color-bg-base', colors.bg);
+        root.style.setProperty('--color-bg-widget', colors.widget);
+        root.style.setProperty('--color-border', colors.border);
+        
+        // Apply intensity adjustments
+        const bgIntensity = intensities.background || 0;
+        const widgetIntensity = intensities.widget || 0;
+        const borderIntensity = intensities.border || 0;
+        
+        // Base values for intensity calculations
+        const baseValues = {
+          light: { bg: 100, widget: 98, border: 90 },
+          dark: { bg: 0, widget: 3, border: 10 },
+          oled: { bg: 0, widget: 0, border: 0 }
+        };
+        
+        const bases = baseValues[theme] || baseValues.dark;
+        
+        // Adjust background intensity
+        if (bgIntensity !== 0) {
+          const adjustedBg = Math.max(0, Math.min(100, bases.bg + bgIntensity));
+          root.style.setProperty('--color-bg-base', `0 0% ${adjustedBg}%`);
+        }
+        
+        // Adjust widget intensity
+        if (widgetIntensity !== 0) {
+          const adjustedWidget = Math.max(0, Math.min(100, bases.widget + widgetIntensity));
+          root.style.setProperty('--color-bg-widget', `0 0% ${adjustedWidget}%`);
+        }
+        
+        // Adjust border intensity
+        if (borderIntensity !== 0) {
+          const adjustedBorder = Math.max(0, Math.min(100, bases.border + borderIntensity));
+          root.style.setProperty('--color-border', `0 0% ${adjustedBorder}%`);
+        }
+
+        // Mark theme as ready
+        document.documentElement.classList.add('theme-ready');
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
