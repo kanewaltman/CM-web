@@ -27,7 +27,8 @@ import {
   RefreshCw as RefreshCwIcon,
   ChevronUp,
   SlidersHorizontal,
-  GripVertical as GripVerticalIcon
+  GripVertical as GripVerticalIcon,
+  Plus
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -41,6 +42,17 @@ import {
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { MarketsWidgetHeader } from './MarketsWidgetHeader';
+import { AddToListButton } from './AddToListButton';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from './ui/dialog';
+import { toast } from './ui/use-toast';
 
 // TanStack Table imports
 import {
@@ -648,6 +660,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     onSecondaryCurrencyChange: externalSecondaryCurrencyChange,
     onQuoteAssetsChange,
     compact = false,
+    onRemove,
   } = props;
   
   const { theme, resolvedTheme } = useTheme();
@@ -659,6 +672,110 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Add custom lists state
+  const [customLists, setCustomLists] = useState<CustomList[]>([]);
+  const [activeListId, setActiveListId] = useState<string | null>(null);
+  const [showAddToListDialog, setShowAddToListDialog] = useState(false);
+  const [selectedAssetForList, setSelectedAssetForList] = useState<string | null>(null);
+  
+  // Load custom lists from localStorage
+  useEffect(() => {
+    try {
+      const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
+      const savedActiveList = localStorage.getItem(ACTIVE_LIST_KEY);
+      
+      if (savedLists) {
+        setCustomLists(JSON.parse(savedLists));
+      }
+      
+      if (savedActiveList) {
+        setActiveListId(JSON.parse(savedActiveList));
+      }
+    } catch (error) {
+      console.error('Error loading custom lists:', error);
+    }
+  }, []);
+  
+  // Listen for custom events for list changes
+  useEffect(() => {
+    const handleListsUpdated = (event: CustomEvent) => {
+      if (event.detail?.lists) {
+        setCustomLists(event.detail.lists);
+      }
+    };
+    
+    const handleActiveListChanged = (event: CustomEvent) => {
+      if ('listId' in event.detail) {
+        setActiveListId(event.detail.listId);
+      }
+    };
+    
+    // Add event listeners
+    document.addEventListener('markets-lists-updated', handleListsUpdated as EventListener);
+    document.addEventListener('markets-active-list-changed', handleActiveListChanged as EventListener);
+    
+    // Cleanup event listeners
+    return () => {
+      document.removeEventListener('markets-lists-updated', handleListsUpdated as EventListener);
+      document.removeEventListener('markets-active-list-changed', handleActiveListChanged as EventListener);
+    };
+  }, []);
+  
+  // Add an asset to a list
+  const addAssetToList = useCallback((listId: string, asset: string) => {
+    const updatedLists = customLists.map(list => {
+      if (list.id === listId) {
+        // Only add if not already in the list
+        if (!list.assets.includes(asset)) {
+          return {
+            ...list,
+            assets: [...list.assets, asset]
+          };
+        }
+      }
+      return list;
+    });
+    
+    setCustomLists(updatedLists);
+    localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(updatedLists));
+    
+    // Dispatch event for other components
+    const event = new CustomEvent('markets-lists-updated', {
+      detail: { lists: updatedLists },
+      bubbles: true
+    });
+    document.dispatchEvent(event);
+  }, [customLists]);
+  
+  // Remove an asset from a list
+  const removeAssetFromList = useCallback((listId: string, asset: string) => {
+    const updatedLists = customLists.map(list => {
+      if (list.id === listId) {
+        return {
+          ...list,
+          assets: list.assets.filter(a => a !== asset)
+        };
+      }
+      return list;
+    });
+    
+    setCustomLists(updatedLists);
+    localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(updatedLists));
+    
+    // Dispatch event for other components
+    const event = new CustomEvent('markets-lists-updated', {
+      detail: { lists: updatedLists },
+      bubbles: true
+    });
+    document.dispatchEvent(event);
+  }, [customLists]);
+  
+  // Show the add to list dialog
+  const handleShowAddToListDialog = useCallback((asset: string) => {
+    setSelectedAssetForList(asset);
+    setShowAddToListDialog(true);
+  }, []);
   
   // Generate a stable ID for this widget instance
   const marketWidgetId = useId();
@@ -975,71 +1092,51 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     return false;
   }, []);
 
-  // Filter market data based on selected quote asset and search query
-  const filteredMarketData = useMemo(() => {
-    console.log(`Filtering with selectedQuoteAsset: ${selectedQuoteAsset}, searchQuery: ${searchQuery}`);
-    console.log(`Total market data items before filtering: ${marketData.length}`);
+  // Modify the filteredData calculation to include custom list filtering (around line 1050)
+  // Update the filtering logic to apply list filters
+  useEffect(() => {
+    // Don't filter if no data, search query, or quote asset selection
+    if (marketData.length === 0) {
+      setFilteredData([]);
+      return;
+    }
+
+    // Apply all filters sequentially
+    let filtered = [...marketData];
     
-    // Log all the quoteAsset values to see what's actually in the data
-    const allQuoteAssets = marketData.map(item => item.quoteAsset);
-    console.log('All quoteAssets in marketData:', [...new Set(allQuoteAssets)]);
-    
-    // Count occurrences of each quoteAsset
-    const quoteAssetCounts = allQuoteAssets.reduce((acc, quoteAsset) => {
-      acc[quoteAsset] = (acc[quoteAsset] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    console.log('QuoteAsset counts:', quoteAssetCounts);
-    
-    // Debug: Check the specific USD items in the original data
-    if (selectedQuoteAsset === 'USD') {
-      const usdItems = marketData.filter(item => item.quoteAsset === 'USD');
-      console.log(`Found ${usdItems.length} items with quoteAsset === 'USD'`);
-      console.log('First 5 USD items:', usdItems.slice(0, 5).map(i => `${i.baseAsset}/${i.quoteAsset}`));
-      
-      // Check if items contain a slash in their pair name
-      console.log('Sample pairs from data:', marketData.slice(0, 5).map(i => i.pair));
-      
-      // Check if we're properly parsing the quoteAsset from the pair string
-      const sampleItems = marketData.slice(0, 5);
-      console.log('Sample items quoteAsset values:', sampleItems.map(i => i.quoteAsset));
-      console.log('Sample pairs split check:', sampleItems.map(i => {
-        const [baseAsset, quoteAsset] = i.pair.split('/');
-        return { 
-          pair: i.pair, 
-          baseFromSplit: baseAsset, 
-          quoteFromSplit: quoteAsset,
-          storedQuoteAsset: i.quoteAsset
-        };
-      }));
+    // Filter by selected quote asset if not ALL
+    if (selectedQuoteAsset !== 'ALL') {
+      filtered = filtered.filter(item => item.quoteAsset === selectedQuoteAsset);
     }
     
-    // First apply quote asset filter
-    let filtered = selectedQuoteAsset === 'ALL' 
-      ? marketData 
-      : marketData.filter(item => {
-          // Special case for USD to make sure we're catching all USD pairs
-          if (selectedQuoteAsset === 'USD') {
-            // Check both the quoteAsset property and the pair string to be extra safe
-            return item.quoteAsset === 'USD' || item.pair.endsWith('/USD');
-          }
-          return item.quoteAsset === selectedQuoteAsset;
-        });
-    
-    console.log(`After quote asset filter (${selectedQuoteAsset}): ${filtered.length} items`);
-    
-    // Apply search filter
-    if (searchQuery?.trim()) {
-      filtered = filtered.filter(item => assetMatchesSearch(item, searchQuery));
+    // Apply search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(item => 
+        // Simple multi-field search
+        (item.baseAsset.toLowerCase().includes(query) || 
+         item.quoteAsset.toLowerCase().includes(query) ||
+         item.pair.toLowerCase().includes(query))
+      );
     }
     
-    return filtered;
-  }, [marketData, selectedQuoteAsset, searchQuery, assetMatchesSearch]);
-  
+    // Filter by custom list if one is active
+    if (activeListId) {
+      const activeList = customLists.find(list => list.id === activeListId);
+      if (activeList) {
+        filtered = filtered.filter(item => 
+          activeList.assets.includes(item.baseAsset)
+        );
+      }
+    }
+    
+    setFilteredData(filtered);
+  }, [marketData, selectedQuoteAsset, searchQuery, activeListId, customLists]);
+
   // Update the table with filtered data whenever filters change
   useEffect(() => {
-    console.log('Filtered data updated:', filteredMarketData.length);
-  }, [filteredMarketData]);
+    console.log('Filtered data updated:', filteredData.length);
+  }, [filteredData]);
 
   // Responsive column hiding logic will be implemented after table initialization
   
@@ -1058,35 +1155,48 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         const marginMultiplier = row.original.marginMultiplier;
         
         return (
-          <div className="flex items-center gap-2">
-            <div className="relative flex shrink-0">
-              {/* Base asset icon */}
-              <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10">
-                <img
-                  src={baseAssetConfig.icon}
-                  alt={row.original.baseAsset}
-                  className="w-full h-full object-cover"
-                />
+          <div className="flex items-center gap-2 justify-between group">
+            <div className="flex items-center gap-2">
+              <div className="relative flex shrink-0">
+                {/* Base asset icon */}
+                <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10">
+                  <img
+                    src={baseAssetConfig.icon}
+                    alt={row.original.baseAsset}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {/* Quote asset icon */}
+                <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border absolute -right-3 bottom-0 z-0">
+                  <img
+                    src={quoteAssetConfig.icon}
+                    alt={row.original.quoteAsset}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               </div>
-              {/* Quote asset icon */}
-              <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border absolute -right-3 bottom-0 z-0">
-                <img
-                  src={quoteAssetConfig.icon}
-                  alt={row.original.quoteAsset}
-                  className="w-full h-full object-cover"
-                />
+              <div className="ml-2 flex items-center gap-2">
+                <span className="font-jakarta font-semibold text-sm">
+                  {row.original.baseAsset}
+                  <span className="text-muted-foreground font-semibold">/{row.original.quoteAsset}</span>
+                </span>
+                {marginMultiplier && marginMultiplier >= 5 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500 font-medium">
+                    5×
+                  </span>
+                )}
               </div>
             </div>
-            <div className="ml-2 flex items-center gap-2">
-              <span className="font-jakarta font-semibold text-sm">
-                {row.original.baseAsset}
-                <span className="text-muted-foreground font-semibold">/{row.original.quoteAsset}</span>
-              </span>
-              {marginMultiplier && marginMultiplier >= 5 && (
-                <span className="text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500 font-medium">
-                  5×
-                </span>
-              )}
+            
+            {/* Add to list button - only visible on hover */}
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <AddToListButton 
+                asset={row.original.baseAsset} 
+                size="sm" 
+                variant="ghost"
+                label="+" 
+                className="h-6 w-6 p-0"
+              />
             </div>
           </div>
         );
@@ -1539,7 +1649,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
   // Initialize TanStack Table with filtered data
   const table = useReactTable({
-    data: filteredMarketData,
+    data: filteredData,
     columns,
     state: {
       sorting,
@@ -1974,6 +2084,57 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[hsl(var(--color-widget-bg))] to-transparent pointer-events-none z-30"></div>
         </div>
       </div>
+      
+      {/* Add the dialog for adding an asset to a list */}
+      <Dialog open={showAddToListDialog} onOpenChange={setShowAddToListDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add {selectedAssetForList} to List</DialogTitle>
+            <DialogDescription>
+              Choose a list to add this asset to.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {customLists.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground">
+                No custom lists available. Create one using the dropdown menu on the widget header.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {customLists.map(list => (
+                  <div key={list.id} className="flex items-center justify-between p-2 border rounded-md">
+                    <div>
+                      <div className="font-medium">{list.name}</div>
+                      <div className="text-xs text-muted-foreground">{list.assets.length} assets</div>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        if (selectedAssetForList) {
+                          addAssetToList(list.id, selectedAssetForList);
+                          setShowAddToListDialog(false);
+                        }
+                      }}
+                      disabled={selectedAssetForList ? list.assets.includes(selectedAssetForList) : false}
+                    >
+                      {selectedAssetForList && list.assets.includes(selectedAssetForList) 
+                        ? "Already in list" 
+                        : "Add"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="secondary">Cancel</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });
@@ -2070,3 +2231,22 @@ ValueFlash.displayName = 'ValueFlash';
 const UPDATE_INTERVAL_VISIBLE = 5000; // 5 seconds when tab is visible (was 10s)
 const UPDATE_INTERVAL_HIDDEN = 30000;  // 30 seconds when tab is hidden (was 60s)
 const UPDATE_DEBOUNCE_TIME = 500;     // 0.5 second debounce (was 1s)
+
+// LocalStorage keys for custom lists
+const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
+const ACTIVE_LIST_KEY = 'markets-widget-active-list';
+
+// Interface for custom lists
+interface CustomList {
+  id: string;
+  name: string;
+  assets: string[];
+}
+
+// ... existing code ...
+
+export interface MarketsWidgetRef {
+  getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
+}
+
+// ... existing code ...

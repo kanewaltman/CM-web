@@ -17,7 +17,7 @@ interface DataSourceProviderProps {
 export function DataSourceProvider({ children, defaultDataSource }: DataSourceProviderProps) {
   const [dataSource, setDataSource] = useState<DataSource>(() => {
     const saved = localStorage.getItem('data-source');
-    return (saved === 'demo' || saved === 'sample') ? saved : (defaultDataSource || 'demo');
+    return (saved === 'demo' || saved === 'sample') ? saved : (defaultDataSource || 'sample');
   });
 
   useEffect(() => {
