@@ -1,3 +1,0 @@
-ancestorEntries = []
-ourEntries = ["src/lib/supabase.ts"]
-theirEntries = ["src/lib/supabase.ts"]
