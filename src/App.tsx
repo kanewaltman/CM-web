@@ -66,6 +66,7 @@ function AppContent() {
     if (hasAdBlocker) {
       console.warn('Ad blocker detected in React component');
       setAdBlockerDetected(true);
+      
     }
   }, []);
 

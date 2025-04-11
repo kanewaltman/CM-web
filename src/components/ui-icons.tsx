@@ -25,7 +25,16 @@ import {
   Plus,
   Edit,
   Globe,
-  ListFilter
+  ListFilter,
+  // Widget-specific icons
+  BarChart2,
+  DollarSign,
+  LineChart,
+  PieChart,
+  Activity,
+  RefreshCcw,
+  Users,
+  Sparkles
 } from 'lucide-react';
 
 // Export our safe version of the fingerprint icon
@@ -52,5 +61,14 @@ export {
   Plus,
   Edit,
   Globe,
-  ListFilter
+  ListFilter,
+  // Widget-specific icons
+  BarChart2,
+  DollarSign,
+  LineChart,
+  PieChart,
+  Activity,
+  RefreshCcw,
+  Users,
+  Sparkles
 }; 
