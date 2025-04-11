@@ -73,10 +73,25 @@ export default {
             height: '0',
           },
         },
+        'value-flash': {
+          '0%': {
+            color: 'inherit',
+            textShadow: '0 0 0 rgba(255, 255, 255, 0)',
+          },
+          '30%': {
+            color: 'white',
+            textShadow: '0 0 8px rgba(255, 255, 255, 0.8)',
+          },
+          '100%': {
+            color: 'inherit',
+            textShadow: '0 0 0 rgba(255, 255, 255, 0)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'value-flash': 'value-flash 0.7s ease-in-out',
       },
     },
   },
