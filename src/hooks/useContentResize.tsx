@@ -20,6 +20,65 @@ export function useContentResize({ minWidth = 1940, maxWidth = 3840 }: UseConten
   const contentRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [scrollY, setScrollY] = useState(0);
+  const [contentRect, setContentRect] = useState<DOMRect | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const leftHandleRef = useRef<HTMLDivElement>(null);
+  const rightHandleRef = useRef<HTMLDivElement>(null);
+
+  // Track element position
+  const updateElementPosition = useCallback(() => {
+    if (contentRef.current) {
+      const rect = contentRef.current.getBoundingClientRect();
+      setContentRect(rect);
+      
+      // Directly update handle positions for immediate response
+      if (leftHandleRef.current) {
+        leftHandleRef.current.style.left = `${rect.left}px`;
+      }
+      if (rightHandleRef.current) {
+        rightHandleRef.current.style.left = `${rect.right - 12}px`;
+      }
+    }
+  }, []);
+
+  // Set up ResizeObserver to track content element position
+  useEffect(() => {
+    if (!resizeObserverRef.current && contentRef.current) {
+      resizeObserverRef.current = new ResizeObserver(updateElementPosition);
+      resizeObserverRef.current.observe(contentRef.current);
+    }
+    
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+        resizeObserverRef.current = null;
+      }
+    };
+  }, [updateElementPosition]);
+
+  // Track scroll and resize events
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+      updateElementPosition();
+    };
+    
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+      updateElementPosition();
+    };
+    
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize);
+    
+    // Initial position update
+    updateElementPosition();
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [updateElementPosition]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent, side: 'left' | 'right') => {
     e.preventDefault();
@@ -56,7 +115,10 @@ export function useContentResize({ minWidth = 1940, maxWidth = 3840 }: UseConten
     // Constrain width between minimum and maximum values
     newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
     setContentWidth(newWidth);
-  }, [isResizing, resizeSide, startX, startWidth, minWidth, maxWidth]);
+    
+    // Trigger an immediate position update
+    requestAnimationFrame(updateElementPosition);
+  }, [isResizing, resizeSide, startX, startWidth, minWidth, maxWidth, updateElementPosition]);
 
   const handleResizeEnd = useCallback(() => {
     setIsResizing(false);
@@ -72,19 +134,10 @@ export function useContentResize({ minWidth = 1940, maxWidth = 3840 }: UseConten
     document.querySelectorAll('.resize-handle.active').forEach((handle) => {
       handle.classList.remove('active');
     });
-  }, [contentWidth]);
-
-  // Track scroll position
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
     
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
+    // Ensure handle positions are updated
+    updateElementPosition();
+  }, [contentWidth, updateElementPosition]);
 
   // Clean up event listeners and attach them when needed
   useEffect(() => {
@@ -118,41 +171,39 @@ export function useContentResize({ minWidth = 1940, maxWidth = 3840 }: UseConten
   // Render resize handles
   const renderResizeHandles = useCallback(() => {
     if (viewportWidth > minWidth) {
-      // Calculate position based on content element
-      const rect = contentRef.current?.getBoundingClientRect();
-      if (!rect) return null;
-      
-      const handleStyle = {
-        position: 'fixed' as const,
-        top: 0,
-        height: '100vh'
-      };
-
       return (
         <>
           <div 
+            ref={leftHandleRef}
             className="resize-handle resize-handle-left" 
             onMouseDown={(e) => handleResizeStart(e, 'left')}
             title="Drag to resize width"
             style={{
-              ...handleStyle,
-              left: `${rect.left}px`
+              position: 'fixed',
+              top: 0,
+              height: '100vh',
+              left: contentRect ? `${contentRect.left}px` : '0px',
+              zIndex: 10
             }}
           />
           <div 
+            ref={rightHandleRef}
             className="resize-handle resize-handle-right" 
             onMouseDown={(e) => handleResizeStart(e, 'right')}
             title="Drag to resize width"
             style={{
-              ...handleStyle,
-              left: `${rect.right - 12}px`
+              position: 'fixed',
+              top: 0,
+              height: '100vh',
+              left: contentRect ? `${contentRect.right - 12}px` : '0px',
+              zIndex: 10
             }}
           />
         </>
       );
     }
     return null;
-  }, [viewportWidth, minWidth, handleResizeStart, contentRef, scrollY]);
+  }, [viewportWidth, minWidth, handleResizeStart, contentRect]);
 
   return {
     contentRef,
