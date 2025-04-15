@@ -717,7 +717,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <AssetPriceTooltip asset={balance.asset}>
+                          <AssetPriceTooltip asset={balance.asset} inTableCell={true}>
                             <button 
                               type="button"
                               className="font-jakarta font-bold text-sm rounded-md px-1"

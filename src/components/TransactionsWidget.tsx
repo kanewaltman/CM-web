@@ -244,7 +244,8 @@ const SAMPLE_TRANSACTIONS: Transaction[] = [
 const StyledAssetButton: React.FC<{
   asset: string;
   className?: string;
-}> = ({ asset, className }) => {
+  inTableCell?: boolean;
+}> = ({ asset, className, inTableCell = false }) => {
   if (!asset || !isAssetTicker(asset)) return <span>{asset}</span>;
   
   const { theme } = useTheme();
@@ -254,8 +255,8 @@ const StyledAssetButton: React.FC<{
   const assetColor = theme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
   
   return (
-    <AssetPriceTooltip asset={asset as AssetTicker}>
-      <div onClick={(e) => e.stopPropagation()}>
+    <AssetPriceTooltip asset={asset as AssetTicker} inTableCell={inTableCell}>
+      <div onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
         <button 
           type="button"
           className={cn("font-jakarta font-bold text-sm rounded-md px-1", className)}
@@ -336,7 +337,7 @@ const columns: ColumnDef<Transaction>[] = [
     accessorKey: "asset",
     cell: ({ row }) => {
       const asset = row.getValue("asset") as string;
-      return <StyledAssetButton asset={asset} />;
+      return <StyledAssetButton asset={asset} inTableCell={true} />;
     },
     size: 100,
   },

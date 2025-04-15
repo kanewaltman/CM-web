@@ -93,7 +93,7 @@ const AssetButton = ({
   const showHoverState = isHovered || isActive;
   
   return (
-    <AssetPriceTooltip asset={asset as AssetTicker}>
+    <AssetPriceTooltip asset={asset as AssetTicker} inTableCell={false}>
       <div
         className={cn("font-jakarta font-bold rounded-md px-1 relative z-20 asset-button-container", className)}
         style={{ 
