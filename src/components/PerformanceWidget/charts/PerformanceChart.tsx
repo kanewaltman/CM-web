@@ -1037,6 +1037,7 @@ export function PerformanceChart({ viewMode: propViewMode = 'split', onViewModeC
                               asset={asset} 
                               delayDuration={300}
                               disabled={isKeyboardFocus}
+                              inPopover={true}
                             >
                               <button
                                 type="button"

@@ -346,6 +346,7 @@ interface AssetPriceTooltipProps {
   delayDuration?: number;
   disabled?: boolean;
   inTableCell?: boolean;
+  inPopover?: boolean;
 }
 
 export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ 
@@ -353,7 +354,8 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({
   children,
   delayDuration = 0,
   disabled = false,
-  inTableCell = false
+  inTableCell = false,
+  inPopover = false
 }) => {
   const { theme } = useTheme();
   const { dataSource } = useDataSource();
@@ -593,7 +595,7 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({
           className="py-2 px-3 bg-background text-foreground border border-border" 
           sideOffset={5} 
           align="center"
-          side={inTableCell ? "right" : "top"}
+          side={inTableCell || inPopover ? "right" : "top"}
         >
           {loading ? (
             <div className="text-xs text-muted-foreground">Loading price...</div>
