@@ -22,6 +22,7 @@ export function DataSourceProvider({ children, defaultDataSource }: DataSourcePr
 
   useEffect(() => {
     localStorage.setItem('data-source', dataSource);
+    console.log('DataSourceContext: Data source changed to', dataSource);
   }, [dataSource]);
 
   return (

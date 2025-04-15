@@ -461,10 +461,13 @@ function AppContent() {
             onAddWidget={handleAddWidget}
             dataSource={dataSource}
             onDataSourceChange={(source) => {
+              // Save the new data source to localStorage first
               setDataSource(source);
-              if (grid) {
-                updateWidgetsDataSource(grid, source, handleRemoveWidget);
-              }
+              localStorage.setItem('data-source', source);
+              
+              // Use window.location.reload() to refresh the entire application
+              // This ensures all components get the updated data source
+              window.location.reload();
             }}
             onToggleLayoutLock={toggleLayoutLock}
             contentWidth={contentWidth}
