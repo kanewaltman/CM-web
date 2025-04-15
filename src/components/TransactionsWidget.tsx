@@ -30,6 +30,7 @@ import {
   ListFilterIcon,
   PlusIcon,
   TrashIcon,
+  FileDownIcon,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -91,6 +92,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDataSource } from '@/lib/DataSourceContext';
+import { AssetPriceTooltip } from './AssetPriceTooltip';
+import { ASSETS, AssetTicker, isAssetTicker } from '@/assets/AssetTicker';
+import { useTheme } from 'next-themes';
 
 type Transaction = {
   id: string;
@@ -236,25 +240,79 @@ const SAMPLE_TRANSACTIONS: Transaction[] = [
   }
 ];
 
+// StyledAssetButton component for consistent styling across all asset buttons
+const StyledAssetButton: React.FC<{
+  asset: string;
+  className?: string;
+}> = ({ asset, className }) => {
+  if (!asset || !isAssetTicker(asset)) return <span>{asset}</span>;
+  
+  const { theme } = useTheme();
+  const assetConfig = ASSETS[asset as AssetTicker];
+  if (!assetConfig) return <span>{asset}</span>;
+  
+  const assetColor = theme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+  
+  return (
+    <AssetPriceTooltip asset={asset as AssetTicker}>
+      <div onClick={(e) => e.stopPropagation()}>
+        <button 
+          type="button"
+          className={cn("font-jakarta font-bold text-sm rounded-md px-1", className)}
+          style={{ 
+            color: assetColor,
+            backgroundColor: `${assetColor}14`,
+            cursor: 'pointer',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'text',
+            userSelect: 'text'
+          }}
+          onMouseEnter={(e) => {
+            const target = e.currentTarget;
+            target.style.backgroundColor = assetColor;
+            target.style.color = 'hsl(var(--color-widget-bg))';
+          }}
+          onMouseLeave={(e) => {
+            const target = e.currentTarget;
+            target.style.backgroundColor = `${assetColor}14`;
+            target.style.color = assetColor;
+          }}
+          onMouseDown={(e) => {
+            if (e.detail > 1) {
+              e.preventDefault();
+            }
+          }}
+        >
+          {className?.includes('display-symbol') ? asset : assetConfig.name}
+        </button>
+      </div>
+    </AssetPriceTooltip>
+  );
+};
+
 const columns: ColumnDef<Transaction>[] = [
   {
     id: "select",
     header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
+      <div className="flex items-center">
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+        />
+      </div>
     ),
     cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
+      <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      </div>
     ),
     size: 28,
     enableSorting: false,
@@ -276,27 +334,40 @@ const columns: ColumnDef<Transaction>[] = [
   {
     header: "Asset",
     accessorKey: "asset",
+    cell: ({ row }) => {
+      const asset = row.getValue("asset") as string;
+      return <StyledAssetButton asset={asset} />;
+    },
     size: 100,
   },
   {
     header: "Type",
     accessorKey: "type",
-    cell: ({ row }) => (
-      <Badge
-        className={cn(
-          row.getValue("type") === "Withdrawal" &&
-            "bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30",
-          row.getValue("type") === "Deposit" &&
-            "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30",
-          row.getValue("type") === "Trade" &&
-            "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30",
-          row.getValue("type") === "Staking" &&
-            "bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/30"
-        )}
-      >
-        {row.getValue("type")}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const type = row.getValue("type") as string;
+      let variant: any = "default";
+      
+      switch (type) {
+        case "Withdrawal":
+          variant = "withdrawalType";
+          break;
+        case "Deposit":
+          variant = "depositType";
+          break;
+        case "Trade":
+          variant = "tradeType";
+          break;
+        case "Staking":
+          variant = "stakingType";
+          break;
+      }
+      
+      return (
+        <Badge variant={variant} className="font-medium">
+          {type}
+        </Badge>
+      );
+    },
     size: 120,
     filterFn: typeFilterFn,
   },
@@ -306,7 +377,18 @@ const columns: ColumnDef<Transaction>[] = [
     cell: ({ row }) => {
       const amount = parseFloat(row.getValue("amount"));
       const asset = row.getValue("asset") as string;
-      return <div className="text-right">{amount} {asset}</div>;
+      
+      // Format the amount with appropriate decimal places
+      const formattedAmount = amount.toLocaleString(undefined, { 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+      });
+      
+      return (
+        <div className="text-right">
+          {formattedAmount} {asset}
+        </div>
+      );
     },
     size: 150,
   },
@@ -315,27 +397,50 @@ const columns: ColumnDef<Transaction>[] = [
     accessorKey: "fee",
     cell: ({ row }) => {
       const fee = row.original.fee;
-      return <div className="text-right text-muted-foreground">{fee ? `${fee} ${row.original.asset}` : '-'}</div>;
+      const asset = row.getValue("asset") as string;
+      
+      if (!fee) {
+        return <div className="text-right text-muted-foreground">-</div>;
+      }
+      
+      const formattedFee = fee.toLocaleString(undefined, { 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+      });
+      
+      return (
+        <div className="text-right text-muted-foreground">
+          {formattedFee} {asset}
+        </div>
+      );
     },
     size: 100,
   },
   {
     header: "Status",
     accessorKey: "status",
-    cell: ({ row }) => (
-      <Badge
-        className={cn(
-          row.getValue("status") === "Failed" &&
-            "bg-destructive/20 text-destructive border-destructive/30",
-          row.getValue("status") === "Pending" &&
-            "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-          row.getValue("status") === "Completed" &&
-            "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30"
-        )}
-      >
-        {row.getValue("status")}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const status = row.getValue("status") as string;
+      let variant: any = "default";
+      
+      switch (status) {
+        case "Failed":
+          variant = "failedStatus";
+          break;
+        case "Pending":
+          variant = "pendingStatus";
+          break;
+        case "Completed":
+          variant = "completedStatus";
+          break;
+      }
+      
+      return (
+        <Badge variant={variant} className="font-medium">
+          {status}
+        </Badge>
+      );
+    },
     size: 100,
     filterFn: statusFilterFn,
   },
@@ -376,6 +481,47 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
     );
     setData(updatedData);
     table.resetRowSelection();
+  };
+
+  const handleExportCSV = () => {
+    // Determine rows to export (either selected rows or all rows)
+    const rowsToExport = table.getSelectedRowModel().rows.length > 0 
+      ? table.getSelectedRowModel().rows
+      : table.getRowModel().rows;
+    
+    // Create CSV header based on visible columns
+    const visibleColumns = table.getVisibleFlatColumns().filter(col => 
+      col.id !== 'select' && col.id !== 'actions');
+    const header = visibleColumns.map(col => col.id).join(',');
+    
+    // Create CSV rows
+    const csvRows = rowsToExport.map(row => {
+      return visibleColumns.map(col => {
+        // Handle special cases like date formatting
+        if (col.id === 'date') {
+          const date = new Date(row.getValue('date'));
+          return `"${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}"`;
+        }
+        // Get raw value for other columns
+        return `"${row.getValue(col.id) || ''}"`;
+      }).join(',');
+    });
+    
+    // Combine header and rows
+    const csvContent = [header, ...csvRows].join('\n');
+    
+    // Create a blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `transactions_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // If there were selected rows, keep the selection
   };
 
   const table = useReactTable({
@@ -790,14 +936,23 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {/* Add transaction button */}
-          <Button className="ml-auto" variant="outline">
-            <PlusIcon
+          {/* Export CSV button */}
+          <Button 
+            className="ml-auto" 
+            variant="outline"
+            onClick={handleExportCSV}
+          >
+            <FileDownIcon
               className="-ms-1 opacity-60"
               size={16}
               aria-hidden="true"
             />
-            Add transaction
+            Export CSV
+            {table.getSelectedRowModel().rows.length > 0 && (
+              <span className="bg-background text-muted-foreground/70 -me-1 inline-flex h-5 max-h-full items-center rounded border px-1 font-[inherit] text-[0.625rem] font-medium">
+                {table.getSelectedRowModel().rows.length}
+              </span>
+            )}
           </Button>
         </div>
       </div>
@@ -872,7 +1027,8 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="h-8" // Fixed height for rows
+                  className="h-8"
+                  onClick={() => row.toggleSelected(!row.getIsSelected())}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="last:py-0">
@@ -1000,43 +1156,45 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
 
 function RowActions({ row }: { row: Row<Transaction> }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <div className="flex justify-end">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="shadow-none"
-            aria-label="More actions"
-          >
-            <MoreHorizontal size={16} aria-hidden="true" />
-          </Button>
-        </div>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <span>View details</span>
-            <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <div className="flex justify-end">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="shadow-none"
+              aria-label="More actions"
+            >
+              <MoreHorizontal size={16} aria-hidden="true" />
+            </Button>
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuGroup>
+            <DropdownMenuItem>
+              <span>View details</span>
+              <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <span>Edit</span>
+              <DropdownMenuShortcut>⌘E</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem>
+              <span>Export</span>
+              <DropdownMenuShortcut>⌘X</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <span>Delete</span>
+            <DropdownMenuShortcut>⌘⌫</DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuItem>
-            <span>Edit</span>
-            <DropdownMenuShortcut>⌘E</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <span>Export</span>
-            <DropdownMenuShortcut>⌘X</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-destructive focus:text-destructive">
-          <span>Delete</span>
-          <DropdownMenuShortcut>⌘⌫</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 } 

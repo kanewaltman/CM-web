@@ -889,6 +889,13 @@ button.font-bold,
   box-shadow: 0 0 0 1px hsl(var(--color-widget-header));
 }
 
+/* Transaction table row hover and selection styling */
+[data-slot="table-row"] {
+  position: relative;
+}
+
+/* These rules are no longer needed with box-shadow approach */
+
 [data-slot="table-head"] {
   position: relative;
   border-collapse: collapse;
