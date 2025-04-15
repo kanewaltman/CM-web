@@ -19,6 +19,7 @@ export function useContentResize({ minWidth = 1940, maxWidth = 3840 }: UseConten
   const [startWidth, setStartWidth] = useState<number>(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  const [scrollY, setScrollY] = useState(0);
 
   const handleResizeStart = useCallback((e: React.MouseEvent, side: 'left' | 'right') => {
     e.preventDefault();
@@ -73,6 +74,18 @@ export function useContentResize({ minWidth = 1940, maxWidth = 3840 }: UseConten
     });
   }, [contentWidth]);
 
+  // Track scroll position
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   // Clean up event listeners and attach them when needed
   useEffect(() => {
     if (isResizing) {
@@ -105,23 +118,41 @@ export function useContentResize({ minWidth = 1940, maxWidth = 3840 }: UseConten
   // Render resize handles
   const renderResizeHandles = useCallback(() => {
     if (viewportWidth > minWidth) {
+      // Calculate position based on content element
+      const rect = contentRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      
+      const handleStyle = {
+        position: 'fixed' as const,
+        top: 0,
+        height: '100vh'
+      };
+
       return (
         <>
           <div 
             className="resize-handle resize-handle-left" 
             onMouseDown={(e) => handleResizeStart(e, 'left')}
             title="Drag to resize width"
+            style={{
+              ...handleStyle,
+              left: `${rect.left}px`
+            }}
           />
           <div 
             className="resize-handle resize-handle-right" 
             onMouseDown={(e) => handleResizeStart(e, 'right')}
             title="Drag to resize width"
+            style={{
+              ...handleStyle,
+              left: `${rect.right - 12}px`
+            }}
           />
         </>
       );
     }
     return null;
-  }, [viewportWidth, minWidth, handleResizeStart]);
+  }, [viewportWidth, minWidth, handleResizeStart, contentRef, scrollY]);
 
   return {
     contentRef,

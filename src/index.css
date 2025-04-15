@@ -411,10 +411,8 @@ body {
 
 /* Resize handles for main-content-inner */
 .resize-handle {
-  position: absolute;
   width: 12px;
   height: 100%;
-  top: 0;
   cursor: ew-resize;
   z-index: 10;
   opacity: 0;
@@ -467,11 +465,11 @@ body.resizing .resize-handle::after {
 }
 
 .resize-handle-left {
-  left: 0;
+  /* Left positioning is now applied inline */
 }
 
 .resize-handle-right {
-  right: 0;
+  /* Right positioning is now applied inline */
 }
 
 @media (max-width: 1940px) {
