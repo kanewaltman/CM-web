@@ -31,13 +31,27 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const resizeFrameRef = useRef<number>();
   const gridElementRef = useRef<HTMLDivElement>(null);
+  const [grid, setGrid] = useState<GridStack | null>(null);
+  const [isLayoutLocked, setIsLayoutLocked] = useState(false);
+  const [contentWidth, setContentWidth] = useState<number>(() => {
+    // Get saved width from localStorage or use default (1940px)
+    const savedWidth = localStorage.getItem('cm-content-width');
+    const width = savedWidth ? parseInt(savedWidth, 10) : 1940;
+    // Ensure width is at least 1940px
+    return Math.max(1940, width);
+  });
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [resizeSide, setResizeSide] = useState<'left' | 'right' | null>(null);
+  const [startX, setStartX] = useState<number>(0);
+  const [startWidth, setStartWidth] = useState<number>(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
 
   // Check if we're on the exchange-rates route
   const isExchangeRatesRoute = window.location.pathname === '/exchange-rates';
 
   // Initialize the grid through our custom hook
   const {
-    grid,
     gridRef,
     initGrid,
     handleRemoveWidget,
@@ -81,7 +95,7 @@ function AppContent() {
       if (mobile !== isMobile) {
         setIsMobile(mobile);
         if (pageChangeRef.current) {
-          pageChangeRef.current(currentPage); // Re-initialize with current page
+          pageChangeRef.current(currentPage as PageType); // Re-initialize with current page
         }
       }
     });
@@ -407,6 +421,88 @@ function AppContent() {
     };
   }, [gridRef, isMobile, currentPage]);
 
+  const handleResizeStart = useCallback((e: React.MouseEvent, side: 'left' | 'right') => {
+    e.preventDefault();
+    // Only allow resizing if viewport width is greater than 1940px
+    if (contentRef.current && viewportWidth > 1940) {
+      // Add active class directly to the clicked resize handle for immediate feedback
+      if (e.currentTarget) {
+        (e.currentTarget as HTMLElement).classList.add('active');
+      }
+      
+      setIsResizing(true);
+      setResizeSide(side);
+      setStartX(e.clientX);
+      setStartWidth(contentWidth);
+      
+      // Add resizing class to body for visual feedback
+      document.body.classList.add('resizing');
+    }
+  }, [contentWidth, viewportWidth]);
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    
+    const delta = e.clientX - startX;
+    let newWidth = startWidth;
+    
+    // Both sides should adjust the width equally to maintain centering
+    if (resizeSide === 'right') {
+      newWidth = startWidth + delta * 2;
+    } else if (resizeSide === 'left') {
+      newWidth = startWidth - delta * 2;
+    }
+    
+    // Constrain width between minimum (1940px) and maximum values
+    newWidth = Math.max(1940, Math.min(3840, newWidth));
+    setContentWidth(newWidth);
+  }, [isResizing, resizeSide, startX, startWidth]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+    setResizeSide(null);
+    
+    // Save the new width to localStorage using the current state value
+    localStorage.setItem('cm-content-width', String(contentWidth));
+    
+    // Remove resizing class
+    document.body.classList.remove('resizing');
+    
+    // Remove active class from any active resize handles
+    document.querySelectorAll('.resize-handle.active').forEach((handle) => {
+      handle.classList.remove('active');
+    });
+  }, [contentWidth]);
+
+  // Clean up event listeners and attach them when needed
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+    } else {
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+      document.body.classList.remove('resizing');
+    };
+  }, [isResizing, handleResizeMove, handleResizeEnd]);
+
+  // Update viewport width when window resizes
+  useEffect(() => {
+    const handleViewportResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    
+    window.addEventListener('resize', handleViewportResize);
+    return () => {
+      window.removeEventListener('resize', handleViewportResize);
+    };
+  }, []);
+
   // If we're on the exchange rates route, render the tester component
   if (isExchangeRatesRoute) {
     return (
@@ -443,7 +539,25 @@ function AppContent() {
     <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
       <div className="main-content h-[calc(100vh-4rem)] overflow-y-auto bg-[hsl(var(--color-bg-base))]">
-        <div className="main-content-inner h-full relative">
+        <div 
+          ref={contentRef}
+          className="main-content-inner h-full relative"
+          style={{ maxWidth: `${contentWidth}px` }}
+        >
+          {viewportWidth > 1940 && (
+            <>
+              <div 
+                className="resize-handle resize-handle-left" 
+                onMouseDown={(e) => handleResizeStart(e, 'left')}
+                title="Drag to resize width"
+              />
+              <div 
+                className="resize-handle resize-handle-right" 
+                onMouseDown={(e) => handleResizeStart(e, 'right')}
+                title="Drag to resize width"
+              />
+            </>
+          )}
           <ControlBar
             onResetLayout={handleResetLayout}
             onCopyLayout={handleCopyLayout}
@@ -457,6 +571,7 @@ function AppContent() {
               }
             }}
             onToggleLayoutLock={toggleLayoutLock}
+            contentWidth={contentWidth}
           />
           <div 
             ref={gridElementRef} 
