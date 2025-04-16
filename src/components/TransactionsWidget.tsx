@@ -359,7 +359,7 @@ const columns: ColumnDef<Transaction>[] = [
           variant={variant} 
           className="font-medium"
           active={isActive}
-          onClick={(e) => handleBadgeSort('type', type, e)}
+          onClick={(e) => handleBadgeFilter('type', type, e)}
         >
           {type}
         </SortableBadge>
@@ -442,7 +442,7 @@ const columns: ColumnDef<Transaction>[] = [
           variant={variant} 
           className="font-medium"
           active={isActive}
-          onClick={(e) => handleBadgeSort('status', status, e)}
+          onClick={(e) => handleBadgeFilter('status', status, e)}
         >
           {status}
         </SortableBadge>
@@ -533,44 +533,37 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
     // If there were selected rows, keep the selection
   };
 
-  // Define badge sort handler
-  const handleBadgeSort = (column: string, value: string, e: React.MouseEvent) => {
+  // Define badge filter handler
+  const handleBadgeFilter = (column: string, value: string, e: React.MouseEvent) => {
     // Stop event propagation to prevent row selection
     e.stopPropagation();
     
-    // Get current filters
-    const currentTypeFilter = table.getColumn("type")?.getFilterValue() as string[] | undefined;
-    const currentStatusFilter = table.getColumn("status")?.getFilterValue() as string[] | undefined;
+    // Get current filter value for the column
+    const currentFilter = table.getColumn(column)?.getFilterValue() as string[] | undefined;
     
-    // If same badge is clicked again in the same column, remove just that filter
-    if (activeSortBadge?.column === column && activeSortBadge?.value === value) {
-      // Clear just this specific column's filter
+    // Check if this value is already filtered
+    const isValueFiltered = currentFilter?.includes(value);
+    
+    if (isValueFiltered) {
+      // If already filtered, remove the filter
       table.getColumn(column)?.setFilterValue(undefined);
       
-      // If we still have a filter in the other column, keep that active
-      if ((column === 'type' && currentStatusFilter?.length) || 
-          (column === 'status' && currentTypeFilter?.length)) {
-        // Set active badge to the other column that still has a filter
+      // If this was the active badge, clear it or set to other column's filter if exists
+      if (activeSortBadge?.column === column && activeSortBadge?.value === value) {
         const otherColumn = column === 'type' ? 'status' : 'type';
-        const otherValue = column === 'type' ? currentStatusFilter?.[0] : currentTypeFilter?.[0];
-        setActiveSortBadge(otherValue ? { column: otherColumn, value: otherValue } : null);
-      } else {
-        // No filters left, clear active badge
-        setActiveSortBadge(null);
-        // Reset sort to default (date desc)
-        setSorting([{ id: "date", desc: true }]);
+        const otherColumnFilter = table.getColumn(otherColumn)?.getFilterValue() as string[] | undefined;
+        
+        if (otherColumnFilter?.length) {
+          setActiveSortBadge({ column: otherColumn, value: otherColumnFilter[0] });
+        } else {
+          setActiveSortBadge(null);
+        }
       }
-      return;
+    } else {
+      // Add new filter
+      table.getColumn(column)?.setFilterValue([value]);
+      setActiveSortBadge({ column, value });
     }
-    
-    // Set this column's filter to the selected value
-    table.getColumn(column)?.setFilterValue([value]);
-    
-    // Set the active badge for visual indication
-    setActiveSortBadge({ column, value });
-    
-    // Apply sorting by that column
-    setSorting([{ id: column, desc: false }]);
   };
 
   // Create modified columns with sortable badges
@@ -609,7 +602,7 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                 variant={variant} 
                 className="font-medium"
                 active={isActive}
-                onClick={(e) => handleBadgeSort('type', type, e)}
+                onClick={(e) => handleBadgeFilter('type', type, e)}
               >
                 {type}
               </SortableBadge>
@@ -648,7 +641,7 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                 variant={variant} 
                 className="font-medium"
                 active={isActive}
-                onClick={(e) => handleBadgeSort('status', status, e)}
+                onClick={(e) => handleBadgeFilter('status', status, e)}
               >
                 {status}
               </SortableBadge>
