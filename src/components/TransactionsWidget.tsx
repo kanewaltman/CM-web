@@ -1196,53 +1196,6 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
           </DropdownMenu>
         </div>
         <div className="flex items-center gap-3">
-          {/* Delete button */}
-          {table.getSelectedRowModel().rows.length > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button className="ml-auto" variant="outline">
-                  <TrashIcon
-                    className="-ms-1 opacity-60"
-                    size={16}
-                    aria-hidden="true"
-                  />
-                  Delete
-                  <span className="bg-background text-muted-foreground/70 -me-1 inline-flex h-5 max-h-full items-center rounded border px-1 font-[inherit] text-[0.625rem] font-medium">
-                    {table.getSelectedRowModel().rows.length}
-                  </span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
-                  <div
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full border"
-                    aria-hidden="true"
-                  >
-                    <AlertCircle className="opacity-80" size={16} />
-                  </div>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Are you absolutely sure?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete{" "}
-                      {table.getSelectedRowModel().rows.length} selected{" "}
-                      {table.getSelectedRowModel().rows.length === 1
-                        ? "transaction"
-                        : "transactions"}
-                      .
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteRows}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
           {/* Export CSV button */}
           <Button 
             className="ml-auto" 
@@ -1342,8 +1295,10 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                   className={cn(
-                    "h-8 cursor-pointer",
-                    row.getIsSelected() && "bg-accent"
+                    "h-8 cursor-pointer border-b",
+                    row.getIsSelected() 
+                      ? "bg-accent border-border/50" 
+                      : "bg-[hsl(var(--card))] border-border/10"
                   )}
                   onClick={() => row.toggleSelected(!row.getIsSelected())}
                 >
