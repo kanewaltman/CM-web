@@ -1,4 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSProperties, forwardRef, useImperativeHandle } from 'react';
+import isEqual from 'fast-deep-equal';
+
+// Disable verbose logging in production
+if (process.env.NODE_ENV === 'production') {
+  console.log = () => {};
+}
+
 import { useSearchParams } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
@@ -83,11 +90,7 @@ import {
   type DragEndEvent,
   DragStartEvent,
   DragMoveEvent,
-  DragOverEvent,
-  DragLeaveEvent,
-  Droppable,
-  Draggable,
-  DropResult
+  DragOverEvent
 } from '@dnd-kit/core';
 import { restrictToHorizontalAxis, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import {
@@ -121,8 +124,8 @@ const memoizedFormatPrice = (price: number) => {
     return priceFormatterCache.get(price)!;
   }
   const result = formatPrice(price);
-  if (priceFormatterCache.size > 1000) {
-    // Clear cache if it gets too large
+  // Shrink cache threshold to reduce memory churn
+  if (priceFormatterCache.size > 500) {
     priceFormatterCache.clear();
   }
   priceFormatterCache.set(price, result);
@@ -192,7 +195,7 @@ const memoizedFormatLargeNumber = (value: number) => {
     return largeNumberFormatterCache.get(value)!;
   }
   const result = formatLargeNumber(value);
-  if (largeNumberFormatterCache.size > 1000) {
+  if (largeNumberFormatterCache.size > 500) {
     largeNumberFormatterCache.clear();
   }
   largeNumberFormatterCache.set(value, result);
@@ -212,7 +215,9 @@ const getConversionRate = (from: AssetTicker, to: AssetTicker | null): number =>
   if (!to) return 1; // No conversion needed if no secondary currency
   if (from === to) return 1;
   
-  console.log(`Converting from ${from} to ${to}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Converting from ${from} to ${to}`);
+  }
   
   // First check direct conversions
   if (from === 'EUR' && to === 'USD') return CURRENCY_CONVERSION_RATES.EUR_USD;
@@ -232,7 +237,9 @@ const getConversionRate = (from: AssetTicker, to: AssetTicker | null): number =>
   }
   
   // For other pairs, use a default rate (this should be replaced with real data)
-  console.log(`No direct conversion rate found for ${from} to ${to}, using default`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`No direct conversion rate found for ${from} to ${to}, using default`);
+  }
   return 1.0;
 };
 
@@ -631,27 +638,14 @@ export interface MarketsWidgetRef {
   getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
 }
 
-// Add a deep comparison memo utility
-const useDeepCompareMemo = <T,>(factory: () => T, deps: React.DependencyList) => {
-  const ref = useRef<{ deps: React.DependencyList; obj: T; initialized: boolean }>({
-    deps: [],
-    obj: null as unknown as T,
-    initialized: false
-  });
-  
-  const depsChanged = !ref.current.initialized || 
-    deps.length !== ref.current.deps.length || 
-    deps.some((dep, i) => {
-      return JSON.stringify(dep) !== JSON.stringify(ref.current.deps[i]);
-    });
-  
-  if (depsChanged) {
+// Add a deep comparison memo utility using fast-deep-equal
+const useDeepCompareMemo = <T,>(factory: () => T, deps: React.DependencyList): T => {
+  const ref = useRef<{ deps: React.DependencyList; value: T }>({ deps: [], value: factory() });
+  if (!isEqual(ref.current.deps, deps)) {
     ref.current.deps = deps;
-    ref.current.obj = factory();
-    ref.current.initialized = true;
+    ref.current.value = factory();
   }
-  
-  return ref.current.obj;
+  return ref.current.value;
 };
 
 export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((props, ref) => {
@@ -1078,7 +1072,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     return false;
   }, []);
 
-  // Modify the filteredData calculation to include custom list filtering (around line 1050)
   // Update the filtering logic to apply list filters
   useEffect(() => {
     // Don't filter if no data, search query, or quote asset selection
@@ -1087,38 +1080,50 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       return;
     }
 
-    // Apply all filters sequentially
-    let filtered = [...marketData];
-    
-    // Filter by selected quote asset if not ALL
-    if (selectedQuoteAsset !== 'ALL') {
-      filtered = filtered.filter(item => item.quoteAsset === selectedQuoteAsset);
-    }
-    
-    // Apply search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(item => 
-        // Simple multi-field search
-        (item.baseAsset.toLowerCase().includes(query) || 
-         item.quoteAsset.toLowerCase().includes(query) ||
-         item.pair.toLowerCase().includes(query))
-      );
-    }
-    
-    // Filter by custom list if one is active
-    if (activeListId) {
-      const activeList = customLists.find(list => list.id === activeListId);
-      if (activeList) {
+    // Debounce filtering operations to reduce layout thrashing
+    const debouncedFilter = () => {
+      // Only log in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Filtering ${marketData.length} items with query: "${searchQuery}"`);
+      }
+      
+      // Apply all filters sequentially
+      let filtered = [...marketData];
+      
+      // Filter by selected quote asset if not ALL
+      if (selectedQuoteAsset !== 'ALL') {
+        filtered = filtered.filter(item => item.quoteAsset === selectedQuoteAsset);
+      }
+      
+      // Apply search query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
         filtered = filtered.filter(item => 
-          // Check if the full trading pair is in the assets list
-          // If it's an old format list (only base assets), still support that
-          activeList.assets.includes(item.pair) || activeList.assets.includes(item.baseAsset)
+          // Simple multi-field search
+          (item.baseAsset.toLowerCase().includes(query) || 
+           item.quoteAsset.toLowerCase().includes(query) ||
+           item.pair.toLowerCase().includes(query))
         );
       }
-    }
+      
+      // Filter by custom list if one is active
+      if (activeListId) {
+        const activeList = customLists.find(list => list.id === activeListId);
+        if (activeList) {
+          filtered = filtered.filter(item => 
+            // Check if the full trading pair is in the assets list
+            // If it's an old format list (only base assets), still support that
+            activeList.assets.includes(item.pair) || activeList.assets.includes(item.baseAsset)
+          );
+        }
+      }
+      
+      setFilteredData(filtered);
+    };
     
-    setFilteredData(filtered);
+    // Use a short timeout to batch filtering work
+    const timeoutId = setTimeout(debouncedFilter, 50);
+    return () => clearTimeout(timeoutId);
   }, [marketData, selectedQuoteAsset, searchQuery, activeListId, customLists]);
 
   // Update the table with filtered data whenever filters change
@@ -1130,226 +1135,233 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   
   // Now let's update the price column cell to show extra info when columns are hidden
   const columns = useDeepCompareMemo<ColumnDef<MarketData>[]>(() => {
-    console.log('Rebuilding columns with secondaryCurrency:', secondaryCurrency);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Rebuilding columns with secondaryCurrency:', secondaryCurrency);
+    }
     
+    // Simply return columns without size property - we'll apply it later
     return [
-    {
-      id: 'pair',
-      header: 'Pair',
-      accessorKey: 'pair',
-      cell: ({ row }) => {
-        const baseAssetConfig = ASSETS[row.original.baseAsset];
-        const quoteAssetConfig = ASSETS[row.original.quoteAsset];
-        const marginMultiplier = row.original.marginMultiplier;
-        
-        return (
-          <div className="flex items-center gap-2 justify-between group">
-            <div className="flex items-center gap-2">
-              <div className="relative flex shrink-0">
-                {/* Base asset icon */}
-                <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10">
-                  <img
-                    src={baseAssetConfig.icon}
-                    alt={row.original.baseAsset}
-                    className="w-full h-full object-cover"
-                  />
+      {
+        id: 'pair',
+        header: 'Pair',
+        accessorKey: 'pair',
+        cell: ({ row }) => {
+          const baseAssetConfig = ASSETS[row.original.baseAsset];
+          const quoteAssetConfig = ASSETS[row.original.quoteAsset];
+          const marginMultiplier = row.original.marginMultiplier;
+          
+          return (
+            <div className="flex items-center gap-2 justify-between group">
+              <div className="flex items-center gap-2">
+                <div className="relative flex shrink-0">
+                  {/* Base asset icon */}
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border z-10">
+                    <img
+                      src={baseAssetConfig.icon}
+                      alt={row.original.baseAsset}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {/* Quote asset icon */}
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border absolute -right-3 bottom-0 z-0">
+                    <img
+                      src={quoteAssetConfig.icon}
+                      alt={row.original.quoteAsset}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 </div>
-                {/* Quote asset icon */}
-                <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden border border-border absolute -right-3 bottom-0 z-0">
-                  <img
-                    src={quoteAssetConfig.icon}
-                    alt={row.original.quoteAsset}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="ml-2 flex items-center gap-2">
+                  <span className="font-jakarta font-semibold text-sm">
+                    {row.original.baseAsset}
+                    <span className="text-muted-foreground font-semibold">/{row.original.quoteAsset}</span>
+                  </span>
+                  {marginMultiplier && marginMultiplier >= 5 && (
+                    <span className="text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500 font-medium">
+                      5×
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="ml-2 flex items-center gap-2">
-                <span className="font-jakarta font-semibold text-sm">
-                  {row.original.baseAsset}
-                  <span className="text-muted-foreground font-semibold">/{row.original.quoteAsset}</span>
-                </span>
-                {marginMultiplier && marginMultiplier >= 5 && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500 font-medium">
-                    5×
-                  </span>
-                )}
+              
+              {/* Add to list button - only visible on hover */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <AddToListButton 
+                  asset={row.original.pair} 
+                  size="sm" 
+                  variant="ghost"
+                  label="+" 
+                  className="h-6 w-6 p-0"
+                />
               </div>
             </div>
-            
-            {/* Add to list button - only visible on hover */}
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-              <AddToListButton 
-                asset={row.original.pair} 
-                size="sm" 
-                variant="ghost"
-                label="+" 
-                className="h-6 w-6 p-0"
+          );
+        },
+        // Remove size property here as it causes frequent rebuilds
+      },
+      {
+        id: 'price',
+        header: 'Price',
+        accessorKey: 'price',
+        cell: ({ row }) => {
+          // Display in secondary currency if set, otherwise use quote asset currency
+          const displayCurrency = secondaryCurrency || row.original.quoteAsset;
+          
+          const pricePrefix = displayCurrency === 'EUR' ? '€' : 
+                             displayCurrency === 'USD' ? '$' :
+                             displayCurrency === 'GBP' ? '£' : '';
+          
+          // Get conversion rate
+          const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
+          
+          // Use original price or converted price based on secondary currency
+          const displayPrice = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+            row.original.price * conversionRate : 
+            row.original.price;
+          
+          return (
+            <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%] tabular-nums">
+              <ValueFlash 
+                value={displayPrice} 
+                formatter={(price) => `${pricePrefix}${memoizedFormatPrice(price)}`}
               />
             </div>
-          </div>
-        );
+          );
+        },
+        // Remove size property here
       },
-      size: columnSizes.pair,
-    },
-    {
-      id: 'price',
-      header: 'Price',
-      accessorKey: 'price',
-      cell: ({ row }) => {
-        // Display in secondary currency if set, otherwise use quote asset currency
-        const displayCurrency = secondaryCurrency || row.original.quoteAsset;
-        
-        const pricePrefix = displayCurrency === 'EUR' ? '€' : 
-                           displayCurrency === 'USD' ? '$' :
-                           displayCurrency === 'GBP' ? '£' : '';
-        
-        // Get conversion rate
-        const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
-        
-        // Use original price or converted price based on secondary currency
-        const displayPrice = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
-          row.original.price * conversionRate : 
-          row.original.price;
-        
-        return (
-          <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%] tabular-nums">
-            <ValueFlash 
-              value={displayPrice} 
-              formatter={(price) => `${pricePrefix}${memoizedFormatPrice(price)}`}
-            />
-          </div>
-        );
+      {
+        id: 'change24h',
+        header: '24h %',
+        accessorKey: 'change24h',
+        cell: ({ row }) => {
+          // Get the 24h change value
+          const change24h = row.original.change24h;
+          
+          return (
+            <div className={cn(
+              "text-right whitespace-nowrap font-mono tabular-nums",
+              change24h > 0 ? "text-price-up" : 
+              change24h < 0 ? "text-price-down" : 
+              "text-muted-foreground/80"
+            )}>
+              <ValueFlash 
+                value={change24h} 
+                formatter={(value) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`}
+                className={cn(
+                  change24h > 0 ? "text-price-up" : 
+                  change24h < 0 ? "text-price-down" : 
+                  "text-muted-foreground/80"
+                )}
+              />
+            </div>
+          );
+        },
       },
-      size: columnSizes.price,
-    },
-    {
-      id: 'change24h',
-      header: '24h %',
-      accessorKey: 'change24h',
-      cell: ({ row }) => {
-        // Get the 24h change value
-        const change24h = row.original.change24h;
-        
-        return (
+      {
+        id: 'change7d',
+        header: '7d %',
+        accessorKey: 'change7d',
+        cell: ({ row }) => (
           <div className={cn(
             "text-right whitespace-nowrap font-mono tabular-nums",
-            change24h > 0 ? "text-price-up" : 
-            change24h < 0 ? "text-price-down" : 
+            row.original.change7d > 0 ? "text-price-up" : 
+            row.original.change7d < 0 ? "text-price-down" : 
             "text-muted-foreground/80"
           )}>
             <ValueFlash 
-              value={change24h} 
+              value={row.original.change7d} 
               formatter={(value) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`}
               className={cn(
-                change24h > 0 ? "text-price-up" : 
-                change24h < 0 ? "text-price-down" : 
+                row.original.change7d > 0 ? "text-price-up" : 
+                row.original.change7d < 0 ? "text-price-down" : 
                 "text-muted-foreground/80"
               )}
             />
           </div>
-        );
+        ),
       },
-      size: columnSizes.change24h,
-    },
-    {
-      id: 'change7d',
-      header: '7d %',
-      accessorKey: 'change7d',
-      cell: ({ row }) => (
-        <div className={cn(
-          "text-right whitespace-nowrap font-mono tabular-nums",
-          row.original.change7d > 0 ? "text-price-up" : 
-          row.original.change7d < 0 ? "text-price-down" : 
-          "text-muted-foreground/80"
-        )}>
-          <ValueFlash 
-            value={row.original.change7d} 
-            formatter={(value) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`}
-            className={cn(
-              row.original.change7d > 0 ? "text-price-up" : 
-              row.original.change7d < 0 ? "text-price-down" : 
-              "text-muted-foreground/80"
-            )}
-          />
-        </div>
-      ),
-      size: columnSizes.change7d,
-    },
-    {
-      id: 'marketCap',
-      header: 'Market Cap',
-      accessorKey: 'marketCap',
-      cell: ({ row }) => {
-        // Display in secondary currency if set, otherwise use quote asset currency
-        const displayCurrency = secondaryCurrency || row.original.quoteAsset;
-        
-        const pricePrefix = displayCurrency === 'EUR' ? '€' : 
-                          displayCurrency === 'USD' ? '$' :
-                          displayCurrency === 'GBP' ? '£' : '';
-        
-        // Get conversion rate
-        const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
-        
-        // Use original marketCap or converted marketCap based on secondary currency
-        const displayMarketCap = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
-          row.original.marketCap * conversionRate : 
-          row.original.marketCap;
-        
-        // Handle very small values that might be rounding errors
-        // Only show values that are meaningfully non-zero (above some threshold)
-        const isSignificant = displayMarketCap > 100; // Only show values above $100 or equivalent
-        
-        return (
-          <div className="text-right font-jakarta font-semibold text-sm leading-[150%] tabular-nums">
-            {isSignificant ? (
-              <ValueFlash 
-                value={displayMarketCap} 
-                formatter={(value) => `${pricePrefix}${memoizedFormatLargeNumber(value)}`}
-              />
-            ) : '—'}
-          </div>
-        );
+      {
+        id: 'marketCap',
+        header: 'Market Cap',
+        accessorKey: 'marketCap',
+        cell: ({ row }) => {
+          // Display in secondary currency if set, otherwise use quote asset currency
+          const displayCurrency = secondaryCurrency || row.original.quoteAsset;
+          
+          const pricePrefix = displayCurrency === 'EUR' ? '€' : 
+                            displayCurrency === 'USD' ? '$' :
+                            displayCurrency === 'GBP' ? '£' : '';
+          
+          // Get conversion rate
+          const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
+          
+          // Use original marketCap or converted marketCap based on secondary currency
+          const displayMarketCap = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+            row.original.marketCap * conversionRate : 
+            row.original.marketCap;
+          
+          // Handle very small values that might be rounding errors
+          // Only show values that are meaningfully non-zero (above some threshold)
+          const isSignificant = displayMarketCap > 100; // Only show values above $100 or equivalent
+          
+          return (
+            <div className="text-right font-jakarta font-semibold text-sm leading-[150%] tabular-nums">
+              {isSignificant ? (
+                <ValueFlash 
+                  value={displayMarketCap} 
+                  formatter={(value) => `${pricePrefix}${memoizedFormatLargeNumber(value)}`}
+                />
+              ) : '—'}
+            </div>
+          );
+        },
       },
-      size: columnSizes.marketCap,
-    },
-    {
-      id: 'volume',
-      header: 'Volume (24h)',
-      accessorKey: 'volume',
-      cell: ({ row }) => {
-        // Display in secondary currency if set, otherwise use quote asset currency
-        const displayCurrency = secondaryCurrency || row.original.quoteAsset;
-        
-        const pricePrefix = displayCurrency === 'EUR' ? '€' : 
-                          displayCurrency === 'USD' ? '$' :
-                          displayCurrency === 'GBP' ? '£' : '';
-        
-        // Get conversion rate
-        const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
-        
-        // Use original volume or converted volume based on secondary currency
-        const displayVolume = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
-          row.original.volume * conversionRate : 
-          row.original.volume;
-        
-        // Handle very small values that might be rounding errors
-        // Only show values that are meaningfully non-zero (above some threshold)
-        const isSignificant = displayVolume > 100; // Only show values above $100 or equivalent
-        
-        return (
-          <div className="text-right font-jakarta font-semibold text-sm leading-[150%] tabular-nums">
-            {isSignificant ? (
-              <ValueFlash 
-                value={displayVolume} 
-                formatter={(value) => `${pricePrefix}${memoizedFormatLargeNumber(value)}`}
-              />
-            ) : '—'}
-          </div>
-        );
-      },
-      size: columnSizes.volume,
-    }
-  ]}, [columnSizes, secondaryCurrency]);
+      {
+        id: 'volume',
+        header: 'Volume (24h)',
+        accessorKey: 'volume',
+        cell: ({ row }) => {
+          // Display in secondary currency if set, otherwise use quote asset currency
+          const displayCurrency = secondaryCurrency || row.original.quoteAsset;
+          
+          const pricePrefix = displayCurrency === 'EUR' ? '€' : 
+                            displayCurrency === 'USD' ? '$' :
+                            displayCurrency === 'GBP' ? '£' : '';
+          
+          // Get conversion rate
+          const conversionRate = getConversionRate(row.original.quoteAsset, secondaryCurrency);
+          
+          // Use original volume or converted volume based on secondary currency
+          const displayVolume = secondaryCurrency && row.original.quoteAsset !== secondaryCurrency ? 
+            row.original.volume * conversionRate : 
+            row.original.volume;
+          
+          // Handle very small values that might be rounding errors
+          // Only show values that are meaningfully non-zero (above some threshold)
+          const isSignificant = displayVolume > 100; // Only show values above $100 or equivalent
+          
+          return (
+            <div className="text-right font-jakarta font-semibold text-sm leading-[150%] tabular-nums">
+              {isSignificant ? (
+                <ValueFlash 
+                  value={displayVolume} 
+                  formatter={(value) => `${pricePrefix}${memoizedFormatLargeNumber(value)}`}
+                />
+              ) : '—'}
+            </div>
+          );
+        },
+      }
+    ]}, [secondaryCurrency]);
+
+  // Apply sizes separately in a lightweight memo
+  const columnsWithSizes = useMemo(() => {
+    return columns.map(col => ({
+      ...col,
+      size: columnSizes[col.id as keyof typeof columnSizes] || 100
+    }));
+  }, [columns, columnSizes]);
 
   // Setup column order
   const [columnOrder, setColumnOrder] = useState<string[]>(
@@ -1414,10 +1426,15 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
   // Modify the fetchMarketData function to add better logging and error handling
   const fetchMarketData = useCallback(async () => {
-    console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
+    // Only log in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
+    }
     
     if (isRefreshing) {
-      console.log('Update already in progress, skipping...');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Update already in progress, skipping...');
+      }
       return;
     }
 
@@ -1426,40 +1443,25 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
       if (dataSource === 'sample') {
         try {
-          console.log('Attempting to fetch data from CoinGecko API...');
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('Attempting to fetch data from CoinGecko API...');
+          }
           
           // Intentionally skip CoinGecko API for now to use our expanded sample data
-          // Comment out the throw to use the real API if needed
           throw new Error('Using expanded sample data instead of CoinGecko API');
           
-          // Original CoinGecko API code here...
-          /*
-          const exchangeRates = await coinGeckoService.fetchExchangeRates();
-          
-          // Get all supported crypto assets with CoinGecko IDs
-          const supportedAssets = coinGeckoService.getMappedCryptoAssets();
-          const coinGeckoIds = supportedAssets
-            .map(ticker => ASSET_TICKER_TO_COINGECKO_ID[ticker])
-            .filter(Boolean);
-          
-          // Rest of the CoinGecko API code...
-          */
         } catch (error) {
-          console.log('Using balanced sample data, total pairs available:', Object.keys(SAMPLE_MARKET_DATA).length);
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('Using balanced sample data, total pairs available:', Object.keys(SAMPLE_MARKET_DATA).length);
+          }
           
           // If we get here, we're using sample data as fallback
           if (marketData.length === 0) {
-            console.log('Initial load with balanced sample data');
-            // Get a balanced subset of EUR, USD, and BTC pairs
-            const balancedData = getBalancedSampleData(70); // Use 70 pairs for a good variety
-            console.log(`Using ${Object.keys(balancedData).length} pairs with currency distribution:`, {
-              EUR: Object.keys(balancedData).filter(pair => pair.includes('/EUR')).length,
-              USD: Object.keys(balancedData).filter(pair => pair.includes('/USD')).length,
-              BTC: Object.keys(balancedData).filter(pair => pair.includes('/BTC')).length
-            });
-            
-            // Initial load with sample data
-            const sampleDataArray = Object.entries(balancedData)
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Initial load with sample data');
+            }
+            // Use all sample data instead of a balanced subset
+            const sampleDataArray = Object.entries(SAMPLE_MARKET_DATA)
               .map(([pair, details]) => {
                 const parts = pair.split('/');
                 if (parts.length !== 2) {
@@ -1512,8 +1514,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           } else {
             // Using existing update logic
             setMarketData(prevData => {
+              // Track if we actually change any items
+              let hasUpdatedAnyItem = false;
+              
               return prevData.map(item => {
-                // Rest of the update logic remains the same...
                 // Randomly decide if this item should update
                 if (Math.random() > UPDATE_PROBABILITY) {
                   return item; // Skip update for this item
@@ -1551,6 +1555,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                   return item;
                 }
 
+                // Mark that we're actually updating something
+                hasUpdatedAnyItem = true;
+
                 return {
                   ...item,
                   price: newPrice,
@@ -1563,7 +1570,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             });
           }
           
-          setLastUpdateTime(new Date().toLocaleTimeString());
+          if (process.env.NODE_ENV !== 'production') {
+            setLastUpdateTime(new Date().toLocaleTimeString());
+          }
           setError(null);
         }
       } else {
@@ -1590,7 +1599,14 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       
       try {
         isUpdating = true;
-        await fetchMarketData();
+        // Use requestAnimationFrame to batch React state updates
+        requestAnimationFrame(() => {
+          fetchMarketData().catch(err => {
+            if (process.env.NODE_ENV !== 'production') {
+              console.error('Error fetching market data:', err);
+            }
+          });
+        });
         lastUpdateTime = Date.now();
       } finally {
         isUpdating = false;
@@ -1638,7 +1654,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   // Initialize TanStack Table with filtered data
   const table = useReactTable({
     data: filteredData,
-    columns,
+    columns: columnsWithSizes,
     state: {
       sorting,
       columnOrder,
@@ -1676,7 +1692,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     count: rows.length,
     getScrollElement: () => tableContainerRef.current,
     estimateSize: () => 48, // Estimate row height in pixels
-    overscan: 1, // Number of items to render before/after visible area
+    overscan: 0, // reduce overscan to zero for performance
   });
 
   // Create refs to store calculated widths for DOM measurement
@@ -2223,9 +2239,9 @@ const ValueFlash = React.memo<{
 ValueFlash.displayName = 'ValueFlash';
 
 // Add these constants at the top level after imports
-const UPDATE_INTERVAL_VISIBLE = 5000; // 5 seconds when tab is visible (was 10s)
-const UPDATE_INTERVAL_HIDDEN = 30000;  // 30 seconds when tab is hidden (was 60s)
-const UPDATE_DEBOUNCE_TIME = 500;     // 0.5 second debounce (was 1s)
+const UPDATE_INTERVAL_VISIBLE = 7000; // 7 seconds when tab is visible (was 5s)
+const UPDATE_INTERVAL_HIDDEN = 45000;  // 45 seconds when tab is hidden (was 30s)
+const UPDATE_DEBOUNCE_TIME = 300;     // 0.3 second debounce (was 0.5s)
 
 // LocalStorage keys for custom lists
 const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
