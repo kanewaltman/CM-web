@@ -306,6 +306,9 @@ const SkeletonRow: React.FC<{ isMinWidth?: boolean }> = ({ isMinWidth = false })
   </TableRow>
 );
 
+// Add this CSS class at the top of the file - this will be applied to our column cells
+const COLUMN_TRANSITION_CLASSES = "transition-all duration-300 ease-in-out";
+
 // Draggable Table Header Component
 const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
   const isNarrowColumn = header.column.id === 'favorite'; // Identify narrow columns
@@ -323,7 +326,8 @@ const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketD
     <TableHead
       className={cn(
         "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80 group text-sm text-muted-foreground",
-        isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
+        isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
+        COLUMN_TRANSITION_CLASSES
       )}
       style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
       onClick={handleHeaderClick}
@@ -374,7 +378,8 @@ const DragAlongCell = React.memo(
     return (
       <TableCell
         className={cn(
-          isNarrowColumn && "p-0 w-[30px] max-w-[30px]"
+          isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
+          COLUMN_TRANSITION_CLASSES
         )}
         style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
       >
@@ -861,59 +866,40 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   const updateColumnSizes = useCallback(() => {
     if (!containerRef.current) return;
     
-    // We'll use requestAnimationFrame to ensure layout calculations happen at the right time
-    // This helps prevent flickering during column visibility changes
-    requestAnimationFrame(() => {
-      const containerWidth = containerRef.current?.clientWidth || 0;
-      const padding = 20; // Buffer for borders, padding
+    // Use a single RAF call to ensure synchronous measurements
+    const containerWidth = containerRef.current?.clientWidth || 0;
+    const padding = 20; // Buffer for borders, padding
+    
+    // Get only visible columns based on both user preferences and dynamic visibility
+    const visibleColumnIds = Object.keys(minColumnWidths)
+      .filter(id => 
+        columnVisibility[id] !== false && 
+        dynamicVisibility[id] !== false
+      ) as (keyof typeof minColumnWidths)[];
+    
+    // Calculate total minimum width needed for visible columns only
+    const totalMinWidth = visibleColumnIds.reduce((total, id) => 
+      total + minColumnWidths[id], 0) + padding;
+    
+    // Calculate total flex weight for visible columns only
+    const totalFlexWeight = visibleColumnIds.reduce((total, id) => 
+      total + columnFlexWeights[id], 0);
+    
+    // If we have extra space, distribute it proportionally based on flex weights
+    const newSizes = {...minColumnWidths};
+    
+    if (containerWidth > totalMinWidth) {
+      const extraSpace = containerWidth - totalMinWidth;
       
-      // Get only visible columns based on both user preferences and dynamic visibility
-      const visibleColumnIds = Object.keys(minColumnWidths)
-        .filter(id => 
-          columnVisibility[id] !== false && 
-          dynamicVisibility[id] !== false
-        ) as (keyof typeof minColumnWidths)[];
-      
-      // Calculate total minimum width needed for visible columns only
-      const totalMinWidth = visibleColumnIds.reduce((total, id) => 
-        total + minColumnWidths[id], 0) + padding;
-      
-      // Calculate total flex weight for visible columns only
-      const totalFlexWeight = visibleColumnIds.reduce((total, id) => 
-        total + columnFlexWeights[id], 0);
-      
-      // If we have extra space, distribute it proportionally based on flex weights
-      if (containerWidth > totalMinWidth) {
-        const extraSpace = containerWidth - totalMinWidth;
-        const newSizes = {...minColumnWidths};
-        
-        // Distribute extra space proportionally to visible columns
-        visibleColumnIds.forEach(id => {
-          const proportion = columnFlexWeights[id] / totalFlexWeight;
-          newSizes[id] = Math.floor(minColumnWidths[id] + (extraSpace * proportion));
-        });
-        
-        // Use a functional update to ensure we're working with latest state
-        setColumnSizes(prev => {
-          // Only update if there's a meaningful difference
-          const hasChanged = visibleColumnIds.some(id => 
-            Math.abs(prev[id] - newSizes[id]) > 2
-          );
-          
-          return hasChanged ? newSizes : prev;
-        });
-      } else {
-        // If space is constrained, use minimum widths
-        setColumnSizes(prev => {
-          // Only update if there's a meaningful difference
-          const hasChanged = visibleColumnIds.some(id => 
-            prev[id] !== minColumnWidths[id]
-          );
-          
-          return hasChanged ? {...minColumnWidths} : prev;
-        });
-      }
-    });
+      // Distribute extra space proportionally to visible columns
+      visibleColumnIds.forEach(id => {
+        const proportion = columnFlexWeights[id] / totalFlexWeight;
+        newSizes[id] = Math.floor(minColumnWidths[id] + (extraSpace * proportion));
+      });
+    }
+    
+    // Use a single setState call to avoid multiple re-renders
+    setColumnSizes(newSizes);
   }, [columnVisibility, dynamicVisibility, minColumnWidths, columnFlexWeights]);
   
   // Debounce resize operations to improve performance
@@ -1690,7 +1676,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     count: rows.length,
     getScrollElement: () => tableContainerRef.current,
     estimateSize: () => 48, // Estimate row height in pixels
-    overscan: 10, // Number of items to render before/after visible area
+    overscan: 1, // Number of items to render before/after visible area
   });
 
   // Create refs to store calculated widths for DOM measurement
@@ -1721,13 +1707,12 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         const containerWidth = containerRef.current.clientWidth;
         
         // Define breakpoints more precisely based on actual measurement
-        // Width ranges based on real-world testing with the component
         const breakpoints = {
-          xs: 320,  // Minimum width for the widget (2-3 units)
-          sm: 480,  // Small width (~4-5 units)
-          md: 640,  // Medium width (~6-7 units)
-          lg: 800,  // Large width (~8-9 units)
-          xl: 1000, // Extra large width (10+ units)
+          xs: 320,  
+          sm: 480,  
+          md: 640,  
+          lg: 800,  
+          xl: 1000,
         };
         
         // Get user's column order and visibility preferences
@@ -1784,30 +1769,37 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         
         // Only update if there's a change to avoid unnecessary renders
         if (hasVisibilityChanged) {
-          // Update dynamic visibility state
-          setDynamicVisibility(newDynamicVisibility);
-          
-          // After updating visibility, trigger column size update
-          // Wait for React to process the state update first
-          setTimeout(() => {
+          // Use a combined update strategy to prevent flickering
+          // First update column sizes to ensure they're correct for the current visibility
+          requestAnimationFrame(() => {
+            // Update visibility state first
+            setDynamicVisibility(newDynamicVisibility);
+            
+            // Then update column sizes in the same frame to ensure visual consistency
             updateColumnSizes();
-          }, 50);
+          });
         }
-        
-        // Log which columns are visible for debugging
-        console.log(`Width: ${containerWidth}px, Showing ${columnsToShow.length} columns:`, 
-          columnsToShow.join(', '));
-        
       } catch (error) {
         console.error('Error in responsive column hiding:', error);
       }
     };
     
-    // Run it without debounce first
-    checkWidth();
+    // Use a more efficient debounce that doesn't cause flickering
+    const debouncedCheckWidth = (() => {
+      let timeout: NodeJS.Timeout | null = null;
+      return () => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        timeout = setTimeout(() => {
+          // Pass the table reference to the checkWidth function through closure
+          requestAnimationFrame(() => checkWidth());
+        }, 200);
+      };
+    })();
     
-    // Debounced version
-    const debouncedCheckWidth = debounce(checkWidth, 150);
+    // Run initial check
+    requestAnimationFrame(checkWidth);
     
     // Set up resize observer
     const resizeObserver = new ResizeObserver(debouncedCheckWidth);
@@ -1818,7 +1810,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     return () => {
       resizeObserver.disconnect();
     };
-  }, [table, debounce, updateColumnSizes, dynamicVisibility]);
+  }, [table, updateColumnSizes, dynamicVisibility]);
 
   if (error) {
     return (
@@ -1928,7 +1920,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
               </Table>
             ) : (
               <div className="w-full">
-                <div className="sticky top-0 z-20 w-full flex bg-[hsl(var(--color-widget-header))] border-b border-border">
+                <div 
+                  className="sticky top-0 z-20 w-full flex bg-[hsl(var(--color-widget-header))] border-b border-border"
+                >
                   {table.getHeaderGroups()[0].headers
                     .filter(header => {
                       const columnId = header.column.id;
@@ -1944,8 +1938,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                       const totalWidth = getTotalColumnsWidth();
                       const visibleColumnsCount = table.getVisibleLeafColumns().length;
                       const width = columnSizes[columnId as keyof typeof columnSizes] || 
-                                (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
-                                 Math.max(110, totalWidth / visibleColumnsCount));
+                                  (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
+                                   Math.max(110, totalWidth / visibleColumnsCount));
                       
                       return (
                         <div
@@ -1954,7 +1948,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                             "px-4 py-2 h-10 flex items-center text-sm text-muted-foreground",
                             isPairColumn ? "justify-start" : "justify-end",
                             isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
-                            "cursor-pointer hover:text-foreground/80"
+                            "cursor-pointer hover:text-foreground/80",
+                            COLUMN_TRANSITION_CLASSES
                           )}
                           style={{
                             width: isNarrowColumn ? 30 : width,
@@ -2043,13 +2038,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                           const columnId = cell.column.id;
                           const isNarrowColumn = columnId === 'favorite';
                           const isPairColumn = columnId === 'pair';
-                          
-                          // Get width from columnSizes or calculate proportion of container
-                          const visibleColumnsCount = table.getVisibleLeafColumns().length;
-                          const width = columnSizes[columnId as keyof typeof columnSizes] || 
-                                     (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
-                                      Math.max(110, totalWidth / visibleColumnsCount));
-                          
+
+                          // Directly use width from columnSizes state, provide simple fallbacks
+                          const width = columnSizes[columnId as keyof typeof columnSizes] || (isPairColumn ? 180 : 110);
+
                           return (
                             <div
                               key={cell.id}
@@ -2057,7 +2049,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                                 "flex items-center px-4 py-2 overflow-hidden",
                                 isNarrowColumn && "w-[30px] max-w-[30px] p-0",
                                 isPairColumn ? "justify-start" : "justify-end",
-                                "border-b border-border"
+                                "border-b border-border",
+                                COLUMN_TRANSITION_CLASSES
                               )}
                               style={{
                                 width: isNarrowColumn ? 30 : width,
