@@ -305,33 +305,6 @@ const StyledAssetButton: React.FC<{
 
 const columns: ColumnDef<Transaction>[] = [
   {
-    id: "select",
-    header: ({ table }) => (
-      <div className="flex items-center">
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      </div>
-    ),
-    cell: ({ row }) => (
-      <div onClick={(e) => e.stopPropagation()} className="flex items-center">
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      </div>
-    ),
-    size: 28,
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
     header: "Date",
     accessorKey: "date",
     cell: ({ row }) => {
@@ -527,7 +500,7 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
     
     // Create CSV header based on visible columns
     const visibleColumns = table.getVisibleFlatColumns().filter(col => 
-      col.id !== 'select' && col.id !== 'actions');
+      col.id !== 'actions');
     const header = visibleColumns.map(col => col.id).join(',');
     
     // Create CSV rows
@@ -1309,13 +1282,20 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                     <TableHead
                       key={header.id}
                       style={{ width: `${header.getSize()}px` }}
-                      className="h-11"
+                      className={cn(
+                        "h-11",
+                        // Add right alignment to Amount and Fee column headers
+                        (header.id === "amount" || header.id === "fee") && "text-right"
+                      )}
                     >
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <div
                           className={cn(
-                            header.column.getCanSort() &&
-                              "flex h-full cursor-pointer items-center justify-between gap-2 select-none"
+                            "flex h-full cursor-pointer items-center select-none",
+                            // For Amount and Fee columns, right align content
+                            (header.id === "amount" || header.id === "fee")
+                              ? "justify-end" 
+                              : "justify-start"
                           )}
                           onClick={header.column.getToggleSortingHandler()}
                           onKeyDown={(e) => {
@@ -1336,14 +1316,14 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                           {{
                             asc: (
                               <ChevronUpIcon
-                                className="shrink-0 opacity-60"
+                                className="shrink-0 opacity-60 ml-2"
                                 size={16}
                                 aria-hidden="true"
                               />
                             ),
                             desc: (
                               <ChevronDownIcon
-                                className="shrink-0 opacity-60"
+                                className="shrink-0 opacity-60 ml-2"
                                 size={16}
                                 aria-hidden="true"
                               />
@@ -1368,7 +1348,10 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="h-8"
+                  className={cn(
+                    "h-8 cursor-pointer",
+                    row.getIsSelected() && "bg-accent"
+                  )}
                   onClick={() => row.toggleSelected(!row.getIsSelected())}
                 >
                   {row.getVisibleCells().map((cell) => (
