@@ -39,6 +39,28 @@ const badgeVariants = cva(
   }
 );
 
+// CSS styles for active badges - shows hover effect permanently
+const getActiveStyles = (variant: string | null): string => {
+  switch (variant) {
+    case 'withdrawalType':
+      return 'bg-orange-500 text-background dark:text-background';
+    case 'depositType':
+      return 'bg-green-500 text-background dark:text-background';
+    case 'tradeType':
+      return 'bg-blue-500 text-background dark:text-background';
+    case 'stakingType':
+      return 'bg-purple-500 text-background dark:text-background';
+    case 'failedStatus':
+      return 'bg-destructive dark:bg-red-400 text-background dark:text-background';
+    case 'pendingStatus':
+      return 'bg-yellow-500 text-background dark:text-background';
+    case 'completedStatus':
+      return 'bg-green-500 text-background dark:text-background';
+    default:
+      return '';
+  }
+};
+
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
@@ -52,4 +74,26 @@ function Badge({ className, variant, ...props }: BadgeProps) {
   );
 }
 
-export { Badge, badgeVariants };
+export interface SortableBadgeProps extends BadgeProps {
+  active?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+}
+
+function SortableBadge({ className, variant, active, onClick, ...props }: SortableBadgeProps) {
+  return (
+    <div 
+      className={cn(
+        badgeVariants({ variant }), 
+        active && variant ? getActiveStyles(variant) : '',
+        'cursor-pointer',
+        className
+      )}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      {...props} 
+    />
+  );
+}
+
+export { Badge, SortableBadge, badgeVariants };

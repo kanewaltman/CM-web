@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -46,7 +46,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import { Badge, SortableBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -112,6 +112,17 @@ const multiColumnFilterFn: FilterFn<Transaction> = (row, columnId, filterValue) 
     `${row.original.asset} ${row.original.type} ${row.original.date}`.toLowerCase();
   const searchTerm = (filterValue ?? "").toLowerCase();
   return searchableRowContent.includes(searchTerm);
+};
+
+// Asset filter function that supports multi-selection
+const assetFilterFn: FilterFn<Transaction> = (
+  row,
+  columnId,
+  filterValue: string[]
+) => {
+  if (!filterValue?.length) return true;
+  const asset = row.getValue(columnId) as string;
+  return filterValue.includes(asset);
 };
 
 const statusFilterFn: FilterFn<Transaction> = (
@@ -340,6 +351,7 @@ const columns: ColumnDef<Transaction>[] = [
       return <StyledAssetButton asset={asset} inTableCell={true} />;
     },
     size: 100,
+    filterFn: "asset",
   },
   {
     header: "Type",
@@ -466,7 +478,9 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tableBodyRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<any>(null);
   const [containerHeight, setContainerHeight] = useState<number>(0);
+  const [activeSortBadge, setActiveSortBadge] = useState<{ column: string; value: string } | null>(null);
 
   const [sorting, setSorting] = useState<SortingState>([
     {
@@ -525,9 +539,116 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
     // If there were selected rows, keep the selection
   };
 
+  // Define badge sort handler
+  const handleBadgeSort = (column: string, value: string, e: React.MouseEvent) => {
+    // Stop event propagation to prevent row selection
+    e.stopPropagation();
+    
+    // If same badge is clicked again, remove the filter
+    if (activeSortBadge?.column === column && activeSortBadge?.value === value) {
+      setActiveSortBadge(null);
+      // Clear the column filter
+      tableRef.current?.getColumn(column)?.setFilterValue(undefined);
+      // Reset sort to default (date desc)
+      setSorting([{ id: "date", desc: true }]);
+      return;
+    }
+    
+    // Set new active badge
+    setActiveSortBadge({ column, value });
+    
+    // Apply filter to show only matching values
+    tableRef.current?.getColumn(column)?.setFilterValue([value]);
+    
+    // Apply sorting by that column
+    setSorting([{ id: column, desc: false }]);
+  };
+
+  // Create modified columns with sortable badges
+  const sortableColumns: ColumnDef<Transaction>[] = React.useMemo(() => {
+    return columns.map(column => {
+      // Add sorting functionality to Type column
+      if (column.accessorKey === 'type') {
+        return {
+          ...column,
+          cell: ({ row }) => {
+            const type = row.getValue("type") as string;
+            let variant: any = "default";
+            
+            switch (type) {
+              case "Withdrawal":
+                variant = "withdrawalType";
+                break;
+              case "Deposit":
+                variant = "depositType";
+                break;
+              case "Trade":
+                variant = "tradeType";
+                break;
+              case "Staking":
+                variant = "stakingType";
+                break;
+            }
+            
+            const isActive = activeSortBadge?.column === 'type' && activeSortBadge?.value === type;
+            
+            return (
+              <SortableBadge 
+                variant={variant} 
+                className="font-medium"
+                active={isActive}
+                onClick={(e) => handleBadgeSort('type', type, e)}
+              >
+                {type}
+              </SortableBadge>
+            );
+          }
+        };
+      }
+      
+      // Add sorting functionality to Status column
+      if (column.accessorKey === 'status') {
+        return {
+          ...column,
+          cell: ({ row }) => {
+            const status = row.getValue("status") as string;
+            let variant: any = "default";
+            
+            switch (status) {
+              case "Failed":
+                variant = "failedStatus";
+                break;
+              case "Pending":
+                variant = "pendingStatus";
+                break;
+              case "Completed":
+                variant = "completedStatus";
+                break;
+            }
+            
+            const isActive = activeSortBadge?.column === 'status' && activeSortBadge?.value === status;
+            
+            return (
+              <SortableBadge 
+                variant={variant} 
+                className="font-medium"
+                active={isActive}
+                onClick={(e) => handleBadgeSort('status', status, e)}
+              >
+                {status}
+              </SortableBadge>
+            );
+          }
+        };
+      }
+      
+      return column;
+    });
+  }, [activeSortBadge]);
+
   const table = useReactTable({
     data,
-    columns,
+    columns: sortableColumns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
@@ -544,7 +665,18 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
       columnFilters,
       columnVisibility,
     },
+    filterFns: {
+      multiColumn: multiColumnFilterFn,
+      status: statusFilterFn,
+      type: typeFilterFn,
+      asset: assetFilterFn,
+    },
   });
+  
+  // Store table instance in ref to avoid circular dependencies
+  React.useEffect(() => {
+    tableRef.current = table;
+  }, [table]);
 
   // Update row count based on available vertical space
   useLayoutEffect(() => {
@@ -715,46 +847,199 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
   // Generate unique ID for input label association
   const id = React.useId();
 
+  // Asset search state
+  const [assetSearchTerm, setAssetSearchTerm] = useState("");
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+  const [showAssetSuggestions, setShowAssetSuggestions] = useState(false);
+  const assetPopoverRef = useRef<HTMLDivElement>(null);
+  
+  // Handle clicks outside the asset popover
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showAssetSuggestions && 
+        assetPopoverRef.current && 
+        !assetPopoverRef.current.contains(event.target as Node) &&
+        inputRef.current && 
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowAssetSuggestions(false);
+      }
+    };
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showAssetSuggestions]);
+  
+  // Get available assets for suggestions
+  const availableAssets = Object.keys(ASSETS).filter(isAssetTicker);
+  
+  // Filter assets based on search term
+  const filteredAssets = useMemo(() => {
+    // First filter assets based on search term
+    const filtered = availableAssets.filter(asset => 
+      asset.toLowerCase().includes(assetSearchTerm.toLowerCase()) || 
+      ASSETS[asset as AssetTicker].name.toLowerCase().includes(assetSearchTerm.toLowerCase())
+    );
+    
+    // If there's no search term, sort so selected assets appear first
+    if (!assetSearchTerm) {
+      return [...filtered].sort((a, b) => {
+        const aSelected = selectedAssets.includes(a);
+        const bSelected = selectedAssets.includes(b);
+        
+        if (aSelected && !bSelected) return -1;
+        if (!aSelected && bSelected) return 1;
+        return 0;
+      });
+    }
+    
+    return filtered;
+  }, [availableAssets, assetSearchTerm, selectedAssets]);
+  
+  // Handle asset selection/deselection
+  const handleAssetChange = (asset: string) => {
+    setSelectedAssets(prev => {
+      const isSelected = prev.includes(asset);
+      const newSelection = isSelected
+        ? prev.filter(a => a !== asset)
+        : [...prev, asset];
+        
+      // Update the table filter
+      table.getColumn("asset")?.setFilterValue(newSelection.length ? newSelection : undefined);
+      
+      return newSelection;
+    });
+  };
+  
+  // Handle asset search input change
+  const handleAssetSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setAssetSearchTerm(value);
+    
+    // Always show suggestions when typing (if results exist)
+    setShowAssetSuggestions(true);
+    
+    // Ensure input stays focused
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+    
+    // If we're clearing the search, make sure we don't lose our selections
+    if (value === "" && !showAssetSuggestions) {
+      table.getColumn("asset")?.setFilterValue(selectedAssets.length ? selectedAssets : undefined);
+    }
+  };
+  
+  // Clear all selected assets
+  const clearSelectedAssets = () => {
+    setSelectedAssets([]);
+    setAssetSearchTerm("");
+    table.getColumn("asset")?.setFilterValue(undefined);
+    
+    // Ensure input maintains focus after clearing
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+  };
+
   return (
     <div className={cn("w-full h-full flex flex-col", className)} ref={containerRef}>
       {/* Filters */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-2">
         <div className="flex items-center gap-3">
-          {/* Filter by text */}
+          {/* Filter by asset with suggestions popover */}
           <div className="relative">
-            <Input
-              id={`${id}-input`}
-              ref={inputRef}
-              className={cn(
-                "peer min-w-60 ps-9",
-                Boolean(table.getColumn("asset")?.getFilterValue()) && "pe-9"
-              )}
-              value={
-                (table.getColumn("asset")?.getFilterValue() ?? "") as string
-              }
-              onChange={(e) =>
-                table.getColumn("asset")?.setFilterValue(e.target.value)
-              }
-              placeholder="Filter by asset..."
-              type="text"
-              aria-label="Filter by asset"
-            />
-            <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
-              <ListFilterIcon size={16} aria-hidden="true" />
-            </div>
-            {Boolean(table.getColumn("asset")?.getFilterValue()) && (
-              <button
-                className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md transition-[color,box-shadow] outline-none focus:z-10 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Clear filter"
+            <div className="relative">
+              <Input
+                id={`${id}-input`}
+                ref={inputRef}
+                className={cn(
+                  "peer min-w-60 ps-9",
+                  (Boolean(assetSearchTerm) || selectedAssets.length > 0) && "pe-9"
+                )}
+                value={assetSearchTerm}
+                onChange={handleAssetSearchChange}
+                onFocus={() => {
+                  // Delay showing suggestions to avoid flicker during focus
+                  setTimeout(() => setShowAssetSuggestions(true), 50);
+                }}
                 onClick={() => {
-                  table.getColumn("asset")?.setFilterValue("");
+                  // Auto-focus on click
                   if (inputRef.current) {
                     inputRef.current.focus();
                   }
+                  setShowAssetSuggestions(true);
                 }}
+                placeholder={selectedAssets.length ? `${selectedAssets.length} assets selected` : "Filter by asset..."}
+                type="text"
+                aria-label="Filter by asset"
+              />
+              <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
+                <ListFilterIcon size={16} aria-hidden="true" />
+              </div>
+              {(Boolean(assetSearchTerm) || selectedAssets.length > 0) && (
+                <button
+                  className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md transition-[color,box-shadow] outline-none focus:z-10 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Clear filter"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearSelectedAssets();
+                  }}
+                >
+                  <XCircle size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Separate popover that's positioned absolutely under the input */}
+            {showAssetSuggestions && filteredAssets.length > 0 && (
+              <div
+                ref={assetPopoverRef}
+                className="absolute top-full left-0 z-50 mt-1 w-60 p-0 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-80"
               >
-                <XCircle size={16} aria-hidden="true" />
-              </button>
+                <div className="max-h-60 overflow-auto py-1">
+                  {filteredAssets.map((asset) => (
+                    <div
+                      key={asset}
+                      className={cn(
+                        "flex items-center px-2 py-1.5 hover:bg-muted cursor-pointer",
+                        selectedAssets.includes(asset) && "bg-muted/50"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAssetChange(asset);
+                        setAssetSearchTerm("");
+                        // Keep focus on input
+                        if (inputRef.current) {
+                          inputRef.current.focus();
+                        }
+                      }}
+                    >
+                      <Checkbox 
+                        id={`${id}-asset-${asset}`}
+                        checked={selectedAssets.includes(asset)}
+                        className="mr-2"
+                        onCheckedChange={(checked) => {
+                          handleAssetChange(asset);
+                          // Don't close popover or lose focus
+                          if (inputRef.current) {
+                            inputRef.current.focus();
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <StyledAssetButton asset={asset} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
           
