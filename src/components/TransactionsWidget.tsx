@@ -376,10 +376,20 @@ const columns: ColumnDef<Transaction>[] = [
           break;
       }
       
+      // Check if this type is in the type filter (regardless of active badge)
+      const typeFilter = table.getColumn("type")?.getFilterValue() as string[] | undefined;
+      const isActive = typeFilter?.includes(type) || 
+                     (activeSortBadge?.column === 'type' && activeSortBadge?.value === type);
+      
       return (
-        <Badge variant={variant} className="font-medium">
+        <SortableBadge 
+          variant={variant} 
+          className="font-medium"
+          active={isActive}
+          onClick={(e) => handleBadgeSort('type', type, e)}
+        >
           {type}
-        </Badge>
+        </SortableBadge>
       );
     },
     size: 120,
@@ -449,10 +459,20 @@ const columns: ColumnDef<Transaction>[] = [
           break;
       }
       
+      // Check if this status is in the status filter (regardless of active badge)
+      const statusFilter = table.getColumn("status")?.getFilterValue() as string[] | undefined;
+      const isActive = statusFilter?.includes(status) || 
+                      (activeSortBadge?.column === 'status' && activeSortBadge?.value === status);
+      
       return (
-        <Badge variant={variant} className="font-medium">
+        <SortableBadge 
+          variant={variant} 
+          className="font-medium"
+          active={isActive}
+          onClick={(e) => handleBadgeSort('status', status, e)}
+        >
           {status}
-        </Badge>
+        </SortableBadge>
       );
     },
     size: 100,
@@ -545,21 +565,36 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
     // Stop event propagation to prevent row selection
     e.stopPropagation();
     
-    // If same badge is clicked again, remove the filter
+    // Get current filters
+    const currentTypeFilter = table.getColumn("type")?.getFilterValue() as string[] | undefined;
+    const currentStatusFilter = table.getColumn("status")?.getFilterValue() as string[] | undefined;
+    
+    // If same badge is clicked again in the same column, remove just that filter
     if (activeSortBadge?.column === column && activeSortBadge?.value === value) {
-      setActiveSortBadge(null);
-      // Clear the column filter
-      tableRef.current?.getColumn(column)?.setFilterValue(undefined);
-      // Reset sort to default (date desc)
-      setSorting([{ id: "date", desc: true }]);
+      // Clear just this specific column's filter
+      table.getColumn(column)?.setFilterValue(undefined);
+      
+      // If we still have a filter in the other column, keep that active
+      if ((column === 'type' && currentStatusFilter?.length) || 
+          (column === 'status' && currentTypeFilter?.length)) {
+        // Set active badge to the other column that still has a filter
+        const otherColumn = column === 'type' ? 'status' : 'type';
+        const otherValue = column === 'type' ? currentStatusFilter?.[0] : currentTypeFilter?.[0];
+        setActiveSortBadge(otherValue ? { column: otherColumn, value: otherValue } : null);
+      } else {
+        // No filters left, clear active badge
+        setActiveSortBadge(null);
+        // Reset sort to default (date desc)
+        setSorting([{ id: "date", desc: true }]);
+      }
       return;
     }
     
-    // Set new active badge
-    setActiveSortBadge({ column, value });
+    // Set this column's filter to the selected value
+    table.getColumn(column)?.setFilterValue([value]);
     
-    // Apply filter to show only matching values
-    tableRef.current?.getColumn(column)?.setFilterValue([value]);
+    // Set the active badge for visual indication
+    setActiveSortBadge({ column, value });
     
     // Apply sorting by that column
     setSorting([{ id: column, desc: false }]);
@@ -591,7 +626,10 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                 break;
             }
             
-            const isActive = activeSortBadge?.column === 'type' && activeSortBadge?.value === type;
+            // Check if this type is in the type filter (regardless of active badge)
+            const typeFilter = table.getColumn("type")?.getFilterValue() as string[] | undefined;
+            const isActive = typeFilter?.includes(type) || 
+                           (activeSortBadge?.column === 'type' && activeSortBadge?.value === type);
             
             return (
               <SortableBadge 
@@ -627,7 +665,10 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                 break;
             }
             
-            const isActive = activeSortBadge?.column === 'status' && activeSortBadge?.value === status;
+            // Check if this status is in the status filter (regardless of active badge)
+            const statusFilter = table.getColumn("status")?.getFilterValue() as string[] | undefined;
+            const isActive = statusFilter?.includes(status) || 
+                            (activeSortBadge?.column === 'status' && activeSortBadge?.value === status);
             
             return (
               <SortableBadge 
