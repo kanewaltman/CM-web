@@ -256,7 +256,8 @@ const StyledAssetButton: React.FC<{
   asset: string;
   className?: string;
   inTableCell?: boolean;
-}> = ({ asset, className, inTableCell = false }) => {
+  inPopover?: boolean;
+}> = ({ asset, className, inTableCell = false, inPopover = false }) => {
   if (!asset || !isAssetTicker(asset)) return <span>{asset}</span>;
   
   const { theme } = useTheme();
@@ -266,7 +267,7 @@ const StyledAssetButton: React.FC<{
   const assetColor = theme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
   
   return (
-    <AssetPriceTooltip asset={asset as AssetTicker} inTableCell={inTableCell}>
+    <AssetPriceTooltip asset={asset as AssetTicker} inTableCell={inTableCell} inPopover={inPopover}>
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
         <button 
           type="button"
@@ -1035,7 +1036,7 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                         }}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      <StyledAssetButton asset={asset} />
+                      <StyledAssetButton asset={asset} inPopover={true} />
                     </div>
                   ))}
                 </div>
@@ -1079,7 +1080,13 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                         htmlFor={`${id}-status-${i}`}
                         className="flex grow justify-between gap-2 font-normal"
                       >
-                        {value}{" "}
+                        <Badge variant={
+                          value === "Failed" ? "failedStatus" : 
+                          value === "Pending" ? "pendingStatus" : 
+                          "completedStatus"
+                        } className="font-medium">
+                          {value}
+                        </Badge>
                         <span className="text-muted-foreground ms-2 text-xs">
                           {statusCounts.get(value)}
                         </span>
@@ -1127,7 +1134,14 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                         htmlFor={`${id}-type-${i}`}
                         className="flex grow justify-between gap-2 font-normal"
                       >
-                        {value}{" "}
+                        <Badge variant={
+                          value === "Withdrawal" ? "withdrawalType" : 
+                          value === "Deposit" ? "depositType" : 
+                          value === "Trade" ? "tradeType" : 
+                          "stakingType"
+                        } className="font-medium">
+                          {value}
+                        </Badge>
                         <span className="text-muted-foreground ms-2 text-xs">
                           {typeCounts.get(value)}
                         </span>
