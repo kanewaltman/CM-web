@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { 
@@ -16,7 +15,7 @@ import {
   Columns as ColumnsIcon,
   Plus as PlusIcon,
   ChevronsUpDown,
-  SlidersHorizontal,
+  SlidersHorizontal
 } from 'lucide-react';
 import {
   Command,
@@ -232,7 +231,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
               <ChevronsUpDown className="h-3.5 w-3.5 ml-auto opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="p-0 w-[280px]" align="start">
+          <PopoverContent className="p-0 w-[220px]" align="start">
             <Command>
               <CommandInput 
                 placeholder="Search trading pairs..." 
@@ -240,99 +239,23 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                 value={pairSearchValue}
                 onValueChange={setPairSearchValue}
               />
-              <div className="flex items-center px-3 py-2 border-b">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 text-xs"
-                  onClick={() => {
-                    if (activeListId) {
-                      // Add all visible filtered pairs
-                      filteredPairs.forEach(pair => {
-                        ListManager.addAssetToList(activeListId, pair);
-                      });
-                      setPairPopoverOpen(false);
-                    }
-                  }}
-                >
-                  Select All
-                </Button>
-              </div>
               <CommandList className="max-h-[300px]">
                 <CommandEmpty>No trading pairs found</CommandEmpty>
                 <CommandGroup>
-                  {filteredPairs.map((pair) => {
-                    const [baseAsset, quoteAsset] = pair.split('/');
-                    const lists = ListManager.getLists();
-                    const activeList = lists.find(list => list.id === activeListId);
-                    const isPairInList = activeList ? activeList.assets.includes(pair) : false;
-                    
-                    return (
-                      <CommandItem
-                        key={pair}
-                        value={pair}
-                        onSelect={() => {
-                          // Toggle the asset in the list
-                          if (activeListId) {
-                            if (isPairInList) {
-                              ListManager.removeAssetFromList(activeListId, pair);
-                            } else {
-                              ListManager.addAssetToList(activeListId, pair);
-                            }
-                          }
-                        }}
-                        className="flex items-center py-2 px-2"
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center">
-                            <Checkbox 
-                              checked={isPairInList}
-                              className="mr-2"
-                              id={`header-checkbox-${pair}`}
-                              onCheckedChange={() => {
-                                if (activeListId) {
-                                  if (isPairInList) {
-                                    ListManager.removeAssetFromList(activeListId, pair);
-                                  } else {
-                                    ListManager.addAssetToList(activeListId, pair);
-                                  }
-                                }
-                              }}
-                            />
-                            {ASSETS[baseAsset as AssetTicker]?.icon ? (
-                              <img 
-                                src={ASSETS[baseAsset as AssetTicker].icon} 
-                                alt={baseAsset} 
-                                className="w-5 h-5 mr-2 rounded-full" 
-                              />
-                            ) : (
-                              <div className="w-5 h-5 mr-2 rounded-full bg-muted flex items-center justify-center">
-                                <span className="text-xs">{baseAsset.charAt(0)}</span>
-                              </div>
-                            )}
-                            <span className="font-medium">{baseAsset}</span>
-                          </div>
-                          
-                          <div className="flex items-center text-muted-foreground">
-                            <span className="text-xs">/</span>
-                            <span className="text-xs ml-1">{quoteAsset}</span>
-                          </div>
-                        </div>
-                      </CommandItem>
-                    );
-                  })}
+                  {filteredPairs.map((pair) => (
+                    <CommandItem
+                      key={pair}
+                      value={pair}
+                      onSelect={() => {
+                        // Pass the pair directly to handleAddPair to avoid state timing issues
+                        handleAddPair(pair);
+                      }}
+                    >
+                      {renderPairOption(pair)}
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               </CommandList>
-              <div className="flex justify-center p-2 border-t">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => setPairPopoverOpen(false)}
-                >
-                  Done
-                </Button>
-              </div>
             </Command>
           </PopoverContent>
         </Popover>
