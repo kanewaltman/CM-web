@@ -348,7 +348,7 @@ export const WidgetContainer = memo(function WidgetContainer({
                 onClick={() => saveActiveList(list.id)}
               >
                 <ListChecks className="h-4 w-4 mr-2 opacity-70" />
-                {list.name} ({list.assets.length})
+                {list.name}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuItem onClick={() => handleRenameList(list.id)}>
