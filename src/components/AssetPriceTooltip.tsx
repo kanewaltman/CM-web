@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes';
 import { ExchangeRateData } from '@/services/coinGeckoService';
 import { RATES_UPDATED_EVENT } from '@/contexts/ExchangeRatesContext';
 import NumberFlow, { continuous } from '@number-flow/react';
+import { cn } from '@/lib/utils';
 
 // Storage keys from ExchangeRatesContext
 const STORAGE_RATES_KEY = 'cm_exchange_rates';
@@ -297,19 +298,12 @@ const PriceDisplay = ({
   };
   
   return (
-    <div className="font-tabular-nums" style={{ display: 'flex', alignItems: 'center', height: '1.2em' }}>
-      <div style={{ paddingRight: '2px', display: 'flex', alignItems: 'center' }}>€</div>
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '100%' }}>
+    <div className="font-tabular-nums flex items-center h-[1.2em] whitespace-nowrap">
+      <div className="pr-[2px] flex items-center">€</div>
+      <div className="relative flex items-center h-full">
         {/* Animated version */}
         {isAnimated && startValue !== null && !animationComplete && (
-          <div style={{ 
-            position: 'relative', 
-            zIndex: 2,
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center'
-          }}
-          className={getDynamicColor()}>
+          <div className={cn("relative z-2 h-full flex items-center", getDynamicColor())}>
             <NumberFlow
               key={key}
               value={displayValue}
@@ -331,17 +325,14 @@ const PriceDisplay = ({
         )}
         
         {/* Static version (shown after animation completes) */}
-        <div style={{ 
-          opacity: animationComplete ? 1 : 0,
-          position: !animationComplete ? 'absolute' : 'static',
-          inset: 0,
-          zIndex: 1,
-          transition: 'opacity 300ms ease-in, color 500ms ease-out',
-          display: 'flex',
-          alignItems: 'center',
-          height: '100%'
-        }}
-        className={getDynamicColor()}>
+        <div 
+          className={cn(
+            "transition-opacity duration-300 ease-in transition-colors duration-500 ease-out flex items-center h-full",
+            animationComplete ? "opacity-100" : "opacity-0",
+            !animationComplete ? "absolute inset-0 z-1" : "static",
+            getDynamicColor()
+          )}
+        >
           {formattedStatic}
         </div>
       </div>
@@ -354,13 +345,17 @@ interface AssetPriceTooltipProps {
   children: React.ReactNode;
   delayDuration?: number;
   disabled?: boolean;
+  inTableCell?: boolean;
+  inPopover?: boolean;
 }
 
 export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({ 
   asset, 
   children,
   delayDuration = 0,
-  disabled = false
+  disabled = false,
+  inTableCell = false,
+  inPopover = false
 }) => {
   const { theme } = useTheme();
   const { dataSource } = useDataSource();
@@ -596,14 +591,19 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({
         <TooltipTrigger asChild>
           {children}
         </TooltipTrigger>
-        <TooltipContent className="py-2 px-3 bg-background text-foreground border border-border">
+        <TooltipContent 
+          className="py-2 px-3 bg-background text-foreground border border-border" 
+          sideOffset={5} 
+          align="center"
+          side={inTableCell || inPopover ? "right" : "top"}
+        >
           {loading ? (
             <div className="text-xs text-muted-foreground">Loading price...</div>
           ) : error ? (
             <div className="text-xs text-red-500">Failed to load price</div>
           ) : currentAssetData && currentAssetData.eur ? (
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full overflow-hidden">
+            <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
               <img
                 src={assetConfig.icon}
                 alt={asset}
@@ -611,7 +611,7 @@ export const AssetPriceTooltip: React.FC<AssetPriceTooltipProps> = ({
               />
             </div>
             <div className="flex flex-col">
-                <div className="text-[13px] font-medium font-tabular-nums">
+                <div className="text-[13px] font-medium font-tabular-nums whitespace-nowrap">
                   <PriceDisplay
                     price={currentPrice}
                     format={getNumberFormat(currentPrice)}
@@ -659,15 +659,16 @@ const formatTimeSince = (timestamp: number): string => {
 export interface AssetButtonWithPriceProps {
   asset: AssetTicker;
   onClick?: () => void;
+  inTableCell?: boolean;
 }
 
-export const AssetButtonWithPrice: React.FC<AssetButtonWithPriceProps> = ({ asset, onClick }) => {
+export const AssetButtonWithPrice: React.FC<AssetButtonWithPriceProps> = ({ asset, onClick, inTableCell = false }) => {
   const { theme } = useTheme();
   const assetConfig = ASSETS[asset];
   const assetColor = theme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
 
   return (
-    <AssetPriceTooltip asset={asset}>
+    <AssetPriceTooltip asset={asset} inTableCell={inTableCell}>
       <button
         type="button"
         className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"

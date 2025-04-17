@@ -401,15 +401,92 @@ body {
 }
 
 .main-content-inner {
-  max-width: 1920px; /* Match TopBar max-width */
+  max-width: 1940px; /* Default max-width */
   margin-left: auto;
   margin-right: auto;
   padding: 0 1.5rem; /* Match TopBar padding */
+  position: relative; /* Ensure positioning context for absolute handles */
+  transition: max-width 0.1s ease-out; /* Smooth transition when resizing */
+}
+
+/* Resize handles for main-content-inner */
+.resize-handle {
+  width: 12px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
+.resize-handle:hover {
+  opacity: 0.7;
+}
+
+.resize-handle:active,
+.resize-handle.active {
+  opacity: 1;
+  background-color: rgba(128, 128, 128, 0.3);
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 40%;
+  background-color: rgba(128, 128, 128, 0.6);
+  border-radius: 1px;
+}
+
+.resize-handle:active::after,
+.resize-handle.active::after {
+  height: 60%;
+  width: 3px;
+  background-color: rgba(128, 128, 128, 0.9);
+}
+
+body.resizing {
+  cursor: ew-resize !important;
+  user-select: none;
+}
+
+body.resizing .resize-handle {
+  opacity: 1;
+}
+
+body.resizing .resize-handle::after {
+  height: 60%;
+  width: 3px;
+  background-color: rgba(128, 128, 128, 0.9);
+}
+
+.resize-handle-left {
+  /* Left positioning is now applied inline */
+}
+
+.resize-handle-right {
+  /* Right positioning is now applied inline */
+}
+
+@media (max-width: 1940px) {
+  /* Hide resize handles when viewport width is 1940px or less */
+  .resize-handle {
+    display: none;
+  }
 }
 
 @media (max-width: 768px) {
   .main-content-inner {
     padding: 0;
+  }
+  
+  /* Hide resize handles on mobile */
+  .resize-handle {
+    display: none;
   }
 }
 
@@ -811,6 +888,13 @@ button.font-bold,
   position: relative;
   box-shadow: 0 0 0 1px hsl(var(--color-widget-header));
 }
+
+/* Transaction table row hover and selection styling */
+[data-slot="table-row"] {
+  position: relative;
+}
+
+/* These rules are no longer needed with box-shadow approach */
 
 [data-slot="table-head"] {
   position: relative;

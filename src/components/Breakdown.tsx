@@ -93,7 +93,7 @@ const AssetButton = ({
   const showHoverState = isHovered || isActive;
   
   return (
-    <AssetPriceTooltip asset={asset as AssetTicker}>
+    <AssetPriceTooltip asset={asset as AssetTicker} inTableCell={false}>
       <div
         className={cn("font-jakarta font-bold rounded-md px-1 relative z-20 asset-button-container", className)}
         style={{ 
@@ -271,7 +271,7 @@ const Breakdown: React.FC<{
   const { dataSource } = useDataSource();
   const [treeMapData, setTreeMapData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [balances, setBalances] = useState<any>(SAMPLE_BALANCES);
+  const [balances, setBalances] = useState<any>(SAMPLE_BALANCES());
   const [error, setError] = useState<string | null>(null);
   const [clickedItemId, setClickedItemId] = useState<string | null>(null);
   // Track whether treemap tooltips should be shown
@@ -588,7 +588,7 @@ const Breakdown: React.FC<{
       if (dataSource === 'sample') {
         // Use sample data
         console.log('Breakdown: Using sample data');
-        setBalances(SAMPLE_BALANCES);
+        setBalances(SAMPLE_BALANCES());
         setError(null);
       } else {
         // Get a demo token first
@@ -630,7 +630,7 @@ const Breakdown: React.FC<{
       console.error('Breakdown: Error fetching balances:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch balances');
       // Fallback to sample data
-      setBalances(SAMPLE_BALANCES);
+      setBalances(SAMPLE_BALANCES());
     } finally {
       setIsLoading(false);
     }

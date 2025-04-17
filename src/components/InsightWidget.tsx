@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { format, parseISO, isToday, startOfDay, isSameDay } from 'date-fns';
+import { format, parseISO, isToday, startOfDay, isSameDay, Match } from 'date-fns';
 import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon, Type } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -18,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { v4 as uuidv4 } from 'uuid';
 
 // Types from CM-Intel
 interface Citation {
@@ -58,10 +59,31 @@ const FALLBACK_DATA: NewsDigest = {
   ],
   timestamp: new Date().toISOString()
 };
+interface InsightWidgetProps extends Omit<RemovableWidgetProps, 'widgetId'> {
+  widgetId: string;
+}
 
-// Extend RemovableWidgetProps to include widgetId
-interface InsightWidgetProps extends RemovableWidgetProps {
-  widgetId?: string;
+// Create a map of token patterns
+const cryptoRegexPatterns = [
+  { symbol: 'BTC', pattern: /\b(Bitcoin|BTC)\b/g },
+  { symbol: 'ETH', pattern: /\b(Ethereum|ETH)\b/g },
+  { symbol: 'BNB', pattern: /\b(Binance Coin|BNB)\b/g },
+  { symbol: 'SOL', pattern: /\b(Solana|SOL)\b/g },
+  { symbol: 'XRP', pattern: /\b(Ripple|XRP)\b/g },
+  { symbol: 'ADA', pattern: /\b(Cardano|ADA)\b/g },
+  { symbol: 'DOGE', pattern: /\b(Dogecoin|DOGE)\b/g },
+  { symbol: 'SHIB', pattern: /\b(Shiba Inu|SHIB)\b/g },
+  { symbol: 'AVAX', pattern: /\b(Avalanche|AVAX)\b/g },
+  { symbol: 'LINK', pattern: /\b(Chainlink|LINK)\b/g }
+];
+
+// Define the TextMatch type with all necessary properties
+interface TextMatch {
+  startIndex: number;
+  endIndex: number;
+  asset: string;
+  text: string;
+  type: 'asset' | 'citation';
 }
 
 export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemove, widgetId }) => {
@@ -213,158 +235,199 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   const formatContentWithAssets = useCallback((text: string) => {
     if (!text) return [];
     
-    // Create a map of token patterns
-    const cryptoRegexPatterns = [
-      { symbol: 'BTC', pattern: /\b(Bitcoin|BTC)\b/g },
-      { symbol: 'ETH', pattern: /\b(Ethereum|ETH)\b/g },
-      { symbol: 'BNB', pattern: /\b(Binance Coin|BNB)\b/g },
-      { symbol: 'SOL', pattern: /\b(Solana|SOL)\b/g },
-      { symbol: 'XRP', pattern: /\b(Ripple|XRP)\b/g },
-      { symbol: 'ADA', pattern: /\b(Cardano|ADA)\b/g },
-      { symbol: 'DOGE', pattern: /\b(Dogecoin|DOGE)\b/g },
-      { symbol: 'SHIB', pattern: /\b(Shiba Inu|SHIB)\b/g },
-      { symbol: 'AVAX', pattern: /\b(Avalanche|AVAX)\b/g },
-      { symbol: 'LINK', pattern: /\b(Chainlink|LINK)\b/g }
-    ];
-
-    // Create an array of all matches with their positions
-    type Match = {
-      startIndex: number;
-      endIndex: number;
-      asset: string;
-      text: string;
-      type: 'asset' | 'citation';
-    };
-
-    const matches: Match[] = [];
-
-    // Find all crypto token matches
-    cryptoRegexPatterns.forEach(({ symbol, pattern }) => {
-      let match;
-      while ((match = pattern.exec(text)) !== null) {
-        // Check if the asset exists in our configuration
-        if (ASSETS[symbol as AssetTicker]) {
-          matches.push({
-            startIndex: match.index,
-            endIndex: match.index + match[0].length,
-            asset: symbol,
-            text: match[0],
-            type: 'asset'
-          });
-        }
-      }
-    });
-
-    // Find all citation references like [1]
-    const citationPattern = /\[(\d+)\]/g;
-    let citMatch;
-    
-    if (currentDigest?.citations) {
-      while ((citMatch = citationPattern.exec(text)) !== null) {
-        const citationNum = parseInt(citMatch[1], 10);
-        const citation = currentDigest.citations.find(c => c.number === citationNum);
-        
-        if (citation) {
-          matches.push({
-            startIndex: citMatch.index,
-            endIndex: citMatch.index + citMatch[0].length,
-            asset: '',
-            text: citMatch[0],
-            type: 'citation'
-          });
-        }
-      }
-    }
-
-    // Sort matches by startIndex
-    matches.sort((a, b) => a.startIndex - b.startIndex);
-
-    // Build content parts array
+    // Split text by '###' to identify sections
+    const sections = text.split('###');
     const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    
-    matches.forEach((match, index) => {
-      // Add text before the match
-      if (match.startIndex > lastIndex) {
-        parts.push(text.substring(lastIndex, match.startIndex));
-      }
-      
-      // Add the match component
-      if (match.type === 'asset') {
-        const asset = match.asset as AssetTicker;
-        const assetConfig = ASSETS[asset];
-        const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
-        
-        parts.push(
-          <AssetPriceTooltip key={`asset-${index}`} asset={asset}>
-            <span 
-              className="inline-asset-button font-jakarta rounded-md hover:cursor-pointer"
-              style={{
-                display: 'inline-block',
-                fontWeight: 500,
-                margin: '0 0.05em',
-                padding: '0 0.15em',
-                color: assetColor,
-                backgroundColor: `${assetColor}14`,
-                transition: 'all 0.15s ease-in-out',
-                cursor: 'pointer',
-                WebkitTouchCallout: 'none',
-                WebkitUserSelect: 'text',
-                userSelect: 'text'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = assetColor;
-                e.currentTarget.style.color = 'hsl(var(--color-widget-bg))';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = `${assetColor}14`;
-                e.currentTarget.style.color = assetColor;
-              }}
-              onMouseDown={(e) => {
-                if (e.detail > 1) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              {match.text}
-            </span>
-          </AssetPriceTooltip>
-        );
-      } else if (match.type === 'citation') {
-        const citationNum = parseInt(match.text.replace(/[\[\]]/g, ''), 10);
-        const citation = currentDigest?.citations?.find(c => c.number === citationNum);
-        
-        if (citation) {
-          parts.push(
-            <a 
-              key={`citation-${index}`}
-              href={citation.url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              {match.text}
-            </a>
-          );
+
+    sections.forEach((section, index) => {
+      // Trim whitespace
+      const trimmedSection = section.trim();
+
+      // If the section is not empty, process it
+      if (trimmedSection) {
+        // If it's the first section, treat it as a paragraph
+        if (index === 0) {
+          parts.push(...processText(trimmedSection));
         } else {
-          parts.push(match.text);
+          // Otherwise, treat it as a title followed by a paragraph
+          const [title, ...paragraphParts] = trimmedSection.split('\n');
+          parts.push(
+            <h3 
+              key={`title-${index}`}
+              style={{
+                fontSize: `${fontSize * 1.2}px`, // 20% larger than body text
+                fontWeight: 'bold',
+                margin: '0.5em 0'
+              }}
+            >
+              {title.trim()}
+            </h3>
+          );
+          const paragraph = paragraphParts.join('\n').trim();
+          if (paragraph) {
+            parts.push(...processText(paragraph));
+          }
         }
       }
-      
-      lastIndex = match.endIndex;
     });
-    
-    // Add remaining text
-    if (lastIndex < text.length) {
-      parts.push(text.substring(lastIndex));
-    }
+
+    // Return the formatted parts
+    return parts;
+  }, [currentDigest, currentTheme, fontSize]);
+
+  // Helper function to process text for assets and citations
+  const processText = (text: string): React.ReactNode[] => {
+    console.log('Processing text:', text); // Debugging log
+
+    // Split text into paragraphs and headers
+    const sections = text.split(/\n\n|###/);
+    const parts: React.ReactNode[] = [];
+
+    let globalParagraphIndex = 0; // Initialize a global paragraph index
+
+    sections.forEach((section, sectionIndex) => {
+      const trimmedSection = section.trim();
+      const matches: TextMatch[] = [];
+
+      if (trimmedSection.startsWith('###')) {
+        // Handle headers
+        parts.push(
+          <h3 key={`header-${sectionIndex}`} style={{ fontSize: `${fontSize * 1.2}px`, fontWeight: 'bold', margin: '0.5em 0' }}>
+            {trimmedSection.replace('###', '').trim()}
+          </h3>
+        );
+      } else {
+        const paragraphParts: React.ReactNode[] = [];
+
+        // Find all crypto token matches
+        cryptoRegexPatterns.forEach(({ symbol, pattern }) => {
+          let match;
+          while ((match = pattern.exec(trimmedSection)) !== null) {
+            if (ASSETS[symbol as AssetTicker]) {
+              matches.push({
+                startIndex: match.index,
+                endIndex: match.index + match[0].length,
+                asset: symbol,
+                text: match[0],
+                type: 'asset'
+              });
+            }
+          }
+        });
+
+        // Find all citation references like [1]
+        const citationPattern = /\[(\d+)\]/g;
+        let citMatch;
+        
+        if (currentDigest?.citations) {
+          while ((citMatch = citationPattern.exec(trimmedSection)) !== null) {
+            const citationNum = parseInt(citMatch[1], 10);
+            const citation = currentDigest.citations.find(c => c.number === citationNum);
+            
+            if (citation) {
+              matches.push({
+                startIndex: citMatch.index,
+                endIndex: citMatch.index + citMatch[0].length,
+                asset: '',
+                text: citMatch[0],
+                type: 'citation'
+              });
+            }
+          }
+        }
+
+        // Sort matches by startIndex
+        matches.sort((a, b) => a.startIndex - b.startIndex);
+
+        // Build content parts array
+        let lastIndex = 0;
+        
+        matches.forEach((match, index) => {
+          if (match.startIndex > lastIndex) {
+            paragraphParts.push(trimmedSection.substring(lastIndex, match.startIndex));
+          }
+          
+          if (match.type === 'asset') {
+            const asset = match.asset as AssetTicker;
+            const assetConfig = ASSETS[asset];
+            const assetColor = currentTheme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+            
+            paragraphParts.push(
+              <AssetPriceTooltip key={`asset-${sectionIndex}-${index}-${match.startIndex}`} asset={asset}>
+                <span 
+                  className="inline-asset-button font-jakarta rounded-md hover:cursor-pointer"
+                  style={{
+                    display: 'inline-block',
+                    fontWeight: 500,
+                    margin: '0 0.05em',
+                    padding: '0 0.15em',
+                    color: assetColor,
+                    backgroundColor: `${assetColor}14`,
+                    transition: 'all 0.15s ease-in-out',
+                    cursor: 'pointer',
+                    WebkitTouchCallout: 'none',
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = assetColor;
+                    e.currentTarget.style.color = 'hsl(var(--color-widget-bg))';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = `${assetColor}14`;
+                    e.currentTarget.style.color = assetColor;
+                  }}
+                  onMouseDown={(e) => {
+                    if (e.detail > 1) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  {match.text}
+                </span>
+              </AssetPriceTooltip>
+            );
+          } else if (match.type === 'citation') {
+            const citationNum = parseInt(match.text.replace(/\[|\]/g, ''), 10);
+            const citation = currentDigest?.citations?.find(c => c.number === citationNum);
+            
+            if (citation) {
+              paragraphParts.push(
+                <a 
+                  key={`citation-${sectionIndex}-${index}-${match.startIndex}`}
+                  href={citation.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  {match.text}
+                </a>
+              );
+            } else {
+              paragraphParts.push(match.text);
+            }
+          }
+          
+          lastIndex = match.endIndex;
+        });
+        
+        if (lastIndex < trimmedSection.length) {
+          paragraphParts.push(trimmedSection.substring(lastIndex));
+        }
+
+        parts.push(<p key={`paragraph-${uuidv4()}`} style={{ marginBottom: '1em' }}>{paragraphParts}</p>);
+        globalParagraphIndex++; // Increment global paragraph index for each paragraph
+      }
+    });
     
     return parts;
-  }, [currentDigest, currentTheme]);
+  };
 
   // Update content parts when digest changes
   useEffect(() => {
     if (currentDigest) {
+      // Clear content parts before setting new content
+      setContentParts([]);
       const parts = formatContentWithAssets(currentDigest.content);
       setContentParts(parts);
     }
@@ -545,7 +608,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                 lineHeight: lineHeight
               }}
             >
-              <p>{contentParts}</p>
+              {contentParts}
             </div>
             
             {/* Citations */}
@@ -757,4 +820,4 @@ export const InsightWidgetControls: React.FC<{ widgetId: string }> = ({ widgetId
   );
 };
 
-export default InsightWidget; 
+export default InsightWidget;

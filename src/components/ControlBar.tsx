@@ -54,6 +54,8 @@ interface ControlBarProps {
   // Add new prop for controlling layout lock
   onToggleLayoutLock?: (locked: boolean) => void;
   initialLayoutLocked?: boolean;
+  // Add new prop for content width
+  contentWidth?: number;
 }
 
 export function ControlBar({ 
@@ -67,7 +69,8 @@ export function ControlBar({
   dataSource,
   onDataSourceChange,
   onToggleLayoutLock,
-  initialLayoutLocked = false
+  initialLayoutLocked = false,
+  contentWidth = 1940
 }: ControlBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const colors = getThemeValues(resolvedTheme || theme, 0, 0, 0);
@@ -320,8 +323,9 @@ export function ControlBar({
     )}>
       {/* Left Section - Account Selector and Balance */}
       <div 
-        className="flex items-center justify-between max-w-[1920px] mx-auto"
+        className="flex items-center justify-between mx-auto"
         style={{ 
+          maxWidth: `${contentWidth}px`,
           paddingLeft: `calc(${gridStyle === 'rounded' ? '8px' : '4px'} + var(--grid-margin))`, 
           paddingRight: `calc(${gridStyle === 'rounded' ? '8px' : '4px'} + var(--grid-margin))` 
         }}

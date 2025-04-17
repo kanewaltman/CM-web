@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -30,6 +30,7 @@ import {
   ListFilterIcon,
   PlusIcon,
   TrashIcon,
+  FileDownIcon,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -45,7 +46,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import { Badge, SortableBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -91,6 +92,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDataSource } from '@/lib/DataSourceContext';
+import { AssetPriceTooltip } from './AssetPriceTooltip';
+import { ASSETS, AssetTicker, isAssetTicker } from '@/assets/AssetTicker';
+import { useTheme } from 'next-themes';
 
 type Transaction = {
   id: string;
@@ -108,6 +112,17 @@ const multiColumnFilterFn: FilterFn<Transaction> = (row, columnId, filterValue) 
     `${row.original.asset} ${row.original.type} ${row.original.date}`.toLowerCase();
   const searchTerm = (filterValue ?? "").toLowerCase();
   return searchableRowContent.includes(searchTerm);
+};
+
+// Asset filter function that supports multi-selection
+const assetFilterFn: FilterFn<Transaction> = (
+  row,
+  columnId,
+  filterValue: string[]
+) => {
+  if (!filterValue?.length) return true;
+  const asset = row.getValue(columnId) as string;
+  return filterValue.includes(asset);
 };
 
 const statusFilterFn: FilterFn<Transaction> = (
@@ -236,30 +251,59 @@ const SAMPLE_TRANSACTIONS: Transaction[] = [
   }
 ];
 
+// StyledAssetButton component for consistent styling across all asset buttons
+const StyledAssetButton: React.FC<{
+  asset: string;
+  className?: string;
+  inTableCell?: boolean;
+  inPopover?: boolean;
+}> = ({ asset, className, inTableCell = false, inPopover = false }) => {
+  if (!asset || !isAssetTicker(asset)) return <span>{asset}</span>;
+  
+  const { theme } = useTheme();
+  const assetConfig = ASSETS[asset as AssetTicker];
+  if (!assetConfig) return <span>{asset}</span>;
+  
+  const assetColor = theme === 'dark' ? assetConfig.theme.dark : assetConfig.theme.light;
+  
+  return (
+    <AssetPriceTooltip asset={asset as AssetTicker} inTableCell={inTableCell} inPopover={inPopover}>
+      <div onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
+        <button 
+          type="button"
+          className={cn("font-jakarta font-bold text-sm rounded-md px-1", className)}
+          style={{ 
+            color: assetColor,
+            backgroundColor: `${assetColor}14`,
+            cursor: 'pointer',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'text',
+            userSelect: 'text'
+          }}
+          onMouseEnter={(e) => {
+            const target = e.currentTarget;
+            target.style.backgroundColor = assetColor;
+            target.style.color = 'hsl(var(--color-widget-bg))';
+          }}
+          onMouseLeave={(e) => {
+            const target = e.currentTarget;
+            target.style.backgroundColor = `${assetColor}14`;
+            target.style.color = assetColor;
+          }}
+          onMouseDown={(e) => {
+            if (e.detail > 1) {
+              e.preventDefault();
+            }
+          }}
+        >
+          {className?.includes('display-symbol') ? asset : assetConfig.name}
+        </button>
+      </div>
+    </AssetPriceTooltip>
+  );
+};
+
 const columns: ColumnDef<Transaction>[] = [
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
-    size: 28,
-    enableSorting: false,
-    enableHiding: false,
-  },
   {
     header: "Date",
     accessorKey: "date",
@@ -276,27 +320,51 @@ const columns: ColumnDef<Transaction>[] = [
   {
     header: "Asset",
     accessorKey: "asset",
+    cell: ({ row }) => {
+      const asset = row.getValue("asset") as string;
+      return <StyledAssetButton asset={asset} inTableCell={true} />;
+    },
     size: 100,
+    filterFn: "asset",
   },
   {
     header: "Type",
     accessorKey: "type",
-    cell: ({ row }) => (
-      <Badge
-        className={cn(
-          row.getValue("type") === "Withdrawal" &&
-            "bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30",
-          row.getValue("type") === "Deposit" &&
-            "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30",
-          row.getValue("type") === "Trade" &&
-            "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/30",
-          row.getValue("type") === "Staking" &&
-            "bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/30"
-        )}
-      >
-        {row.getValue("type")}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const type = row.getValue("type") as string;
+      let variant: any = "default";
+      
+      switch (type) {
+        case "Withdrawal":
+          variant = "withdrawalType";
+          break;
+        case "Deposit":
+          variant = "depositType";
+          break;
+        case "Trade":
+          variant = "tradeType";
+          break;
+        case "Staking":
+          variant = "stakingType";
+          break;
+      }
+      
+      // Check if this type is in the type filter (regardless of active badge)
+      const typeFilter = table.getColumn("type")?.getFilterValue() as string[] | undefined;
+      const isActive = typeFilter?.includes(type) || 
+                     (activeSortBadge?.column === 'type' && activeSortBadge?.value === type);
+      
+      return (
+        <SortableBadge 
+          variant={variant} 
+          className="font-medium"
+          active={isActive}
+          onClick={(e) => handleBadgeFilter('type', type, e)}
+        >
+          {type}
+        </SortableBadge>
+      );
+    },
     size: 120,
     filterFn: typeFilterFn,
   },
@@ -306,7 +374,18 @@ const columns: ColumnDef<Transaction>[] = [
     cell: ({ row }) => {
       const amount = parseFloat(row.getValue("amount"));
       const asset = row.getValue("asset") as string;
-      return <div className="text-right">{amount} {asset}</div>;
+      
+      // Format the amount with appropriate decimal places
+      const formattedAmount = amount.toLocaleString(undefined, { 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+      });
+      
+      return (
+        <div className="text-right">
+          {formattedAmount} {asset}
+        </div>
+      );
     },
     size: 150,
   },
@@ -315,27 +394,60 @@ const columns: ColumnDef<Transaction>[] = [
     accessorKey: "fee",
     cell: ({ row }) => {
       const fee = row.original.fee;
-      return <div className="text-right text-muted-foreground">{fee ? `${fee} ${row.original.asset}` : '-'}</div>;
+      const asset = row.getValue("asset") as string;
+      
+      if (!fee) {
+        return <div className="text-right text-muted-foreground">-</div>;
+      }
+      
+      const formattedFee = fee.toLocaleString(undefined, { 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+      });
+      
+      return (
+        <div className="text-right text-muted-foreground">
+          {formattedFee} {asset}
+        </div>
+      );
     },
     size: 100,
   },
   {
     header: "Status",
     accessorKey: "status",
-    cell: ({ row }) => (
-      <Badge
-        className={cn(
-          row.getValue("status") === "Failed" &&
-            "bg-destructive/20 text-destructive border-destructive/30",
-          row.getValue("status") === "Pending" &&
-            "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30",
-          row.getValue("status") === "Completed" &&
-            "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30"
-        )}
-      >
-        {row.getValue("status")}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const status = row.getValue("status") as string;
+      let variant: any = "default";
+      
+      switch (status) {
+        case "Failed":
+          variant = "failedStatus";
+          break;
+        case "Pending":
+          variant = "pendingStatus";
+          break;
+        case "Completed":
+          variant = "completedStatus";
+          break;
+      }
+      
+      // Check if this status is in the status filter (regardless of active badge)
+      const statusFilter = table.getColumn("status")?.getFilterValue() as string[] | undefined;
+      const isActive = statusFilter?.includes(status) || 
+                      (activeSortBadge?.column === 'status' && activeSortBadge?.value === status);
+      
+      return (
+        <SortableBadge 
+          variant={variant} 
+          className="font-medium"
+          active={isActive}
+          onClick={(e) => handleBadgeFilter('status', status, e)}
+        >
+          {status}
+        </SortableBadge>
+      );
+    },
     size: 100,
     filterFn: statusFilterFn,
   },
@@ -360,7 +472,9 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tableBodyRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<any>(null);
   const [containerHeight, setContainerHeight] = useState<number>(0);
+  const [activeSortBadge, setActiveSortBadge] = useState<{ column: string; value: string } | null>(null);
 
   const [sorting, setSorting] = useState<SortingState>([
     {
@@ -378,9 +492,171 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
     table.resetRowSelection();
   };
 
+  const handleExportCSV = () => {
+    // Determine rows to export (either selected rows or all rows)
+    const rowsToExport = table.getSelectedRowModel().rows.length > 0 
+      ? table.getSelectedRowModel().rows
+      : table.getRowModel().rows;
+    
+    // Create CSV header based on visible columns
+    const visibleColumns = table.getVisibleFlatColumns().filter(col => 
+      col.id !== 'actions');
+    const header = visibleColumns.map(col => col.id).join(',');
+    
+    // Create CSV rows
+    const csvRows = rowsToExport.map(row => {
+      return visibleColumns.map(col => {
+        // Handle special cases like date formatting
+        if (col.id === 'date') {
+          const date = new Date(row.getValue('date'));
+          return `"${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}"`;
+        }
+        // Get raw value for other columns
+        return `"${row.getValue(col.id) || ''}"`;
+      }).join(',');
+    });
+    
+    // Combine header and rows
+    const csvContent = [header, ...csvRows].join('\n');
+    
+    // Create a blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `transactions_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // If there were selected rows, keep the selection
+  };
+
+  // Define badge filter handler
+  const handleBadgeFilter = (column: string, value: string, e: React.MouseEvent) => {
+    // Stop event propagation to prevent row selection
+    e.stopPropagation();
+    
+    // Get current filter value for the column
+    const currentFilter = table.getColumn(column)?.getFilterValue() as string[] | undefined;
+    
+    // Check if this value is already filtered
+    const isValueFiltered = currentFilter?.includes(value);
+    
+    if (isValueFiltered) {
+      // If already filtered, remove the filter
+      table.getColumn(column)?.setFilterValue(undefined);
+      
+      // If this was the active badge, clear it or set to other column's filter if exists
+      if (activeSortBadge?.column === column && activeSortBadge?.value === value) {
+        const otherColumn = column === 'type' ? 'status' : 'type';
+        const otherColumnFilter = table.getColumn(otherColumn)?.getFilterValue() as string[] | undefined;
+        
+        if (otherColumnFilter?.length) {
+          setActiveSortBadge({ column: otherColumn, value: otherColumnFilter[0] });
+        } else {
+          setActiveSortBadge(null);
+        }
+      }
+    } else {
+      // Add new filter
+      table.getColumn(column)?.setFilterValue([value]);
+      setActiveSortBadge({ column, value });
+    }
+  };
+
+  // Create modified columns with sortable badges
+  const sortableColumns: ColumnDef<Transaction>[] = React.useMemo(() => {
+    return columns.map(column => {
+      // Add sorting functionality to Type column
+      if (column.accessorKey === 'type') {
+        return {
+          ...column,
+          cell: ({ row }) => {
+            const type = row.getValue("type") as string;
+            let variant: any = "default";
+            
+            switch (type) {
+              case "Withdrawal":
+                variant = "withdrawalType";
+                break;
+              case "Deposit":
+                variant = "depositType";
+                break;
+              case "Trade":
+                variant = "tradeType";
+                break;
+              case "Staking":
+                variant = "stakingType";
+                break;
+            }
+            
+            // Check if this type is in the type filter (regardless of active badge)
+            const typeFilter = table.getColumn("type")?.getFilterValue() as string[] | undefined;
+            const isActive = typeFilter?.includes(type) || 
+                           (activeSortBadge?.column === 'type' && activeSortBadge?.value === type);
+            
+            return (
+              <SortableBadge 
+                variant={variant} 
+                className="font-medium"
+                active={isActive}
+                onClick={(e) => handleBadgeFilter('type', type, e)}
+              >
+                {type}
+              </SortableBadge>
+            );
+          }
+        };
+      }
+      
+      // Add sorting functionality to Status column
+      if (column.accessorKey === 'status') {
+        return {
+          ...column,
+          cell: ({ row }) => {
+            const status = row.getValue("status") as string;
+            let variant: any = "default";
+            
+            switch (status) {
+              case "Failed":
+                variant = "failedStatus";
+                break;
+              case "Pending":
+                variant = "pendingStatus";
+                break;
+              case "Completed":
+                variant = "completedStatus";
+                break;
+            }
+            
+            // Check if this status is in the status filter (regardless of active badge)
+            const statusFilter = table.getColumn("status")?.getFilterValue() as string[] | undefined;
+            const isActive = statusFilter?.includes(status) || 
+                            (activeSortBadge?.column === 'status' && activeSortBadge?.value === status);
+            
+            return (
+              <SortableBadge 
+                variant={variant} 
+                className="font-medium"
+                active={isActive}
+                onClick={(e) => handleBadgeFilter('status', status, e)}
+              >
+                {status}
+              </SortableBadge>
+            );
+          }
+        };
+      }
+      
+      return column;
+    });
+  }, [activeSortBadge]);
+
   const table = useReactTable({
     data,
-    columns,
+    columns: sortableColumns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
@@ -397,7 +673,18 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
       columnFilters,
       columnVisibility,
     },
+    filterFns: {
+      multiColumn: multiColumnFilterFn,
+      status: statusFilterFn,
+      type: typeFilterFn,
+      asset: assetFilterFn,
+    },
   });
+  
+  // Store table instance in ref to avoid circular dependencies
+  React.useEffect(() => {
+    tableRef.current = table;
+  }, [table]);
 
   // Update row count based on available vertical space
   useLayoutEffect(() => {
@@ -568,46 +855,199 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
   // Generate unique ID for input label association
   const id = React.useId();
 
+  // Asset search state
+  const [assetSearchTerm, setAssetSearchTerm] = useState("");
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+  const [showAssetSuggestions, setShowAssetSuggestions] = useState(false);
+  const assetPopoverRef = useRef<HTMLDivElement>(null);
+  
+  // Handle clicks outside the asset popover
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showAssetSuggestions && 
+        assetPopoverRef.current && 
+        !assetPopoverRef.current.contains(event.target as Node) &&
+        inputRef.current && 
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowAssetSuggestions(false);
+      }
+    };
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showAssetSuggestions]);
+  
+  // Get available assets for suggestions
+  const availableAssets = Object.keys(ASSETS).filter(isAssetTicker);
+  
+  // Filter assets based on search term
+  const filteredAssets = useMemo(() => {
+    // First filter assets based on search term
+    const filtered = availableAssets.filter(asset => 
+      asset.toLowerCase().includes(assetSearchTerm.toLowerCase()) || 
+      ASSETS[asset as AssetTicker].name.toLowerCase().includes(assetSearchTerm.toLowerCase())
+    );
+    
+    // If there's no search term, sort so selected assets appear first
+    if (!assetSearchTerm) {
+      return [...filtered].sort((a, b) => {
+        const aSelected = selectedAssets.includes(a);
+        const bSelected = selectedAssets.includes(b);
+        
+        if (aSelected && !bSelected) return -1;
+        if (!aSelected && bSelected) return 1;
+        return 0;
+      });
+    }
+    
+    return filtered;
+  }, [availableAssets, assetSearchTerm, selectedAssets]);
+  
+  // Handle asset selection/deselection
+  const handleAssetChange = (asset: string) => {
+    setSelectedAssets(prev => {
+      const isSelected = prev.includes(asset);
+      const newSelection = isSelected
+        ? prev.filter(a => a !== asset)
+        : [...prev, asset];
+        
+      // Update the table filter
+      table.getColumn("asset")?.setFilterValue(newSelection.length ? newSelection : undefined);
+      
+      return newSelection;
+    });
+  };
+  
+  // Handle asset search input change
+  const handleAssetSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setAssetSearchTerm(value);
+    
+    // Always show suggestions when typing (if results exist)
+    setShowAssetSuggestions(true);
+    
+    // Ensure input stays focused
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+    
+    // If we're clearing the search, make sure we don't lose our selections
+    if (value === "" && !showAssetSuggestions) {
+      table.getColumn("asset")?.setFilterValue(selectedAssets.length ? selectedAssets : undefined);
+    }
+  };
+  
+  // Clear all selected assets
+  const clearSelectedAssets = () => {
+    setSelectedAssets([]);
+    setAssetSearchTerm("");
+    table.getColumn("asset")?.setFilterValue(undefined);
+    
+    // Ensure input maintains focus after clearing
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+  };
+
   return (
     <div className={cn("w-full h-full flex flex-col", className)} ref={containerRef}>
       {/* Filters */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-2 py-2">
         <div className="flex items-center gap-3">
-          {/* Filter by text */}
+          {/* Filter by asset with suggestions popover */}
           <div className="relative">
-            <Input
-              id={`${id}-input`}
-              ref={inputRef}
-              className={cn(
-                "peer min-w-60 ps-9",
-                Boolean(table.getColumn("asset")?.getFilterValue()) && "pe-9"
-              )}
-              value={
-                (table.getColumn("asset")?.getFilterValue() ?? "") as string
-              }
-              onChange={(e) =>
-                table.getColumn("asset")?.setFilterValue(e.target.value)
-              }
-              placeholder="Filter by asset..."
-              type="text"
-              aria-label="Filter by asset"
-            />
-            <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
-              <ListFilterIcon size={16} aria-hidden="true" />
-            </div>
-            {Boolean(table.getColumn("asset")?.getFilterValue()) && (
-              <button
-                className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md transition-[color,box-shadow] outline-none focus:z-10 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Clear filter"
+            <div className="relative">
+              <Input
+                id={`${id}-input`}
+                ref={inputRef}
+                className={cn(
+                  "peer min-w-60 ps-9",
+                  (Boolean(assetSearchTerm) || selectedAssets.length > 0) && "pe-9"
+                )}
+                value={assetSearchTerm}
+                onChange={handleAssetSearchChange}
+                onFocus={() => {
+                  // Delay showing suggestions to avoid flicker during focus
+                  setTimeout(() => setShowAssetSuggestions(true), 50);
+                }}
                 onClick={() => {
-                  table.getColumn("asset")?.setFilterValue("");
+                  // Auto-focus on click
                   if (inputRef.current) {
                     inputRef.current.focus();
                   }
+                  setShowAssetSuggestions(true);
                 }}
+                placeholder={selectedAssets.length ? `${selectedAssets.length} assets selected` : "Filter by asset..."}
+                type="text"
+                aria-label="Filter by asset"
+              />
+              <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
+                <ListFilterIcon size={16} aria-hidden="true" />
+              </div>
+              {(Boolean(assetSearchTerm) || selectedAssets.length > 0) && (
+                <button
+                  className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md transition-[color,box-shadow] outline-none focus:z-10 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Clear filter"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearSelectedAssets();
+                  }}
+                >
+                  <XCircle size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Separate popover that's positioned absolutely under the input */}
+            {showAssetSuggestions && filteredAssets.length > 0 && (
+              <div
+                ref={assetPopoverRef}
+                className="absolute top-full left-0 z-50 mt-1 w-60 p-0 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-80"
               >
-                <XCircle size={16} aria-hidden="true" />
-              </button>
+                <div className="max-h-60 overflow-auto py-1">
+                  {filteredAssets.map((asset) => (
+                    <div
+                      key={asset}
+                      className={cn(
+                        "flex items-center px-2 py-1.5 hover:bg-muted cursor-pointer",
+                        selectedAssets.includes(asset) && "bg-muted/50"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAssetChange(asset);
+                        setAssetSearchTerm("");
+                        // Keep focus on input
+                        if (inputRef.current) {
+                          inputRef.current.focus();
+                        }
+                      }}
+                    >
+                      <Checkbox 
+                        id={`${id}-asset-${asset}`}
+                        checked={selectedAssets.includes(asset)}
+                        className="mr-2"
+                        onCheckedChange={(checked) => {
+                          handleAssetChange(asset);
+                          // Don't close popover or lose focus
+                          if (inputRef.current) {
+                            inputRef.current.focus();
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <StyledAssetButton asset={asset} inPopover={true} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
           
@@ -647,7 +1087,13 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                         htmlFor={`${id}-status-${i}`}
                         className="flex grow justify-between gap-2 font-normal"
                       >
-                        {value}{" "}
+                        <Badge variant={
+                          value === "Failed" ? "failedStatus" : 
+                          value === "Pending" ? "pendingStatus" : 
+                          "completedStatus"
+                        } className="font-medium">
+                          {value}
+                        </Badge>
                         <span className="text-muted-foreground ms-2 text-xs">
                           {statusCounts.get(value)}
                         </span>
@@ -695,7 +1141,14 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                         htmlFor={`${id}-type-${i}`}
                         className="flex grow justify-between gap-2 font-normal"
                       >
-                        {value}{" "}
+                        <Badge variant={
+                          value === "Withdrawal" ? "withdrawalType" : 
+                          value === "Deposit" ? "depositType" : 
+                          value === "Trade" ? "tradeType" : 
+                          "stakingType"
+                        } className="font-medium">
+                          {value}
+                        </Badge>
                         <span className="text-muted-foreground ms-2 text-xs">
                           {typeCounts.get(value)}
                         </span>
@@ -743,61 +1196,23 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
           </DropdownMenu>
         </div>
         <div className="flex items-center gap-3">
-          {/* Delete button */}
-          {table.getSelectedRowModel().rows.length > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button className="ml-auto" variant="outline">
-                  <TrashIcon
-                    className="-ms-1 opacity-60"
-                    size={16}
-                    aria-hidden="true"
-                  />
-                  Delete
-                  <span className="bg-background text-muted-foreground/70 -me-1 inline-flex h-5 max-h-full items-center rounded border px-1 font-[inherit] text-[0.625rem] font-medium">
-                    {table.getSelectedRowModel().rows.length}
-                  </span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <div className="flex flex-col gap-2 max-sm:items-center sm:flex-row sm:gap-4">
-                  <div
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full border"
-                    aria-hidden="true"
-                  >
-                    <AlertCircle className="opacity-80" size={16} />
-                  </div>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Are you absolutely sure?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete{" "}
-                      {table.getSelectedRowModel().rows.length} selected{" "}
-                      {table.getSelectedRowModel().rows.length === 1
-                        ? "transaction"
-                        : "transactions"}
-                      .
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteRows}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-          {/* Add transaction button */}
-          <Button className="ml-auto" variant="outline">
-            <PlusIcon
+          {/* Export CSV button */}
+          <Button 
+            className="ml-auto" 
+            variant="outline"
+            onClick={handleExportCSV}
+          >
+            <FileDownIcon
               className="-ms-1 opacity-60"
               size={16}
               aria-hidden="true"
             />
-            Add transaction
+            Export CSV
+            {table.getSelectedRowModel().rows.length > 0 && (
+              <span className="bg-background text-muted-foreground/70 -me-1 inline-flex h-5 max-h-full items-center rounded border px-1 font-[inherit] text-[0.625rem] font-medium">
+                {table.getSelectedRowModel().rows.length}
+              </span>
+            )}
           </Button>
         </div>
       </div>
@@ -813,13 +1228,20 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                     <TableHead
                       key={header.id}
                       style={{ width: `${header.getSize()}px` }}
-                      className="h-11"
+                      className={cn(
+                        "h-11",
+                        // Add right alignment to Amount and Fee column headers
+                        (header.id === "amount" || header.id === "fee") && "text-right"
+                      )}
                     >
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <div
                           className={cn(
-                            header.column.getCanSort() &&
-                              "flex h-full cursor-pointer items-center justify-between gap-2 select-none"
+                            "flex h-full cursor-pointer items-center select-none",
+                            // For Amount and Fee columns, right align content
+                            (header.id === "amount" || header.id === "fee")
+                              ? "justify-end" 
+                              : "justify-start"
                           )}
                           onClick={header.column.getToggleSortingHandler()}
                           onKeyDown={(e) => {
@@ -840,14 +1262,14 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                           {{
                             asc: (
                               <ChevronUpIcon
-                                className="shrink-0 opacity-60"
+                                className="shrink-0 opacity-60 ml-2"
                                 size={16}
                                 aria-hidden="true"
                               />
                             ),
                             desc: (
                               <ChevronDownIcon
-                                className="shrink-0 opacity-60"
+                                className="shrink-0 opacity-60 ml-2"
                                 size={16}
                                 aria-hidden="true"
                               />
@@ -872,7 +1294,13 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="h-8" // Fixed height for rows
+                  className={cn(
+                    "h-8 cursor-pointer border-b",
+                    row.getIsSelected() 
+                      ? "bg-accent border-border/50" 
+                      : "bg-[hsl(var(--card))] border-border/10"
+                  )}
+                  onClick={() => row.toggleSelected(!row.getIsSelected())}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="last:py-0">
@@ -1000,43 +1428,45 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
 
 function RowActions({ row }: { row: Row<Transaction> }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <div className="flex justify-end">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="shadow-none"
-            aria-label="More actions"
-          >
-            <MoreHorizontal size={16} aria-hidden="true" />
-          </Button>
-        </div>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <span>View details</span>
-            <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <div className="flex justify-end">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="shadow-none"
+              aria-label="More actions"
+            >
+              <MoreHorizontal size={16} aria-hidden="true" />
+            </Button>
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuGroup>
+            <DropdownMenuItem>
+              <span>View details</span>
+              <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <span>Edit</span>
+              <DropdownMenuShortcut>⌘E</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem>
+              <span>Export</span>
+              <DropdownMenuShortcut>⌘X</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-destructive focus:text-destructive">
+            <span>Delete</span>
+            <DropdownMenuShortcut>⌘⌫</DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuItem>
-            <span>Edit</span>
-            <DropdownMenuShortcut>⌘E</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <span>Export</span>
-            <DropdownMenuShortcut>⌘X</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-destructive focus:text-destructive">
-          <span>Delete</span>
-          <DropdownMenuShortcut>⌘⌫</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 } 

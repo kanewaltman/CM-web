@@ -58,7 +58,7 @@ export const ShimmerButton = React.forwardRef<
           {/* spark */}
           <div className="absolute inset-0 [border-radius:0] [mask:none]">
             {/* spark before - Updated conic-gradient for fading effect */}
-            <div className="absolute -inset-full w-auto rotate-0 animate-spin-around [background:conic-gradient(from_calc(270deg-(var(--spread)*0.5)),transparent_0,transparent_calc(var(--spread)*0.1),var(--shimmer-color)_calc(var(--spread)*0.5),transparent_calc(var(--spread)*0.9),transparent_var(--spread))] [translate:0_0]" />
+            <div className="absolute -inset-full w-auto rotate-0 animate-spin-around [background:conic-gradient(from_calc(270deg-(var(--spread)*0.5)),transparent_0,transparent_calc(var(--spread)*0.1),var(--shimmer-color)_calc(var(--spread)*0.5),transparent_calc(var(--spread)*0.9),transparent_var(--spread))] [translate:0_0] transition-[background]" />
           </div>
         </div>
         {children}
@@ -70,17 +70,17 @@ export const ShimmerButton = React.forwardRef<
             "!cursor-pointer",
 
             // Base shadow adjusted for light/dark themes
-            "text-sm font-medium shadow-[inset_0_-8px_10px_#00000033] dark:shadow-[inset_0_-8px_10px_#ffffff0d]",
+            "text-sm font-medium shadow-[inset_0_-8px_10px_#ffffff43] dark:shadow-[inset_0_-8px_10px_#ffffff16]",
             "[border-radius:var(--radius)]",
 
             // transition
             "transform-gpu transition-all duration-300 ease-in-out",
 
             // on hover - adjusted for light/dark themes
-            "group-hover:shadow-[inset_0_-6px_10px_#00000040] dark:group-hover:shadow-[inset_0_-6px_10px_#ffffff26]",
+            "group-hover:shadow-[inset_0_-6px_10px_#ffffff74] dark:group-hover:shadow-[inset_0_-6px_10px_#ffffff22]",
 
             // on click - adjusted for light/dark themes
-            "group-active:shadow-[inset_0_-10px_10px_#0000004d] dark:group-active:shadow-[inset_0_-10px_10px_#ffffff33]",
+            "group-active:shadow-[inset_0_-10px_10px_#ffffff4d] dark:group-active:shadow-[inset_0_-10px_10px_#ffffff33]",
           )}
         />
 

@@ -129,7 +129,7 @@ const HeaderDivider: React.FC = () => {
 };
 
 // Add sample data
-export const SAMPLE_BALANCES = {
+const SAMPLE_BALANCES_DATA = {
   "BTC": {
     "BTC": "1.23456789",
     "EUR": "45678.90"
@@ -167,6 +167,9 @@ export const SAMPLE_BALANCES = {
     "EUR": "1250.00"
   }
 };
+
+// Export a function to get sample data instead of exporting the object directly
+export const SAMPLE_BALANCES = () => SAMPLE_BALANCES_DATA;
 
 const SAMPLE_PRICES = {
   "BTCEUR": { price: 79000.50, change24h: 2.5 },
@@ -324,7 +327,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
 
         if (dataSource === 'sample') {
           // Use sample data
-          const balancesArray = Object.entries(SAMPLE_BALANCES)
+          const balancesArray = Object.entries(SAMPLE_BALANCES())
             .filter(([asset]) => asset !== 'TOTAL')
             .map(([asset, details]: [string, any]) => ({
               asset: asset as AssetTicker,
@@ -811,7 +814,7 @@ export const BalancesWidget: React.FC<BalancesWidgetProps> = ({ className, compa
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <AssetPriceTooltip asset={balance.asset}>
+                          <AssetPriceTooltip asset={balance.asset} inTableCell={true}>
                             <button 
                               type="button"
                               className="font-jakarta font-bold text-sm rounded-md px-1"

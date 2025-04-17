@@ -10,6 +10,7 @@ import { useTheme } from 'next-themes';
 import { getThemeValues } from './lib/utils';
 import { getLayoutForPage, PageType, getPageFromPath, navigateToPage } from './layouts';
 import { useGridStack } from './hooks/useGridStack';
+import { useContentResize } from './hooks/useContentResize';
 import { createWidget, updateWidgetsDataSource } from './components/WidgetRenderer';
 import { DASHBOARD_LAYOUT_KEY, MOBILE_BREAKPOINT, LayoutWidget, ExtendedGridStackWidget } from './types/widgets';
 import { WIDGET_REGISTRY, widgetIds, widgetTypes, widgetTitles } from './lib/widgetRegistry';
@@ -31,13 +32,17 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const resizeFrameRef = useRef<number>();
   const gridElementRef = useRef<HTMLDivElement>(null);
+  const [grid, setGrid] = useState<GridStack | null>(null);
+  const [isLayoutLocked, setIsLayoutLocked] = useState(false);
+  
+  // Use the content resize hook
+  const { contentRef, contentWidth, viewportWidth, renderResizeHandles } = useContentResize();
 
   // Check if we're on the exchange-rates route
   const isExchangeRatesRoute = window.location.pathname === '/exchange-rates';
 
   // Initialize the grid through our custom hook
   const {
-    grid,
     gridRef,
     initGrid,
     handleRemoveWidget,
@@ -81,7 +86,7 @@ function AppContent() {
       if (mobile !== isMobile) {
         setIsMobile(mobile);
         if (pageChangeRef.current) {
-          pageChangeRef.current(currentPage); // Re-initialize with current page
+          pageChangeRef.current(currentPage as PageType); // Re-initialize with current page
         }
       }
     });
@@ -443,7 +448,12 @@ function AppContent() {
     <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
       <div className="main-content h-[calc(100vh-4rem)] overflow-y-auto bg-[hsl(var(--color-bg-base))]">
-        <div className="main-content-inner h-full relative">
+        <div 
+          ref={contentRef}
+          className="main-content-inner h-full relative"
+          style={{ maxWidth: `${contentWidth}px` }}
+        >
+          {renderResizeHandles()}
           <ControlBar
             onResetLayout={handleResetLayout}
             onCopyLayout={handleCopyLayout}
@@ -451,12 +461,16 @@ function AppContent() {
             onAddWidget={handleAddWidget}
             dataSource={dataSource}
             onDataSourceChange={(source) => {
+              // Save the new data source to localStorage first
               setDataSource(source);
-              if (grid) {
-                updateWidgetsDataSource(grid, source, handleRemoveWidget);
-              }
+              localStorage.setItem('data-source', source);
+              
+              // Use window.location.reload() to refresh the entire application
+              // This ensures all components get the updated data source
+              window.location.reload();
             }}
             onToggleLayoutLock={toggleLayoutLock}
+            contentWidth={contentWidth}
           />
           <div 
             ref={gridElementRef} 

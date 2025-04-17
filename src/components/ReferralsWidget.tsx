@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { WidgetContainer } from './WidgetContainer';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
@@ -19,14 +20,18 @@ import { AnimatedGridPattern } from './magicui/animated-grid-pattern';
 import { Ripple } from './magicui/ripple';
 import { DotPattern } from './magicui/dot-pattern';
 import { ShimmerButton } from './magicui/shimmer-button';
+import { TextAnimate } from "./magicui/text-animate";
 
 // Define view modes for the Referrals widget
-export type ReferralsViewMode = 'warp' | 'flickering' | 'grid' | 'ripple' | 'dots';
+export type ReferralsViewMode = 'warp' | 'grid' | 'ripple' | 'dots';
 
 // View mode labels for dropdown
-const viewLabels: Record<ReferralsViewMode, string> = {
+type ViewLabels = {
+  [key in ReferralsViewMode]: string;
+};
+
+const viewLabels: ViewLabels = {
   'warp': 'Warp Background',
-  'flickering': 'Flickering Grid',
   'grid': 'Animated Grid',
   'ripple': 'Ripple Effect',
   'dots': 'Dot Pattern'
@@ -54,7 +59,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     // Always reset loading state after max 2 seconds no matter what
     const safetyTimer = setTimeout(() => {
       if (isLoading) {
-        console.log("⚠️ Safety timeout triggered - forcing loading state to false");
+        // console.log("⚠️ Safety timeout triggered - forcing loading state to false");
         setIsLoading(false);
       }
     }, 2000);
@@ -91,12 +96,12 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     
     // Handle performance widget modes that can cause invalid states
     if (mode === 'split' || mode === 'cumulative' || mode === 'combined') {
-      console.warn(`Invalid performance view mode "${mode}" rejected for referrals widget - using default`);
+      // console.warn(`Invalid performance view mode "${mode}" rejected for referrals widget - using default`);
       return props.defaultViewMode || 'warp';
     }
     
     // For any other invalid mode
-    console.warn(`Unknown view mode "${mode}" rejected for referrals widget - using default`);
+    // console.warn(`Unknown view mode "${mode}" rejected for referrals widget - using default`);
     return props.defaultViewMode || 'warp';
   }, [props.defaultViewMode]);
 
@@ -106,7 +111,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     let state = widgetStateRegistry.get(props.widgetId) as ReferralsWidgetState;
     
     if (!state) {
-      console.log(`Creating new ReferralsWidgetState for ${props.widgetId}`);
+      // console.log(`Creating new ReferralsWidgetState for ${props.widgetId}`);
       // Try to restore view mode from localStorage
       let initialViewMode: ReferralsViewMode = props.defaultViewMode || 'warp';
       
@@ -115,14 +120,14 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
         const storedWidgetMode = localStorage.getItem(`widget_${props.widgetId}_view_mode`);
         if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode)) {
           initialViewMode = storedWidgetMode as ReferralsViewMode;
-          console.log(`Priority 1: Using view mode from widget-specific key: ${initialViewMode}`);
+          // console.log(`Priority 1: Using view mode from widget-specific key: ${initialViewMode}`);
         } 
         // PRIORITY 2: Check generic key if widget-specific not found
         else {
           const storedMode = localStorage.getItem('referrals_widget_view_mode');
           if (storedMode && Object.keys(viewLabels).includes(storedMode)) {
             initialViewMode = storedMode as ReferralsViewMode;
-            console.log(`Priority 2: Using view mode from generic key: ${initialViewMode}`);
+            // console.log(`Priority 2: Using view mode from generic key: ${initialViewMode}`);
           }
           // PRIORITY 3: Only use layout if no localStorage keys found
           else {
@@ -137,18 +142,18 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
               // Check for the referral-specific view mode first
               if (widgetData?.viewState?.referralViewMode && validModes.includes(widgetData.viewState.referralViewMode)) {
                 initialViewMode = widgetData.viewState.referralViewMode as ReferralsViewMode;
-                console.log(`Priority 3: Using referral-specific view mode from layout: ${initialViewMode}`);
+                // console.log(`Priority 3: Using referral-specific view mode from layout: ${initialViewMode}`);
               } 
               // Then check the generic viewMode if it's valid for referrals
               else if (widgetData?.viewState?.viewMode && validModes.includes(widgetData.viewState.viewMode)) {
                 initialViewMode = widgetData.viewState.viewMode as ReferralsViewMode;
-                console.log(`Priority 3: Using generic view mode from layout: ${initialViewMode}`);
+                // console.log(`Priority 3: Using generic view mode from layout: ${initialViewMode}`);
               }
               // Handle performance widget view modes gracefully
               else if (widgetData?.viewState?.viewMode === 'split' || 
                       widgetData?.viewState?.viewMode === 'cumulative' || 
                       widgetData?.viewState?.viewMode === 'combined') {
-                console.warn(`Ignoring performance widget view mode "${widgetData.viewState.viewMode}" for referral widget`);
+                // console.warn(`Ignoring performance widget view mode "${widgetData.viewState.viewMode}" for referral widget`);
                 // Keep default view mode
               }
             }
@@ -157,11 +162,11 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
         
         // Final validation to ensure we have a valid view mode
         if (!Object.keys(viewLabels).includes(initialViewMode)) {
-          console.warn(`Invalid view mode detected: ${initialViewMode}, using default 'warp' instead`);
+          // console.warn(`Invalid view mode detected: ${initialViewMode}, using default 'warp' instead`);
           initialViewMode = 'warp';
         }
       } catch (error) {
-        console.error('Error retrieving view mode from localStorage:', error);
+        // console.error('Error retrieving view mode from localStorage:', error);
       }
       
       state = createDefaultReferralsWidgetState(initialViewMode, props.widgetId);
@@ -170,7 +175,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
       // Always sync the widget's true view mode back to layout to ensure consistency
       setTimeout(() => {
         if (state && state.viewMode) {
-          console.log(`Ensuring layout consistency with actual widget mode: ${state.viewMode}`);
+          // console.log(`Ensuring layout consistency with actual widget mode: ${state.viewMode}`);
           setIsLoading(false); // Mark loading as complete before synchronizing
           synchronizeViewModeToLayout(state.viewMode, props.widgetId);
         }
@@ -183,7 +188,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
         if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode)) {
           const savedMode = storedWidgetMode as ReferralsViewMode;
           if (savedMode !== state.viewMode) {
-            console.log(`Updating existing widget state with stored view mode (priority source): ${savedMode}`);
+            // console.log(`Updating existing widget state with stored view mode (priority source): ${savedMode}`);
             state.setViewMode(savedMode);
           }
         }
@@ -200,7 +205,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
             if (widgetData?.viewState?.referralViewMode && validModes.includes(widgetData.viewState.referralViewMode)) {
               const layoutMode = widgetData.viewState.referralViewMode as ReferralsViewMode;
               if (layoutMode !== state.viewMode) {
-                console.log(`Updating widget state with layout referralViewMode (secondary source): ${layoutMode}`);
+                // console.log(`Updating widget state with layout referralViewMode (secondary source): ${layoutMode}`);
                 state.setViewMode(layoutMode);
                 viewModeFound = true;
               }
@@ -209,7 +214,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
             else if (!viewModeFound && widgetData?.viewState?.viewMode && validModes.includes(widgetData.viewState.viewMode)) {
               const layoutMode = widgetData.viewState.viewMode as ReferralsViewMode;
               if (layoutMode !== state.viewMode) {
-                console.log(`Updating widget state with layout viewMode (tertiary source): ${layoutMode}`);
+                // console.log(`Updating widget state with layout viewMode (tertiary source): ${layoutMode}`);
                 state.setViewMode(layoutMode);
               }
             }
@@ -218,7 +223,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
         
         // Final validation to ensure the widget state has a valid view mode
         if (!Object.keys(viewLabels).includes(state.viewMode)) {
-          console.warn(`Invalid view mode detected in existing widget state: ${state.viewMode}, resetting to last known good mode`);
+          // console.warn(`Invalid view mode detected in existing widget state: ${state.viewMode}, resetting to last known good mode`);
           // Try to find the last known good mode from widget-specific key
           const storedWidgetMode = localStorage.getItem(`widget_${props.widgetId}_view_mode`);
           if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode)) {
@@ -231,13 +236,13 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
         // Always sync the widget's true view mode back to layout to ensure consistency
         setTimeout(() => {
           if (state && state.viewMode) {
-            console.log(`Ensuring layout consistency with actual widget mode: ${state.viewMode}`);
+            // console.log(`Ensuring layout consistency with actual widget mode: ${state.viewMode}`);
             setIsLoading(false); // Mark loading as complete before synchronizing
             synchronizeViewModeToLayout(state.viewMode, props.widgetId);
           }
         }, 100);
       } catch (error) {
-        console.error('Error checking stored view mode for existing state:', error);
+        // console.error('Error checking stored view mode for existing state:', error);
         setIsLoading(false); // Ensure we mark loading as complete even if there's an error
       }
     }
@@ -250,11 +255,11 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
   useEffect(() => {
     // If widgetState is available, ensure we're not stuck in loading state
     if (widgetState) {
-      console.log("🔄 Ensuring loading state is reset");
+      // console.log("🔄 Ensuring loading state is reset");
       // Short timeout to allow other initialization processes to complete
       setTimeout(() => {
         if (isLoading) {
-          console.log("🔄 Forcing loading state to false");
+          // console.log("🔄 Forcing loading state to false");
           setIsLoading(false);
         }
       }, 300);
@@ -283,8 +288,8 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     
     if (storedWidgetMode && Object.keys(viewLabels).includes(storedWidgetMode) && 
         storedWidgetMode !== widgetState.viewMode) {
-      console.log(`📌 REFRESH FIX: Found mismatch between localStorage (${storedWidgetMode}) and state (${widgetState.viewMode})`);
-      console.log(`📌 REFRESH FIX: Forcing update to localStorage value: ${storedWidgetMode}`);
+      // console.log(`📌 REFRESH FIX: Found mismatch between localStorage (${storedWidgetMode}) and state (${widgetState.viewMode})`);
+      // console.log(`📌 REFRESH FIX: Forcing update to localStorage value: ${storedWidgetMode}`);
       
       // Force update to the localStorage value
       widgetState.setViewMode(storedWidgetMode as ReferralsViewMode);
@@ -310,23 +315,23 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
   useEffect(() => {
     // Safety check to ensure viewMode is valid on mount
     if (!Object.keys(viewLabels).includes(viewMode)) {
-      console.warn(`Invalid view mode detected on mount: ${viewMode}, resetting to 'warp'`);
+      // console.warn(`Invalid view mode detected on mount: ${viewMode}, resetting to 'warp'`);
       handleViewModeChange('warp');
     }
   }, []);
   
   // Helper function to synchronize the current view mode to the layout
   const synchronizeViewModeToLayout = useCallback((viewMode: ReferralsViewMode, widgetId: string = props.widgetId) => {
-    console.log(`ReferralsWrapper: Synchronizing ${viewMode} to layout`);
+    // console.log(`ReferralsWrapper: Synchronizing ${viewMode} to layout`);
     try {
       const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
       if (savedLayout) {
-        console.log(`ReferralsWrapper: Updating layout in localStorage`);
+        // console.log(`ReferralsWrapper: Updating layout in localStorage`);
         const layout = JSON.parse(savedLayout);
         const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
         
         if (widgetIndex !== -1) {
-          console.log(`ReferralsWrapper: Found widget at index ${widgetIndex} in layout`);
+          // console.log(`ReferralsWrapper: Found widget at index ${widgetIndex} in layout`);
           
           // Create or update the viewState property to include our view mode
           const currentViewState = layout[widgetIndex].viewState || {};
@@ -342,21 +347,21 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
           
           // Save the updated layout back to localStorage
           localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-          console.log(`ReferralsWrapper: Layout updated with view mode ${viewMode}`);
+          // console.log(`ReferralsWrapper: Layout updated with view mode ${viewMode}`);
           
           // Also update the widget-specific storage to ensure consistency
           localStorage.setItem(`widget_${widgetId}_view_mode`, viewMode);
         } else {
-          console.warn(`ReferralsWrapper: Widget not found in layout`);
+          // console.warn(`ReferralsWrapper: Widget not found in layout`);
         }
       } else {
-        console.log(`ReferralsWrapper: No saved layout found in localStorage`);
+        // console.log(`ReferralsWrapper: No saved layout found in localStorage`);
         
         // Fallback - ensure widget-specific localStorage key is at least set
         localStorage.setItem(`widget_${widgetId}_view_mode`, viewMode);
       }
     } catch (error) {
-      console.error('Failed to synchronize view mode to layout:', error);
+      // console.error('Failed to synchronize view mode to layout:', error);
       // Fallback - ensure widget-specific localStorage key is at least set
       localStorage.setItem(`widget_${widgetId}_view_mode`, viewMode);
     }
@@ -375,7 +380,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
         if (widgetStateRegistry.has(props.widgetId)) {
           const registryState = widgetStateRegistry.get(props.widgetId) as ReferralsWidgetState;
           if (registryState && registryState.viewMode !== widgetState.viewMode) {
-            console.log(`Ensuring widget registry state is up to date: ${widgetState.viewMode}`);
+            // console.log(`Ensuring widget registry state is up to date: ${widgetState.viewMode}`);
             registryState.setViewMode(widgetState.viewMode);
           }
         }
@@ -412,7 +417,7 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
   useEffect(() => {
     // Sync current mode to layout when component is fully initialized and not loading
     if (isInitialized.current && !isLoading && widgetState && widgetState.viewMode) {
-      console.log(`ReferralsWrapper: Component mounted, syncing mode ${widgetState.viewMode} to layout`);
+      // console.log(`ReferralsWrapper: Component mounted, syncing mode ${widgetState.viewMode} to layout`);
       synchronizeViewModeToLayout(widgetState.viewMode, props.widgetId);
     }
   }, [synchronizeViewModeToLayout, widgetState, props.widgetId, isLoading]);
@@ -422,27 +427,27 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
     // Skip processing during very initial render only
     // Don't block on isLoading which might get stuck
     if (!isInitialized.current) {
-      console.log(`Skipping view mode change to ${mode} during initialization`);
+      // console.log(`Skipping view mode change to ${mode} during initialization`);
       return;
     }
     
     // If we're loading but it's a user-initiated change, allow it to proceed
     if (isLoading) {
-      console.log(`View mode change requested while loading, but will proceed anyway: ${mode}`);
+      // console.log(`View mode change requested while loading, but will proceed anyway: ${mode}`);
       // Force loading state to false since user is clearly interacting
       setIsLoading(false);
     } else {
-      console.log(`ReferralsWrapper: View mode change requested to ${mode}`);
+      // console.log(`ReferralsWrapper: View mode change requested to ${mode}`);
     }
     
     // Verify the mode is valid
     if (!Object.keys(viewLabels).includes(mode)) {
-      console.error(`Invalid view mode requested: ${mode}`);
+      // console.error(`Invalid view mode requested: ${mode}`);
       return;
     }
     
     // Update widget state
-    console.log(`ReferralsWrapper: Updating widget state to ${mode}`);
+    // console.log(`ReferralsWrapper: Updating widget state to ${mode}`);
     widgetState.setViewMode(mode);
     
     // Explicitly ensure the registry is immediately updated
@@ -450,13 +455,13 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
       const registryState = widgetStateRegistry.get(props.widgetId) as ReferralsWidgetState;
       if (registryState && 'setViewMode' in registryState) {
         registryState.setViewMode(mode);
-        console.log(`ReferralsWrapper: Explicitly updated registry state to ${mode}`);
+        // console.log(`ReferralsWrapper: Explicitly updated registry state to ${mode}`);
       }
     }
     
     // Save to widget-specific localStorage key for persistence
     try {
-      console.log(`ReferralsWrapper: Saving view mode to localStorage keys`);
+      // console.log(`ReferralsWrapper: Saving view mode to localStorage keys`);
       localStorage.setItem(`widget_${props.widgetId}_view_mode`, mode);
       localStorage.setItem('referrals_widget_view_mode', mode);
       
@@ -468,19 +473,19 @@ export const ReferralsWrapper: React.FC<ReferralsWidgetProps> = (props) => {
         synchronizeViewModeToLayout(mode, props.widgetId);
       }, 100);
     } catch (error) {
-      console.error('Failed to save view mode to localStorage:', error);
+      // console.error('Failed to save view mode to localStorage:', error);
     }
     
     // Notify parent of view mode change if callback is provided
     if (props.onViewModeChange) {
-      console.log(`ReferralsWrapper: Calling parent onViewModeChange callback`);
+      // console.log(`ReferralsWrapper: Calling parent onViewModeChange callback`);
       props.onViewModeChange(mode);
     } else {
-      console.log(`ReferralsWrapper: No parent onViewModeChange callback provided`);
+      // console.log(`ReferralsWrapper: No parent onViewModeChange callback provided`);
     }
     
     // Force a re-render by updating state directly
-    console.log(`ReferralsWrapper: Directly updating component state`);
+    // console.log(`ReferralsWrapper: Directly updating component state`);
     setViewMode(mode);
     
   }, [props.widgetId, props.onViewModeChange, widgetState, synchronizeViewModeToLayout]);
@@ -506,7 +511,20 @@ const Referrals: React.FC<{
   widgetId: string;
 }> = ({ className, onRemove, forceTheme, viewMode, onViewModeChange, widgetId }) => {
   const { resolvedTheme, theme: specificTheme } = useTheme();
-  
+  const [shimmerColor, setShimmerColor] = useState<string>('#ffffff'); // Initial color
+
+  // Define constant animation props outside the component render cycle
+  const textAnimateProps = useMemo(() => ({
+    animation: "fadeIn" as const,
+    once: true,
+  }), []);
+
+  // Handler to update shimmer color based on hue from WarpBackground
+  const handleActiveHueChange = useCallback((hue: number) => {
+    const newColor = `hsl(${hue} 80% 70%)`; // Lighter color for shimmer
+    setShimmerColor(newColor);
+  }, []);
+
   // Use forced theme if provided
   const effectiveTheme = forceTheme || (resolvedTheme === 'dark' ? 'dark' : 'light');
   
@@ -515,8 +533,8 @@ const Referrals: React.FC<{
   
   // Debug the current viewMode and onViewModeChange handler
   useEffect(() => {
-    console.log('Referrals component - current view mode:', viewMode);
-    console.log('Referrals component - has view mode handler:', !!onViewModeChange);
+    // console.log('Referrals component - current view mode:', viewMode);
+    // console.log('Referrals component - has view mode handler:', !!onViewModeChange);
     
     // Safety check - if received an invalid view mode, set it to warp
     // But only if this isn't the first time (to prevent loops during initialization)
@@ -524,9 +542,9 @@ const Referrals: React.FC<{
     if (!validModes.includes(viewMode)) {
       // Only log during the first mount to avoid log spam
       if (isFirstMount.current) {
-        console.warn(`Referrals received invalid view mode during initialization: ${viewMode}, will change to 'warp'`);
+        // console.warn(`Referrals received invalid view mode during initialization: ${viewMode}, will change to 'warp'`);
       } else {
-        console.warn(`Referrals received invalid view mode after initialization: ${viewMode}, changing to 'warp'`);
+        // console.warn(`Referrals received invalid view mode after initialization: ${viewMode}, changing to 'warp'`);
       }
       
       // Try to get the stored view mode first before defaulting to warp
@@ -534,7 +552,7 @@ const Referrals: React.FC<{
       
       // Check if storedMode exists and is valid
       if (storedMode && validModes.includes(storedMode)) {
-        console.log(`Referrals component - Using stored view mode from localStorage: ${storedMode}`);
+        // console.log(`Referrals component - Using stored view mode from localStorage: ${storedMode}`);
         const fallbackMode = storedMode as ReferralsViewMode;
         
         // Use a timeout to break potential render loops during initialization
@@ -579,14 +597,14 @@ const Referrals: React.FC<{
           <DropdownMenuItem
             key={key}
             onClick={() => {
-              console.log('Dropdown item clicked, changing to:', key);
+              // console.log('Dropdown item clicked, changing to:', key);
               // Direct update to localStorage as a backup
               try {
                 localStorage.setItem(`widget_${widgetId}_view_mode`, key);
                 // Add a direct log about the localStorage update
-                console.log(`Direct localStorage update for widget ${widgetId}: ${key}`);
+                // console.log(`Direct localStorage update for widget ${widgetId}: ${key}`);
               } catch (e) {
-                console.error('Failed to update localStorage directly:', e);
+                // console.error('Failed to update localStorage directly:', e);
               }
               // Normal handler call
               onViewModeChange(key as ReferralsViewMode);
@@ -609,7 +627,7 @@ const Referrals: React.FC<{
     const validViewMode = Object.keys(viewLabels).includes(viewMode) ? viewMode : 'warp';
     
     if (validViewMode !== viewMode) {
-      console.warn(`Rendering with corrected view mode: ${validViewMode} instead of ${viewMode}`);
+      // console.warn(`Rendering with corrected view mode: ${validViewMode} instead of ${viewMode}`);
       // Don't trigger state changes during render, defer to next tick
       // But only if this isn't the first render to avoid loop
       if (!isFirstMount.current) {
@@ -617,62 +635,87 @@ const Referrals: React.FC<{
       }
     }
     
+    // Base props for animation - now using the memoized props object
+    // const textAnimateProps = { ... }; // Removed from here
+
+    // Memoize the text content for the warp view
+    const warpTextContent = useMemo(() => (
+      <div className="text-center px-6 flex flex-col items-center">
+        <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+          Trade like you have a time machine
+        </TextAnimate>
+        <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+          Insight into the future, powered by Coinmetro.
+        </TextAnimate>
+      </div>
+    ), [textAnimateProps]); // Now correctly depends on the stable props object
+
     switch (validViewMode) {
       case 'warp':
         return (
-          <WarpBackground 
+          <WarpBackground
             className="flex-1 w-full border-none flex items-center justify-center"
             themeVariant={specificTheme}
             beamsPerSide={3}
+            beamSize={3}
+            onActiveHueChange={handleActiveHueChange}
           >
-            <div className="text-center px-6">
-              <h3 className="text-xl font-bold mb-2">Trade like you have a time machine</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Insights for the future, provided by Coinmetro.
-              </p>
-              <ShimmerButton 
-                shimmerColor="#fff"
+            {/* Render the memoized text content */}
+            {warpTextContent}
+            {/* ShimmerButton is NOT wrapped - Now wrapped with motion.div */}
+            <motion.div
+              key={`warp-${viewMode}`}
+              initial={{ opacity: 0, y: 20 }} // Start invisible and slightly down
+              animate={{ opacity: 1, y: 0 }}   // Fade in and slide up
+              transition={{ delay: 1.2, duration: 0.5 }} // Start after text (approx 0.7s + 0.5s duration), duration 0.5s
+              className="flex justify-center" // Add flex container for centering if needed
+            >
+              <ShimmerButton
+                shimmerColor={shimmerColor}
                 shimmerSize="0.05em"
                 shimmerDuration="6s"
                 borderRadius="8px"
                 background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
-                className="mx-auto text-sm"
+                className="mx-auto text-sm" // mx-auto might already handle centering
               >
                 Get Started
               </ShimmerButton>
-            </div>
+            </motion.div>
           </WarpBackground>
-        );
-      case 'flickering':
-        return (
-          <div className="h-full w-full">
-            <FlickeringGrid 
-              className="h-full w-full p-6"
-            >
-              <div className="flex items-center justify-center h-full w-full">
-                <div className="text-center">
-                  <h3 className="text-xl font-bold mb-2">Flickering Grid</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Referral program with dynamic flickering grid effects
-                  </p>
-                </div>
-              </div>
-            </FlickeringGrid>
-          </div>
         );
       case 'grid':
         return (
           <div className="h-full w-full relative flex items-center justify-center">
             <AnimatedGridPattern
-              className="absolute inset-0 h-full w-full"
+              className="absolute inset-0 h-full w-full opacity-10"
               numSquares={60}
               duration={3}
             />
-            <div className="text-center relative z-10">
-              <h3 className="text-xl font-bold mb-2">Animated Grid</h3>
-              <p className="text-sm text-muted-foreground">
-                Referral program with animated grid pattern
-              </p>
+            <div className="text-center relative z-10 px-6 flex flex-col items-center">
+              <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+                API for bot trading
+              </TextAnimate>
+              <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+                Trade automatically with our industry leading API
+              </TextAnimate>
+              <motion.div
+                key={`grid-${viewMode}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.2, duration: 0.5 }}
+                className="flex justify-center"
+              >
+                <ShimmerButton
+                  shimmerColor={shimmerColor}
+                  shimmerSize="0.05em"
+                  shimmerDuration="6s"
+                  borderRadius="8px"
+                  background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                  className="mx-auto text-sm"
+                >
+                  Learn More
+                </ShimmerButton>
+              </motion.div>
             </div>
           </div>
         );
@@ -686,21 +729,31 @@ const Referrals: React.FC<{
               numCircles={4}
             />
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center relative z-10 px-6 py-4">
-                <h3 className="text-xl font-bold mb-2">Give a friend the gift of Pro Trading</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Earn when they trade.
-                </p>
-                <ShimmerButton 
-                  shimmerColor="#8b5cf6" 
-                  shimmerSize="0.05em"
-                  shimmerDuration="4s"
-                  borderRadius="8px"
-                  background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
-                  className="mx-auto text-sm"
+              <div className="text-center relative z-10 px-6 py-4 flex flex-col items-center">
+                <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+                  Give a friend the gift of Pro Trading
+                </TextAnimate>
+                <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+                  & Earn on your combined trading volume.
+                </TextAnimate>
+                <motion.div
+                  key={`ripple-${viewMode}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.2, duration: 0.5 }}
+                  className="flex justify-center"
                 >
-                  Join Now
-                </ShimmerButton>
+                  <ShimmerButton
+                    shimmerColor="#fff"
+                    shimmerSize="0.05em"
+                    shimmerDuration="6s"
+                    borderRadius="8px"
+                    background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                    className="mx-auto text-sm"
+                  >
+                    + Invite Friends
+                  </ShimmerButton>
+                </motion.div>
               </div>
             </div>
           </div>
@@ -709,7 +762,7 @@ const Referrals: React.FC<{
         return (
           <div className="h-full w-full relative flex items-center justify-center">
             <DotPattern
-              className="absolute inset-0"
+              className="absolute inset-0 opacity-10"
               width={24}
               height={24}
               cx={1.5}
@@ -717,11 +770,31 @@ const Referrals: React.FC<{
               cr={1.5}
               glow={true}
             />
-            <div className="text-center relative z-10">
-              <h3 className="text-xl font-bold mb-2">Dot Pattern</h3>
-              <p className="text-sm text-muted-foreground">
-                Referral program with glowing dot pattern
-              </p>
+            <div className="text-center relative z-10 px-6 flex flex-col items-center">
+              <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+                92+ Assets ready for trading
+              </TextAnimate>
+              <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+                Explore all markets, exchange pairs, and marging options.
+              </TextAnimate>
+              <motion.div
+                key={`dots-${viewMode}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.2, duration: 0.5 }}
+                className="flex justify-center"
+              >
+                <ShimmerButton
+                  shimmerColor={shimmerColor}
+                  shimmerSize="0.05em"
+                  shimmerDuration="6s"
+                  borderRadius="8px"
+                  background={effectiveTheme === 'dark' ? "rgba(20, 20, 20, 1)" : "rgba(0, 0, 0, 1)"}
+                  className="mx-auto text-sm"
+                >
+                  Trade now
+                </ShimmerButton>
+              </motion.div>
             </div>
           </div>
         );
@@ -741,7 +814,7 @@ const Referrals: React.FC<{
       extraControls={viewController}
     >
       <div className="h-full w-full rounded-xl bg-card overflow-hidden border flex">
-        {renderContent()}
+        {renderContent() as React.ReactNode}
       </div>
     </WidgetContainer>
   );

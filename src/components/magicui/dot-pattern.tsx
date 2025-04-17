@@ -2,7 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState, useMemo } from "react";
+import { throttle } from 'lodash';
 
 /**
  *  DotPattern Component Props
@@ -60,7 +61,7 @@ interface DotPatternProps extends React.SVGProps<SVGSVGElement> {
  * - Dots color can be controlled via the text color utility classes
  */
 
-export function DotPattern({
+export const DotPattern = React.memo(function DotPattern({
   width = 16,
   height = 16,
   x = 0,
@@ -76,20 +77,20 @@ export function DotPattern({
   const containerRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
-        setDimensions({ width, height });
-      }
-    };
+  const updateDimensions = throttle(() => {
+    if (containerRef.current) {
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      setDimensions({ width, height });
+    }
+  }, 200);
 
+  useEffect(() => {
     updateDimensions();
     window.addEventListener("resize", updateDimensions);
     return () => window.removeEventListener("resize", updateDimensions);
   }, []);
 
-  const dots = Array.from(
+  const dots = useMemo(() => Array.from(
     {
       length:
         Math.ceil(dimensions.width / width) *
@@ -105,7 +106,7 @@ export function DotPattern({
         duration: Math.random() * 3 + 2,
       };
     },
-  );
+  ), [dimensions, width, height, cx, cy]);
 
   return (
     <svg
@@ -155,4 +156,4 @@ export function DotPattern({
       ))}
     </svg>
   );
-}
+});
