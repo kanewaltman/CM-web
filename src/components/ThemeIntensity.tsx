@@ -345,6 +345,12 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
               onValueChange={handleForegroundOpacityChange}
               onValueCommit={handleForegroundOpacityCommit}
               onPointerDown={() => { isDraggingRef.current = true; }}
+              onLostPointerCapture={() => {
+                if (isDraggingRef.current) {
+                  // Call commit handler with current value when pointer capture is lost
+                  handleForegroundOpacityCommit([foregroundOpacity]);
+                }
+              }}
               className="transition-all duration-150"
             />
           </div>
