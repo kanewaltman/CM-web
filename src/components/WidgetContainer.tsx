@@ -25,6 +25,17 @@ import {
 } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from './ui/alert-dialog';
 
 interface WidgetContainerProps {
   children: React.ReactNode;
@@ -67,6 +78,10 @@ export const WidgetContainer = memo(function WidgetContainer({
   const [renameListId, setRenameListId] = useState<string | null>(null);
   const [renameListName, setRenameListName] = useState('');
   const [renameListDialogOpen, setRenameListDialogOpen] = useState(false);
+
+  // State for delete dialog
+  const [deleteListId, setDeleteListId] = useState<string | null>(null);
+  const [deleteListDialogOpen, setDeleteListDialogOpen] = useState(false);
 
   // Load custom lists from localStorage
   useEffect(() => {
@@ -159,17 +174,26 @@ export const WidgetContainer = memo(function WidgetContainer({
 
   // Delete a list
   const handleDeleteList = useCallback((listId: string) => {
-    const confirmed = confirm('Are you sure you want to delete this list?');
-    if (confirmed) {
-      const updatedLists = customLists.filter(list => list.id !== listId);
-      saveCustomLists(updatedLists);
-      
-      // If we're deleting the active list, set to null (all markets)
-      if (activeList === listId) {
-        saveActiveList(null);
-      }
+    setDeleteListId(listId);
+    setDeleteListDialogOpen(true);
+  }, []);
+
+  // Confirm list deletion
+  const confirmDeleteList = useCallback(() => {
+    if (!deleteListId) return;
+    
+    const updatedLists = customLists.filter(list => list.id !== deleteListId);
+    saveCustomLists(updatedLists);
+    
+    // If we're deleting the active list, set to null (all markets)
+    if (activeList === deleteListId) {
+      saveActiveList(null);
     }
-  }, [customLists, activeList, saveCustomLists, saveActiveList]);
+    
+    // Reset state and close dialog
+    setDeleteListId(null);
+    setDeleteListDialogOpen(false);
+  }, [customLists, activeList, deleteListId, saveCustomLists, saveActiveList]);
 
   // Rename a list - improved version with Dialog
   const handleRenameList = useCallback((listId: string) => {
@@ -509,6 +533,30 @@ export const WidgetContainer = memo(function WidgetContainer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Delete List Dialog */}
+      <AlertDialog open={deleteListDialogOpen} onOpenChange={setDeleteListDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this list and remove all assets from it.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteListId(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteList}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }); 
