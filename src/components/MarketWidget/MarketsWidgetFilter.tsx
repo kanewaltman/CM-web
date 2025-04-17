@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Input } from './ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { 
@@ -17,7 +25,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from './ui/command';
+} from '../ui/command';
 import {
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -25,7 +33,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from './ui/dropdown-menu';
+} from '../ui/dropdown-menu';
 
 // Helper functions for localStorage
 const getLocalStorageItem = <T,>(key: string, defaultValue: T): T => {

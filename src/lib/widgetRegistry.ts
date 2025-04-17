@@ -7,7 +7,7 @@ import { RecentTrades } from '@/components/RecentTrades';
 import { BalancesWidget } from '@/components/BalancesWidget';
 import { PerformanceWidget } from '@/components/PerformanceWidget/PerformanceWidget';
 import { BreakdownWrapper } from '@/components/Breakdown';
-import MarketsWidget from '@/components/MarketsWidget';
+import MarketsWidget from '@/components/MarketWidget/MarketsWidget';
 import { TransactionsWidget } from '@/components/TransactionsWidget';
 import { InsightWidget } from '@/components/InsightWidget';
 import { ReferralsWrapper } from '@/components/ReferralsWidget';

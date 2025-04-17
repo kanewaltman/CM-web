@@ -5,7 +5,7 @@ import { WidgetContainer } from './WidgetContainer';
 import { PerformanceWidgetWrapper } from './PerformanceWidgetWrapper';
 import { InsightWidgetControls } from './InsightWidget';
 import { ReferralsWrapper } from './ReferralsWidget';
-import { MarketsWidgetWrapper } from './MarketsWidgetWrapper';
+import { MarketsWidgetWrapper } from './MarketWidget/MarketsWidgetWrapper';
 import { 
   CreateWidgetParams, 
   ExtendedGridStackWidget,
@@ -19,6 +19,7 @@ import {
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
 import { useReactTable } from '@tanstack/react-table';
+import { BalancesWidgetWrapper } from './BalancesWidgetWrapper';
 
 // Create a wrapper component for Markets widget to use hooks properly
 const MarketsWidgetContainer = ({ 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { 
@@ -14,7 +14,8 @@ import {
   Ban as BanIcon,
   Columns as ColumnsIcon,
   Plus as PlusIcon,
-  ChevronsUpDown
+  ChevronsUpDown,
+  SlidersHorizontal
 } from 'lucide-react';
 import {
   Command,
@@ -23,7 +24,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from './ui/command';
+} from '../ui/command';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +36,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   DropdownMenuLabel,
-} from './ui/dropdown-menu';
+} from '../ui/dropdown-menu';
 import { useReactTable } from '@tanstack/react-table';
 import { MarketsWidgetMenu, ListManager } from './MarketsWidgetMenu';
 import { MarketsWidgetColumnVisibility } from './MarketsWidget';
@@ -48,10 +49,11 @@ import {
   DialogTitle,
   DialogFooter,
   DialogTrigger
-} from './ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+} from '../ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { SAMPLE_MARKET_DATA } from '@/services/marketsSampleData';
 import { toast } from '@/hooks/use-toast';
+import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
 
 // Helper functions for localStorage
 const getLocalStorageItem = <T,>(key: string, defaultValue: T): T => {

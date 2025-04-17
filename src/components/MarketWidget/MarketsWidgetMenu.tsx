@@ -24,11 +24,35 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '../ui/dropdown-menu';
 import { useReactTable } from '@tanstack/react-table';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { DialogClose } from '@radix-ui/react-dialog';
+import { cn } from '@/lib/utils';
+import { 
+  X,
+  ChevronLeft, 
+  ChevronRight, 
+  FileCog, 
+  Bell,
+  Settings,
+  Columns as ColumnsIcon,
+  Plus as PlusIcon,
+  Users,
+  RefreshCw,
+  Download,
+  Share2,
+  ArrowUpDown,
+  ArrowDown,
+  Eye,
+  Rows3,
+  Pin,
+  Wallet,
+  Zap,
+  ChevronsLeftRight,
+  MoreVertical 
+} from 'lucide-react';
 
 // LocalStorage keys for custom lists
 const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
@@ -46,46 +70,6 @@ export const MarketsWidgetMenu: React.FC<{
 }> = ({ tableRef }) => {
   return (
     <>
-      <DropdownMenuItem onClick={() => {
-        // Export to CSV functionality
-        if (tableRef?.current) {
-          const table = tableRef.current.getTable();
-          if (table) {
-            const rows = table.getFilteredRowModel().rows;
-            const headers = table.getAllColumns()
-              .filter(column => column.getIsVisible())
-              .map(column => column.id);
-            
-            const csvData = rows.map(row => {
-              return headers.map(header => {
-                const value = row.getValue(header);
-                return typeof value === 'string' ? `"${value}"` : value;
-              }).join(',');
-            });
-            
-            const csvString = [
-              headers.join(','),
-              ...csvData
-            ].join('\n');
-            
-            // Create blob and download
-            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.setAttribute('href', url);
-            link.setAttribute('download', 'markets-data.csv');
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }
-        }
-      }}>
-        Export to CSV
-      </DropdownMenuItem>
-      
-      <DropdownMenuSeparator />
-      
       <DropdownMenuItem onClick={() => {
         if (tableRef?.current) {
           const table = tableRef.current.getTable();

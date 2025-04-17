@@ -23,8 +23,8 @@ import {
   TableHead,
   TableRow,
   TableCell
-} from './ui/table';
-import { Button } from './ui/button';
+} from '../ui/table';
+import { Button } from '../ui/button';
 import { cn } from '@/lib/utils';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { 
@@ -45,9 +45,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
   DropdownMenuCheckboxItem 
-} from './ui/dropdown-menu';
-import { Checkbox } from './ui/checkbox';
-import { Input } from './ui/input';
+} from '../ui/dropdown-menu';
+import { Checkbox } from '../ui/checkbox';
+import { Input } from '../ui/input';
 import { MarketsWidgetHeader } from './MarketsWidgetHeader';
 import { 
   Dialog,
@@ -57,8 +57,8 @@ import {
   DialogTitle,
   DialogFooter,
   DialogClose,
-} from './ui/dialog';
-import { toast } from './ui/use-toast';
+} from '../ui/dialog';
+import { toast } from '../ui/use-toast';
 
 // TanStack Table imports
 import {
