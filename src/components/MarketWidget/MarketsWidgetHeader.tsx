@@ -40,7 +40,6 @@ import {
 import { useReactTable } from '@tanstack/react-table';
 import { MarketsWidgetMenu, ListManager } from './MarketsWidgetMenu';
 import { MarketsWidgetColumnVisibility } from './MarketsWidget';
-import { MarketsWidgetFilter } from './MarketsWidgetFilter';
 import { 
   Dialog, 
   DialogContent, 
@@ -104,14 +103,36 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   // Get actual table instance - simplified access pattern
   const actualTable = table || tableRef?.current?.getTable() || null;
 
-  // Check if filters are active by getting stored values
+  // Storage keys for local storage
   const storageKeys = {
     search: `marketsWidget_${widgetId}_searchQuery`,
     quoteAsset: `marketsWidget_${widgetId}_selectedQuoteAsset`,
     secondaryCurrency: `marketsWidget_${widgetId}_secondaryCurrency`,
   };
-  
+
+  // Local state variables for filter values
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedQuoteAsset, setSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>('ALL');
+  const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(null);
   const [isFiltersActive, setIsFiltersActive] = useState(false);
+  
+  // Initialize from localStorage
+  useEffect(() => {
+    try {
+      const storedSearchQuery = getLocalStorageItem<string>(storageKeys.search, '');
+      const storedQuoteAsset = getLocalStorageItem<AssetTicker | 'ALL'>(storageKeys.quoteAsset, 'ALL');
+      const storedSecondaryCurrency = getLocalStorageItem<AssetTicker | null>(storageKeys.secondaryCurrency, null);
+      
+      setSearchQuery(storedSearchQuery);
+      setSelectedQuoteAsset(storedQuoteAsset);
+      setSecondaryCurrency(storedSecondaryCurrency);
+      
+      const active = storedSearchQuery !== '' || storedQuoteAsset !== 'ALL' || storedSecondaryCurrency !== null;
+      setIsFiltersActive(active);
+    } catch (error) {
+      console.error('Error loading filter state from localStorage:', error);
+    }
+  }, [widgetId]);
   
   // Get all trading pairs from sample data
   const availablePairs = Object.keys(SAMPLE_MARKET_DATA).sort();
@@ -148,20 +169,37 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     };
   }, []);
   
-  // Check if any filters are active
+  // Update isFiltersActive whenever filters change
   useEffect(() => {
-    try {
-      const searchQuery = localStorage.getItem(storageKeys.search) ? JSON.parse(localStorage.getItem(storageKeys.search) || '') : '';
-      const selectedQuoteAsset = localStorage.getItem(storageKeys.quoteAsset) ? JSON.parse(localStorage.getItem(storageKeys.quoteAsset) || '') : 'ALL';
-      const secondaryCurrency = localStorage.getItem(storageKeys.secondaryCurrency) ? JSON.parse(localStorage.getItem(storageKeys.secondaryCurrency) || '') : null;
-      
-      const active = searchQuery !== '' || selectedQuoteAsset !== 'ALL' || secondaryCurrency !== null;
-      setIsFiltersActive(active);
-    } catch (error) {
-      console.error('Error checking filter state:', error);
-      setIsFiltersActive(false);
-    }
-  }, [widgetId]);
+    const active = searchQuery !== '' || selectedQuoteAsset !== 'ALL' || secondaryCurrency !== null;
+    setIsFiltersActive(active);
+  }, [searchQuery, selectedQuoteAsset, secondaryCurrency]);
+
+  // Handle filter changes
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setLocalStorageItem(storageKeys.search, value);
+    onSearchQueryChange(value);
+  };
+
+  const handleQuoteAssetChange = (value: AssetTicker | 'ALL') => {
+    setSelectedQuoteAsset(value);
+    setLocalStorageItem(storageKeys.quoteAsset, value);
+    onSelectedQuoteAssetChange(value);
+  };
+
+  const handleSecondaryCurrencyChange = (value: AssetTicker | null) => {
+    setSecondaryCurrency(value);
+    setLocalStorageItem(storageKeys.secondaryCurrency, value);
+    onSecondaryCurrencyChange(value);
+  };
+
+  const clearAllFilters = () => {
+    handleSearchChange('');
+    handleQuoteAssetChange('ALL');
+    handleSecondaryCurrencyChange(null);
+    setFilterDropdownOpen(false);
+  };
 
   // Handle adding a pair to the current list
   const handleAddPair = (pairToAdd: string = selectedPair) => {
@@ -273,38 +311,211 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-64 p-1" align="start">
-          <MarketsWidgetFilter 
-            widgetId={widgetId}
-            onSearchQueryChange={(val) => {
-              onSearchQueryChange(val);
-              // Update active state when filter changes
-              setIsFiltersActive(
-                val !== '' || 
-                JSON.parse(localStorage.getItem(storageKeys.quoteAsset) || '"ALL"') !== 'ALL' || 
-                JSON.parse(localStorage.getItem(storageKeys.secondaryCurrency) || 'null') !== null
-              );
-            }}
-            onSelectedQuoteAssetChange={(val) => {
-              onSelectedQuoteAssetChange(val);
-              // Update active state when filter changes
-              setIsFiltersActive(
-                JSON.parse(localStorage.getItem(storageKeys.search) || '""') !== '' || 
-                val !== 'ALL' || 
-                JSON.parse(localStorage.getItem(storageKeys.secondaryCurrency) || 'null') !== null
-              );
-            }}
-            onSecondaryCurrencyChange={(val) => {
-              onSecondaryCurrencyChange(val);
-              // Update active state when filter changes
-              setIsFiltersActive(
-                JSON.parse(localStorage.getItem(storageKeys.search) || '""') !== '' || 
-                JSON.parse(localStorage.getItem(storageKeys.quoteAsset) || '"ALL"') !== 'ALL' || 
-                val !== null
-              );
-            }}
-            quoteAssets={quoteAssets}
-            onCloseDropdown={() => setFilterDropdownOpen(false)}
-          />
+          {/* Improved filter implementation */}
+          <>
+            <div className="relative mb-1 px-1" onClick={(e) => e.stopPropagation()} onFocus={(e) => e.stopPropagation()}>
+              <Input
+                type="text"
+                placeholder="Search Pairs"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="h-8 w-full pl-7 pr-7 text-xs"
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+              {searchQuery && (
+                <button 
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSearchChange('');
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            
+            <DropdownMenuSeparator className="mx-1 my-1"/>
+
+            <DropdownMenuGroup>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className={cn(
+                  "text-xs h-8 mx-1 pr-2",
+                  selectedQuoteAsset === 'ALL' && "opacity-75"
+                )}>
+                  {selectedQuoteAsset === 'ALL' ? (
+                    <ListIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                  ) : ASSETS[selectedQuoteAsset]?.icon ? (
+                    <img 
+                      src={ASSETS[selectedQuoteAsset].icon} 
+                      alt={selectedQuoteAsset} 
+                      className="w-4 h-4 mr-2 rounded-full shrink-0" 
+                    />
+                  ) : (
+                    <div className="w-4 h-4 mr-2 shrink-0"></div>
+                  )}
+                  <span className="flex-1 text-left truncate">
+                    Quote: {selectedQuoteAsset === 'ALL' ? 'All Pairs' : selectedQuoteAsset}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="p-0 w-48">
+                  <Command>
+                    <CommandInput placeholder="Filter pair..." className="h-8 text-xs" autoFocus />
+                    <CommandList>
+                      <CommandEmpty>No pair found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="ALL"
+                          onSelect={() => handleQuoteAssetChange('ALL')}
+                          className="text-xs h-8 flex items-center justify-between"
+                        >
+                          <div className="flex items-center flex-1 truncate">
+                            <ListIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                            <span className="truncate">All Pairs</span>
+                          </div>
+                          <Check
+                            className={cn(
+                              "ml-2 h-3 w-3 flex-shrink-0",
+                              selectedQuoteAsset === 'ALL' ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </CommandItem>
+                        {quoteAssets.map((asset) => {
+                          const assetConfig = ASSETS[asset];
+                          return (
+                            <CommandItem
+                              key={asset}
+                              value={asset}
+                              onSelect={(currentValue) => {
+                                handleQuoteAssetChange(currentValue.toUpperCase() as AssetTicker);
+                              }}
+                              className="text-xs h-8 flex items-center justify-between"
+                            >
+                              <div className="flex items-center flex-1 truncate">
+                                {assetConfig?.icon ? (
+                                  <img 
+                                    src={assetConfig.icon} 
+                                    alt={asset} 
+                                    className="w-4 h-4 mr-2 rounded-full shrink-0" 
+                                  />
+                                ) : (
+                                  <div className="w-4 h-4 mr-2 shrink-0"></div>
+                                )}
+                                <span className="truncate">{asset}</span>
+                              </div>
+                              <Check
+                                className={cn(
+                                  "ml-2 h-3 w-3 flex-shrink-0",
+                                  selectedQuoteAsset === asset ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className={cn(
+                  "text-xs h-8 mx-1 pr-2",
+                  secondaryCurrency === null && "opacity-75"
+                )}>
+                  {secondaryCurrency === null ? (
+                    <BanIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                  ) : ASSETS[secondaryCurrency]?.icon ? (
+                    <img 
+                      src={ASSETS[secondaryCurrency].icon} 
+                      alt={secondaryCurrency} 
+                      className="w-4 h-4 mr-2 rounded-full shrink-0" 
+                    />
+                  ) : (
+                    <div className="w-4 h-4 mr-2 shrink-0"></div>
+                  )}
+                  <span className="flex-1 text-left truncate">
+                    {secondaryCurrency ? `Show in: ${secondaryCurrency}` : 'Secondary: None'}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="p-0 w-48">
+                  <Command>
+                    <CommandInput placeholder="Filter currency..." className="h-8 text-xs" autoFocus />
+                    <CommandList>
+                      <CommandEmpty>No currency found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value=""
+                          onSelect={() => handleSecondaryCurrencyChange(null)}
+                          className="text-xs h-8 flex items-center justify-between"
+                        >
+                          <div className="flex items-center flex-1 truncate">
+                            <BanIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                            <span className="truncate">None</span>
+                          </div>
+                          <Check
+                            className={cn(
+                              "ml-2 h-3 w-3 flex-shrink-0",
+                              secondaryCurrency === null ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </CommandItem>
+                        {(['USD', 'EUR', 'GBP'] as const).map((currency) => {
+                          const assetConfig = ASSETS[currency];
+                          return (
+                            <CommandItem
+                              key={currency}
+                              value={currency}
+                              onSelect={(currentValue) => {
+                                handleSecondaryCurrencyChange(currentValue.toUpperCase() as AssetTicker);
+                              }}
+                              className="text-xs h-8 flex items-center justify-between"
+                            >
+                              <div className="flex items-center flex-1 truncate">
+                                {assetConfig?.icon ? (
+                                  <img 
+                                    src={assetConfig.icon} 
+                                    alt={currency} 
+                                    className="w-4 h-4 mr-2 rounded-full shrink-0" 
+                                  />
+                                ) : (
+                                  <div className="w-4 h-4 mr-2 shrink-0"></div>
+                                )}
+                                <span className="truncate">Show in {currency}</span>
+                              </div>
+                              <Check
+                                className={cn(
+                                  "ml-2 h-3 w-3 flex-shrink-0",
+                                  secondaryCurrency === currency ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuGroup>
+            
+            {/* Separator and Clear Filters Button */}
+            <DropdownMenuSeparator className="mx-1 my-1" />
+            <DropdownMenuItem 
+              className={cn(
+                "text-xs h-8 mx-1 pr-2 focus:bg-muted",
+                !isFiltersActive 
+                  ? "opacity-50 pointer-events-none"
+                  : "cursor-pointer"
+              )}
+              onSelect={clearAllFilters}
+              disabled={!isFiltersActive}
+            >
+              <RotateCcw className="mr-2 h-3.5 w-3.5 opacity-80" />
+              <span>Clear All Filters</span>
+            </DropdownMenuItem>
+          </>
         </DropdownMenuContent>
       </DropdownMenu>
 

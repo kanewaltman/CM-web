@@ -11,5 +11,4 @@
 export { default as MarketsWidget } from './MarketsWidget';
 export { MarketsWidgetWrapper } from './MarketsWidgetWrapper';
 export { MarketsWidgetHeader } from './MarketsWidgetHeader';
-export { MarketsWidgetMenu } from './MarketsWidgetMenu';
-export { MarketsWidgetFilter } from './MarketsWidgetFilter'; 
+export { MarketsWidgetMenu } from './MarketsWidgetMenu'; 
