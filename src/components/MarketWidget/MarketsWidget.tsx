@@ -6,12 +6,9 @@ if (process.env.NODE_ENV === 'production') {
   console.log = () => {};
 }
 
-import { useSearchParams } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { ASSET_TYPE } from '@/assets/common';
-import { AssetIcon } from '@/assets/AssetIcon';
-import { formatAmount, formatCurrency, formatPercentage } from '@/utils/formatting';
 import { coinGeckoService } from '@/services/coinGeckoService';
 import { getApiUrl } from '@/lib/api-config';
 import { ASSET_TICKER_TO_COINGECKO_ID } from '@/services/coinGeckoService';
@@ -69,7 +66,7 @@ import {
   DialogFooter,
   DialogClose,
 } from '../ui/dialog';
-import { toast } from '../ui/use-toast';
+import { toast } from '@/hooks/use-toast';
 
 // TanStack Table imports
 import {
