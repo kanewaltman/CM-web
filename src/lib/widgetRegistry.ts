@@ -7,7 +7,7 @@ import { RecentTrades } from '@/components/RecentTrades';
 import { BalancesWidget } from '@/components/BalancesWidget';
 import { PerformanceWidget } from '@/components/PerformanceWidget/PerformanceWidget';
 import { BreakdownWrapper } from '@/components/Breakdown';
-import MarketsWidget from '@/components/MarketsWidget';
+import MarketsWidget from '@/components/MarketWidget/MarketsWidget';
 import { TransactionsWidget } from '@/components/TransactionsWidget';
 import { InsightWidget } from '@/components/InsightWidget';
 import { ReferralsWrapper } from '@/components/ReferralsWidget';
@@ -68,7 +68,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     title: 'Markets',
     component: MarketsWidget,
     defaultSize: { w: 8, h: 4 },
-    minSize: { w: 4, h: 3 },
+    minSize: { w: 3, h: 3 },
     maxSize: { w: 12, h: 9 }
   },
   'performance': {

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
 import { PerformanceWidgetWrapper } from './PerformanceWidgetWrapper';
 import { InsightWidgetControls } from './InsightWidget';
 import { ReferralsWrapper } from './ReferralsWidget';
+import { MarketsWidgetWrapper } from './MarketWidget/MarketsWidgetWrapper';
 import { 
   CreateWidgetParams, 
   ExtendedGridStackWidget,
@@ -17,6 +18,50 @@ import {
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
+import { useReactTable } from '@tanstack/react-table';
+import { BalancesWidgetWrapper } from './BalancesWidgetWrapper';
+
+// Create a wrapper component for Markets widget to use hooks properly
+const MarketsWidgetContainer = ({ 
+  widgetId, 
+  WidgetComponent, 
+  title, 
+  onRemove 
+}: { 
+  widgetId: string, 
+  WidgetComponent: React.FC<any>, 
+  title: string, 
+  onRemove: () => boolean 
+}) => {
+  return (
+    <WidgetContainer
+      title={title}
+      onRemove={onRemove}
+      headerControls={
+        <MarketsWidgetWrapper 
+          isHeader 
+          widgetId={widgetId} 
+          widgetComponent={WidgetComponent} 
+          onRemove={onRemove}
+        />
+      }
+      widgetMenu={
+        <MarketsWidgetWrapper 
+          isMenu 
+          widgetId={widgetId} 
+          widgetComponent={WidgetComponent} 
+          onRemove={onRemove} 
+        />
+      }
+    >
+      <MarketsWidgetWrapper 
+        widgetId={widgetId} 
+        widgetComponent={WidgetComponent} 
+        onRemove={onRemove} 
+      />
+    </WidgetContainer>
+  );
+};
 
 /**
  * Creates a new widget DOM element for GridStack
@@ -115,12 +160,14 @@ export const createWidget = ({
                 isHeader 
                 widgetId={widgetId} 
                 widgetComponent={WidgetComponent}
+                onRemove={() => true}
               />
             }
           >
             <PerformanceWidgetWrapper
               widgetId={widgetId}
               widgetComponent={WidgetComponent}
+              onRemove={() => true}
             />
           </WidgetContainer>
         </DataSourceProvider>
@@ -209,6 +256,36 @@ export const createWidget = ({
         </DataSourceProvider>
       );
     }
+    // For markets widget, use MarketsWidgetWrapper
+    else if (widgetType === 'markets') {
+      const handleRemove = () => {
+        console.log('Markets widget header remove callback triggered');
+        // Try both event approaches for maximum compatibility
+        document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+        
+        // Direct call fallback if window.handleRemoveWidget is available
+        try {
+          if ((window as any).handleGridStackWidgetRemove) {
+            (window as any).handleGridStackWidgetRemove(widgetId);
+          }
+        } catch (e) {
+          console.error('Direct removal fallback failed:', e);
+        }
+        
+        return true;
+      };
+      
+      component = (
+        <DataSourceProvider>
+          <MarketsWidgetContainer
+            widgetId={widgetId}
+            WidgetComponent={WidgetComponent}
+            title={widgetTitles[widgetType]}
+            onRemove={handleRemove}
+          />
+        </DataSourceProvider>
+      );
+    }
     // For all other widgets, use standard wrapper
     else {
       component = (
@@ -271,6 +348,91 @@ const getPerformanceWidgetTitle = (widgetId: string): string => {
 };
 
 /**
+ * Renders a React widget into a DOM element
+ */
+export const renderWidgetIntoElement = (
+  el: HTMLElement, 
+  widgetId: string, 
+  widgetType: string, 
+  widgetElement: HTMLElement,
+  onRemove: () => boolean
+): void => {
+  try {
+    const root = createRoot(el);
+    (widgetElement as any)._reactRoot = root;
+    
+    const baseId = widgetId.split('-')[0]; 
+    const WidgetComponent = widgetComponents[widgetType];
+    
+    if (!WidgetComponent) {
+      console.error('Widget component not found for type:', widgetType);
+      return;
+    }
+
+    if (baseId === 'performance') {
+      // Get correct title from localStorage for performance widgets
+      const widgetTitle = getPerformanceWidgetTitle(widgetId);
+      
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitle}
+              onRemove={onRemove}
+              headerControls={<PerformanceWidgetWrapper 
+                isHeader 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent} 
+                onRemove={onRemove} 
+              />}
+            >
+              <PerformanceWidgetWrapper 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent} 
+                onRemove={onRemove} 
+              />
+            </WidgetContainer>
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    } else if (widgetType === 'markets') {
+      // Use MarketsWidgetContainer for markets widgets
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <MarketsWidgetContainer
+              widgetId={widgetId}
+              WidgetComponent={WidgetComponent}
+              title={widgetTitles[widgetType]}
+              onRemove={onRemove}
+            />
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    } else {
+      // For non-performance, non-markets widgets
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={onRemove}
+            >
+              <WidgetComponent 
+                widgetId={widgetId} 
+                onRemove={onRemove} 
+              />
+            </WidgetContainer>
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    }
+  } catch (error) {
+    console.error('Error rendering widget:', error);
+  }
+};
+
+/**
  * Update all widgets with the new data source
  */
 export const updateWidgetsDataSource = (
@@ -282,7 +444,7 @@ export const updateWidgetsDataSource = (
   
   const items = grid.getGridItems();
   
-  items.forEach(item => {
+  items.forEach((item: any) => {
     const node = item.gridstackNode;
     if (!node?.id) return;
     

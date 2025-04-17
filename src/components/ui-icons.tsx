@@ -19,7 +19,13 @@ import {
   Copy,
   Clipboard,
   Palette,
-  Monitor
+  Monitor,
+  // Added icons for Markets dropdown
+  ListChecks,
+  Plus,
+  Edit,
+  Globe,
+  ListFilter
 } from 'lucide-react';
 
 // Export our safe version of the fingerprint icon
@@ -40,5 +46,11 @@ export {
   Copy,
   Clipboard,
   Palette,
-  Monitor
+  Monitor,
+  // Added icons for Markets dropdown
+  ListChecks,
+  Plus,
+  Edit,
+  Globe,
+  ListFilter
 }; 
