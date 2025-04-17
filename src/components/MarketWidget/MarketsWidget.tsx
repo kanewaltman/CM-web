@@ -2307,10 +2307,6 @@ interface CustomList {
   assets: string[];
 }
 
-// ... existing code ...
-
 export interface MarketsWidgetRef {
   getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
 }
-
-// ... existing code ...
