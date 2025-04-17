@@ -22,8 +22,8 @@ interface TopBarProps {
 
 export function TopBar({ currentPage, onPageChange }: TopBarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const { backgroundIntensity, widgetIntensity, borderIntensity } = useThemeIntensity();
-  const colors = getThemeValues(resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity);
+  const { backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity } = useThemeIntensity();
+  const colors = getThemeValues(resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity);
   const [isScrolled, setIsScrolled] = useState(false);
 
   // Apply CSS variables when theme or intensities change
@@ -38,7 +38,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
     return () => {
       styleTag.remove();
     };
-  }, [theme, backgroundIntensity, widgetIntensity, borderIntensity]);
+  }, [theme, backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity]);
 
   const handlePageClick = (page: 'dashboard' | 'spot' | 'margin' | 'stake') => (e: React.MouseEvent) => {
     e.preventDefault();

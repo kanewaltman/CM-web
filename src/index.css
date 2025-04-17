@@ -10,6 +10,22 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Add smooth transitions for foreground colors */
+:root {
+  --transition-speed: 80ms;
+  --transition-timing: ease-out;
+  --current-foreground-opacity: 0.7;
+}
+
+/* Set transition properties for HSL colors */
+html {
+  transition: 
+    --color-foreground-default var(--transition-speed) var(--transition-timing),
+    --color-foreground-muted var(--transition-speed) var(--transition-timing),
+    --color-foreground-subtle var(--transition-speed) var(--transition-timing),
+    --current-foreground-opacity var(--transition-speed) var(--transition-timing);
+}
+
 :root {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   line-height: 1.5;

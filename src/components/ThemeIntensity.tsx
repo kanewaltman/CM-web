@@ -1,10 +1,11 @@
-import { cn } from '@/lib/utils';
+import { cn, getThemeValues } from '@/lib/utils';
 import { Lock, Unlock } from 'lucide-react';
 import { Button } from './ui/button';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from 'next-themes';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { useThemeIntensity } from '@/contexts/ThemeContext';
+import { Slider } from './ui/slider';
 
 interface ThemeIntensityProps {
   className?: string;
@@ -14,6 +15,7 @@ interface ThemeIntensities {
   background: number;
   widget: number;
   border: number;
+  foregroundOpacity: number;
 }
 
 export function ThemeIntensity({ className }: ThemeIntensityProps) {
@@ -22,15 +24,31 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
     backgroundIntensity,
     widgetIntensity,
     borderIntensity,
+    foregroundOpacity,
     setBackgroundIntensity,
     setWidgetIntensity,
     setBorderIntensity,
+    setForegroundOpacity,
   } = useThemeIntensity();
   
   const [isLocked, setIsLocked] = useState(() => {
     const savedLockState = localStorage.getItem('theme-sliders-locked');
     return savedLockState === null ? true : savedLockState === 'true';
   });
+
+  // Reference to track if we're currently dragging
+  const isDraggingRef = useRef(false);
+  const lastUpdateTimeRef = useRef(0);
+  const throttleTimeMs = 16; // ~ 60fps
+
+  // Throttled function to update CSS directly without causing excessive DOM operations
+  const throttledApplyForegroundOpacity = useCallback((opacity: number) => {
+    const now = Date.now();
+    if (now - lastUpdateTimeRef.current >= throttleTimeMs) {
+      lastUpdateTimeRef.current = now;
+      applyForegroundOpacity(opacity);
+    }
+  }, []);
 
   // Get intensity label based on theme and value
   const getIntensityLabel = (intensity: number) => {
@@ -46,7 +64,7 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
     if (saved) {
       return JSON.parse(saved);
     }
-    return { background: 0, widget: 0, border: 0 };
+    return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
   };
 
   const saveThemeIntensities = (theme: string, intensities: ThemeIntensities) => {
@@ -104,6 +122,75 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
     }
   };
 
+  // Apply CSS variables for foreground opacity during drag
+  const applyForegroundOpacity = (opacity: number) => {
+    if (!resolvedTheme) return;
+    
+    const root = document.documentElement;
+    const intensities = getThemeIntensities(resolvedTheme);
+
+    // Get current theme values
+    const colors = getThemeValues(
+      resolvedTheme,
+      intensities.background,
+      intensities.widget,
+      intensities.border,
+      opacity
+    );
+
+    // Update only foreground-related CSS variables
+    Object.entries(colors.cssVariables)
+      .filter(([key]) => key.includes('foreground'))
+      .forEach(([key, value]) => {
+        root.style.setProperty(key, value);
+      });
+
+    // Also update the CSS variable for reference
+    root.style.setProperty('--current-foreground-opacity', String(opacity));
+  };
+
+  // Handle active slider dragging with throttling
+  const handleSliderDrag = (value: number[]) => {
+    const opacity = value[0];
+    if (isDraggingRef.current) {
+      throttledApplyForegroundOpacity(opacity);
+    }
+  };
+
+  const handleForegroundOpacityChange = (value: number[]) => {
+    const opacity = value[0];
+    
+    // Immediate visual update while dragging
+    handleSliderDrag(value);
+    
+    // Update state for permanent change
+    setForegroundOpacity(opacity);
+    
+    if (resolvedTheme) {
+      const currentIntensities = getThemeIntensities(resolvedTheme);
+      currentIntensities.foregroundOpacity = opacity;
+      saveThemeIntensities(resolvedTheme, currentIntensities);
+    }
+  };
+
+  // When drag ends, ensure final value is applied properly
+  const handleForegroundOpacityCommit = (value: number[]) => {
+    isDraggingRef.current = false;
+    const opacity = value[0];
+    
+    // Force immediate update of all variables
+    applyForegroundOpacity(opacity);
+    
+    // Ensure state is updated
+    setForegroundOpacity(opacity);
+    
+    if (resolvedTheme) {
+      const currentIntensities = getThemeIntensities(resolvedTheme);
+      currentIntensities.foregroundOpacity = opacity;
+      saveThemeIntensities(resolvedTheme, currentIntensities);
+    }
+  };
+
   const toggleLock = () => {
     if (!isLocked && resolvedTheme) {
       const currentIntensities = getThemeIntensities(resolvedTheme);
@@ -121,6 +208,12 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
   const getValueFromIntensity = (intensity: number) => {
     return intensity === -1 ? 'min' : intensity === 1 ? 'max' : 'default';
   };
+
+  // Initialize CSS variable with current foreground opacity on mount
+  useEffect(() => {
+    // Apply opacity to both themes
+    document.documentElement.style.setProperty('--current-foreground-opacity', String(foregroundOpacity));
+  }, [resolvedTheme, foregroundOpacity]);
 
   return (
     <div className={cn("w-full space-y-4", className)}>
@@ -237,6 +330,24 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
               </TabsTrigger>
             </TabsList>
           </Tabs>
+        </div>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium">Foreground</span>
+            <span className="text-xs text-muted-foreground">{Math.round(foregroundOpacity * 100)}%</span>
+          </div>
+          <div className="px-1 py-3">
+            <Slider
+              value={[foregroundOpacity]}
+              min={0.3}
+              max={1}
+              step={0.05}
+              onValueChange={handleForegroundOpacityChange}
+              onValueCommit={handleForegroundOpacityCommit}
+              onPointerDown={() => { isDraggingRef.current = true; }}
+              className="transition-all duration-150"
+            />
+          </div>
         </div>
       </div>
     </div>
