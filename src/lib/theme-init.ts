@@ -16,7 +16,7 @@ const getSavedIntensities = (theme: string) => {
   if (saved) {
     return JSON.parse(saved);
   }
-  return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+  return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
 };
 
 // Apply initial theme values

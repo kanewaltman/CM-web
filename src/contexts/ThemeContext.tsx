@@ -38,7 +38,7 @@ const getInitialIntensities = () => {
       background: getIntensity(0, getComputedStyle(root).getPropertyValue('--color-bg-base')),
       widget: getIntensity(0, getComputedStyle(root).getPropertyValue('--color-bg-widget')),
       border: getIntensity(0, getComputedStyle(root).getPropertyValue('--color-border')),
-      foregroundOpacity: 0.7 // Default foreground opacity
+      foregroundOpacity: 0.85 // Default foreground opacity
     };
   }
 
@@ -50,7 +50,7 @@ const getInitialIntensities = () => {
     background: getIntensity(bgBase, getComputedStyle(root).getPropertyValue('--color-bg-base')),
     widget: getIntensity(widgetBase, getComputedStyle(root).getPropertyValue('--color-bg-widget')),
     border: getIntensity(borderBase, getComputedStyle(root).getPropertyValue('--color-border')),
-    foregroundOpacity: 0.7 // Default foreground opacity
+    foregroundOpacity: 0.85 // Default foreground opacity
   };
 };
 
@@ -68,7 +68,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
     if (savedIntensities) {
-      const { background, widget, border, foregroundOpacity = 0.7 } = JSON.parse(savedIntensities);
+      const { background, widget, border, foregroundOpacity = 0.85 } = JSON.parse(savedIntensities);
       setBackgroundIntensity(background);
       setWidgetIntensity(widget);
       setBorderIntensity(border);
@@ -78,7 +78,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setBackgroundIntensity(0);
       setWidgetIntensity(0);
       setBorderIntensity(0);
-      setForegroundOpacity(0.7);
+      setForegroundOpacity(0.85);
     }
   }, [resolvedTheme]);
 
@@ -91,7 +91,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setBackgroundIntensity(value);
       if (resolvedTheme) {
         const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
         localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, background: value }));
       }
     },
@@ -99,7 +99,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setWidgetIntensity(value);
       if (resolvedTheme) {
         const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
         localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, widget: value }));
       }
     },
@@ -107,7 +107,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setBorderIntensity(value);
       if (resolvedTheme) {
         const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
         localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, border: value }));
       }
     },
@@ -115,7 +115,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setForegroundOpacity(value);
       if (resolvedTheme) {
         const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
         localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, foregroundOpacity: value }));
       }
     },

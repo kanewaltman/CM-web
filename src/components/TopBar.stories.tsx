@@ -16,7 +16,7 @@ const ThemeIntensityWrapper = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Initialize with default values if no saved values exist
-    const defaultIntensities = { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+    const defaultIntensities = { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
     
     const getSavedIntensities = (theme: string) => {
       if (typeof window === 'undefined') return defaultIntensities;
@@ -53,9 +53,9 @@ const ThemeWrapper = ({ children }: { children: React.ReactNode }) => {
     
     // Get saved intensities for both themes
     const getSavedIntensities = (theme: string) => {
-      if (typeof window === 'undefined') return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+      if (typeof window === 'undefined') return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
       const saved = localStorage.getItem(`theme-intensities-${theme}`);
-      return saved ? JSON.parse(saved) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+      return saved ? JSON.parse(saved) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
     };
 
     const lightIntensities = getSavedIntensities('light');

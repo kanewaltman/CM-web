@@ -64,7 +64,7 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
     if (saved) {
       return JSON.parse(saved);
     }
-    return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.7 };
+    return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
   };
 
   const saveThemeIntensities = (theme: string, intensities: ThemeIntensities) => {
