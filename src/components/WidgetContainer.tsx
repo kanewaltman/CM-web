@@ -62,14 +62,11 @@ export const WidgetContainer = memo(function WidgetContainer({
   const [activeList, setActiveList] = useState<string | null>(null);
   const isMarketsWidget = title === "Markets";
   
-  // State for the create list dialog
-  const [createListDialogOpen, setCreateListDialogOpen] = useState(false);
+  // State for handling custom lists
   const [newListName, setNewListName] = useState('');
-  
-  // New state for the rename list dialog
-  const [renameListDialogOpen, setRenameListDialogOpen] = useState(false);
-  const [renameListId, setRenameListId] = useState<string>('');
+  const [renameListId, setRenameListId] = useState<string | null>(null);
   const [renameListName, setRenameListName] = useState('');
+  const [renameListDialogOpen, setRenameListDialogOpen] = useState(false);
 
   // Load custom lists from localStorage
   useEffect(() => {
@@ -125,32 +122,40 @@ export const WidgetContainer = memo(function WidgetContainer({
     }
   }, [customLists]);
 
-  // Create a new list - improved version with Dialog
-  const handleCreateList = useCallback(() => {
-    // Open the dialog with a default name
-    setNewListName(`New List ${customLists.length + 1}`);
-    setCreateListDialogOpen(true);
-  }, [customLists]);
-  
-  // Handle saving the new list when confirmed in dialog
-  const handleSaveNewList = useCallback(() => {
-    if (newListName.trim() === '') return;
-    
-    const listId = `list-${Date.now()}`;
-    const newList: CustomList = {
-      id: listId,
-      name: newListName.trim(),
-      assets: []
-    };
-    
-    const updatedLists = [...customLists, newList];
-    saveCustomLists(updatedLists);
-    saveActiveList(listId);
-    
-    // Reset and close dialog
+  // Handle creating a new list
+  const handleCreateList = () => {
     setNewListName('');
-    setCreateListDialogOpen(false);
-  }, [newListName, customLists, saveCustomLists, saveActiveList]);
+  };
+  
+  // Handle saving a new list
+  const handleSaveNewList = () => {
+    if (newListName.trim()) {
+      const newList: CustomList = {
+        id: `list-${Date.now()}`,
+        name: newListName.trim(),
+        assets: []
+      };
+      
+      const updatedLists = [...customLists, newList];
+      setCustomLists(updatedLists);
+      
+      // Store in localStorage
+      localStorage.setItem('markets-widget-custom-lists', JSON.stringify(updatedLists));
+      
+      // Set as active list
+      saveActiveList(newList.id);
+      
+      // Reset state and close dialog
+      setNewListName('');
+      
+      // Dispatch event
+      const event = new CustomEvent('markets-lists-updated', {
+        detail: { lists: updatedLists },
+        bubbles: true
+      });
+      document.dispatchEvent(event);
+    }
+  };
 
   // Delete a list
   const handleDeleteList = useCallback((listId: string) => {
@@ -187,7 +192,7 @@ export const WidgetContainer = memo(function WidgetContainer({
     saveCustomLists(updatedLists);
     
     // Reset and close dialog
-    setRenameListId('');
+    setRenameListId(null);
     setRenameListName('');
     setRenameListDialogOpen(false);
   }, [renameListId, renameListName, customLists, saveCustomLists]);
@@ -302,9 +307,6 @@ export const WidgetContainer = memo(function WidgetContainer({
         
       return (
         <>
-          <DropdownMenuLabel>Markets View: {activeListName}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          
           {/* All Markets option */}
           <DropdownMenuItem 
             onClick={() => saveActiveList(null)}
@@ -342,11 +344,36 @@ export const WidgetContainer = memo(function WidgetContainer({
           
           <DropdownMenuSeparator />
           
-          {/* Create new list */}
-          <DropdownMenuItem onClick={handleCreateList}>
-            <Plus className="h-4 w-4 mr-2 opacity-70" />
-            Create New List
-          </DropdownMenuItem>
+          {/* Create new list - inline form instead of modal */}
+          <div className="p-2">
+            <div className="flex items-center space-x-2">
+              <Input 
+                value={newListName} 
+                onChange={(e) => setNewListName(e.target.value)}
+                placeholder="New list name..."
+                className="h-8 text-xs"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newListName.trim() !== '') {
+                    handleSaveNewList();
+                    setTitleMenuOpen(false);
+                  }
+                }}
+              />
+              <Button 
+                size="sm" 
+                className="h-8 px-2"
+                onClick={() => {
+                  if (newListName.trim() !== '') {
+                    handleSaveNewList();
+                    setTitleMenuOpen(false);
+                  }
+                }}
+                disabled={newListName.trim() === ''}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </>
       );
     } else {
@@ -377,12 +404,18 @@ export const WidgetContainer = memo(function WidgetContainer({
           !isMobile && "cursor-move" // Only show move cursor on desktop
         )}>
           <div className="flex items-center space-x-2">
-            <h2 key={title} className="text-sm font-semibold">{title}</h2>
             <DropdownMenu open={titleMenuOpen} onOpenChange={setTitleMenuOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-4 w-4 p-0 hover:bg-transparent">
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
+                <div className="flex items-center cursor-pointer group">
+                  <h2 key={title} className="text-sm font-semibold group-hover:text-primary">
+                    {isMarketsWidget && activeList 
+                      ? (customLists.find(list => list.id === activeList)?.name || 'Markets') 
+                      : title}
+                  </h2>
+                  <Button variant="ghost" size="icon" className="h-4 w-4 p-0 ml-1 hover:bg-transparent">
+                    <ChevronDown className="h-4 w-4 opacity-50 group-hover:opacity-100" />
+                  </Button>
+                </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
                 {renderTitleDropdownContent()}
@@ -432,67 +465,22 @@ export const WidgetContainer = memo(function WidgetContainer({
         </div>
       </div>
       
-      {/* Create List Dialog */}
-      <Dialog open={createListDialogOpen} onOpenChange={setCreateListDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Create New List</DialogTitle>
-            <DialogDescription>
-              Enter a name for your new market list. You can add assets to it later.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="list-name" className="text-right">
-                List Name
-              </Label>
-              <Input 
-                id="list-name" 
-                value={newListName} 
-                onChange={(e) => setNewListName(e.target.value)}
-                className="col-span-3"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSaveNewList();
-                  }
-                }}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setCreateListDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSaveNewList}
-              disabled={newListName.trim() === ''}
-            >
-              Create List
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
       {/* Rename List Dialog */}
       <Dialog open={renameListDialogOpen} onOpenChange={setRenameListDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Rename List</DialogTitle>
             <DialogDescription>
-              Enter a new name for your market list.
+              Enter a new name for your list.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="rename-list-name" className="text-right">
+              <Label htmlFor="rename-list" className="text-right">
                 List Name
               </Label>
               <Input 
-                id="rename-list-name" 
+                id="rename-list" 
                 value={renameListName} 
                 onChange={(e) => setRenameListName(e.target.value)}
                 className="col-span-3"
@@ -516,7 +504,7 @@ export const WidgetContainer = memo(function WidgetContainer({
               onClick={handleSaveRenamedList}
               disabled={renameListName.trim() === ''}
             >
-              Rename List
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
