@@ -49,7 +49,6 @@ import {
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { MarketsWidgetHeader } from './MarketsWidgetHeader';
-import { AddToListButton } from './AddToListButton';
 import { 
   Dialog,
   DialogContent,
@@ -215,10 +214,6 @@ const getConversionRate = (from: AssetTicker, to: AssetTicker | null): number =>
   if (!to) return 1; // No conversion needed if no secondary currency
   if (from === to) return 1;
   
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`Converting from ${from} to ${to}`);
-  }
-  
   // First check direct conversions
   if (from === 'EUR' && to === 'USD') return CURRENCY_CONVERSION_RATES.EUR_USD;
   if (from === 'USD' && to === 'EUR') return CURRENCY_CONVERSION_RATES.USD_EUR;
@@ -237,9 +232,6 @@ const getConversionRate = (from: AssetTicker, to: AssetTicker | null): number =>
   }
   
   // For other pairs, use a default rate (this should be replaced with real data)
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`No direct conversion rate found for ${from} to ${to}, using default`);
-  }
   return 1.0;
 };
 
@@ -922,39 +914,34 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     };
   }, [updateColumnSizes, debouncedUpdateColumnSizes]);
 
-  // Force rerender when secondary currency changes
+  // Only force rerender when secondary currency changes from one value to another (not on initial render)
   const [forceRenderKey, setForceRenderKey] = useState(0);
+  const prevSecondaryCurrencyRef = useRef<AssetTicker | null>(null);
+  
   useEffect(() => {
-    console.log('Secondary currency changed to:', secondaryCurrency);
-    // Force a complete re-render by changing the key
-    setForceRenderKey(prev => prev + 1);
+    // Only trigger the re-render if this is an actual change, not the initial value
+    if (prevSecondaryCurrencyRef.current !== secondaryCurrency && prevSecondaryCurrencyRef.current !== null) {
+      setForceRenderKey(prev => prev + 1);
+    }
+    prevSecondaryCurrencyRef.current = secondaryCurrency;
   }, [secondaryCurrency]);
   
   // Dynamic key for table to force complete re-renders
-  const tableKey = `table-${forceRenderKey}-${secondaryCurrency || 'none'}`;
+  const tableKey = useMemo(() => 
+    `table-${forceRenderKey}-${secondaryCurrency || 'none'}`, 
+    [forceRenderKey, secondaryCurrency]
+  );
 
   useEffect(() => {
-    if (externalSelectedQuoteAsset !== undefined) {
-      console.log('External quote asset changed:', externalSelectedQuoteAsset);
-    } else {
-      console.log('Internal quote asset changed:', internalSelectedQuoteAsset);
-    }
+    // External/internal quote asset handling (console logs removed)
   }, [externalSelectedQuoteAsset, internalSelectedQuoteAsset]);
 
   useEffect(() => {
-    if (externalSearchQuery !== undefined) {
-      console.log('External search query changed:', externalSearchQuery);
-    } else {
-      console.log('Internal search query changed:', internalSearchQuery);
-    }
+    // External/internal search query handling (console logs removed)
   }, [externalSearchQuery, internalSearchQuery]);
 
   useEffect(() => {
-    if (externalSecondaryCurrency !== undefined) {
-      console.log('External secondary currency changed:', externalSecondaryCurrency);
-    } else {
-      console.log('Internal secondary currency changed:', internalSecondaryCurrency);
-    }
+    // External/internal secondary currency handling (console logs removed)
   }, [externalSecondaryCurrency, internalSecondaryCurrency]);
 
   useEffect(() => {
@@ -1128,18 +1115,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
   // Update the table with filtered data whenever filters change
   useEffect(() => {
-    console.log('Filtered data updated:', filteredData.length);
+    // Filtered data update logic - remove console logging
   }, [filteredData]);
 
   // Responsive column hiding logic will be implemented after table initialization
   
   // Now let's update the price column cell to show extra info when columns are hidden
-  const columns = useDeepCompareMemo<ColumnDef<MarketData>[]>(() => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('Rebuilding columns with secondaryCurrency:', secondaryCurrency);
-    }
-    
-    // Simply return columns without size property - we'll apply it later
+  const columns = useMemo<ColumnDef<MarketData>[]>(() => {
     return [
       {
         id: 'pair',
@@ -1183,21 +1165,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                   )}
                 </div>
               </div>
-              
-              {/* Add to list button - only visible on hover */}
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <AddToListButton 
-                  asset={row.original.pair} 
-                  size="sm" 
-                  variant="ghost"
-                  label="+" 
-                  className="h-6 w-6 p-0"
-                />
-              </div>
             </div>
           );
         },
-        // Remove size property here as it causes frequent rebuilds
       },
       {
         id: 'price',
@@ -1228,7 +1198,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             </div>
           );
         },
-        // Remove size property here
       },
       {
         id: 'change24h',
@@ -1353,7 +1322,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           );
         },
       }
-    ]}, [secondaryCurrency]);
+    ]
+  }, [secondaryCurrency]);
 
   // Apply sizes separately in a lightweight memo
   const columnsWithSizes = useMemo(() => {
