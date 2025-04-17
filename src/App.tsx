@@ -3,6 +3,7 @@ import * as ReactDOM from 'react-dom/client';
 import 'gridstack/dist/gridstack.min.css';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
+import { Footer } from './components/Footer';
 import { Toaster } from './components/ui/sonner';
 import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
 import { useThemeIntensity } from './contexts/ThemeContext';
@@ -415,10 +416,15 @@ function AppContent() {
   // If we're on the exchange rates route, render the tester component
   if (isExchangeRatesRoute) {
     return (
-      <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
+      <div className="flex flex-col h-screen bg-[hsl(var(--color-bg-base))]">
         <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
-        <div className="main-content p-4 mt-4">
-          <ExchangeRatesTester />
+        <div className="main-content overflow-auto flex-grow">
+          <div className="mx-auto mb-4" style={{ maxWidth: `${contentWidth}px` }}>
+            <div className="p-4">
+              <ExchangeRatesTester />
+            </div>
+          </div>
+          <Footer />
         </div>
         <Toaster position="bottom-right" />
       </div>
@@ -428,29 +434,35 @@ function AppContent() {
   // Render error state if there's an error
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="bg-red-50 p-4 rounded-lg border border-red-200 max-w-md">
-          <h2 className="text-lg font-semibold text-red-800 mb-2">Error</h2>
-          <p className="text-red-700">{error}</p>
-          <button
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-            onClick={() => window.location.reload()}
-          >
-            Refresh Page
-          </button>
+      <div className="flex flex-col h-screen bg-background">
+        <div className="main-content overflow-auto flex-grow">
+          <div className="flex items-center justify-center min-h-[calc(100vh-124px)]">
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200 max-w-md">
+              <h2 className="text-lg font-semibold text-red-800 mb-2">Error</h2>
+              <p className="text-red-700">{error}</p>
+              <button
+                className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                onClick={() => window.location.reload()}
+              >
+                Refresh Page
+              </button>
+            </div>
+          </div>
+          <Footer />
         </div>
+        <Toaster position="bottom-right" />
       </div>
     );
   }
 
   // Regular dashboard view
   return (
-    <div className="min-h-screen bg-[hsl(var(--color-bg-base))]">
+    <div className="flex flex-col h-screen bg-[hsl(var(--color-bg-base))]">
       <TopBar currentPage={currentPage} onPageChange={handlePageChange} />
-      <div className="main-content h-[calc(100vh-4rem)] overflow-y-auto bg-[hsl(var(--color-bg-base))]">
+      <div className="main-content overflow-auto flex-grow">
         <div 
           ref={contentRef}
-          className="main-content-inner h-full relative"
+          className="main-content-inner relative mx-auto mb-4"
           style={{ maxWidth: `${contentWidth}px` }}
         >
           {renderResizeHandles()}
@@ -474,15 +486,17 @@ function AppContent() {
           />
           <div 
             ref={gridElementRef} 
-            className="grid-stack w-full h-[calc(100%-4rem)] p-4 bg-[hsl(var(--color-bg-base))] overflow-hidden"
+            className="grid-stack w-full p-4 bg-[hsl(var(--color-bg-base))]"
             style={{ 
-              minHeight: '500px',
+              height: 'auto',
+              minHeight: '200px',
               position: 'relative',
               '--grid-columns': '12',
               '--grid-row-height': '50px'
             } as React.CSSProperties}
           />
         </div>
+        <Footer />
       </div>
       <Toaster 
         position="bottom-right"

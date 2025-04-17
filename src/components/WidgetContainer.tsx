@@ -451,15 +451,6 @@ export const WidgetContainer = memo(function WidgetContainer({
             {extraControls}
             {headerControls}
             <div className="flex items-center space-x-1">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={handleExpand}
-                title={`Expand widget ${isTauri ? 'to new window' : 'in browser'}`}
-              >
-                <Maximize2 className="h-4 w-4" />
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -473,9 +464,13 @@ export const WidgetContainer = memo(function WidgetContainer({
                       <DropdownMenuSeparator />
                     </>
                   )}
+                  <DropdownMenuItem onClick={handleExpand} title={`Expand widget ${isTauri ? 'to new window' : 'in browser'}`}>
+                    <Maximize2 className="h-4 w-4 mr-2 opacity-50" />
+                    <span>Popout</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleRemove} className="text-destructive">
                     <Trash2 className="h-4 w-4 mr-2 opacity-50" />
-                    <span>Remove Widget</span>
+                    <span>Remove</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

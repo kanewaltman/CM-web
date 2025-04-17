@@ -11,11 +11,12 @@ const ThemeIntensityWrapper = ({ children }: { children: React.ReactNode }) => {
     setBackgroundIntensity,
     setWidgetIntensity,
     setBorderIntensity,
+    setForegroundOpacity,
   } = useThemeIntensity();
 
   useEffect(() => {
     // Initialize with default values if no saved values exist
-    const defaultIntensities = { background: 0, widget: 0, border: 0 };
+    const defaultIntensities = { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
     
     const getSavedIntensities = (theme: string) => {
       if (typeof window === 'undefined') return defaultIntensities;
@@ -35,8 +36,9 @@ const ThemeIntensityWrapper = ({ children }: { children: React.ReactNode }) => {
       setBackgroundIntensity(lightIntensities.background);
       setWidgetIntensity(lightIntensities.widget);
       setBorderIntensity(lightIntensities.border);
+      setForegroundOpacity(lightIntensities.foregroundOpacity);
     }
-  }, [setBackgroundIntensity, setWidgetIntensity, setBorderIntensity]);
+  }, [setBackgroundIntensity, setWidgetIntensity, setBorderIntensity, setForegroundOpacity]);
 
   return children;
 };
@@ -44,16 +46,16 @@ const ThemeIntensityWrapper = ({ children }: { children: React.ReactNode }) => {
 // Theme wrapper component to handle theme initialization
 const ThemeWrapper = ({ children }: { children: React.ReactNode }) => {
   const { resolvedTheme } = useTheme();
-  const { backgroundIntensity, widgetIntensity, borderIntensity } = useThemeIntensity();
+  const { backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity } = useThemeIntensity();
 
   useEffect(() => {
     const root = document.documentElement;
     
     // Get saved intensities for both themes
     const getSavedIntensities = (theme: string) => {
-      if (typeof window === 'undefined') return { background: 0, widget: 0, border: 0 };
+      if (typeof window === 'undefined') return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
       const saved = localStorage.getItem(`theme-intensities-${theme}`);
-      return saved ? JSON.parse(saved) : { background: 0, widget: 0, border: 0 };
+      return saved ? JSON.parse(saved) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
     };
 
     const lightIntensities = getSavedIntensities('light');
@@ -63,7 +65,8 @@ const ThemeWrapper = ({ children }: { children: React.ReactNode }) => {
     const lightColors = getThemeValues('light', 
       lightIntensities.background,
       lightIntensities.widget,
-      lightIntensities.border
+      lightIntensities.border,
+      lightIntensities.foregroundOpacity
     );
     const lightStyles = document.createElement('style');
     lightStyles.textContent = `:root {\n${Object.entries(lightColors.cssVariables)
@@ -75,7 +78,8 @@ const ThemeWrapper = ({ children }: { children: React.ReactNode }) => {
     const darkColors = getThemeValues('dark',
       darkIntensities.background,
       darkIntensities.widget,
-      darkIntensities.border
+      darkIntensities.border,
+      darkIntensities.foregroundOpacity
     );
     const darkStyles = document.createElement('style');
     darkStyles.textContent = `.dark {\n${Object.entries(darkColors.cssVariables)
@@ -87,7 +91,7 @@ const ThemeWrapper = ({ children }: { children: React.ReactNode }) => {
       lightStyles.remove();
       darkStyles.remove();
     };
-  }, [resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity]);
+  }, [resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity]);
 
   return children;
 };

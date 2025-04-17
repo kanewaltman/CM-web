@@ -16,14 +16,20 @@ const getSavedIntensities = (theme: string) => {
   if (saved) {
     return JSON.parse(saved);
   }
-  return { background: 0, widget: 0, border: 0 };
+  return { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
 };
 
 // Apply initial theme values
 const applyInitialTheme = () => {
   const theme = getInitialTheme();
   const intensities = getSavedIntensities(theme);
-  const colors = getThemeValues(theme, intensities.background, intensities.widget, intensities.border);
+  const colors = getThemeValues(
+    theme, 
+    intensities.background, 
+    intensities.widget, 
+    intensities.border,
+    intensities.foregroundOpacity
+  );
   
   // Apply CSS variables
   Object.entries(colors.cssVariables).forEach(([key, value]) => {
@@ -35,4 +41,6 @@ const applyInitialTheme = () => {
 };
 
 // Run immediately
-applyInitialTheme(); 
+applyInitialTheme();
+
+export { applyInitialTheme }; 

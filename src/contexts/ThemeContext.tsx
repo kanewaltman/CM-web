@@ -5,15 +5,18 @@ interface ThemeIntensities {
   background: number;
   widget: number;
   border: number;
+  foregroundOpacity: number;
 }
 
 interface ThemeContextType {
   backgroundIntensity: number;
   widgetIntensity: number;
   borderIntensity: number;
+  foregroundOpacity: number;
   setBackgroundIntensity: (value: number) => void;
   setWidgetIntensity: (value: number) => void;
   setBorderIntensity: (value: number) => void;
+  setForegroundOpacity: (value: number) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -34,7 +37,8 @@ const getInitialIntensities = () => {
     return {
       background: getIntensity(0, getComputedStyle(root).getPropertyValue('--color-bg-base')),
       widget: getIntensity(0, getComputedStyle(root).getPropertyValue('--color-bg-widget')),
-      border: getIntensity(0, getComputedStyle(root).getPropertyValue('--color-border'))
+      border: getIntensity(0, getComputedStyle(root).getPropertyValue('--color-border')),
+      foregroundOpacity: 0.85 // Default foreground opacity
     };
   }
 
@@ -45,7 +49,8 @@ const getInitialIntensities = () => {
   return {
     background: getIntensity(bgBase, getComputedStyle(root).getPropertyValue('--color-bg-base')),
     widget: getIntensity(widgetBase, getComputedStyle(root).getPropertyValue('--color-bg-widget')),
-    border: getIntensity(borderBase, getComputedStyle(root).getPropertyValue('--color-border'))
+    border: getIntensity(borderBase, getComputedStyle(root).getPropertyValue('--color-border')),
+    foregroundOpacity: 0.85 // Default foreground opacity
   };
 };
 
@@ -55,6 +60,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [backgroundIntensity, setBackgroundIntensity] = useState(initialIntensities.background);
   const [widgetIntensity, setWidgetIntensity] = useState(initialIntensities.widget);
   const [borderIntensity, setBorderIntensity] = useState(initialIntensities.border);
+  const [foregroundOpacity, setForegroundOpacity] = useState(initialIntensities.foregroundOpacity);
 
   // Load theme-specific intensities when theme changes
   useEffect(() => {
@@ -62,15 +68,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
     if (savedIntensities) {
-      const { background, widget, border } = JSON.parse(savedIntensities);
+      const { background, widget, border, foregroundOpacity = 0.85 } = JSON.parse(savedIntensities);
       setBackgroundIntensity(background);
       setWidgetIntensity(widget);
       setBorderIntensity(border);
+      setForegroundOpacity(foregroundOpacity);
     } else {
       // Reset to defaults if no saved intensities for this theme
       setBackgroundIntensity(0);
       setWidgetIntensity(0);
       setBorderIntensity(0);
+      setForegroundOpacity(0.85);
     }
   }, [resolvedTheme]);
 
@@ -78,11 +86,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     backgroundIntensity,
     widgetIntensity,
     borderIntensity,
+    foregroundOpacity,
     setBackgroundIntensity: (value: number) => {
       setBackgroundIntensity(value);
       if (resolvedTheme) {
         const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0 };
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
         localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, background: value }));
       }
     },
@@ -90,7 +99,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setWidgetIntensity(value);
       if (resolvedTheme) {
         const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0 };
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
         localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, widget: value }));
       }
     },
@@ -98,11 +107,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setBorderIntensity(value);
       if (resolvedTheme) {
         const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
-        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0 };
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
         localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, border: value }));
       }
     },
-  }), [backgroundIntensity, widgetIntensity, borderIntensity, resolvedTheme]);
+    setForegroundOpacity: (value: number) => {
+      setForegroundOpacity(value);
+      if (resolvedTheme) {
+        const savedIntensities = localStorage.getItem(`theme-intensities-${resolvedTheme}`);
+        const intensities = savedIntensities ? JSON.parse(savedIntensities) : { background: 0, widget: 0, border: 0, foregroundOpacity: 0.85 };
+        localStorage.setItem(`theme-intensities-${resolvedTheme}`, JSON.stringify({ ...intensities, foregroundOpacity: value }));
+      }
+    },
+  }), [backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity, resolvedTheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

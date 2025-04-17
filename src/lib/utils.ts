@@ -95,7 +95,8 @@ export function getThemeValues(
   theme: string | undefined, 
   backgroundIntensity: number = 0,
   widgetIntensity: number = 0,
-  borderIntensity: number = 0
+  borderIntensity: number = 0,
+  foregroundOpacity: number = 0.7
 ): ThemeColors {
   // If theme is undefined, null, empty string, or 'system', 
   // we need to check if the document has the 'dark' class
@@ -104,20 +105,25 @@ export function getThemeValues(
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       // If dark mode is detected through the class, use dark theme values
       if (document.documentElement.classList.contains('dark')) {
-        return getDarkThemeValues(backgroundIntensity, widgetIntensity, borderIntensity);
+        return getDarkThemeValues(backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity);
       }
     }
     // Default to light theme if we can't detect or aren't in browser
-    return getLightThemeValues(backgroundIntensity, widgetIntensity, borderIntensity);
+    return getLightThemeValues(backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity);
   }
 
   // If theme is explicitly set
   return theme === 'light' 
-    ? getLightThemeValues(backgroundIntensity, widgetIntensity, borderIntensity) 
-    : getDarkThemeValues(backgroundIntensity, widgetIntensity, borderIntensity);
+    ? getLightThemeValues(backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity) 
+    : getDarkThemeValues(backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity);
 }
 
-function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number, borderIntensity: number): ThemeColors {
+function getDarkThemeValues(
+  backgroundIntensity: number, 
+  widgetIntensity: number, 
+  borderIntensity: number,
+  foregroundOpacity: number
+): ThemeColors {
   const baseColors = {
     background: {
       default: 'hsl(0 0% 0%)',
@@ -223,14 +229,19 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
   // Get widget hover color
   const widgetHoverColor = getWidgetHoverColor(widgetIntensity);
 
+  // Apply foreground opacity to text styles
+  const textColor = `text-white/${foregroundOpacity}`;
+  const textMutedColor = `text-white/${foregroundOpacity * 0.5}`;
+  const hoverColor = `hover:text-white/${foregroundOpacity * 0.8}`;
+
   return {
     background: `bg-[${bgBase}]`,
-    text: 'text-white',
-    textMuted: 'text-white/50',
-    hover: 'hover:text-white/80',
+    text: textColor,
+    textMuted: textMutedColor,
+    hover: hoverColor,
     buttonBg: 'bg-white/10',
     searchBg: `bg-[${widgetBase}]`,
-    searchPlaceholder: 'placeholder:text-white/50',
+    searchPlaceholder: `placeholder:${textMutedColor}`,
     searchBorder: 'border-border',
     kbdBg: 'bg-white/10',
     intensity: backgroundIntensity,
@@ -245,20 +256,20 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
       '--color-widget-content': widgetBase,
       '--color-widget-inset': getWidgetInsetColor(widgetIntensity),
       '--color-widget-hover': widgetHoverColor,
-      '--color-foreground-default': '0 0% 98%',
+      '--color-foreground-default': `0 0% ${98 * foregroundOpacity}%`,
       '--color-foreground-muted': getInterpolatedValue(
         {
-          oled: '0 0% 40%',
-          default: '0 0% 64%',
-          backlit: '0 0% 60%'
+          oled: `0 0% ${40 * foregroundOpacity}%`,
+          default: `0 0% ${64 * foregroundOpacity}%`,
+          backlit: `0 0% ${60 * foregroundOpacity}%`
         },
         backgroundIntensity
       ),
       '--color-foreground-subtle': getInterpolatedValue(
         {
-          oled: '0 0% 30%',
-          default: '0 0% 50%',
-          backlit: '0 0% 50%'
+          oled: `0 0% ${30 * foregroundOpacity}%`,
+          default: `0 0% ${50 * foregroundOpacity}%`,
+          backlit: `0 0% ${50 * foregroundOpacity}%`
         },
         backgroundIntensity
       ),
@@ -275,9 +286,9 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
       '--muted': widgetBase,
       '--muted-foreground': getInterpolatedValue(
         {
-          oled: '0 0% 40%',
-          default: '0 0% 64%',
-          backlit: '0 0% 60%'
+          oled: `0 0% ${40 * foregroundOpacity}%`,
+          default: `0 0% ${64 * foregroundOpacity}%`,
+          backlit: `0 0% ${60 * foregroundOpacity}%`
         },
         backgroundIntensity
       ),
@@ -292,7 +303,12 @@ function getDarkThemeValues(backgroundIntensity: number, widgetIntensity: number
   };
 }
 
-function getLightThemeValues(backgroundIntensity: number, widgetIntensity: number, borderIntensity: number): ThemeColors {
+function getLightThemeValues(
+  backgroundIntensity: number, 
+  widgetIntensity: number, 
+  borderIntensity: number,
+  foregroundOpacity: number
+): ThemeColors {
   // Get background colors based on background intensity
   const bgBase = getInterpolatedValue(
     {
@@ -351,13 +367,13 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
   const borderBase = getBorderColor(borderIntensity);
   const borderMuted = getBorderColor(borderIntensity, 0.5);
 
-  // Get foreground colors based on intensity
+  // Get foreground colors based on intensity and apply opacity
   const getForegroundColor = (intensity: number): string => {
     return getInterpolatedValue(
       {
-        oled: '210 40% 20%',
-        default: '222.2 84% 4.9%',
-        backlit: '45 30% 20%'
+        oled: `210 40% ${20 * foregroundOpacity}%`,
+        default: `222.2 84% ${4.9 * foregroundOpacity}%`,
+        backlit: `45 30% ${20 * foregroundOpacity}%`
       },
       intensity
     );
@@ -366,9 +382,21 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
   const getMutedForegroundColor = (intensity: number): string => {
     return getInterpolatedValue(
       {
-        oled: '210 40% 40%',
-        default: '215.4 16.3% 46.9%',
-        backlit: '45 30% 40%'
+        oled: `210 40% ${40 * foregroundOpacity}%`,
+        default: `215.4 16.3% ${46.9 * foregroundOpacity}%`,
+        backlit: `45 30% ${40 * foregroundOpacity}%`
+      },
+      intensity
+    );
+  };
+
+  // Apply foreground opacity also to secondary text
+  const getSubtleForegroundColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: `210 40% ${30 * foregroundOpacity}%`,
+        default: `215.4 16.3% ${35 * foregroundOpacity}%`,
+        backlit: `45 30% ${30 * foregroundOpacity}%`
       },
       intensity
     );
@@ -454,7 +482,7 @@ function getLightThemeValues(backgroundIntensity: number, widgetIntensity: numbe
       '--color-widget-hover': widgetHoverColor,
       '--color-foreground-default': foregroundColor,
       '--color-foreground-muted': mutedForegroundColor,
-      '--color-foreground-subtle': mutedForegroundColor,
+      '--color-foreground-subtle': getSubtleForegroundColor(backgroundIntensity),
       '--color-border-default': borderBase,
       '--color-border-muted': borderMuted,
       '--card': cardBase,
