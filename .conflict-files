@@ -1,0 +1,3 @@
+ancestorEntries = ["package-lock.json"]
+ourEntries = ["package-lock.json"]
+theirEntries = ["package-lock.json"]
