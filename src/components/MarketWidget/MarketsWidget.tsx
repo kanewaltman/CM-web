@@ -1,13 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSProperties, forwardRef, useImperativeHandle } from 'react';
 
-// Disable verbose logging in production
-if (process.env.NODE_ENV === 'production') {
-  console.log = () => {};
-}
-
 import { useTheme } from 'next-themes';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
-import { SAMPLE_MARKET_DATA, SampleMarketDataItem, getBalancedSampleData } from '@/services/marketsSampleData';
+import { SAMPLE_MARKET_DATA, SampleMarketDataItem } from '@/services/marketsSampleData';
 import { 
   Table,
   TableHeader,
@@ -82,29 +77,26 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Format price with appropriate number of decimal places - memoize this function
-const formatPrice = (price: number) => {
-  if (price >= 1000) {
-    return price.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  } else if (price >= 100) {
-    return price.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  } else if (price >= 1) {
-    return price.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  } else if (price >= 0.01) {
-    return price.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  } else {
-    return price.toLocaleString(undefined, { maximumFractionDigits: 8 });
-  }
-};
-
-// Cache formatter results for common values
+// Format price with appropriate number of decimal places
 const priceFormatterCache = new Map<number, string>();
-const memoizedFormatPrice = (price: number) => {
+const formatPrice = (price: number) => {
   if (priceFormatterCache.has(price)) {
     return priceFormatterCache.get(price)!;
   }
-  const result = formatPrice(price);
-  // Shrink cache threshold to reduce memory churn
+  
+  let result;
+  if (price >= 1000) {
+    result = price.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  } else if (price >= 100) {
+    result = price.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  } else if (price >= 1) {
+    result = price.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  } else if (price >= 0.01) {
+    result = price.toLocaleString(undefined, { maximumFractionDigits: 6 });
+  } else {
+    result = price.toLocaleString(undefined, { maximumFractionDigits: 8 });
+  }
+  
   if (priceFormatterCache.size > 500) {
     priceFormatterCache.clear();
   }
@@ -113,58 +105,57 @@ const memoizedFormatPrice = (price: number) => {
 };
 
 // Format numbers into K, M, B, T notation
-const formatLargeNumber = (value: number) => {
-  if (value === 0) return '0';
-  
-  if (value >= 1_000_000_000_000) {
-    return `${(value / 1_000_000_000_000).toFixed(2)}T`;
-  } else if (value >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(2)}B`;
-  } else if (value >= 10_000_000) {
-    return `${(value / 1_000_000).toFixed(2)}M`;
-  } else if (value >= 1_000_000) {
-    const inMillions = value / 1_000_000;
-    if (inMillions < 0.01) {
-      return `${(value / 1_000).toFixed(2)}K`;
-    }
-    return `${inMillions.toFixed(2)}M`;
-  } else if (value >= 10_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  } else if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(2)}K`;
-  } else if (value >= 100) {
-    return value.toFixed(0);
-  } else if (value >= 10) {
-    return value.toFixed(1);
-  } else if (value >= 1) {
-    return value.toFixed(2);
-  } else if (value > 0) {
-    if (value >= 0.1) {
-      return value.toFixed(2);
-    } else if (value >= 0.01) {
-      return value.toFixed(3);
-    } else if (value >= 0.001) {
-      return value.toFixed(4);
-    } else {
-      return value.toExponential(2);
-    }
-  }
-  
-  // Fallback for any other case
-  return value.toLocaleString();
-};
-
-// Cache large number formatter results
 const largeNumberFormatterCache = new Map<number, string>();
-const memoizedFormatLargeNumber = (value: number) => {
+const formatLargeNumber = (value: number) => {
   if (largeNumberFormatterCache.has(value)) {
     return largeNumberFormatterCache.get(value)!;
   }
-  const result = formatLargeNumber(value);
+  
+  let result;
+  if (value === 0) {
+    result = '0';
+  } else if (value >= 1_000_000_000_000) {
+    result = `${(value / 1_000_000_000_000).toFixed(2)}T`;
+  } else if (value >= 1_000_000_000) {
+    result = `${(value / 1_000_000_000).toFixed(2)}B`;
+  } else if (value >= 10_000_000) {
+    result = `${(value / 1_000_000).toFixed(2)}M`;
+  } else if (value >= 1_000_000) {
+    const inMillions = value / 1_000_000;
+    if (inMillions < 0.01) {
+      result = `${(value / 1_000).toFixed(2)}K`;
+    } else {
+      result = `${inMillions.toFixed(2)}M`;
+    }
+  } else if (value >= 10_000) {
+    result = `${(value / 1_000).toFixed(1)}K`;
+  } else if (value >= 1_000) {
+    result = `${(value / 1_000).toFixed(2)}K`;
+  } else if (value >= 100) {
+    result = value.toFixed(0);
+  } else if (value >= 10) {
+    result = value.toFixed(1);
+  } else if (value >= 1) {
+    result = value.toFixed(2);
+  } else if (value > 0) {
+    if (value >= 0.1) {
+      result = value.toFixed(2);
+    } else if (value >= 0.01) {
+      result = value.toFixed(3);
+    } else if (value >= 0.001) {
+      result = value.toFixed(4);
+    } else {
+      result = value.toExponential(2);
+    }
+  } else {
+    result = value.toLocaleString();
+  }
+  
   if (largeNumberFormatterCache.size > 500) {
     largeNumberFormatterCache.clear();
   }
   largeNumberFormatterCache.set(value, result);
+  
   return result;
 };
 
@@ -241,18 +232,11 @@ const SkeletonRow: React.FC<{ isMinWidth?: boolean }> = ({ isMinWidth = false })
       </div>
     </TableCell>
     <TableCell className="text-right">
-      <div className="flex flex-col items-end">
-        <div className="w-24 h-5 ml-auto rounded bg-white/5 animate-pulse" />
-        {isMinWidth && (
-          <div className="w-16 h-3 mt-1 ml-auto rounded bg-white/5 animate-pulse" />
-        )}
-      </div>
+      <div className="w-24 h-5 ml-auto rounded bg-white/5 animate-pulse" />
     </TableCell>
     {!isMinWidth && (
       <TableCell className="text-right">
-        <div className="flex flex-col items-end">
-          <div className="w-16 h-5 ml-auto rounded bg-white/5 animate-pulse" />
-        </div>
+        <div className="w-16 h-5 ml-auto rounded bg-white/5 animate-pulse" />
       </TableCell>
     )}
     <TableCell className="text-right">
@@ -994,10 +978,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     }
 
     const debouncedFilter = () => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`Filtering ${marketData.length} items with query: "${searchQuery}"`);
-      }
-      
+      // Skip logging
       let filtered = [...marketData];
       
       // Apply filters: quote asset, search query, and custom list
@@ -1110,7 +1091,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%] tabular-nums">
               <ValueFlash 
                 value={displayPrice} 
-                formatter={(price) => `${pricePrefix}${memoizedFormatPrice(price)}`}
+                formatter={(price) => `${pricePrefix}${formatPrice(price)}`}
               />
             </div>
           );
@@ -1196,7 +1177,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
               {isSignificant ? (
                 <ValueFlash 
                   value={displayMarketCap} 
-                  formatter={(value) => `${pricePrefix}${memoizedFormatLargeNumber(value)}`}
+                  formatter={(value) => `${pricePrefix}${formatLargeNumber(value)}`}
                 />
               ) : '—'}
             </div>
@@ -1232,7 +1213,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
               {isSignificant ? (
                 <ValueFlash 
                   value={displayVolume} 
-                  formatter={(value) => `${pricePrefix}${memoizedFormatLargeNumber(value)}`}
+                  formatter={(value) => `${pricePrefix}${formatLargeNumber(value)}`}
                 />
               ) : '—'}
             </div>
@@ -1307,64 +1288,29 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
   // Fetch market data with improved logging and error handling
   const fetchMarketData = useCallback(async () => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
-    }
-    
-    if (isRefreshing) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('Update already in progress, skipping...');
-      }
-      return;
-    }
+    if (isRefreshing) return;
 
     try {
       setIsRefreshing(true);
 
       if (dataSource === 'sample') {
         try {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log('Attempting to fetch data from CoinGecko API...');
-          }
-          
           // Intentionally skip CoinGecko API for now to use our expanded sample data
           throw new Error('Using expanded sample data instead of CoinGecko API');
-          
         } catch (error) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log('Using balanced sample data, total pairs available:', Object.keys(SAMPLE_MARKET_DATA).length);
-          }
-          
           // If we get here, we're using sample data as fallback
           if (marketData.length === 0) {
-            if (process.env.NODE_ENV !== 'production') {
-              console.log('Initial load with sample data');
-            }
-            // Use all sample data instead of a balanced subset
+            // Initial load with sample data
             const sampleDataArray = Object.entries(SAMPLE_MARKET_DATA)
               .map(([pair, details]) => {
                 const parts = pair.split('/');
-                if (parts.length !== 2) {
-                  console.error(`Invalid pair format: ${pair}`);
-                  return null;
-                }
+                if (parts.length !== 2) return null;
                 
                 const baseAsset = parts[0] as AssetTicker;
                 const quoteAsset = parts[1] as AssetTicker;
                 
-                // Debug logging to catch any issues with the quote assets
-                console.log(`Processing pair ${pair}: baseAsset=${baseAsset}, quoteAsset=${quoteAsset}`);
-                
                 // Verify the assets exist in our asset registry
-                if (!(baseAsset in ASSETS)) {
-                  console.warn(`Base asset not found in ASSETS registry: ${baseAsset}`);
-                  return null;
-                }
-                
-                if (!(quoteAsset in ASSETS)) {
-                  console.warn(`Quote asset not found in ASSETS registry: ${quoteAsset}`);
-                  return null;
-                }
+                if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) return null;
                 
                 // Create market data item with explicit quote asset
                 return {
@@ -1381,25 +1327,14 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                 };
               })
               .filter(Boolean) as MarketData[];
-
-            // Verify the final data has the expected distribution of quote assets
-            const quoteAssetCounts = sampleDataArray.reduce((acc, item) => {
-              acc[item.quoteAsset] = (acc[item.quoteAsset] || 0) + 1;
-              return acc;
-            }, {} as Record<string, number>);
-            
-            console.log('Final sample data quote asset distribution:', quoteAssetCounts);
-            console.log('Sample data array created with', sampleDataArray.length, 'pairs');
+              
             setMarketData(sampleDataArray);
           } else {
-            // Using existing update logic
+            // Update existing market data with random changes
             setMarketData(prevData => {
-              // Track if we actually change any items
-              let hasUpdatedAnyItem = false;
-              
               return prevData.map(item => {
                 // Randomly decide if this item should update
-                if (Math.random() > UPDATE_PROBABILITY) return item; // Skip update for this item
+                if (Math.random() > UPDATE_PROBABILITY) return item;
 
                 // Calculate price change
                 const priceChangePercent = (Math.random() * 2 - 1) * MAX_PRICE_CHANGE_PERCENT;
@@ -1418,19 +1353,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                 const volumeChangePercent = shouldUpdateVolume ? (Math.random() * 2 - 1) * MAX_VOLUME_CHANGE_PERCENT : 0;
                 const newVolume = item.volume * (1 + volumeChangePercent);
 
-                // Check for significant changes (with lower threshold)
-                const hasSignificantChange = 
-                  Math.abs(newPrice - item.price) >= 0.0000001 ||
-                  Math.abs(newChange24h - item.change24h) >= 0.000001 ||
-                  Math.abs(newChange7d - item.change7d) >= 0.000001 ||
-                  Math.abs(newVolume - item.volume) >= 0.1;
-
-                // If no significant changes, return original item
-                if (!hasSignificantChange) return item;
-
-                // Mark that we're actually updating something
-                hasUpdatedAnyItem = true;
-
                 return {
                   ...item,
                   price: newPrice,
@@ -1443,9 +1365,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             });
           }
           
-          if (process.env.NODE_ENV !== 'production') {
-            setLastUpdateTime(new Date().toLocaleTimeString());
-          }
+          setLastUpdateTime(new Date().toLocaleTimeString());
           setError(null);
         }
       } else {
@@ -1460,7 +1380,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       setIsInitialLoading(false);
     }
   }, [dataSource, marketData.length]);
-
+  
   // Replace the existing fetchMarketData useEffect with this improved version
   useEffect(() => {
     let updateInterval: NodeJS.Timeout | null = null;
@@ -1475,9 +1395,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         // Use requestAnimationFrame to batch React state updates
         requestAnimationFrame(() => {
           fetchMarketData().catch(err => {
-            if (process.env.NODE_ENV !== 'production') {
-              console.error('Error fetching market data:', err);
-            }
+            // Skip error logging
           });
         });
         lastUpdateTime = Date.now();
@@ -2051,8 +1969,4 @@ interface CustomList {
   id: string;
   name: string;
   assets: string[];
-}
-
-export interface MarketsWidgetRef {
-  getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
 }
