@@ -428,8 +428,10 @@ const Breakdown: React.FC<{
     const isBottomLeft = isAtBottomEdge && isAtLeftEdge;
     const isBottomRight = isAtBottomEdge && isAtRightEdge;
     
-    // Container corner radius (matching rounded-xl)
-    const cornerRadius = 12;
+    // Container corner radius - check for grid style to apply different values
+    // Get current grid style from root element
+    const gridStyle = document.documentElement.getAttribute('data-grid-style') || 'dense';
+    const cornerRadius = gridStyle === 'rounded' ? 22 : 12; // 22px for rounded, 12px for dense
     const defaultRadius = 2;
     
     // Get color directly based on asset and current theme

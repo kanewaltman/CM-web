@@ -107,6 +107,9 @@ export function ControlBar({
     // Set CSS variables
     root.style.setProperty('--grid-item-border-radius', borderRadius);
     root.style.setProperty('--grid-margin', margin + 'px');
+    
+    // Set data attribute for grid style
+    root.setAttribute('data-grid-style', style);
   };
   
   const applyGridStyle = (style: GridStyle, showToast = true) => {
