@@ -389,6 +389,26 @@ html {
   border-radius: var(--radius-lg);
 }
 
+/* Additional padding for asset badges in rounded mode */
+:root[data-grid-style="rounded"] .widget-content [class*="asset"],
+:root[data-grid-style="rounded"] .widget-content button[class*="asset"],
+:root[data-grid-style="rounded"] .widget-content .font-jakarta.font-bold.rounded-md.px-1 {
+  padding-left: 0.375rem !important; /* ~6px */
+  padding-right: 0.375rem !important; /* ~6px */
+}
+
+/* Transaction badges styling */
+.widget-content .transaction-badge {
+  padding-left: 0.25rem !important; /* 4px */
+  padding-right: 0.25rem !important; /* 4px */
+}
+
+/* More generous padding for transaction badges in rounded mode */
+:root[data-grid-style="rounded"] .widget-content .transaction-badge {
+  padding-left: 0.5rem !important; /* 8px */
+  padding-right: 0.5rem !important; /* 8px */
+}
+
 /* Transaction table specific styling - ensure border radius is preserved in both modes */
 :root[data-grid-style="rounded"] [gs-id^="transactions"] .widget-content .bg-background.overflow-auto.rounded-md {
   border-radius: var(--radius-md) !important;

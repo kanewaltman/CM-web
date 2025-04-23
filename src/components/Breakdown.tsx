@@ -95,7 +95,7 @@ const AssetButton = ({
   return (
     <AssetPriceTooltip asset={asset as AssetTicker} inTableCell={false}>
       <div
-        className={cn("font-jakarta font-bold rounded-md px-1 relative z-20 asset-button-container", className)}
+        className={cn("font-jakarta font-bold rounded-md px-1 relative z-20 asset-button-container asset-badge", className)}
         style={{ 
           color: showHoverState ? 'hsl(var(--color-widget-bg))' : assetColor,
           backgroundColor: showHoverState ? assetColor : `${assetColor}14`,

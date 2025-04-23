@@ -271,7 +271,7 @@ const StyledAssetButton: React.FC<{
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
         <button 
           type="button"
-          className={cn("font-jakarta font-bold text-sm rounded-md px-1", className)}
+          className={cn("font-jakarta font-bold text-sm rounded-md px-1 asset-badge", className)}
           style={{ 
             color: assetColor,
             backgroundColor: `${assetColor}14`,
