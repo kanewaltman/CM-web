@@ -795,10 +795,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       ) as (keyof typeof minColumnWidths)[];
     
     // Calculate total minimum width and flex weight for visible columns
-    const totalMinWidth = visibleColumnIds.reduce((total, id) => 
-      total + minColumnWidths[id], 0) + padding;
-    const totalFlexWeight = visibleColumnIds.reduce((total, id) => 
-      total + columnFlexWeights[id], 0);
+    const totalMinWidth = visibleColumnIds.reduce((total, id) => total + minColumnWidths[id], 0) + padding;
+    const totalFlexWeight = visibleColumnIds.reduce((total, id) => total + columnFlexWeights[id], 0);
     
     const newSizes = {...minColumnWidths};
     
@@ -814,13 +812,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     
     setColumnSizes(newSizes);
   }, [columnVisibility, dynamicVisibility, minColumnWidths, columnFlexWeights]);
+  
   // Debounce resize operations to improve performance
   const debouncedUpdateColumnSizes = useCallback(debounce(updateColumnSizes, 100), [updateColumnSizes]);
   
   // Initialize column sizes and set up resize listener
   useEffect(() => {
-    // Initial update without debounce
-    updateColumnSizes();
+    updateColumnSizes(); // Initial update without debounce
     
     // Set up resize observer with debounced handler
     const resizeObserver = new ResizeObserver(() => {
@@ -831,8 +829,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       resizeObserver.observe(containerRef.current);
     }
     
-    // Also add window resize event listener as backup
-    window.addEventListener('resize', debouncedUpdateColumnSizes);
+    window.addEventListener('resize', debouncedUpdateColumnSizes); // Also add window resize event listener as backup
     
     return () => {
       resizeObserver.disconnect();
@@ -1381,7 +1378,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     }
   }, [dataSource, marketData.length]);
   
-  // Replace the existing fetchMarketData useEffect with this improved version
   useEffect(() => {
     let updateInterval: NodeJS.Timeout | null = null;
     let lastUpdateTime = Date.now();
@@ -1392,7 +1388,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       
       try {
         isUpdating = true;
-        // Use requestAnimationFrame to batch React state updates
         requestAnimationFrame(() => {
           fetchMarketData().catch(err => {
             // Skip error logging
@@ -1409,22 +1404,16 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         clearInterval(updateInterval);
       }
 
-      // Only set interval if tab is visible
       if (document.visibilityState === 'visible') {
         updateInterval = setInterval(debouncedFetchData, UPDATE_INTERVAL_VISIBLE);
       }
-      // No interval is set when tab is hidden
     };
 
-    // Handle visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // When tab becomes visible again, immediately fetch fresh data
         debouncedFetchData();
-        // And start regular updates
         scheduleNextUpdate();
       } else {
-        // When tab becomes hidden, clear any existing interval
         if (updateInterval) {
           clearInterval(updateInterval);
           updateInterval = null;
@@ -1432,11 +1421,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       }
     };
 
-    // Initial fetch
     debouncedFetchData();
     scheduleNextUpdate();
 
-    // Set up visibility change listener
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
@@ -1447,7 +1434,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     };
   }, [fetchMarketData]);
 
-  // Initialize TanStack Table with filtered data
   const table = useReactTable({
     data: filteredData,
     columns: columnsWithSizes,
@@ -1463,38 +1449,31 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: (newState) => {
       setColumnVisibility(newState);
-      // Schedule a column size update after visibility changes
       setTimeout(() => {
         updateColumnSizes();
       }, 50);
     },
     enableSortingRemoval: false,
-    // Expose the updateColumnSizes function via meta for use in child components
     meta: {
       updateColumnSizes,
     },
   });
 
-  // Expose table instance via ref
   useImperativeHandle(ref, () => ({
     getTable: () => table
   }), [table]);
 
-  // Set up virtualization for rows
   const { rows } = table.getRowModel();
   
-  // Configure the virtualizer
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => 48, // Estimate row height in pixels
-    overscan: 0, // reduce overscan to zero for performance
+    estimateSize: () => 48,
+    overscan: 0,
   });
 
-  // Create refs to store calculated widths for DOM measurement
   const headerRefs = useRef<Record<string, HTMLElement | null>>({});
 
-  // Calculate total width of all columns to ensure consistency
   const getTotalColumnsWidth = useCallback(() => {
     const visibleColumns = table.getVisibleLeafColumns().filter(column => {
       const columnId = column.id;
@@ -1518,61 +1497,44 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         
         const containerWidth = containerRef.current.clientWidth;
         
-        // Get user's column order and visibility preferences
+        // Get user preferences and ensure 'pair' column is first
         const userColumnOrder = table.getState().columnOrder || [];
         const userVisibility = table.getState().columnVisibility || {};
-        
-        // Always ensure pair is shown first
         const orderedColumns = userColumnOrder.filter(col => userVisibility[col] !== false);
         
-        // Always ensure 'pair' is included and is first
         if (!orderedColumns.includes('pair')) {
           orderedColumns.unshift('pair');
         } else if (orderedColumns[0] !== 'pair') {
-          // Move pair to the front if it exists but isn't first
           orderedColumns.splice(orderedColumns.indexOf('pair'), 1);
           orderedColumns.unshift('pair');
         }
         
-        // Calculate minimum column width requirements (pair + at least one data column)
-        const minPairWidth = 150; // Minimum width for pair column
-        const minDataColWidth = 100; // Minimum width for data columns
-        
-        // Determine maximum number of columns that can fit
+        // Calculate how many columns can fit
+        const minPairWidth = 150;
+        const minDataColWidth = 100;
         let maxFittingColumns = Math.max(2, Math.floor((containerWidth - minPairWidth) / minDataColWidth) + 1);
-        
-        // Add a buffer to prevent overflow
         maxFittingColumns = Math.max(2, maxFittingColumns - 1);
         
-        // Determine initial columns to show based on available width
+        // Determine columns to show and create visibility state
         let columnsToShow = orderedColumns.slice(0, maxFittingColumns);
-        
-        // Create new visibility state
         const newDynamicVisibility: VisibilityState = {};
         
-        // Hide columns that aren't in the columnsToShow list
         userColumnOrder.forEach(columnId => {
           if (!columnsToShow.includes(columnId)) {
             newDynamicVisibility[columnId] = false;
           }
         });
         
-        // Check if the visibility state has actually changed before updating
+        // Check if visibility changed before updating
         const hasVisibilityChanged = userColumnOrder.some(columnId => {
           const isCurrentlyHidden = dynamicVisibility[columnId] === false;
           const willBeHidden = newDynamicVisibility[columnId] === false;
           return isCurrentlyHidden !== willBeHidden;
         });
         
-        // Only update if there's a change to avoid unnecessary renders
         if (hasVisibilityChanged) {
-          // Use a combined update strategy to prevent flickering
-          // First update column sizes to ensure they're correct for the current visibility
           requestAnimationFrame(() => {
-            // Update visibility state first
             setDynamicVisibility(newDynamicVisibility);
-            
-            // Then update column sizes in the same frame to ensure visual consistency
             updateColumnSizes();
           });
         }
@@ -1581,7 +1543,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       }
     };
     
-    // Use a more efficient debounce that doesn't cause flickering
+    // Debounced width check to prevent flickering
     const debouncedCheckWidth = (() => {
       let timeout: NodeJS.Timeout | null = null;
       return () => {
@@ -1589,16 +1551,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           clearTimeout(timeout);
         }
         timeout = setTimeout(() => {
-          // Pass the table reference to the checkWidth function through closure
           requestAnimationFrame(() => checkWidth());
         }, 200);
       };
     })();
     
-    // Run initial check
     requestAnimationFrame(checkWidth);
     
-    // Set up resize observer
     const resizeObserver = new ResizeObserver(debouncedCheckWidth);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
