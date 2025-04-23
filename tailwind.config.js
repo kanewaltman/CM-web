@@ -111,6 +111,35 @@ export default {
             textShadow: '0 0 0 rgba(255, 255, 255, 0)',
           },
         },
+        'value-flash-dark': {
+          '0%': {
+            color: 'inherit',
+            textShadow: '0 0 0 rgba(255, 255, 255, 0)',
+          },
+          '30%': {
+            color: 'white',
+            textShadow: '0 0 8px rgba(255, 255, 255, 0.8)',
+          },
+          '100%': {
+            color: 'inherit',
+            textShadow: '0 0 0 rgba(255, 255, 255, 0)',
+          },
+        },
+        'value-flash-light': {
+          '0%': {
+            color: 'inherit',
+            textShadow: '0 0 0 rgba(0, 0, 0, 0)',
+          },
+          '30%': {
+            color: 'hsl(var(--foreground))',
+            textShadow: '0 0 4px rgba(0, 0, 0, 0.5)',
+            fontWeight: '600',
+          },
+          '100%': {
+            color: 'inherit',
+            textShadow: '0 0 0 rgba(0, 0, 0, 0)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -119,6 +148,8 @@ export default {
         'shimmer-slide': 'shimmer-slide calc(var(--speed, 3s) * 1.5) infinite alternate ease-in-out',
         'spin-around': 'spin-around var(--speed, 3s) infinite linear',
         'value-flash': 'value-flash 0.7s ease-in-out',
+        'value-flash-dark': 'value-flash-dark 0.7s ease-in-out',
+        'value-flash-light': 'value-flash-light 0.7s ease-in-out',
       },
     },
   },

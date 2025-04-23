@@ -45,6 +45,7 @@ import {
   DialogFooter,
   DialogClose,
 } from '../ui/dialog';
+import ValueFlash from './ValueFlash';
 
 // TanStack Table imports
 import {
@@ -2036,60 +2037,9 @@ const getStoredValue = <T,>(key: string, defaultValue: T): T => {
     return defaultValue;
   }
 };
-// Enhance the ValueFlash component with better animation and background effect
-const ValueFlash = React.memo<{
-  value: number | string;
-  formatter?: (value: number) => string;
-  className?: string;
-  children?: React.ReactNode;
-}>(({ value, formatter, className, children }) => {
-  const prevValueRef = useRef<number | string>(value); // Store previous value to compare against
-  const [isFlashing, setIsFlashing] = useState(false);
-  
-  useEffect(() => {
-    const prevValue = prevValueRef.current;
-    // Use a small epsilon value for floating point comparison
-    const hasChanged = typeof value === 'number' && typeof prevValue === 'number'
-      ? Math.abs((value - prevValue) / (Math.abs(prevValue) || 1)) > 0.0000001 
-      : value !== prevValue;
-    
-    if (hasChanged) {
-      prevValueRef.current = value; // Update prevValue before setting isFlashing
-      setIsFlashing(false);
-      
-      requestAnimationFrame(() => { // Ensure the DOM has time to process the false state
-        setIsFlashing(true);
-        const timer = setTimeout(() => {
-          setIsFlashing(false);
-        }, 800); // Animation duration + small buffer
-        
-        return () => clearTimeout(timer);
-      });
-    }
-  }, [value]); // Only depend on value, not on prevValueRef.current
-  
-  // Format the value if a formatter is provided and value is a number
-  const displayValue = typeof formatter === 'function' && typeof value === 'number' 
-    ? formatter(value) 
-    : value;
-  
-  return (
-    <span 
-      className={cn(
-        className,
-        isFlashing && "animate-value-flash"
-      )}
-    >
-      {children || displayValue}
-    </span>
-  );
-});
-
-ValueFlash.displayName = 'ValueFlash';
 
 // Add these constants at the top level after imports
 const UPDATE_INTERVAL_VISIBLE = 7000; // 7 seconds when tab is visible (was 5s)
-const UPDATE_INTERVAL_HIDDEN = 45000;  // 45 seconds when tab is hidden (not used anymore - updates paused when hidden)
 const UPDATE_DEBOUNCE_TIME = 300;     // 0.3 second debounce (was 0.5s)
 
 // LocalStorage keys for custom lists
