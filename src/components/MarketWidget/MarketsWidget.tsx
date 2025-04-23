@@ -316,99 +316,6 @@ const SkeletonRow: React.FC<{ isMinWidth?: boolean }> = ({ isMinWidth = false })
 // Add this CSS class at the top of the file - this will be applied to our column cells
 const COLUMN_TRANSITION_CLASSES = "transition-all duration-300 ease-in-out";
 
-// Draggable Table Header Component
-const DraggableTableHeader = ({ header, currentTheme }: { header: Header<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
-  const isNarrowColumn = header.column.id === 'favorite'; // Identify narrow columns
-  const isPairColumn = header.column.id === 'pair'; // Identify pair column for left alignment
-  const isSorted = header.column.getIsSorted();
-
-  // Handler for clicking the entire header
-  const handleHeaderClick = () => {
-    if (header.column.getCanSort()) {
-      header.column.toggleSorting();
-    }
-  };
-
-  return (
-    <TableHead
-      className={cn(
-        "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80 group text-sm text-muted-foreground",
-        isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
-        COLUMN_TRANSITION_CLASSES
-      )}
-      style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
-      onClick={handleHeaderClick}
-      aria-sort={
-        isSorted === "asc"
-          ? "ascending"
-          : isSorted === "desc"
-            ? "descending"
-            : "none"
-      }
-    >
-      <div className="relative">
-        <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-        <div className={cn(
-          "relative z-10 flex items-center gap-1",
-          isPairColumn ? "justify-start" : "justify-end"
-        )}>
-          <span className={cn(
-            "truncate", 
-            isPairColumn ? "text-left" : "text-right", 
-            isNarrowColumn && "sr-only"
-          )}>
-            {header.isPlaceholder
-              ? null
-              : flexRender(header.column.columnDef.header, header.getContext())}
-          </span>
-          {header.column.getCanSort() && !isNarrowColumn && isSorted && (
-            <div className="ml-1 h-4 w-4 flex items-center justify-center">
-              {isSorted === "asc" ? (
-                <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
-              ) : (
-                <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </TableHead>
-  );
-};
-
-// Memoized DragAlongCell component using React.memo
-const DragAlongCell = React.memo(
-  ({ cell, currentTheme }: { cell: Cell<MarketData, unknown>, currentTheme: 'light' | 'dark' }) => {
-    const cellContent = flexRender(cell.column.columnDef.cell, cell.getContext());
-    const isNarrowColumn = cell.column.id === 'favorite'; // Identify narrow columns
-
-    return (
-      <TableCell
-        className={cn(
-          isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
-          COLUMN_TRANSITION_CLASSES
-        )}
-        style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
-      >
-        {cellContent}
-      </TableCell>
-    );
-  },
-  // Custom comparison function to prevent unnecessary re-renders
-  (prevProps, nextProps) => {
-    // Only re-render if the cell value changed
-    const prevValue = prevProps.cell.getValue();
-    const nextValue = nextProps.cell.getValue();
-    
-    // For complex objects in cell data, do more specific comparison
-    if (typeof prevValue === 'object' || typeof nextValue === 'object') {
-      return false; // Always re-render for complex values
-    }
-    
-    return prevValue === nextValue && prevProps.currentTheme === nextProps.currentTheme;
-  }
-);
-
 // Draggable Item for column visibility menu
 const DraggableMenuItem = ({ 
   id, 
@@ -638,14 +545,128 @@ export interface MarketsWidgetRef {
   getTable: () => ReturnType<typeof useReactTable<MarketData>> | null;
 }
 
-// Add a deep comparison memo utility using fast-deep-equal
-const useDeepCompareMemo = <T,>(factory: () => T, deps: React.DependencyList): T => {
-  const ref = useRef<{ deps: React.DependencyList; value: T }>({ deps: [], value: factory() });
-  if (!isEqual(ref.current.deps, deps)) {
-    ref.current.deps = deps;
-    ref.current.value = factory();
+// Define a header rendering function to replace DraggableTableHeader
+const renderTableHeader = (
+  header: Header<MarketData, unknown>, 
+  currentTheme: 'light' | 'dark', 
+  columnSizes?: Record<string, number>,
+  getTotalWidth?: () => number,
+  useTableHead = false // Flag to determine if we should use TableHead instead of div
+) => {
+  const columnId = header.column.id;
+  const isPairColumn = columnId === 'pair';
+  const isNarrowColumn = columnId === 'favorite';
+  const isSorted = header.column.getIsSorted();
+  
+  let width: string | number | undefined;
+  
+  // For the main view with dynamic sizing
+  if (columnSizes && getTotalWidth) {
+    const totalWidth = getTotalWidth();
+    // Use a fixed value for visibleColumnsCount to avoid linter errors
+    const visibleColumnsCount = 6; // Reasonable default for this specific table
+    
+    if (isNarrowColumn) {
+      width = 30;
+    } else {
+      width = columnSizes[columnId as keyof typeof columnSizes] || 
+              (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
+               Math.max(110, totalWidth / visibleColumnsCount));
+    }
+  } else {
+    // Simple sizing for loading/error states
+    width = isNarrowColumn ? 30 : undefined;
   }
-  return ref.current.value;
+  
+  // Common props for both div and TableHead
+  const commonProps = {
+    key: header.id,
+    onClick: () => {
+      if (header.column.getCanSort()) {
+        header.column.toggleSorting();
+      }
+    }
+  };
+  
+  // Common content for both div and TableHead
+  const headerContent = (
+    <div className="relative w-full">
+      <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
+      <div className={cn(
+        "relative z-10 flex items-center gap-1",
+        isPairColumn ? "justify-start" : "justify-end"
+      )}>
+        <span className={cn(
+          "truncate", 
+          isPairColumn ? "text-left" : "text-right", 
+          isNarrowColumn && "sr-only"
+        )}>
+          {header.isPlaceholder
+            ? null
+            : flexRender(header.column.columnDef.header, header.getContext())}
+        </span>
+        {header.column.getCanSort() && !isNarrowColumn && isSorted && (
+          <div className="ml-1 h-4 w-4 flex items-center justify-center">
+            {isSorted === "asc" ? (
+              <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
+            ) : (
+              <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+  
+  if (useTableHead) {
+    return (
+      <TableHead
+        {...commonProps}
+        className={cn(
+          "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80 group text-sm text-muted-foreground",
+          isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
+          COLUMN_TRANSITION_CLASSES
+        )}
+        style={{ width: isNarrowColumn ? '30px' : undefined, maxWidth: isNarrowColumn ? '30px' : undefined }}
+        aria-sort={
+          isSorted === "asc"
+            ? "ascending"
+            : isSorted === "desc"
+              ? "descending"
+              : "none"
+        }
+      >
+        {headerContent}
+      </TableHead>
+    );
+  }
+  
+  return (
+    <div
+      {...commonProps}
+      className={cn(
+        "px-4 py-2 h-10 flex items-center text-sm text-muted-foreground",
+        isPairColumn ? "justify-start" : "justify-end",
+        isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
+        "cursor-pointer hover:text-foreground/80",
+        COLUMN_TRANSITION_CLASSES
+      )}
+      style={{
+        width: isNarrowColumn ? 30 : width,
+        minWidth: isNarrowColumn ? 30 : width,
+        flexShrink: 0,
+      }}
+      aria-sort={
+        isSorted === "asc"
+          ? "ascending"
+          : isSorted === "desc"
+            ? "descending"
+            : "none"
+      }
+    >
+      {headerContent}
+    </div>
+  );
 };
 
 export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((props, ref) => {
@@ -1596,22 +1617,27 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         clearInterval(updateInterval);
       }
 
-      const interval = document.visibilityState === 'visible' 
-        ? UPDATE_INTERVAL_VISIBLE 
-        : UPDATE_INTERVAL_HIDDEN;
-
-      updateInterval = setInterval(debouncedFetchData, interval);
+      // Only set interval if tab is visible
+      if (document.visibilityState === 'visible') {
+        updateInterval = setInterval(debouncedFetchData, UPDATE_INTERVAL_VISIBLE);
+      }
+      // No interval is set when tab is hidden
     };
 
     // Handle visibility changes
     const handleVisibilityChange = () => {
-      const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-      
-      if (document.visibilityState === 'visible' && timeSinceLastUpdate > UPDATE_INTERVAL_VISIBLE) {
+      if (document.visibilityState === 'visible') {
+        // When tab becomes visible again, immediately fetch fresh data
         debouncedFetchData();
+        // And start regular updates
+        scheduleNextUpdate();
+      } else {
+        // When tab becomes hidden, clear any existing interval
+        if (updateInterval) {
+          clearInterval(updateInterval);
+          updateInterval = null;
+        }
       }
-      
-      scheduleNextUpdate();
     };
 
     // Initial fetch
@@ -1857,9 +1883,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                         const columnId = header.column.id;
                         return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
                       })
-                      .map((header) => (
-                        <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
-                      ))}
+                      .map((header) => renderTableHeader(header, currentTheme, undefined, undefined, true))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1877,9 +1901,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                         const columnId = header.column.id;
                         return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
                       })
-                      .map((header) => (
-                        <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
-                      ))}
+                      .map((header) => renderTableHeader(header, currentTheme, undefined, undefined, true))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1971,9 +1993,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                         const columnId = header.column.id;
                         return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
                       })
-                      .map((header) => (
-                        <DraggableTableHeader key={header.id} header={header} currentTheme={currentTheme} />
-                      ))}
+                      .map((header) => renderTableHeader(header, currentTheme, undefined, undefined, true))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1994,76 +2014,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                       const columnId = header.column.id;
                       return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
                     })
-                    .map((header) => {
-                      const columnId = header.column.id;
-                      const isPairColumn = columnId === 'pair';
-                      const isNarrowColumn = columnId === 'favorite';
-                      const isSorted = header.column.getIsSorted();
-                      
-                      // Calculate column width to match body cells
-                      const totalWidth = getTotalColumnsWidth();
-                      const visibleColumnsCount = table.getVisibleLeafColumns().length;
-                      const width = columnSizes[columnId as keyof typeof columnSizes] || 
-                                  (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
-                                   Math.max(110, totalWidth / visibleColumnsCount));
-                      
-                      return (
-                        <div
-                          key={header.id}
-                          className={cn(
-                            "px-4 py-2 h-10 flex items-center text-sm text-muted-foreground",
-                            isPairColumn ? "justify-start" : "justify-end",
-                            isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
-                            "cursor-pointer hover:text-foreground/80",
-                            COLUMN_TRANSITION_CLASSES
-                          )}
-                          style={{
-                            width: isNarrowColumn ? 30 : width,
-                            minWidth: isNarrowColumn ? 30 : width,
-                            flexShrink: 0,
-                          }}
-                          onClick={() => {
-                            if (header.column.getCanSort()) {
-                              header.column.toggleSorting();
-                            }
-                          }}
-                          aria-sort={
-                            isSorted === "asc"
-                              ? "ascending"
-                              : isSorted === "desc"
-                                ? "descending"
-                                : "none"
-                          }
-                        >
-                          <div className="relative w-full">
-                            <div className="absolute -inset-x-[1px] -inset-y-[0.5px] bg-[hsl(var(--color-widget-header))] shadow-[0_0_0_1px_hsl(var(--color-widget-header))]"></div>
-                            <div className={cn(
-                              "relative z-10 flex items-center gap-1",
-                              isPairColumn ? "justify-start" : "justify-end"
-                            )}>
-                              <span className={cn(
-                                "truncate", 
-                                isPairColumn ? "text-left" : "text-right", 
-                                isNarrowColumn && "sr-only"
-                              )}>
-                                {header.isPlaceholder
-                                  ? null
-                                  : flexRender(header.column.columnDef.header, header.getContext())}
-                              </span>
-                              {header.column.getCanSort() && !isNarrowColumn && isSorted && (
-                                <div className="ml-1 h-4 w-4 flex items-center justify-center">
-                                  {isSorted === "asc" ? (
-                                    <ChevronUp className="shrink-0" size={16} aria-hidden="true" />
-                                  ) : (
-                                    <ChevronDownIcon className="shrink-0" size={16} aria-hidden="true" />
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    .map((header) => renderTableHeader(header, currentTheme, columnSizes, () => getTotalColumnsWidth()))}
                 </div>
                 
                 <div 
@@ -2290,7 +2241,7 @@ ValueFlash.displayName = 'ValueFlash';
 
 // Add these constants at the top level after imports
 const UPDATE_INTERVAL_VISIBLE = 7000; // 7 seconds when tab is visible (was 5s)
-const UPDATE_INTERVAL_HIDDEN = 45000;  // 45 seconds when tab is hidden (was 30s)
+const UPDATE_INTERVAL_HIDDEN = 45000;  // 45 seconds when tab is hidden (not used anymore - updates paused when hidden)
 const UPDATE_DEBOUNCE_TIME = 300;     // 0.3 second debounce (was 0.5s)
 
 // LocalStorage keys for custom lists
