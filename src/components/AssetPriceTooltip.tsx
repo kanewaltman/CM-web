@@ -671,7 +671,7 @@ export const AssetButtonWithPrice: React.FC<AssetButtonWithPriceProps> = ({ asse
     <AssetPriceTooltip asset={asset} inTableCell={inTableCell}>
       <button
         type="button"
-        className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150"
+        className="font-jakarta font-bold text-sm rounded-md px-1 transition-all duration-150 asset-badge"
         style={{ 
           color: assetColor,
           backgroundColor: `${assetColor}14`,

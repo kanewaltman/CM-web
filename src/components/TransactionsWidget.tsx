@@ -271,7 +271,7 @@ const StyledAssetButton: React.FC<{
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex' }}>
         <button 
           type="button"
-          className={cn("font-jakarta font-bold text-sm rounded-md px-1", className)}
+          className={cn("font-jakarta font-bold text-sm rounded-md px-1 asset-badge", className)}
           style={{ 
             color: assetColor,
             backgroundColor: `${assetColor}14`,
@@ -1218,7 +1218,7 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
       </div>
 
       {/* Table - allow auto height but with min-height for scrolling */}
-      <div className="bg-background overflow-auto rounded-md border flex-1" ref={tableBodyRef}>
+      <div className="bg-background overflow-auto rounded-md border flex-1 transactions-table-container" ref={tableBodyRef}>
         <Table className="table-fixed w-full">
           <TableHeader className="sticky top-0 z-10 bg-background">
             {table.getHeaderGroups().map((headerGroup) => (

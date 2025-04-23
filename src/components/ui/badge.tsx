@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 // Modified badge variant to better handle hover effects
 const badgeVariants = cva(
-  'inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex items-center rounded-md border py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {
@@ -68,7 +68,7 @@ export interface BadgeProps
 function Badge({ className, variant, ...props }: BadgeProps) {
   return (
     <div 
-      className={cn(badgeVariants({ variant }), className)}
+      className={cn(badgeVariants({ variant }), "transaction-badge", className)}
       {...props} 
     />
   );
@@ -85,7 +85,7 @@ function SortableBadge({ className, variant, active, onClick, ...props }: Sortab
       className={cn(
         badgeVariants({ variant }), 
         active && variant ? getActiveStyles(variant) : '',
-        'cursor-pointer',
+        'cursor-pointer transaction-badge',
         className
       )}
       onClick={onClick}

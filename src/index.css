@@ -346,6 +346,133 @@ html {
   user-select: text;
 }
 
+/* Apply rounded bottom corners only to the main container div that's a direct child of widget-content */
+:root[data-grid-style="rounded"] .widget-content > div:not([class*="badge"]):not([class*="button"]):first-child {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+}
+
+/* Apply rounded corners to widget-inset elements when they are direct children */
+:root[data-grid-style="rounded"] .widget-content > .widget-inset {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+}
+
+/* But don't apply rounded corners to deeper nested elements */
+:root[data-grid-style="rounded"] .widget-content > * > * {
+  border-radius: initial;
+}
+
+/* Apply appropriate border-radius for UI elements based on grid style */
+/* Default style for UI elements */
+.widget-content button,
+.widget-content [class*="badge"],
+.widget-content [class*="button"],
+.widget-content [role="button"],
+.widget-content [class*="asset"] {
+  border-radius: var(--radius-md);
+}
+
+/* Dense style for UI elements */
+:root[data-grid-style="dense"] .widget-content button,
+:root[data-grid-style="dense"] .widget-content [class*="badge"],
+:root[data-grid-style="dense"] .widget-content [class*="button"],
+:root[data-grid-style="dense"] .widget-content [role="button"],
+:root[data-grid-style="dense"] .widget-content [class*="asset"] {
+  border-radius: var(--radius-md);
+}
+
+/* Rounded style for UI elements - slightly more rounded */
+:root[data-grid-style="rounded"] .widget-content button,
+:root[data-grid-style="rounded"] .widget-content [class*="badge"],
+:root[data-grid-style="rounded"] .widget-content [class*="button"],
+:root[data-grid-style="rounded"] .widget-content [role="button"],
+:root[data-grid-style="rounded"] .widget-content [class*="asset"] {
+  border-radius: var(--radius-lg);
+}
+
+/* Additional padding for asset badges in rounded mode */
+:root[data-grid-style="rounded"] .widget-content [class*="asset"],
+:root[data-grid-style="rounded"] .widget-content button[class*="asset"],
+:root[data-grid-style="rounded"] .widget-content .font-jakarta.font-bold.rounded-md.px-1 {
+  padding-left: 0.375rem !important; /* ~6px */
+  padding-right: 0.375rem !important; /* ~6px */
+}
+
+/* Transaction badges styling */
+.widget-content .transaction-badge {
+  padding-left: 0.25rem !important; /* 4px */
+  padding-right: 0.25rem !important; /* 4px */
+}
+
+/* More generous padding for transaction badges in rounded mode */
+:root[data-grid-style="rounded"] .widget-content .transaction-badge {
+  padding-left: 0.5rem !important; /* 8px */
+  padding-right: 0.5rem !important; /* 8px */
+}
+
+/* Transaction table specific styling - ensure border radius is preserved in both modes */
+:root[data-grid-style="rounded"] [gs-id^="transactions"] .widget-content .bg-background.overflow-auto.rounded-md {
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+}
+
+/* Ensure the transactions table container always maintains border radius */
+.transactions-table-container {
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+}
+
+/* Performance widget specific styling */
+/* Target the bottom inner content area background in performance widget */
+:root[data-grid-style="rounded"] [gs-id^="performance"] .grid-stack-item-content .widget-content > .flex-1 {
+  border-radius: 0 0 calc(var(--grid-item-border-radius) - 8px) calc(var(--grid-item-border-radius) - 8px);
+  overflow: hidden;
+}
+
+/* Apply bottom border radius to any card in the performance widget */
+:root[data-grid-style="rounded"] [gs-id^="performance"] .grid-stack-item-content .widget-content div[class*="card"] {
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+}
+
+/* Referral widget specific styling */
+/* Make the referral widget interior contents match the container border radius */
+:root[data-grid-style="rounded"] [gs-id^="referrals"] .grid-stack-item-content .widget-content > div:first-child {
+  /* Apply matching border radius for all corners */
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+  overflow: hidden;
+}
+
+/* Apply the same border radius to any card or container in the referral widget */
+:root[data-grid-style="rounded"] [gs-id^="referrals"] .grid-stack-item-content .widget-content div[class*="card"],
+:root[data-grid-style="rounded"] [gs-id^="referrals"] .grid-stack-item-content .widget-content div[class*="container"] {
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 12px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 12px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 4px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 4px);
+}
+
+/* Breakdown widget specific styling */
+/* Make the breakdown widget interior contents match the container border radius */
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content > div:first-child {
+  /* Apply matching border radius for all corners */
+  border-top-left-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-top-right-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-bottom-left-radius: calc(var(--grid-item-border-radius) - 2px);
+  border-bottom-right-radius: calc(var(--grid-item-border-radius) - 2px);
+  overflow: hidden;
+}
+
+/* Apply border radius to any card, container, or chart in the breakdown widget */
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content div[class*="card"],
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content div[class*="container"],
+:root[data-grid-style="rounded"] [gs-id^="treemap"] .grid-stack-item-content .widget-content .recharts-wrapper {
+  border-radius: calc(var(--grid-item-border-radius) - 4px);
+  overflow: hidden;
+}
+
 .widget-inset {
   background: transparent !important;
   user-select: text;
