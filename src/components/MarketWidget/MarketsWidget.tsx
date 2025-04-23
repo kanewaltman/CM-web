@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSProperties, forwardRef, useImperativeHandle } from 'react';
-import isEqual from 'fast-deep-equal';
 
 // Disable verbose logging in production
 if (process.env.NODE_ENV === 'production') {
@@ -8,10 +7,6 @@ if (process.env.NODE_ENV === 'production') {
 
 import { useTheme } from 'next-themes';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
-import { ASSET_TYPE } from '@/assets/common';
-import { coinGeckoService } from '@/services/coinGeckoService';
-import { getApiUrl } from '@/lib/api-config';
-import { ASSET_TICKER_TO_COINGECKO_ID } from '@/services/coinGeckoService';
 import { SAMPLE_MARKET_DATA, SampleMarketDataItem, getBalancedSampleData } from '@/services/marketsSampleData';
 import { 
   Table,
@@ -26,34 +21,18 @@ import { cn } from '@/lib/utils';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { 
   ChevronDown as ChevronDownIcon, 
-  X,
   AlertTriangle as AlertTriangleIcon,
   RefreshCw as RefreshCwIcon,
   ChevronUp,
-  SlidersHorizontal,
   GripVertical as GripVerticalIcon,
-  Plus,
-  ListPlus,
-  Sparkles,
-  Search as SearchIcon,
   Plus as PlusIcon,
   ListChecks,
   ChevronsUpDown
 } from 'lucide-react';
 import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuTrigger,
-  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-  DropdownMenuCheckboxItem 
 } from '../ui/dropdown-menu';
-import { Checkbox } from '../ui/checkbox';
-import { Input } from '../ui/input';
-import { Separator } from '../ui/separator';
-import { Badge } from '../ui/badge';
-import { MarketsWidgetHeader } from './MarketsWidgetHeader';
 import { ListManager } from './MarketsWidgetMenu';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
@@ -66,7 +45,6 @@ import {
   DialogFooter,
   DialogClose,
 } from '../ui/dialog';
-import { toast } from '@/hooks/use-toast';
 
 // TanStack Table imports
 import {
@@ -77,9 +55,7 @@ import {
   SortingState,
   useReactTable,
   Header,
-  Cell,
   VisibilityState,
-  ColumnOrderState
 } from '@tanstack/react-table';
 
 // TanStack Virtual import for virtualization
@@ -95,15 +71,11 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  DragStartEvent,
-  DragMoveEvent,
-  DragOverEvent
 } from '@dnd-kit/core';
-import { restrictToHorizontalAxis, restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import {
   SortableContext,
   arrayMove,
-  horizontalListSortingStrategy,
   verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
@@ -139,46 +111,33 @@ const memoizedFormatPrice = (price: number) => {
   return result;
 };
 
-// Format market cap and volume to K, M, B, T - memoize this function
+// Format numbers into K, M, B, T notation
 const formatLargeNumber = (value: number) => {
-  // For zero values 
   if (value === 0) return '0';
   
-  // Format numbers based on their magnitude
   if (value >= 1_000_000_000_000) {
-    // Trillions - 2 decimal places
     return `${(value / 1_000_000_000_000).toFixed(2)}T`;
   } else if (value >= 1_000_000_000) {
-    // Billions - 2 decimal places
     return `${(value / 1_000_000_000).toFixed(2)}B`;
   } else if (value >= 10_000_000) {
-    // Larger millions - 2 decimal places
     return `${(value / 1_000_000).toFixed(2)}M`;
   } else if (value >= 1_000_000) {
-    // Smaller millions - avoid showing 0.00M for very small values
     const inMillions = value / 1_000_000;
-    // If less than 0.01 million, show in thousands instead
     if (inMillions < 0.01) {
       return `${(value / 1_000).toFixed(2)}K`;
     }
     return `${inMillions.toFixed(2)}M`;
   } else if (value >= 10_000) {
-    // Larger thousands - 1 decimal place 
     return `${(value / 1_000).toFixed(1)}K`;
   } else if (value >= 1_000) {
-    // Smaller thousands - 2 decimal places
     return `${(value / 1_000).toFixed(2)}K`;
   } else if (value >= 100) {
-    // 100 to 999 - no decimal places
     return value.toFixed(0);
   } else if (value >= 10) {
-    // 10 to 99 - 1 decimal place
     return value.toFixed(1);
   } else if (value >= 1) {
-    // 1 to 9.99 - 2 decimal places
     return value.toFixed(2);
   } else if (value > 0) {
-    // Small values - use appropriate precision based on size
     if (value >= 0.1) {
       return value.toFixed(2);
     } else if (value >= 0.01) {
@@ -186,7 +145,6 @@ const formatLargeNumber = (value: number) => {
     } else if (value >= 0.001) {
       return value.toFixed(4);
     } else {
-      // For very small values, use scientific notation
       return value.toExponential(2);
     }
   }
@@ -217,29 +175,24 @@ const CURRENCY_CONVERSION_RATES = {
   USD_GBP: 0.80,
 };
 
-// Helper to get the right conversion rate between currencies
+// Gets conversion rate between currencies, handling direct rates, BTC pairs, and defaults
 const getConversionRate = (from: AssetTicker, to: AssetTicker | null): number => {
-  if (!to) return 1; // No conversion needed if no secondary currency
+  if (!to) return 1;
   if (from === to) return 1;
   
-  // First check direct conversions
   if (from === 'EUR' && to === 'USD') return CURRENCY_CONVERSION_RATES.EUR_USD;
   if (from === 'USD' && to === 'EUR') return CURRENCY_CONVERSION_RATES.USD_EUR;
   if (from === 'GBP' && to === 'USD') return CURRENCY_CONVERSION_RATES.GBP_USD;
   if (from === 'USD' && to === 'GBP') return CURRENCY_CONVERSION_RATES.USD_GBP;
   
-  // For pairs involving BTC, which might need a two-step conversion
-  if (from === 'BTC' && to === 'USD') return 38000; // Example BTC to USD rate
-  if (from === 'BTC' && to === 'EUR') return 35000; // Example BTC to EUR rate
-  if (from === 'BTC' && to === 'GBP') return 30000; // Example BTC to GBP rate
-  
-  // For alt-coins or stablecoins to major fiat
-  if (to === 'USD' || to === 'EUR' || to === 'GBP') {
-    // Return some sample conversion rate based on the asset type
-    return 1.0; // Default conversion
+  if (from === 'BTC') {
+    if (to === 'USD') return 38000;
+    if (to === 'EUR') return 35000;
+    if (to === 'GBP') return 30000;
   }
   
-  // For other pairs, use a default rate (this should be replaced with real data)
+  if (to === 'USD' || to === 'EUR' || to === 'GBP') return 1.0;
+  
   return 1.0;
 };
 
@@ -341,35 +294,19 @@ const DraggableMenuItem = ({
     zIndex: isDragging ? 50 : 0,
   };
   
-  // Use internal state to make checkbox interaction feel immediate
-  const [internalChecked, setInternalChecked] = useState(isChecked);
+  const [internalChecked, setInternalChecked] = useState(isChecked); // For immediate checkbox interaction
   
-  // Sync internal state with parent state
   useEffect(() => {
     setInternalChecked(isChecked);
   }, [isChecked]);
   
-  // Only allow drag on the handle, not the entire row
-  const handleDragHandleProps = useMemo(() => {
-    return {
-      ...attributes,
-      ...listeners
-    };
-  }, [attributes, listeners]);
+  const handleDragHandleProps = useMemo(() => ({ ...attributes, ...listeners }), [attributes, listeners]); // Only allow drag on handle
   
-  // Separate click handler for checkbox area that doesn't trigger drag
   const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    
-    // Update internal state immediately for responsive UI
-    setInternalChecked(!internalChecked);
-    
-    // Debounce the parent state update to avoid cascading re-renders
-    // This helps prevent flickering when toggling columns
-    requestAnimationFrame(() => {
-      onCheckedChange(!internalChecked);
-    });
+    setInternalChecked(!internalChecked); // Update internal state immediately
+    requestAnimationFrame(() => { onCheckedChange(!internalChecked); }); // Debounce parent update to prevent flickering
   }, [internalChecked, onCheckedChange]);
   
   return (
@@ -437,12 +374,8 @@ export const MarketsWidgetColumnVisibility: React.FC<{
 
   // Initialize sensors for drag and drop
   const sensors = useSensors(
-    useSensor(MouseSensor, {
-      activationConstraint: { distance: 8 } // Increased distance to avoid accidental drags
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 8 } // Delay to distinguish between touch and drag
-    }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
     useSensor(KeyboardSensor, {})
   );
 
@@ -466,35 +399,24 @@ export const MarketsWidgetColumnVisibility: React.FC<{
     }
   }
   
-  // Get the updateColumnSizes function from the table context if available
-  const tableRef = (table as any)._getTableOptions?.()?.meta?.updateColumnSizes;
+  const tableRef = (table as any)._getTableOptions?.()?.meta?.updateColumnSizes; // Get updateColumnSizes function from table context
   
-  // Direct column visibility toggle that uses the table API directly
   const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
-    // Prevent toggling off the 'pair' column (safety check)
-    if (columnId === 'pair') {
-      return;
-    }
+    if (columnId === 'pair') return; // Prevent toggling off the 'pair' column
     
-    // Create a new visibility state object to avoid mutating the existing one
-    const newState = {...table.getState().columnVisibility};
+    const newState = {...table.getState().columnVisibility}; // Create new visibility state object
     
     if (isVisible) {
-      // For TanStack Table, removing the column from the visibility state makes it visible
-      delete newState[columnId];
+      delete newState[columnId]; // Remove column from visibility state to make it visible
     } else {
-      // Setting the column's visibility to false makes it hidden
-      newState[columnId] = false;
+      newState[columnId] = false; // Set column visibility to false to hide it
     }
     
-    // Update the table's visibility state
-    table.setColumnVisibility(newState);
+    table.setColumnVisibility(newState); // Update the table's visibility state
     
     // If available, update column sizes after a delay to prevent flickering
     if (typeof tableRef === 'function') {
-      setTimeout(() => {
-        tableRef();
-      }, 50);
+      setTimeout(() => tableRef(), 50);
     }
   };
 
@@ -560,10 +482,8 @@ const renderTableHeader = (
   
   let width: string | number | undefined;
   
-  // For the main view with dynamic sizing
-  if (columnSizes && getTotalWidth) {
+  if (columnSizes && getTotalWidth) { // For the main view with dynamic sizing
     const totalWidth = getTotalWidth();
-    // Use a fixed value for visibleColumnsCount to avoid linter errors
     const visibleColumnsCount = 6; // Reasonable default for this specific table
     
     if (isNarrowColumn) {
@@ -573,8 +493,7 @@ const renderTableHeader = (
               (isPairColumn ? Math.max(180, totalWidth * 0.3) : 
                Math.max(110, totalWidth / visibleColumnsCount));
     }
-  } else {
-    // Simple sizing for loading/error states
+  } else { // Simple sizing for loading/error states
     width = isNarrowColumn ? 30 : undefined;
   }
   
@@ -587,7 +506,6 @@ const renderTableHeader = (
       }
     }
   };
-  
   // Common content for both div and TableHead
   const headerContent = (
     <div className="relative w-full">
@@ -868,7 +786,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     volume: 1.1
   };
   
-  // Add a separate state for tracking dynamic column visibility based on container width
+  // State for tracking dynamic column visibility based on container width
   const [dynamicVisibility, setDynamicVisibility] = useState<VisibilityState>({});
   
   // Dynamic column sizes that adapt to container width
@@ -881,7 +799,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   const updateColumnSizes = useCallback(() => {
     if (!containerRef.current) return;
     
-    // Use a single RAF call to ensure synchronous measurements
     const containerWidth = containerRef.current?.clientWidth || 0;
     const padding = 20; // Buffer for borders, padding
     
@@ -892,15 +809,12 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         dynamicVisibility[id] !== false
       ) as (keyof typeof minColumnWidths)[];
     
-    // Calculate total minimum width needed for visible columns only
+    // Calculate total minimum width and flex weight for visible columns
     const totalMinWidth = visibleColumnIds.reduce((total, id) => 
       total + minColumnWidths[id], 0) + padding;
-    
-    // Calculate total flex weight for visible columns only
     const totalFlexWeight = visibleColumnIds.reduce((total, id) => 
       total + columnFlexWeights[id], 0);
     
-    // If we have extra space, distribute it proportionally based on flex weights
     const newSizes = {...minColumnWidths};
     
     if (containerWidth > totalMinWidth) {
@@ -913,10 +827,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       });
     }
     
-    // Use a single setState call to avoid multiple re-renders
     setColumnSizes(newSizes);
   }, [columnVisibility, dynamicVisibility, minColumnWidths, columnFlexWeights]);
-  
   // Debounce resize operations to improve performance
   const debouncedUpdateColumnSizes = useCallback(debounce(updateColumnSizes, 100), [updateColumnSizes]);
   
@@ -943,35 +855,21 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     };
   }, [updateColumnSizes, debouncedUpdateColumnSizes]);
 
-  // Only force rerender when secondary currency changes from one value to another (not on initial render)
-  const [forceRenderKey, setForceRenderKey] = useState(0);
+  const [forceRenderKey, setForceRenderKey] = useState(0); // Force rerender when secondary currency changes
   const prevSecondaryCurrencyRef = useRef<AssetTicker | null>(null);
   
   useEffect(() => {
-    // Only trigger the re-render if this is an actual change, not the initial value
     if (prevSecondaryCurrencyRef.current !== secondaryCurrency && prevSecondaryCurrencyRef.current !== null) {
       setForceRenderKey(prev => prev + 1);
     }
     prevSecondaryCurrencyRef.current = secondaryCurrency;
   }, [secondaryCurrency]);
   
-  // Dynamic key for table to force complete re-renders
-  const tableKey = useMemo(() => 
-    `table-${forceRenderKey}-${secondaryCurrency || 'none'}`, 
-    [forceRenderKey, secondaryCurrency]
-  );
+  const tableKey = useMemo(() => `table-${forceRenderKey}-${secondaryCurrency || 'none'}`, [forceRenderKey, secondaryCurrency]);
 
-  useEffect(() => {
-    // External/internal quote asset handling (console logs removed)
-  }, [externalSelectedQuoteAsset, internalSelectedQuoteAsset]);
-
-  useEffect(() => {
-    // External/internal search query handling (console logs removed)
-  }, [externalSearchQuery, internalSearchQuery]);
-
-  useEffect(() => {
-    // External/internal secondary currency handling (console logs removed)
-  }, [externalSecondaryCurrency, internalSecondaryCurrency]);
+  useEffect(() => { /* External/internal quote asset handling */ }, [externalSelectedQuoteAsset, internalSelectedQuoteAsset]);
+  useEffect(() => { /* External/internal search query handling */ }, [externalSearchQuery, internalSearchQuery]);
+  useEffect(() => { /* External/internal secondary currency handling */ }, [externalSecondaryCurrency, internalSecondaryCurrency]);
 
   useEffect(() => {
     if (externalSelectedQuoteAsset === undefined) {
@@ -989,8 +887,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     setStoredValue(STORAGE_KEYS.SORTING, sorting);
   }, [sorting]);
 
-  // Get unique quote assets from market data
-  const quoteAssets = useMemo(() => {
+  const quoteAssets = useMemo(() => { // Get unique quote assets from market data
     const assets = new Set<AssetTicker>();
     marketData.forEach(item => assets.add(item.quoteAsset));
     return Array.from(assets);
@@ -1090,45 +987,36 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
   // Update the filtering logic to apply list filters
   useEffect(() => {
-    // Don't filter if no data, search query, or quote asset selection
     if (marketData.length === 0) {
       setFilteredData([]);
       return;
     }
 
-    // Debounce filtering operations to reduce layout thrashing
     const debouncedFilter = () => {
-      // Only log in development
       if (process.env.NODE_ENV !== 'production') {
         console.log(`Filtering ${marketData.length} items with query: "${searchQuery}"`);
       }
       
-      // Apply all filters sequentially
       let filtered = [...marketData];
       
-      // Filter by selected quote asset if not ALL
+      // Apply filters: quote asset, search query, and custom list
       if (selectedQuoteAsset !== 'ALL') {
         filtered = filtered.filter(item => item.quoteAsset === selectedQuoteAsset);
       }
       
-      // Apply search query
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         filtered = filtered.filter(item => 
-          // Simple multi-field search
-          (item.baseAsset.toLowerCase().includes(query) || 
-           item.quoteAsset.toLowerCase().includes(query) ||
-           item.pair.toLowerCase().includes(query))
+          item.baseAsset.toLowerCase().includes(query) || 
+          item.quoteAsset.toLowerCase().includes(query) ||
+          item.pair.toLowerCase().includes(query)
         );
       }
       
-      // Filter by custom list if one is active
       if (activeListId) {
         const activeList = customLists.find(list => list.id === activeListId);
         if (activeList) {
           filtered = filtered.filter(item => 
-            // Check if the full trading pair is in the assets list
-            // If it's an old format list (only base assets), still support that
             activeList.assets.includes(item.pair) || activeList.assets.includes(item.baseAsset)
           );
         }
@@ -1137,7 +1025,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       setFilteredData(filtered);
     };
     
-    // Use a short timeout to batch filtering work
     const timeoutId = setTimeout(debouncedFilter, 50);
     return () => clearTimeout(timeoutId);
   }, [marketData, selectedQuoteAsset, searchQuery, activeListId, customLists]);
@@ -1396,12 +1283,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
     return () => observer.disconnect();
   }, []);
-
-  // Create a setStoredValue function that uses debounce
+  // Debounced localStorage setter
   const setStoredValue = useCallback(<T,>(key: string, value: T): void => {
     if (typeof window === 'undefined') return;
-    
-    // Inline debouncing to avoid closure issues
     const saveToStorage = () => {
       try {
         window.localStorage.setItem(key, JSON.stringify(value));
@@ -1409,23 +1293,19 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         console.error(`Error writing to localStorage for key ${key}:`, error);
       }
     };
-    
-    // Use a short delay for responsiveness
     setTimeout(saveToStorage, 300);
   }, []);
 
-  // Add this to track the last update time for visual debugging
-  const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
+  const [lastUpdateTime, setLastUpdateTime] = useState<string>(''); // For visual debugging
   
-  // Add these constants for controlling variations
-  const MAX_PRICE_CHANGE_PERCENT = 0.001; // Maximum 0.1% change per update
-  const MAX_VOLUME_CHANGE_PERCENT = 0.002; // Maximum 0.2% change per update
+  // Constants for controlling data variations
+  const MAX_PRICE_CHANGE_PERCENT = 0.001; // Max 0.1% change per update
+  const MAX_VOLUME_CHANGE_PERCENT = 0.002; // Max 0.2% change per update
   const UPDATE_PROBABILITY = 0.5; // 50% chance for any asset to update
   const VOLUME_UPDATE_PROBABILITY = 0.6; // 60% chance for volume to update when price updates
 
-  // Modify the fetchMarketData function to add better logging and error handling
+  // Fetch market data with improved logging and error handling
   const fetchMarketData = useCallback(async () => {
-    // Only log in development
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[MarketsWidget] Fetching market data with data source: ${dataSource}`);
     }
@@ -1518,22 +1398,17 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
               
               return prevData.map(item => {
                 // Randomly decide if this item should update
-                if (Math.random() > UPDATE_PROBABILITY) {
-                  return item; // Skip update for this item
-                }
+                if (Math.random() > UPDATE_PROBABILITY) return item; // Skip update for this item
 
                 // Calculate price change
                 const priceChangePercent = (Math.random() * 2 - 1) * MAX_PRICE_CHANGE_PERCENT;
                 const newPrice = item.price * (1 + priceChangePercent);
 
-                // Increase chances of updates
+                // Update chances and make changes more noticeable
                 const shouldUpdate24h = Math.random() < 0.8; // 80% chance to update with price
                 const shouldUpdate7d = Math.random() < 0.6;  // 60% chance to update with price
-                
-                // Make changes slightly more noticeable
                 const change24hDelta = shouldUpdate24h ? (Math.random() * 2 - 1) * 0.08 : 0;
                 const change7dDelta = shouldUpdate7d ? (Math.random() * 2 - 1) * 0.1 : 0;
-                
                 const newChange24h = Math.max(Math.min(item.change24h + change24hDelta, 15), -15);
                 const newChange7d = Math.max(Math.min(item.change7d + change7dDelta, 25), -25);
 
@@ -1542,7 +1417,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                 const volumeChangePercent = shouldUpdateVolume ? (Math.random() * 2 - 1) * MAX_VOLUME_CHANGE_PERCENT : 0;
                 const newVolume = item.volume * (1 + volumeChangePercent);
 
-                // Lower the threshold for significant changes
+                // Check for significant changes (with lower threshold)
                 const hasSignificantChange = 
                   Math.abs(newPrice - item.price) >= 0.0000001 ||
                   Math.abs(newChange24h - item.change24h) >= 0.000001 ||
@@ -1550,9 +1425,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                   Math.abs(newVolume - item.volume) >= 0.1;
 
                 // If no significant changes, return original item
-                if (!hasSignificantChange) {
-                  return item;
-                }
+                if (!hasSignificantChange) return item;
 
                 // Mark that we're actually updating something
                 hasUpdatedAnyItem = true;
@@ -1726,24 +1599,12 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         
         const containerWidth = containerRef.current.clientWidth;
         
-        // Define breakpoints more precisely based on actual measurement
-        const breakpoints = {
-          xs: 320,  
-          sm: 480,  
-          md: 640,  
-          lg: 800,  
-          xl: 1000,
-        };
-        
         // Get user's column order and visibility preferences
         const userColumnOrder = table.getState().columnOrder || [];
         const userVisibility = table.getState().columnVisibility || {};
         
         // Always ensure pair is shown first
-        const orderedColumns = userColumnOrder.filter(col => 
-          // Only include visible columns (that the user hasn't manually hidden)
-          userVisibility[col] !== false
-        );
+        const orderedColumns = userColumnOrder.filter(col => userVisibility[col] !== false);
         
         // Always ensure 'pair' is included and is first
         if (!orderedColumns.includes('pair')) {
@@ -1759,10 +1620,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         const minDataColWidth = 100; // Minimum width for data columns
         
         // Determine maximum number of columns that can fit
-        let maxFittingColumns = Math.max(
-          2, // Always show at least pair + one data column
-          Math.floor((containerWidth - minPairWidth) / minDataColWidth) + 1
-        );
+        let maxFittingColumns = Math.max(2, Math.floor((containerWidth - minPairWidth) / minDataColWidth) + 1);
         
         // Add a buffer to prevent overflow
         maxFittingColumns = Math.max(2, maxFittingColumns - 1);
@@ -2178,7 +2036,6 @@ const getStoredValue = <T,>(key: string, defaultValue: T): T => {
     return defaultValue;
   }
 };
-
 // Enhance the ValueFlash component with better animation and background effect
 const ValueFlash = React.memo<{
   value: number | string;
@@ -2186,31 +2043,22 @@ const ValueFlash = React.memo<{
   className?: string;
   children?: React.ReactNode;
 }>(({ value, formatter, className, children }) => {
-  // Use refs to store the previous value to compare against
-  const prevValueRef = useRef<number | string>(value);
+  const prevValueRef = useRef<number | string>(value); // Store previous value to compare against
   const [isFlashing, setIsFlashing] = useState(false);
   
-  // Check if value has changed with proper number comparison
   useEffect(() => {
     const prevValue = prevValueRef.current;
-    
     // Use a small epsilon value for floating point comparison
     const hasChanged = typeof value === 'number' && typeof prevValue === 'number'
-      ? Math.abs((value - prevValue) / (Math.abs(prevValue) || 1)) > 0.0000001 // Use relative difference with a small epsilon
+      ? Math.abs((value - prevValue) / (Math.abs(prevValue) || 1)) > 0.0000001 
       : value !== prevValue;
     
     if (hasChanged) {
-      // Update prevValue before setting isFlashing to ensure we capture changes correctly
-      prevValueRef.current = value;
-      
-      // Force the flash effect to reset if it's already flashing
+      prevValueRef.current = value; // Update prevValue before setting isFlashing
       setIsFlashing(false);
       
-      // Use requestAnimationFrame to ensure the DOM has time to process the false state
-      requestAnimationFrame(() => {
+      requestAnimationFrame(() => { // Ensure the DOM has time to process the false state
         setIsFlashing(true);
-        
-        // Remove the flash effect after animation completes
         const timer = setTimeout(() => {
           setIsFlashing(false);
         }, 800); // Animation duration + small buffer
