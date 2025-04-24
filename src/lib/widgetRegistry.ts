@@ -13,6 +13,7 @@ import { InsightWidget } from '@/components/InsightWidget';
 import { ReferralsWrapper } from '@/components/ReferralsWidget';
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
 import EarnWidget from '@/components/EarnWidget';
+import LevelsWidget from '@/components/LevelsWidget';
 
 // Widget Registry - Single source of truth for widget configuration
 export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
@@ -119,6 +120,14 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     defaultSize: { w: 6, h: 6 },
     minSize: { w: 4, h: 4 },
     maxSize: { w: 12, h: 9 }
+  },
+  'levels': {
+    id: 'levels',
+    title: 'Levels',
+    component: LevelsWidget,
+    defaultSize: { w: 6, h: 6 },
+    minSize: { w: 4, h: 4 },
+    maxSize: { w: 12, h: 9 }
   }
 };
 
@@ -149,6 +158,7 @@ export const widgetTitles: Record<string, string> = {
   'insight': 'Insight',
   'referrals': 'Referrals',
   'earn': 'Earn',
+  'levels': 'Levels'
 };
 
 // Helper function for performance titles

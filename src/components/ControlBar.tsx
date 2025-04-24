@@ -1,5 +1,5 @@
 import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette, Sun, Moon, Monitor, ChevronRight } from '../components/ui-icons';
-import { Lock, Unlock, Wallet, LineChart, PieChart, TrendingUp, Receipt, Sparkles, Users, DollarSign, PanelRight } from 'lucide-react';
+import { Lock, Unlock, Wallet, LineChart, PieChart, TrendingUp, Receipt, Sparkles, Users, DollarSign, PanelRight, Award } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -434,9 +434,15 @@ export function ControlBar({
               <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
               <div className="px-3 py-2">
                 <div className="grid grid-cols-2 gap-2">
-                  {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
-                    .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions' || type === 'insight' || type === 'referrals' || type === 'earn')
-                    .map(([type, config]) => {
+                  {(() => {
+                    const filteredWidgets = (Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
+                      .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions' || type === 'insight' || type === 'referrals' || type === 'earn' || type === 'levels');
+                    
+                    // Check if we need a placeholder (odd number of widgets)
+                    const needsPlaceholder = filteredWidgets.length % 2 !== 0;
+                    
+                    // Render all widgets
+                    const renderedWidgets = filteredWidgets.map(([type, config]) => {
                       // Choose the appropriate icon based on widget type
                       const IconComponent = {
                         'balances': Wallet,
@@ -446,7 +452,8 @@ export function ControlBar({
                         'transactions': Receipt,
                         'insight': Sparkles,
                         'referrals': Users,
-                        'earn': DollarSign
+                        'earn': DollarSign,
+                        'levels': Award
                       }[type] || LayoutGrid;
                       
                       return (
@@ -469,7 +476,23 @@ export function ControlBar({
                           </div>
                         </div>
                       );
-                    })}
+                    });
+                    
+                    // If we need a placeholder, add it
+                    if (needsPlaceholder) {
+                      renderedWidgets.push(
+                        <div
+                          key="placeholder"
+                          className="relative flex flex-col items-center justify-center select-none rounded-lg border border-dashed p-3 h-20 text-sm"
+                        >
+                          <div className="text-sm text-muted-foreground mb-1">More widgets</div>
+                          <div className="text-xs text-muted-foreground/70">coming soon</div>
+                        </div>
+                      );
+                    }
+                    
+                    return renderedWidgets;
+                  })()}
                 </div>
               </div>
               <DropdownMenuSeparator />
