@@ -1933,91 +1933,21 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                 </TableBody>
               </Table>
             ) : (
-              <div className="w-full">
-                <div 
-                  className="sticky top-0 z-20 w-full flex bg-[hsl(var(--color-widget-header))] border-b border-border"
-                >
-                  {table.getHeaderGroups()[0].headers
-                    .filter(header => {
-                      const columnId = header.column.id;
-                      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
-                    })
-                    .map((header) => renderTableHeader(header, currentTheme, columnSizes, () => getTotalColumnsWidth()))}
-                </div>
-                
-                <div 
-                  style={{ 
-                    height: `${rowVirtualizer.getTotalSize()}px`, 
-                    width: '100%', 
-                    position: 'relative',
-                    overflow: 'hidden' 
-                  }}
-                >
-                  {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                    const row = rows[virtualRow.index];
-                    const visibleCells = row.getVisibleCells().filter(cell => {
-                      const columnId = cell.column.id;
-                      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
-                    });
-                    
-                    // Calculate total width to ensure proper alignment
-                    const totalWidth = getTotalColumnsWidth();
-                    
-                    return (
-                      <div
-                        key={row.id}
-                        data-index={virtualRow.index}
-                        className={cn(
-                          "absolute top-0 left-0 flex",
-                          "hover:bg-[hsl(var(--color-widget-hover))]",
-                          virtualRow.index % 2 === 0 ? "bg-transparent" : "bg-[hsl(var(--color-widget-alt-row))]"
-                        )}
-                        style={{
-                          height: `48px`, // Fixed row height
-                          width: '100%',
-                          transform: `translateY(${virtualRow.start}px)`,
-                          display: 'flex',
-                        }}
-                      >
-                        {visibleCells.map(cell => {
-                          const columnId = cell.column.id;
-                          const isNarrowColumn = columnId === 'favorite';
-                          const isPairColumn = columnId === 'pair';
-
-                          // Directly use width from columnSizes state, provide simple fallbacks
-                          const width = columnSizes[columnId as keyof typeof columnSizes] || (isPairColumn ? 180 : 110);
-
-                          return (
-                            <div
-                              key={cell.id}
-                              className={cn(
-                                "flex items-center px-4 py-2 overflow-hidden",
-                                isNarrowColumn && "w-[30px] max-w-[30px] p-0",
-                                isPairColumn ? "justify-start" : "justify-end",
-                                "border-b border-border",
-                                COLUMN_TRANSITION_CLASSES
-                              )}
-                              style={{
-                                width: isNarrowColumn ? 30 : width,
-                                minWidth: isNarrowColumn ? 30 : width,
-                                flexShrink: 0,
-                              }}
-                              ref={(el) => {
-                                // Store refs to header cells for measurements
-                                if (virtualRow.index === 0) {
-                                  headerRefs.current[columnId] = el;
-                                }
-                              }}
-                            >
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <TableWithAddAssetRow
+                table={table}
+                rowVirtualizer={rowVirtualizer}
+                rows={rows}
+                activeListId={activeListId}
+                widgetId={id}
+                columnVisibility={columnVisibility}
+                dynamicVisibility={dynamicVisibility}
+                columnSizes={columnSizes}
+                getTotalColumnsWidth={getTotalColumnsWidth}
+                renderTableHeader={renderTableHeader}
+                currentTheme={currentTheme}
+                COLUMN_TRANSITION_CLASSES={COLUMN_TRANSITION_CLASSES}
+                headerRefs={headerRefs}
+              />
             )}
           </div>
           {/* Add fade mask at the bottom of the table */}
@@ -2069,3 +1999,9 @@ const setStoredValue = <T,>(key: string, value: T): void => {
   };
   setTimeout(saveToStorage, 300);
 };
+
+// Import the AddAssetRow component
+import { AddAssetRow } from './MarketsWidgetAddAssetRow';
+
+// Add the import at the top with other imports
+import { TableWithAddAssetRow } from './TableWithAddAssetRow';

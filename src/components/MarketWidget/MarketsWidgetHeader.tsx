@@ -13,7 +13,6 @@ import {
   List as ListIcon,
   Ban as BanIcon,
   Columns as ColumnsIcon,
-  Plus as PlusIcon,
   ChevronsUpDown,
   SlidersHorizontal
 } from 'lucide-react';
@@ -97,9 +96,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false);
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [activeListName, setActiveListName] = useState<string>('');
-  const [pairPopoverOpen, setPairPopoverOpen] = useState(false);
-  const [selectedPair, setSelectedPair] = useState('');
-  const [pairSearchValue, setPairSearchValue] = useState('');
   
   // Get actual table instance - simplified access pattern
   const actualTable = table || tableRef?.current?.getTable() || null;
@@ -135,14 +131,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     }
   }, [widgetId]);
   
-  // Get all trading pairs from sample data
-  const availablePairs = Object.keys(SAMPLE_MARKET_DATA).sort();
-  
-  // Log available pairs for debugging
-  useEffect(() => {
-    console.log('Available trading pairs for selection:', availablePairs);
-  }, [availablePairs]);
-
   // Check for active list 
   useEffect(() => {
     const checkActiveList = () => {
@@ -209,52 +197,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     setFilterDropdownOpen(false);
   };
 
-  // Handle adding a pair to the current list
-  const handleAddPair = (pairToAdd: string = selectedPair) => {
-    if (!activeListId || !pairToAdd) return;
-    
-    // Store the full trading pair instead of just the base asset
-    // This prevents adding multiple pairs with the same base asset
-    ListManager.addAssetToList(activeListId, pairToAdd, widgetId);
-    setSelectedPair('');
-    setPairPopoverOpen(false);
-  };
-
-  // Split rendering pair into components for better styling
-  const renderPairOption = (pair: string) => {
-    const [baseAsset, quoteAsset] = pair.split('/');
-    
-    return (
-      <div className="flex items-center justify-between w-full">
-        <div className="flex items-center">
-          {ASSETS[baseAsset as AssetTicker]?.icon ? (
-            <img 
-              src={ASSETS[baseAsset as AssetTicker].icon} 
-              alt={baseAsset} 
-              className="w-5 h-5 mr-2 rounded-full" 
-            />
-          ) : (
-            <div className="w-5 h-5 mr-2 rounded-full bg-muted flex items-center justify-center">
-              <span className="text-xs">{baseAsset.charAt(0)}</span>
-            </div>
-          )}
-          <span className="font-medium">{baseAsset}</span>
-        </div>
-        
-        <div className="flex items-center text-muted-foreground">
-          <span className="text-xs">/</span>
-          <span className="text-xs ml-1">{quoteAsset}</span>
-        </div>
-      </div>
-    );
-  };
-
-  const filteredPairs = pairSearchValue === ''
-    ? availablePairs
-    : availablePairs.filter((pair) =>
-        pair.toLowerCase().includes(pairSearchValue.toLowerCase())
-      );
-
   // Listen for tab click events
   const handleTabClick = (value: string) => {
     console.log(`[MarketsWidgetHeader] Tab clicked: ${value} for widget ${widgetId}`);
@@ -269,56 +211,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
 
   return (
     <div className="flex items-center gap-2">
-      {/* Add Pair button with direct combobox */}
-      {activeListId && (
-        <Popover open={pairPopoverOpen} onOpenChange={setPairPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-8 px-3 text-xs whitespace-nowrap flex items-center gap-1.5 min-w-[180px] justify-between"
-              onClick={() => setPairPopoverOpen(true)}
-            >
-              <div className="flex items-center">
-                <PlusIcon className="h-3.5 w-3.5 mr-1.5" /> 
-                {selectedPair ? 
-                  <span className="truncate max-w-[100px]">{selectedPair}</span> : 
-                  "Add Asset"
-                }
-              </div>
-              <ChevronsUpDown className="h-3.5 w-3.5 ml-auto opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="p-0 w-[220px]" align="start">
-            <Command>
-              <CommandInput 
-                placeholder="Search trading pairs..." 
-                className="h-9"
-                value={pairSearchValue}
-                onValueChange={setPairSearchValue}
-              />
-              <CommandList className="max-h-[300px]">
-                <CommandEmpty>No trading pairs found</CommandEmpty>
-                <CommandGroup>
-                  {filteredPairs.map((pair) => (
-                    <CommandItem
-                      key={pair}
-                      value={pair}
-                      onSelect={() => {
-                        // Pass the pair directly to handleAddPair to avoid state timing issues
-                        handleAddPair(pair);
-                      }}
-                    >
-                      {renderPairOption(pair)}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      )}
-
       <DropdownMenu open={filterDropdownOpen} onOpenChange={setFilterDropdownOpen}>
         <DropdownMenuTrigger asChild>
           <Button 
