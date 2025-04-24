@@ -35,10 +35,6 @@ export interface EarnWidgetProps extends RemovableWidgetProps {
   // Add any specific props for EarnWidget if needed
 }
 
-export interface LevelsWidgetProps extends RemovableWidgetProps {
-  // Add any specific props for LevelsWidget if needed
-}
-
 export interface WidgetConfig {
   id: string;
   title: string;
