@@ -4,7 +4,9 @@ import {
   getDirectDialogNavigationData, 
   markDialogOpened,
   resetDialogOpenedState,
-  markHashHandled
+  markHashHandled,
+  generateEventId,
+  setCurrentEventId
 } from '@/lib/widgetDialogService';
 
 // Used to avoid duplicate initialization attempts
@@ -122,6 +124,7 @@ export function useWidgetDialogInit() {
 
     // Handle browser back/forward navigation
     const handlePopState = (event: PopStateEvent) => {
+      // Get widget ID from current URL hash
       const widgetId = getWidgetIdFromHash();
       const isDirectNavigationState = event.state?.directLoad === true;
       
@@ -133,6 +136,7 @@ export function useWidgetDialogInit() {
         isDirectNavigation: isDirectNavigationState
       });
       
+      // Check if hash contains a widget ID, regardless of state
       if (widgetId) {
         // Reset the dialog opened state when navigating to allow opening a dialog again
         resetDialogOpenedState();
@@ -150,6 +154,20 @@ export function useWidgetDialogInit() {
           bubbles: true
         });
         document.dispatchEvent(event);
+        
+        // Ensure proper state for this navigation
+        if (!event.state) {
+          window.history.replaceState(
+            { 
+              widgetDialog: true, 
+              widgetId: widgetId,
+              directLoad: false,
+              timestamp: Date.now() 
+            }, 
+            '', 
+            window.location.href
+          );
+        }
       } else {
         console.log('🔄 Closing widget dialogs from popstate');
         // Dispatch event to close all dialogs
@@ -162,8 +180,74 @@ export function useWidgetDialogInit() {
 
     window.addEventListener('popstate', handlePopState);
     
+    // Also handle URL changes when the user pastes a URL and hits Enter
+    const handleHashChange = (e: HashChangeEvent) => {
+      // Get the widget ID from the new URL hash
+      const widgetId = getWidgetIdFromHash();
+      
+      // Check if this is navigation to the same URL (paste + enter of the same URL)
+      const isSameUrlNavigation = e.oldURL === e.newURL;
+      
+      console.log('🔄 Hash change detected:', { 
+        oldURL: e.oldURL, 
+        newURL: e.newURL,
+        widgetId,
+        isSameUrlNavigation
+      });
+      
+      if (widgetId) {
+        console.log('🔄 Detected widget ID in URL from hash change:', widgetId);
+        
+        // Always reset dialog state when we detect a widget ID in hash change
+        // This ensures dialogs can reopen even if we navigate to the same URL
+        resetDialogOpenedState();
+        
+        // Generate a unique event ID
+        const eventId = generateEventId();
+        
+        // Set as current event
+        setCurrentEventId(eventId);
+        
+        // Mark hash as handled
+        markHashHandled(widgetId);
+        
+        // Dispatch event to open the dialog with manual navigation flag
+        const event = new CustomEvent('open-widget-dialog', {
+          detail: { 
+            widgetId,
+            directLoad: false,
+            isManualNavigation: isSameUrlNavigation,
+            eventId
+          },
+          bubbles: true
+        });
+        document.dispatchEvent(event);
+        
+        // Set proper state for this hash
+        window.history.replaceState(
+          { 
+            widgetDialog: true, 
+            widgetId: widgetId,
+            timestamp: Date.now(),
+            isManualNavigation: isSameUrlNavigation,
+            eventId
+          }, 
+          '', 
+          window.location.href
+        );
+        
+        // Clear event ID after a delay
+        setTimeout(() => {
+          setCurrentEventId(null);
+        }, 500);
+      }
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handleHashChange);
     };
   }, []);
 } 

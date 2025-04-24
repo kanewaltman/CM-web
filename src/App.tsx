@@ -20,7 +20,17 @@ import { isValidLayout } from './layouts/dashboardLayout';
 import { ExchangeRatesProvider } from './contexts/ExchangeRatesContext';
 import ExchangeRatesTester from './components/ExchangeRatesTester';
 import { useWidgetDialogInit } from '@/hooks/useWidgetDialogInit';
-import { checkDirectDialogNavigation, getDirectDialogNavigationData } from '@/lib/widgetDialogService';
+import { 
+  checkDirectDialogNavigation, 
+  getDirectDialogNavigationData, 
+  resetDialogOpenedState, 
+  markDialogOpened, 
+  markHashHandled, 
+  handleManualUrlNavigation, 
+  generateEventId, 
+  setCurrentEventId,
+  isClosingDialog
+} from '@/lib/widgetDialogService';
 import { GlobalWidgetDialogRenderer } from './components/GlobalWidgetDialogRenderer';
 
 // Check for direct dialog navigation as early as possible
@@ -538,6 +548,275 @@ function App() {
       setDialogInitialized(true);
     }
   }, []);
+  
+  // Handle direct URL navigation (when user pastes URL and hits Enter)
+  useEffect(() => {
+    // Track processed URLs to prevent infinite loops
+    const processedUrls = new Set<string>();
+    let processingUrl = false;
+    
+    // Function to check for widget in URL
+    const checkCurrentUrl = () => {
+      // Skip if already processing a URL
+      if (processingUrl) {
+        return;
+      }
+      
+      // Skip if a dialog is in the process of closing
+      if (isClosingDialog) {
+        console.log('⏭️ Skipping URL check - dialog is in the process of closing');
+        return;
+      }
+      
+      const currentUrl = window.location.href;
+      const hash = window.location.hash;
+      
+      // Check for dialog closed flag in history state to skip processing
+      if (window.history.state?.dialogClosed) {
+        console.log('⏭️ Skipping URL check - dialog was explicitly closed');
+        return;
+      }
+      
+      // Flag to track if this is manual navigation to same URL
+      let isManualNavigation = false;
+      
+      // Check if this is a manual navigation (paste and enter) with same URL
+      // We can detect this by checking if the URL is already in our processed set
+      // and by checking the timestamp of the last URL processing
+      if (processedUrls.has(currentUrl)) {
+        const now = Date.now();
+        // Only treat as manual navigation if enough time has passed (at least 2 seconds)
+        // to avoid recursive triggers during normal dialog opening
+        if (now - lastWidgetHandleTime > 2000) {
+          console.log('🔄 Detected manual URL navigation with same URL - resetting dialog state');
+          handleManualUrlNavigation();
+          processedUrls.delete(currentUrl); // Remove so we handle it again
+          isManualNavigation = true; // Set the flag
+        } else {
+          console.log('⏭️ Skipping URL check - too soon after last handling');
+          processingUrl = false;
+          return; // Exit early to prevent recursive handling
+        }
+      }
+      
+      if (hash.includes('widget=')) {
+        const widgetIdMatch = hash.match(/widget=([^&]+)/);
+        const widgetId = widgetIdMatch ? widgetIdMatch[1] : null;
+        
+        if (widgetId) {
+          console.log('📱 Detected widget in URL bar navigation:', widgetId);
+          
+          // Mark as processing to prevent reentry
+          processingUrl = true;
+          
+          // Remember this URL to prevent infinite loops
+          processedUrls.add(currentUrl);
+          
+          // Limit the size of the Set to prevent memory leaks
+          if (processedUrls.size > 10) {
+            const iterator = processedUrls.values();
+            const firstValue = iterator.next().value;
+            if (firstValue) {
+              processedUrls.delete(firstValue);
+            }
+          }
+          
+          // We need to wait for dialog system to initialize
+          const checkAndOpen = () => {
+            if (dialogInitialized) {
+              // We need to manually open the dialog through our event system
+              const openDialog = () => {
+                // Check if this dialog has already been handled by the popstate event
+                // by looking for the widget-dialog-open class
+                const hasOpenDialog = document.body.classList.contains('widget-dialog-open');
+                
+                if (hasOpenDialog) {
+                  console.log('📌 Dialog already opened by popstate, skipping URL handler');
+                  processingUrl = false;
+                  return;
+                }
+                
+                // Only check for recent handling if this is NOT a manual navigation
+                if (!isManualNavigation) {
+                  // Check if we've handled this widget ID recently
+                  const now = Date.now();
+                  if (lastWidgetId === widgetId && now - lastWidgetHandleTime < 1000) {
+                    console.log('📌 Recently handled this widget, skipping to prevent duplicates:', widgetId);
+                    processingUrl = false;
+                    return;
+                  }
+                } else {
+                  console.log('🔄 Manual navigation detected - bypassing recent handling check');
+                }
+                
+                // Update tracking
+                lastWidgetId = widgetId as string;
+                lastWidgetHandleTime = Date.now();
+                
+                // Generate a unique event ID for this opening attempt
+                const eventId = generateEventId();
+                
+                // Set as current event
+                setCurrentEventId(eventId);
+                
+                // Reset dialog state to allow opening again
+                resetDialogOpenedState();
+                
+                // Mark hash as handled first
+                markHashHandled(widgetId as string);
+                
+                // Directly dispatch the open dialog event instead of using popstate
+                // which might not be supported in all browsers
+                const event = new CustomEvent('open-widget-dialog', {
+                  detail: { 
+                    widgetId,
+                    directLoad: true,
+                    isManualNavigation,
+                    eventId // Pass the event ID to track which widgets have handled it
+                  },
+                  bubbles: true
+                });
+                document.dispatchEvent(event);
+                
+                // Also set proper history state
+                window.history.replaceState(
+                  { 
+                    widgetDialog: true, 
+                    widgetId: widgetId,
+                    directLoad: true,
+                    timestamp: Date.now(),
+                    processed: true // Mark as processed in state
+                  }, 
+                  '', 
+                  window.location.href
+                );
+                
+                // Release the processing lock and clear event ID after a short delay
+                window.setTimeout(() => {
+                  processingUrl = false;
+                  setCurrentEventId(null);
+                }, 500);
+              };
+              
+              window.setTimeout(openDialog, 100);
+            } else {
+              // Retry after a short delay if dialog system isn't ready
+              window.setTimeout(checkAndOpen, 50);
+            }
+          };
+          
+          // Start the check
+          checkAndOpen();
+        } else {
+          processingUrl = false;
+        }
+      } else {
+        // No widget hash found
+        processingUrl = false;
+      }
+    };
+    
+    // Debounced URL check to avoid rapid consecutive checks
+    let urlCheckTimeout: number | undefined = undefined;
+    const debouncedCheckUrl = () => {
+      if (urlCheckTimeout !== undefined) {
+        window.clearTimeout(urlCheckTimeout);
+      }
+      urlCheckTimeout = window.setTimeout(checkCurrentUrl, 200); // Increased timeout from 50ms to 200ms
+    };
+    
+    // Prevent duplicate dialog opening detection
+    let lastWidgetId: string | null = null;
+    let lastWidgetHandleTime = 0;
+    
+    // Handle popstate events with debouncing
+    const handlePopState = (event: PopStateEvent) => {
+      // Don't process popstate if we're already handling a URL change
+      if (processingUrl) return;
+      
+      // Get current widget ID from hash
+      const hash = window.location.hash;
+      let currentWidgetId: string | null = null;
+      
+      if (hash.includes('widget=')) {
+        const widgetIdMatch = hash.match(/widget=([^&]+)/);
+        currentWidgetId = widgetIdMatch ? widgetIdMatch[1] : null;
+      }
+      
+      // Check if we just processed this widget recently (within 1.5 seconds)
+      const now = Date.now();
+      if (currentWidgetId && 
+          currentWidgetId === lastWidgetId && 
+          now - lastWidgetHandleTime < 1500) {
+        console.log('📌 Skipping duplicate widget handling for:', currentWidgetId);
+        return;
+      }
+      
+      // Update tracking
+      if (currentWidgetId) {
+        lastWidgetId = currentWidgetId;
+        lastWidgetHandleTime = now;
+      }
+      
+      // Check for widget dialog state in the event
+      if (event.state?.widgetDialog) {
+        // This is already being handled properly, no need to do anything
+        return;
+      }
+      
+      console.log('🔄 Handling popstate for URL bar navigation');
+      debouncedCheckUrl();
+    };
+    
+    // Only check URL on mount if there's a hash
+    if (window.location.hash) {
+      // Slight delay to ensure everything is initialized
+      setTimeout(() => debouncedCheckUrl(), 200);
+    }
+    
+    window.addEventListener('popstate', handlePopState);
+    
+    // For modern browsers: monitor URL changes via the Navigation API if available
+    if ('navigation' in window) {
+      try {
+        const navigation = (window as any).navigation;
+        navigation.addEventListener('navigate', () => {
+          if (!processingUrl) {
+            debouncedCheckUrl();
+          }
+        });
+      } catch (e) {
+        console.error('Error setting up Navigation API:', e);
+      }
+    }
+    
+    // Add event listener for input URL navigation
+    window.addEventListener('beforeunload', (e) => {
+      // This will fire before the page refreshes or navigates
+      // Save the current URL to sessionStorage to detect if we're refreshing or navigating to the same URL
+      sessionStorage.setItem('lastUrl', window.location.href);
+      
+      // Don't actually prevent navigation
+      delete e.returnValue;
+    });
+
+    // Check if we're navigating to the same URL when the page loads
+    window.addEventListener('load', () => {
+      const lastUrl = sessionStorage.getItem('lastUrl');
+      if (lastUrl === window.location.href && lastUrl?.includes('#widget=')) {
+        console.log('🔄 Detected navigation to same URL with widget hash');
+        handleManualUrlNavigation();
+        debouncedCheckUrl();
+      }
+    });
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (urlCheckTimeout !== undefined) {
+        window.clearTimeout(urlCheckTimeout);
+      }
+    };
+  }, [dialogInitialized]);
   
   // Only initialize the dialog system after proper timing
   useEffect(() => {

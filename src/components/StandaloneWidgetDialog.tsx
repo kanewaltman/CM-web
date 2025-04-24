@@ -3,6 +3,14 @@ import { Dialog, DialogContent } from './ui/dialog';
 import { ChevronDown } from './ui-icons';
 import { WIDGET_REGISTRY, widgetTitles, findWidgetById } from '@/lib/widgetRegistry';
 import { useDataSource } from '@/lib/DataSourceContext';
+import { openWidgetDialog, closeWidgetDialog } from '@/lib/widgetDialogService';
+
+// Import isClosingDialog flag from WidgetDialog
+// @ts-ignore - Accessing from WidgetDialog which is not explicitly exported
+declare const isClosingDialog: boolean;
+
+// Set our own closing flag in case the import doesn't work
+let isStandaloneDialogClosing = false;
 
 // Error boundary to catch rendering errors in widgets
 class WidgetErrorBoundary extends React.Component<
@@ -61,13 +69,11 @@ export function StandaloneWidgetDialog({
   // Store the original ID for component props
   const originalWidgetId = widgetId;
 
-  // Update URL when dialog is opened/closed
+  // Handle dialog state changes with centralized management
   useEffect(() => {
     if (open) {
-      // Add widget ID to URL for direct access
-      const newUrl = new URL(window.location.href);
-      newUrl.hash = `widget=${widgetId}`;
-      window.history.pushState({ widget: widgetId }, '', newUrl.toString());
+      // Let the service handle URL updates
+      openWidgetDialog(widgetId, 'global');
       
       // Add CSS class to body to indicate a widget dialog is open
       document.body.classList.add('widget-dialog-open');
@@ -77,22 +83,25 @@ export function StandaloneWidgetDialog({
       const timer = setTimeout(() => setIsLoading(false), 200);
       return () => clearTimeout(timer);
     } else {
-      // Remove widget ID from URL when closed
-      if (window.location.hash.includes(`widget=${widgetId}`)) {
-        const newUrl = new URL(window.location.href);
-        newUrl.hash = '';
-        window.history.pushState({}, '', newUrl.toString());
-      }
-      
       // Remove CSS class from body
       document.body.classList.remove('widget-dialog-open');
     }
   }, [open, widgetId]);
 
+  // Handle dialog closing via the Dialog component's onOpenChange
+  const handleOpenChange = (newOpenState: boolean) => {
+    if (!newOpenState && open) {
+      // Dialog is being closed
+      closeWidgetDialog(widgetId);
+    }
+    // Forward the change to the parent
+    onOpenChange(newOpenState);
+  };
+
   // If we can't find the widget, show a not found message
   if (!widgetConfig) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="w-[600px] max-w-[95vw]">
           <div className="p-4">
             <h2 className="text-lg font-semibold mb-2">Widget Not Found</h2>
@@ -110,7 +119,7 @@ export function StandaloneWidgetDialog({
   const WidgetComponent = widgetConfig.component;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[var(--max-widget-width,1200px)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0">
         <div className="flex flex-col h-full">
           {/* Header */}

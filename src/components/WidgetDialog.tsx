@@ -2,6 +2,11 @@ import React, { useEffect } from 'react';
 import { Dialog, DialogContent } from './ui/dialog';
 import { ChevronDown } from './ui-icons';
 import { cn } from '@/lib/utils';
+import { openWidgetDialog, closeWidgetDialog } from '@/lib/widgetDialogService';
+
+// Flag provided by widgetDialogService.ts
+// @ts-ignore - Accessing exported variable
+declare const isClosingDialog: boolean;
 
 interface WidgetDialogProps {
   open: boolean;
@@ -20,25 +25,26 @@ export function WidgetDialog({
   children,
   widgetId
 }: WidgetDialogProps) {
-  // Update URL when dialog is opened/closed
+  // Handle dialog state changes with centralized management
   useEffect(() => {
     if (open) {
-      // Add widget ID to URL for direct access
-      const newUrl = new URL(window.location.href);
-      newUrl.hash = `widget=${widgetId}`;
-      window.history.pushState({ widget: widgetId }, '', newUrl.toString());
-    } else {
-      // Remove widget ID from URL when closed
-      if (window.location.hash.includes(`widget=${widgetId}`)) {
-        const newUrl = new URL(window.location.href);
-        newUrl.hash = '';
-        window.history.pushState({}, '', newUrl.toString());
-      }
+      // Let the service handle URL updates
+      openWidgetDialog(widgetId, 'container');
     }
   }, [open, widgetId]);
 
+  // Handle dialog closing via the Dialog component's onOpenChange
+  const handleOpenChange = (newOpenState: boolean) => {
+    if (!newOpenState && open) {
+      // Dialog is being closed
+      closeWidgetDialog(widgetId);
+    }
+    // Forward the change to the parent
+    onOpenChange(newOpenState);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[var(--max-widget-width)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0">
         <div className="flex flex-col h-full">
           {/* Header */}

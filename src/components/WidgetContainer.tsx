@@ -11,7 +11,16 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Dialog, DialogContent } from './ui/dialog';
-import { getWidgetIdFromHash, markHashHandled, isHashHandled, isSameBaseWidget } from '@/lib/widgetDialogService';
+import { 
+  getWidgetIdFromHash, 
+  markHashHandled, 
+  isHashHandled, 
+  isSameBaseWidget, 
+  isProcessingEvent, 
+  openWidgetDialog, 
+  closeWidgetDialog,
+  hasOpenDialogs
+} from '@/lib/widgetDialogService';
 
 interface WidgetContainerProps {
   children: React.ReactNode;
@@ -26,6 +35,9 @@ interface WidgetContainerProps {
 
 // Track which dialogs are currently open to prevent duplicates
 const openDialogs = new Set<string>();
+
+// Track which events have been handled to prevent duplicates
+const handledEvents = new Set<string>();
 
 export const WidgetContainer = memo(function WidgetContainer({ 
   children, 
@@ -74,13 +86,9 @@ export const WidgetContainer = memo(function WidgetContainer({
             console.log('📍 Opening widget dialog from URL hash:', effectiveWidgetId);
             isAlreadyOpened = true;
             
-            // Track this dialog as open to prevent duplicates
-            if (!openDialogs.has(effectiveWidgetId)) {
-              openDialogs.add(effectiveWidgetId);
-              setIsDialogOpen(true);
-            } else {
-              console.log('⚠️ Dialog already open for:', effectiveWidgetId);
-            }
+            // Use centralized function to open dialog
+            setIsDialogOpen(true);
+            openDialogs.add(effectiveWidgetId);
           } else {
             console.log('⏭️ Skipping hash check - already handled by another widget:', effectiveWidgetId);
           }
@@ -93,39 +101,92 @@ export const WidgetContainer = memo(function WidgetContainer({
     // Check on mount
     checkHash();
 
+    // Create a named handler for hash changes so we can properly remove it
+    const handleHashChange = (e: HashChangeEvent) => {
+      console.log('🔄 Hash change in WidgetContainer:', { 
+        oldURL: e.oldURL, 
+        newURL: e.newURL, 
+        widgetId: effectiveWidgetId
+      });
+      
+      // If this appears to be a fresh navigation to the same URL (paste and enter),
+      // reset the dialog state to allow it to open
+      if (e.oldURL === e.newURL && e.newURL.includes(`widget=${getWidgetIdFromHash()}`)) {
+        console.log('🔄 Detected navigation to same widget URL, attempting to reopen');
+      }
+      
+      // Always recheck the hash when it changes
+      checkHash();
+    };
+
     // Handle hash change for browser navigation
-    window.addEventListener('hashchange', checkHash);
-    
+    window.addEventListener('hashchange', handleHashChange);
+
     // Handle custom dialog open event for widgets
     const handleOpenDialog = (e: CustomEvent) => {
       const requestedWidgetId = e.detail?.widgetId;
       if (!requestedWidgetId) return;
       
-      // Check if the requested widget ID matches this widget's ID (using base ID comparison)
+      // Get the unique event ID if provided in the event
+      const eventId = typeof e.detail?.eventId === 'string' ? e.detail.eventId : null;
+      
+      // Check if this event has already been handled by any container
+      if (eventId && handledEvents.has(eventId)) {
+        console.log('⏭️ Event already handled by another widget container:', eventId);
+        return;
+      }
+      
+      // Check if the requested widget ID matches this widget's ID
       if (isSameBaseWidget(requestedWidgetId, effectiveWidgetId)) {
+        const isManualNavigation = !!e.detail?.isManualNavigation;
+        
         console.log('📍 Opening widget dialog from event:', { 
           widgetId: effectiveWidgetId, 
           requestedId: requestedWidgetId,
           isDirectLoad: e.detail?.directLoad === true,
-          alreadyOpen: isDialogOpen
+          isManualNavigation,
+          alreadyOpen: isDialogOpen,
+          eventId: eventId || 'none'
         });
         
-        // Skip if already open to prevent flashing
-        if (isDialogOpen) {
+        // Mark this event as handled if it has an ID
+        if (eventId) {
+          handledEvents.add(eventId);
+          
+          // Cleanup - limit set size to prevent memory issues
+          if (handledEvents.size > 20) {
+            const oldestEvent = handledEvents.values().next().value;
+            if (oldestEvent) handledEvents.delete(oldestEvent);
+          }
+        }
+        
+        // Skip if already open, unless this is a manual navigation
+        if (isDialogOpen && !isManualNavigation) {
           console.log('📍 Dialog already open, skipping redundant open');
           return;
         }
         
-        // Check if another dialog with the same ID is already open
-        if (openDialogs.has(effectiveWidgetId)) {
-          console.log('⚠️ Dialog already open for this widget ID:', effectiveWidgetId);
-          return;
+        // For manual navigation, force refresh the dialog state
+        if (isManualNavigation && isDialogOpen) {
+          console.log('🔄 Forcing dialog refresh for manual navigation');
+          // Remove from tracking first
+          openDialogs.delete(effectiveWidgetId);
+          // Then add back
+          openDialogs.add(effectiveWidgetId);
+        } else {
+          // Check if another dialog with the same ID is already open
+          if (openDialogs.has(effectiveWidgetId)) {
+            console.log('⚠️ Dialog already open for this widget ID:', effectiveWidgetId);
+            return;
+          }
+          
+          isAlreadyOpened = true;
+          
+          // Track this dialog as open
+          openDialogs.add(effectiveWidgetId);
         }
         
-        isAlreadyOpened = true;
-        
-        // Track this dialog as open
-        openDialogs.add(effectiveWidgetId);
+        // Update local state
         setIsDialogOpen(true);
         
         // Mark the container that has the dialog open with a specific class
@@ -135,26 +196,6 @@ export const WidgetContainer = memo(function WidgetContainer({
         
         // Add a class to the body as well
         document.body.classList.add('widget-dialog-open');
-        
-        // If this is a direct load (from URL), ensure the URL is preserved
-        if (e.detail?.directLoad === true) {
-          // Ensure hash is correctly set without triggering navigation
-          // Use the original requested ID to maintain proper URL format
-          const currentUrl = new URL(window.location.href);
-          if (currentUrl.hash !== `#widget=${requestedWidgetId}`) {
-            const newUrl = new URL(window.location.href);
-            newUrl.hash = `widget=${requestedWidgetId}`;
-            window.history.replaceState(
-              { 
-                widget: requestedWidgetId,
-                directLoad: true, 
-                timestamp: Date.now() 
-              }, 
-              '', 
-              newUrl.toString()
-            );
-          }
-        }
       }
     };
 
@@ -170,7 +211,7 @@ export const WidgetContainer = memo(function WidgetContainer({
         }
         
         // Remove the class from body if no other dialogs are open
-        if (openDialogs.size === 0) {
+        if (!hasOpenDialogs()) {
           document.body.classList.remove('widget-dialog-open');
         }
       }
@@ -181,7 +222,7 @@ export const WidgetContainer = memo(function WidgetContainer({
     document.addEventListener('close-widget-dialogs', handleCloseDialogs);
 
     return () => {
-      window.removeEventListener('hashchange', checkHash);
+      window.removeEventListener('hashchange', handleHashChange);
       document.removeEventListener('open-widget-dialog', handleOpenDialog as EventListener);
       document.removeEventListener('close-widget-dialogs', handleCloseDialogs);
       
@@ -192,83 +233,44 @@ export const WidgetContainer = memo(function WidgetContainer({
     };
   }, [widgetId, isDialogOpen]);
 
-  // Update URL when dialog state changes
-  useEffect(() => {
+  // Handle dialog opening/closing via Dialog component's onOpenChange
+  const handleDialogOpenChange = (open: boolean) => {
     // Use provided widgetId or try to get from DOM
     const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
-    if (!effectiveWidgetId) return; // Skip if no widgetId provided
-
-    if (isDialogOpen) {
-      // Add widget ID to URL for direct access
-      const newUrl = new URL(window.location.href);
+    
+    if (open && !isDialogOpen) {
+      // Opening dialog
+      openWidgetDialog(effectiveWidgetId);
       
-      // Update dialog open classes
+      // Update classes for visual state
       if (containerRef.current) {
         containerRef.current.classList.add('widget-dialog-open');
       }
       document.body.classList.add('widget-dialog-open');
       
-      // Preserve any existing widget ID with timestamp in the URL
-      const currentWidgetIdFromHash = getWidgetIdFromHash();
-      const widgetIdToUse = 
-        (currentWidgetIdFromHash && isSameBaseWidget(currentWidgetIdFromHash, effectiveWidgetId)) 
-          ? currentWidgetIdFromHash 
-          : effectiveWidgetId;
+      // Update local state
+      setIsDialogOpen(true);
+      openDialogs.add(effectiveWidgetId);
+    } 
+    else if (!open && isDialogOpen) {
+      // Closing dialog - use centralized function
+      closeWidgetDialog(effectiveWidgetId);
       
-      // Check if we're already at the correct hash to avoid redundant history entries
-      if (newUrl.hash !== `#widget=${widgetIdToUse}`) {
-        newUrl.hash = `widget=${widgetIdToUse}`;
-        
-        // Check if this was a direct load from URL - if so, replace state instead of pushing
-        const isDirectLoad = !!window.history.state?.directLoad;
-        
-        if (isDirectLoad) {
-          window.history.replaceState(
-            { widget: widgetIdToUse, directLoad: true, timestamp: Date.now() }, 
-            '', 
-            newUrl.toString()
-          );
-        } else {
-          window.history.pushState(
-            { widget: widgetIdToUse, timestamp: Date.now() }, 
-            '', 
-            newUrl.toString()
-          );
-        }
-      }
-    } else {
-      // Remove from open dialogs tracking when closed
-      openDialogs.delete(effectiveWidgetId);
-      
-      // Remove dialog open classes
+      // Update classes
       if (containerRef.current) {
         containerRef.current.classList.remove('widget-dialog-open');
       }
-      // Only remove from body if no other dialogs are open
-      if (openDialogs.size === 0) {
+      
+      // Only remove body class if this is the last dialog
+      if (!hasOpenDialogs()) {
         document.body.classList.remove('widget-dialog-open');
       }
       
-      // Only clear hash if it's for this specific widget (or same base widget)
-      const currentWidgetIdFromHash = getWidgetIdFromHash();
-      if (currentWidgetIdFromHash && isSameBaseWidget(currentWidgetIdFromHash, effectiveWidgetId)) {
-        // Check if we should preserve history state properties
-        const currentState = window.history.state || {};
-        const newUrl = new URL(window.location.href);
-        newUrl.hash = '';
-        
-        window.history.pushState(
-          { 
-            ...currentState,
-            widget: null, 
-            timestamp: Date.now() 
-          }, 
-          '', 
-          newUrl.toString()
-        );
-      }
+      // Update local state
+      setIsDialogOpen(false);
+      openDialogs.delete(effectiveWidgetId);
     }
-  }, [isDialogOpen, widgetId]);
+  };
 
   // Handle title click to open dialog
   const handleTitleClick = (e: React.MouseEvent) => {
@@ -301,7 +303,18 @@ export const WidgetContainer = memo(function WidgetContainer({
         (containerRef as any).current.widgetId = domWidgetId;
       }
       
+      // Update local state directly first
       setIsDialogOpen(true);
+      openDialogs.add(effectiveWidgetId);
+      
+      // Then open dialog via service - specify this is coming from a container
+      openWidgetDialog(effectiveWidgetId, 'container');
+      
+      // Update classes
+      if (containerRef.current) {
+        containerRef.current.classList.add('widget-dialog-open');
+      }
+      document.body.classList.add('widget-dialog-open');
     } else {
       console.log('No widget ID or custom handler available');
     }
@@ -476,7 +489,7 @@ export const WidgetContainer = memo(function WidgetContainer({
 
       {/* Widget Dialog - render only if we have an effective widget ID */}
       {(effectiveWidgetId || ((containerRef as any).current?.widgetId)) && (
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogContent className="w-[var(--max-widget-width,1200px)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0">
             <div className="flex flex-col h-full">
               {/* Dialog Header */}

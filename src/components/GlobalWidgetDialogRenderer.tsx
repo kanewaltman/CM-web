@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { StandaloneWidgetDialog } from './StandaloneWidgetDialog';
 import { findWidgetById } from '@/lib/widgetRegistry';
+import { resetDialogOpenedState } from '@/lib/widgetDialogService';
+
+// Track which events have been handled globally
+const handledGlobalEvents = new Set<string>();
 
 /**
  * This component renders a standalone widget dialog based on custom events
@@ -15,7 +19,33 @@ export function GlobalWidgetDialogRenderer() {
       const widgetId = e.detail?.widgetId;
       if (!widgetId) return;
       
+      // Get event ID if available
+      const eventId = typeof e.detail?.eventId === 'string' ? e.detail.eventId : null;
+      
+      // Skip if this event has already been handled globally
+      if (eventId && handledGlobalEvents.has(eventId)) {
+        console.log('🌐 Event already handled globally:', eventId);
+        return;
+      }
+      
+      // Skip if this dialog was opened by a container directly
+      if (e.detail?.source === 'container') {
+        console.log('🌐 Skipping global handling for container-sourced dialog:', widgetId);
+        return;
+      }
+      
       console.log('🌐 Global dialog renderer handling widget:', widgetId);
+      
+      // If event has an ID, mark it as handled
+      if (eventId) {
+        handledGlobalEvents.add(eventId);
+        
+        // Cleanup - limit size to prevent memory issues
+        if (handledGlobalEvents.size > 20) {
+          const oldestEvent = handledGlobalEvents.values().next().value;
+          if (oldestEvent) handledGlobalEvents.delete(oldestEvent);
+        }
+      }
       
       // Check if the widget exists in the registry using the helper function
       // findWidgetById now handles compound IDs with timestamps
@@ -56,7 +86,11 @@ export function GlobalWidgetDialogRenderer() {
     
     // Listen for close all dialogs event
     const handleCloseDialogs = () => {
-      setOpenWidgets({});
+      if (Object.values(openWidgets).some(isOpen => isOpen)) {
+        setOpenWidgets({});
+        // Reset dialog state to ensure they can be reopened
+        resetDialogOpenedState();
+      }
     };
     
     // Register event listeners
@@ -67,7 +101,31 @@ export function GlobalWidgetDialogRenderer() {
       document.removeEventListener('open-widget-dialog', handleOpenDialog as EventListener);
       document.removeEventListener('close-widget-dialogs', handleCloseDialogs);
     };
-  }, []);
+  }, [openWidgets]);
+  
+  // Handler for individual dialog open state changes
+  const handleDialogOpenChange = (widgetId: string, open: boolean) => {
+    if (!open) {
+      // When closing a dialog, ensure we reset the dialog state
+      setOpenWidgets(prev => ({
+        ...prev,
+        [widgetId]: false
+      }));
+      
+      // Only reset global dialog state if no other dialogs are open
+      const otherDialogsOpen = Object.entries(openWidgets)
+        .some(([id, isOpen]) => id !== widgetId && isOpen);
+      
+      if (!otherDialogsOpen) {
+        resetDialogOpenedState();
+      }
+    } else {
+      setOpenWidgets(prev => ({
+        ...prev,
+        [widgetId]: true
+      }));
+    }
+  };
   
   return (
     <>
@@ -77,12 +135,7 @@ export function GlobalWidgetDialogRenderer() {
             <StandaloneWidgetDialog
               widgetId={widgetId}
               open={isOpen}
-              onOpenChange={(open) => {
-                setOpenWidgets(prev => ({
-                  ...prev,
-                  [widgetId]: open
-                }));
-              }}
+              onOpenChange={(open) => handleDialogOpenChange(widgetId, open)}
             />
           </div>
         )
