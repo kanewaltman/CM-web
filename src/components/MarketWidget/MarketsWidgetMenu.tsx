@@ -92,8 +92,9 @@ export const MarketsWidgetMenu: React.FC<{
 // Utility class for managing lists
 export class ListManager {
   // Load custom lists from localStorage
-  static getLists(): CustomList[] {
+  static getLists(instanceId: string = 'default'): CustomList[] {
     try {
+      // Lists are stored globally (without instance ID)
       const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
       return savedLists ? JSON.parse(savedLists) : [];
     } catch (error) {
@@ -103,13 +104,17 @@ export class ListManager {
   }
   
   // Save custom lists to localStorage
-  static saveLists(lists: CustomList[]): void {
+  static saveLists(lists: CustomList[], instanceId: string = 'default'): void {
     try {
+      // Save lists globally (without instance ID)
       localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(lists));
       
       // Dispatch event for other components
       const event = new CustomEvent('markets-lists-updated', {
-        detail: { lists },
+        detail: { 
+          lists,
+          instanceId: 'all' // Signal update to all widgets
+        },
         bubbles: true
       });
       document.dispatchEvent(event);
@@ -119,24 +124,38 @@ export class ListManager {
   }
   
   // Get active list ID
-  static getActiveListId(): string | null {
+  static getActiveListId(instanceId: string = 'default'): string | null {
     try {
-      const savedActiveList = localStorage.getItem(ACTIVE_LIST_KEY);
-      return savedActiveList ? JSON.parse(savedActiveList) : null;
+      // Each widget instance has its own active list
+      const key = `${ACTIVE_LIST_KEY}-${instanceId}`;
+      const saved = localStorage.getItem(key);
+      
+      // Debug logging
+      console.log(`[ListManager] Getting active list for widget ${instanceId}:`, saved ? JSON.parse(saved) : null);
+      
+      return saved ? JSON.parse(saved) : null;
     } catch (error) {
-      console.error('Error loading active list:', error);
+      console.error('Error getting active list:', error);
       return null;
     }
   }
   
   // Set active list ID
-  static setActiveListId(listId: string | null): void {
+  static setActiveListId(listId: string | null, instanceId: string = 'default'): void {
     try {
-      localStorage.setItem(ACTIVE_LIST_KEY, JSON.stringify(listId));
+      console.log(`[ListManager] Setting active list for widget ${instanceId}:`, listId);
       
-      // Dispatch event for other components
+      // Active list is per widget instance
+      const key = `${ACTIVE_LIST_KEY}-${instanceId}`;
+      localStorage.setItem(key, JSON.stringify(listId));
+      
+      // Dispatch event for other components - IMPORTANT: This should only affect the specific widget
       const event = new CustomEvent('markets-active-list-changed', {
-        detail: { listId },
+        detail: { 
+          listId,
+          instanceId, // Must match the specific instance
+          timestamp: Date.now() // Add timestamp to ensure event uniqueness
+        },
         bubbles: true
       });
       document.dispatchEvent(event);
@@ -146,7 +165,8 @@ export class ListManager {
   }
   
   // Add asset to list
-  static addAssetToList(listId: string, asset: string): void {
+  static addAssetToList(listId: string, asset: string, instanceId: string = 'default'): void {
+    // Get global lists
     const lists = this.getLists();
     const updatedLists = lists.map(list => {
       if (list.id === listId && !list.assets.includes(asset)) {
@@ -158,18 +178,24 @@ export class ListManager {
       return list;
     });
     
-    this.saveLists(updatedLists);
+    // Save globally but notify the widget that made the change
+    this.saveLists(updatedLists, instanceId);
     
     // Dispatch custom event instead of showing alert
     const event = new CustomEvent('asset-added-to-list', {
-      detail: { asset, listId },
+      detail: { 
+        asset, 
+        listId,
+        instanceId
+      },
       bubbles: true
     });
     document.dispatchEvent(event);
   }
   
   // Remove asset from list
-  static removeAssetFromList(listId: string, asset: string): void {
+  static removeAssetFromList(listId: string, asset: string, instanceId: string = 'default'): void {
+    // Get global lists
     const lists = this.getLists();
     const updatedLists = lists.map(list => {
       if (list.id === listId) {
@@ -181,11 +207,16 @@ export class ListManager {
       return list;
     });
     
-    this.saveLists(updatedLists);
+    // Save globally but notify the widget that made the change
+    this.saveLists(updatedLists, instanceId);
     
     // Dispatch custom event instead of showing alert
     const event = new CustomEvent('asset-removed-from-list', {
-      detail: { asset, listId },
+      detail: { 
+        asset, 
+        listId,
+        instanceId
+      },
       bubbles: true
     });
     document.dispatchEvent(event);
@@ -197,15 +228,43 @@ export const AssetListDialog: React.FC<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   asset: string;
-}> = ({ open, onOpenChange, asset }) => {
+  instanceId?: string;
+}> = ({ open, onOpenChange, asset, instanceId = 'default' }) => {
   const [lists, setLists] = useState<CustomList[]>([]);
   
   // Load lists when dialog opens
   useEffect(() => {
     if (open) {
-      setLists(ListManager.getLists());
+      setLists(ListManager.getLists(instanceId));
     }
-  }, [open]);
+  }, [open, instanceId]);
+  
+  // Helper function to check if an asset is in a list
+  // It checks different possible formats of the same asset
+  const isAssetInList = (list: CustomList, assetToCheck: string): boolean => {
+    if (list.assets.includes(assetToCheck)) return true;
+    
+    // Check if this is a base asset (without quote) and find any format in the list
+    if (!assetToCheck.includes(':') && !assetToCheck.includes('/')) {
+      return list.assets.some(listAsset => 
+        listAsset.startsWith(`${assetToCheck}:`) || 
+        listAsset.startsWith(`${assetToCheck}/`)
+      );
+    }
+    
+    // Check if list contains the same asset in different formats
+    if (assetToCheck.includes(':')) {
+      const [base, quote] = assetToCheck.split(':');
+      return list.assets.includes(`${base}/${quote}`) || list.assets.includes(base);
+    }
+    
+    if (assetToCheck.includes('/')) {
+      const [base, quote] = assetToCheck.split('/');
+      return list.assets.includes(`${base}:${quote}`) || list.assets.includes(base);
+    }
+    
+    return false;
+  };
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -230,13 +289,13 @@ export const AssetListDialog: React.FC<{
                     <div className="font-medium">{list.name}</div>
                     <div className="text-xs text-muted-foreground">{list.assets.length} assets</div>
                   </div>
-                  {list.assets.includes(asset) ? (
+                  {isAssetInList(list, asset) ? (
                     <Button 
                       variant="outline"
                       className="text-destructive border-destructive"
                       onClick={() => {
-                        ListManager.removeAssetFromList(list.id, asset);
-                        setLists(ListManager.getLists());
+                        ListManager.removeAssetFromList(list.id, asset, instanceId);
+                        setLists(ListManager.getLists(instanceId));
                       }}
                     >
                       Remove
@@ -245,8 +304,8 @@ export const AssetListDialog: React.FC<{
                     <Button 
                       variant="outline" 
                       onClick={() => {
-                        ListManager.addAssetToList(list.id, asset);
-                        setLists(ListManager.getLists());
+                        ListManager.addAssetToList(list.id, asset, instanceId);
+                        setLists(ListManager.getLists(instanceId));
                       }}
                     >
                       Add

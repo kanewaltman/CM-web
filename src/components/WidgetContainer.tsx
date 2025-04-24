@@ -37,6 +37,12 @@ import {
   AlertDialogTrigger,
 } from './ui/alert-dialog';
 
+interface CustomList {
+  id: string;
+  name: string;
+  assets: string[];
+}
+
 interface WidgetContainerProps {
   children: React.ReactNode;
   title: string;
@@ -45,18 +51,12 @@ interface WidgetContainerProps {
   onRemove?: () => void;
   isMobile?: boolean;
   widgetMenu?: React.ReactNode;
+  widgetId?: string;
 }
 
 // LocalStorage key for saving custom lists
 const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
 const ACTIVE_LIST_KEY = 'markets-widget-active-list';
-
-// Interfaces for the lists feature
-interface CustomList {
-  id: string;
-  name: string;
-  assets: string[];
-}
 
 export const WidgetContainer = memo(function WidgetContainer({ 
   children, 
@@ -65,7 +65,8 @@ export const WidgetContainer = memo(function WidgetContainer({
   extraControls,
   onRemove,
   isMobile = false,
-  widgetMenu
+  widgetMenu,
+  widgetId: externalWidgetId
 }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [titleMenuOpen, setTitleMenuOpen] = useState(false);
@@ -82,21 +83,59 @@ export const WidgetContainer = memo(function WidgetContainer({
   // State for delete dialog
   const [deleteListId, setDeleteListId] = useState<string | null>(null);
   const [deleteListDialogOpen, setDeleteListDialogOpen] = useState(false);
+  
+  // Get the widget ID for proper instance tracking - set default immediately
+  const widgetId = useRef<string>(externalWidgetId || `widget-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
+  // Track whether we've found the DOM ID
+  const [foundDomId, setFoundDomId] = useState(false);
+
+  // When the component mounts, try to get a better ID from the DOM
+  useEffect(() => {
+    if (!externalWidgetId && isMarketsWidget && containerRef.current) {
+      const findAndSetId = () => {
+        const gridItem = containerRef.current?.closest('.grid-stack-item');
+        const domId = gridItem?.getAttribute('gs-id') || gridItem?.id;
+        if (domId) {
+          widgetId.current = domId;
+          console.log(`[WidgetContainer] Widget ID updated to:`, widgetId.current);
+          setFoundDomId(true);
+          
+          // Check if there's a stored active list for this widget
+          try {
+            const storedActiveList = localStorage.getItem(`${ACTIVE_LIST_KEY}-${domId}`);
+            if (storedActiveList) {
+              const listId = JSON.parse(storedActiveList);
+              console.log(`[WidgetContainer] Found stored active list for widget ${domId}:`, listId);
+              setActiveList(listId);
+            }
+          } catch (err) {
+            console.error('Error loading active list for widget:', err);
+          }
+        }
+      };
+      
+      // Try immediately
+      findAndSetId();
+      
+      // And also after a short delay to ensure the DOM is fully ready
+      const timerId = setTimeout(findAndSetId, 100);
+      
+      return () => clearTimeout(timerId);
+    }
+  }, [isMarketsWidget, externalWidgetId]);
 
   // Load custom lists from localStorage
   useEffect(() => {
     if (isMarketsWidget) {
       try {
+        // Get lists from global storage (without instance ID)
         const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
-        const savedActiveList = localStorage.getItem(ACTIVE_LIST_KEY);
         
         if (savedLists) {
           setCustomLists(JSON.parse(savedLists));
         }
         
-        if (savedActiveList) {
-          setActiveList(JSON.parse(savedActiveList));
-        }
+        // The active list is loaded in the widget ID effect above
       } catch (error) {
         console.error('Error loading custom lists:', error);
       }
@@ -106,15 +145,22 @@ export const WidgetContainer = memo(function WidgetContainer({
   // Save custom lists to localStorage
   const saveCustomLists = useCallback((lists: CustomList[]) => {
     try {
+      // Save lists globally (without instance ID)
       localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(lists));
       setCustomLists(lists);
       
-      // Dispatch a custom event that the Markets widget can listen for
+      // Dispatch a custom event that all Markets widgets can listen for
       const event = new CustomEvent('markets-lists-updated', {
-        detail: { lists },
+        detail: { 
+          lists,
+          // Pass the current widget instance ID so widgets know who made the change
+          instanceId: 'all' // Always signal all widgets about list structure changes
+        },
         bubbles: true
       });
       document.dispatchEvent(event);
+      
+      console.log(`[WidgetContainer] Widget ${widgetId.current} saved global lists (${lists.length} lists)`);
     } catch (error) {
       console.error('Error saving custom lists:', error);
     }
@@ -123,19 +169,30 @@ export const WidgetContainer = memo(function WidgetContainer({
   // Save active list to localStorage
   const saveActiveList = useCallback((listId: string | null) => {
     try {
-      localStorage.setItem(ACTIVE_LIST_KEY, JSON.stringify(listId));
+      // Each widget must have its own id to work correctly
+      const instanceId = widgetId.current;
+      
+      console.log(`[WidgetContainer] Setting active list for widget ${instanceId}:`, listId);
+      
+      // Save active list with instance ID (selection is per-widget)
+      localStorage.setItem(`${ACTIVE_LIST_KEY}-${instanceId}`, JSON.stringify(listId));
       setActiveList(listId);
       
       // Dispatch a custom event that the Markets widget can listen for
+      // Make sure this event only targets this specific widget instance
       const event = new CustomEvent('markets-active-list-changed', {
-        detail: { listId, lists: customLists },
+        detail: { 
+          listId, 
+          instanceId, // Must be this specific instance ID
+          timestamp: Date.now() // Add timestamp to make the event unique
+        },
         bubbles: true
       });
       document.dispatchEvent(event);
     } catch (error) {
       console.error('Error saving active list:', error);
     }
-  }, [customLists]);
+  }, []);
 
   // Handle creating a new list
   const handleCreateList = () => {
@@ -145,6 +202,9 @@ export const WidgetContainer = memo(function WidgetContainer({
   // Handle saving a new list
   const handleSaveNewList = () => {
     if (newListName.trim()) {
+      const instanceId = widgetId.current;
+      console.log(`[WidgetContainer] Creating new list "${newListName}" for widget ${instanceId}`);
+      
       const newList: CustomList = {
         id: `list-${Date.now()}`,
         name: newListName.trim(),
@@ -152,23 +212,38 @@ export const WidgetContainer = memo(function WidgetContainer({
       };
       
       const updatedLists = [...customLists, newList];
+      
+      // Store lists globally
+      localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(updatedLists));
       setCustomLists(updatedLists);
       
-      // Store in localStorage
-      localStorage.setItem('markets-widget-custom-lists', JSON.stringify(updatedLists));
+      // Store active list with instance ID
+      localStorage.setItem(`${ACTIVE_LIST_KEY}-${instanceId}`, JSON.stringify(newList.id));
+      setActiveList(newList.id);
       
-      // Set as active list
-      saveActiveList(newList.id);
-      
-      // Reset state and close dialog
+      // Reset state
       setNewListName('');
       
-      // Dispatch event
-      const event = new CustomEvent('markets-lists-updated', {
-        detail: { lists: updatedLists },
+      // Dispatch events with proper instance ID
+      const listsEvent = new CustomEvent('markets-lists-updated', {
+        detail: { 
+          lists: updatedLists,
+          instanceId: 'all' // Notify all widgets about the new list
+        },
         bubbles: true
       });
-      document.dispatchEvent(event);
+      document.dispatchEvent(listsEvent);
+      
+      const activeEvent = new CustomEvent('markets-active-list-changed', {
+        detail: { 
+          listId: newList.id,
+          instanceId // Only this specific widget should switch to this list
+        },
+        bubbles: true
+      });
+      document.dispatchEvent(activeEvent);
+      
+      console.log(`[WidgetContainer] New list created and active list set to ${newList.id} for widget ${instanceId}`);
     }
   };
 

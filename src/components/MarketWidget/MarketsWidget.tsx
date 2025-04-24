@@ -22,7 +22,11 @@ import {
   GripVertical as GripVerticalIcon,
   Plus as PlusIcon,
   ListChecks,
-  ChevronsUpDown
+  ChevronsUpDown,
+  AlertCircle,
+  ListIcon,
+  ListXIcon,
+  XIcon
 } from 'lucide-react';
 import { 
   DropdownMenuSeparator,
@@ -41,6 +45,12 @@ import {
   DialogClose,
 } from '../ui/dialog';
 import ValueFlash from './ValueFlash';
+import { Badge } from '../ui/badge';
+import { Label } from '../ui/label';
+import { Input } from '../ui/input';
+import { ScrollArea } from '../ui/scroll-area';
+import { WidgetTab } from './WidgetTab';
+import { Tooltip } from '../ui/tooltip';
 
 // TanStack Table imports
 import {
@@ -76,6 +86,10 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+// Constants for data refresh intervals
+const UPDATE_INTERVAL_VISIBLE = 7000; // 7 seconds when tab is visible
+const UPDATE_DEBOUNCE_TIME = 300;     // 0.3 second debounce
 
 // Format price with appropriate number of decimal places
 const priceFormatterCache = new Map<number, string>();
@@ -203,9 +217,18 @@ interface MarketData {
 
 export type { MarketData };
 
+interface CustomList {
+  id: string;
+  name: string;
+  assets: string[];
+}
+
 interface MarketsWidgetProps {
   className?: string;
   compact?: boolean;
+  
+  // External state controls
+  id?: string; // Unique ID for this widget instance
   searchQuery?: string;
   onSearchQueryChange?: (value: string) => void;
   selectedQuoteAsset?: AssetTicker | 'ALL';
@@ -213,6 +236,24 @@ interface MarketsWidgetProps {
   secondaryCurrency?: AssetTicker | null;
   onSecondaryCurrencyChange?: (value: AssetTicker | null) => void;
   onQuoteAssetsChange?: (assets: AssetTicker[]) => void;
+  
+  // Column controls
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  columnVisibility?: VisibilityState;
+  onColumnVisibilityChange?: (visibility: VisibilityState) => void;
+  columnOrder?: string[];
+  onColumnOrderChange?: (order: string[]) => void;
+  
+  // Custom list controls
+  customLists?: CustomList[];
+  onCustomListsChange?: (lists: CustomList[]) => void;
+  activeListId?: string | null;
+  onActiveListChange?: (listId: string | null) => void;
+  
+  // Persistence options
+  persistState?: boolean;
+  
   onRemove?: () => void;
 }
 
@@ -575,6 +616,7 @@ const renderTableHeader = (
 export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((props, ref) => {
   const { 
     className,
+    id = 'default',
     searchQuery: externalSearchQuery,
     onSearchQueryChange: externalSearchQueryChange,
     selectedQuoteAsset: externalSelectedQuoteAsset,
@@ -583,6 +625,17 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     onSecondaryCurrencyChange: externalSecondaryCurrencyChange,
     onQuoteAssetsChange,
     compact = false,
+    sorting: externalSorting,
+    onSortingChange,
+    columnVisibility: externalColumnVisibility,
+    onColumnVisibilityChange,
+    columnOrder: externalColumnOrder,
+    onColumnOrderChange,
+    customLists: externalCustomLists,
+    onCustomListsChange,
+    activeListId: externalActiveListId,
+    onActiveListChange,
+    persistState = false,
     onRemove,
   } = props;
   
@@ -596,109 +649,58 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   
-  // Add custom lists state
-  const [customLists, setCustomLists] = useState<CustomList[]>([]);
-  const [activeListId, setActiveListId] = useState<string | null>(null);
+  // Generate storage keys with instance ID to prevent conflicts
+  const instanceStorageKeys = useMemo(() => ({
+    SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}${id}-selected-quote-asset`,
+    SECONDARY_CURRENCY: `${STORAGE_KEY_PREFIX}${id}-secondary-currency`,
+    COLUMN_VISIBILITY: `${STORAGE_KEY_PREFIX}${id}-column-visibility`,
+    COLUMN_ORDER: `${STORAGE_KEY_PREFIX}${id}-column-order`,
+    SORTING: `${STORAGE_KEY_PREFIX}${id}-sorting`,
+    CUSTOM_LISTS: `${STORAGE_KEY_PREFIX}${id}-custom-lists`,
+    ACTIVE_LIST: `${STORAGE_KEY_PREFIX}${id}-active-list`,
+  }), [id]);
+  
+  // Add custom lists state - use external if provided, otherwise internal
+  const [internalCustomLists, setInternalCustomLists] = useState<CustomList[]>(
+    persistState ? getStoredValue(instanceStorageKeys.CUSTOM_LISTS, []) : []
+  );
+  const customLists = externalCustomLists !== undefined ? externalCustomLists : internalCustomLists;
+  
+  const [internalActiveListId, setInternalActiveListId] = useState<string | null>(
+    persistState ? getStoredValue(instanceStorageKeys.ACTIVE_LIST, null) : null
+  );
+  const activeListId = externalActiveListId !== undefined ? externalActiveListId : internalActiveListId;
+  
+  // Load custom lists from ListManager on mount
+  useEffect(() => {
+    if (externalCustomLists === undefined) {
+      // Only load if we're managing lists internally
+      const loadedLists = ListManager.getLists(id);
+      setInternalCustomLists(loadedLists);
+    }
+    
+    if (externalActiveListId === undefined) {
+      // Only load active list if we're managing it internally
+      const activeList = ListManager.getActiveListId(id);
+      setInternalActiveListId(activeList);
+    }
+  }, [id, externalCustomLists, externalActiveListId]);
+  
   const [showAddToListDialog, setShowAddToListDialog] = useState(false);
   const [selectedAssetForList, setSelectedAssetForList] = useState<string | null>(null);
   
-  // Load custom lists from localStorage
+  // Update storage if using internal state and persistence is enabled
   useEffect(() => {
-    try {
-      const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
-      const savedActiveList = localStorage.getItem(ACTIVE_LIST_KEY);
-      
-      if (savedLists) {
-        setCustomLists(JSON.parse(savedLists));
-      }
-      
-      if (savedActiveList) {
-        setActiveListId(JSON.parse(savedActiveList));
-      }
-    } catch (error) {
-      console.error('Error loading custom lists:', error);
+    if (persistState && externalCustomLists === undefined) {
+      setStoredValue(instanceStorageKeys.CUSTOM_LISTS, internalCustomLists);
     }
-  }, []);
+  }, [persistState, externalCustomLists, internalCustomLists, instanceStorageKeys.CUSTOM_LISTS]);
   
-  // Listen for custom events for list changes
   useEffect(() => {
-    const handleListsUpdated = (event: CustomEvent) => {
-      if (event.detail?.lists) {
-        setCustomLists(event.detail.lists);
-      }
-    };
-    
-    const handleActiveListChanged = (event: CustomEvent) => {
-      if ('listId' in event.detail) {
-        setActiveListId(event.detail.listId);
-      }
-    };
-    
-    // Add event listeners
-    document.addEventListener('markets-lists-updated', handleListsUpdated as EventListener);
-    document.addEventListener('markets-active-list-changed', handleActiveListChanged as EventListener);
-    
-    // Cleanup event listeners
-    return () => {
-      document.removeEventListener('markets-lists-updated', handleListsUpdated as EventListener);
-      document.removeEventListener('markets-active-list-changed', handleActiveListChanged as EventListener);
-    };
-  }, []);
-  
-  // Add an asset to a list
-  const addAssetToList = useCallback((listId: string, asset: string) => {
-    const updatedLists = customLists.map(list => {
-      if (list.id === listId) {
-        // Only add if not already in the list
-        if (!list.assets.includes(asset)) {
-          return {
-            ...list,
-            assets: [...list.assets, asset]
-          };
-        }
-      }
-      return list;
-    });
-    
-    setCustomLists(updatedLists);
-    localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(updatedLists));
-    
-    // Dispatch event for other components
-    const event = new CustomEvent('markets-lists-updated', {
-      detail: { lists: updatedLists },
-      bubbles: true
-    });
-    document.dispatchEvent(event);
-  }, [customLists]);
-  
-  // Remove an asset from a list
-  const removeAssetFromList = useCallback((listId: string, asset: string) => {
-    const updatedLists = customLists.map(list => {
-      if (list.id === listId) {
-        return {
-          ...list,
-          assets: list.assets.filter(a => a !== asset)
-        };
-      }
-      return list;
-    });
-    
-    setCustomLists(updatedLists);
-    localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(updatedLists));
-    
-    // Dispatch event for other components
-    const event = new CustomEvent('markets-lists-updated', {
-      detail: { lists: updatedLists },
-      bubbles: true
-    });
-    document.dispatchEvent(event);
-  }, [customLists]);
-  
-  // Show the add to list dialog
-  const handleShowAddToListDialog = useCallback((asset: string) => {
-    setSelectedAssetForList(asset);
-    setShowAddToListDialog(true);
-  }, []);
+    if (persistState && externalActiveListId === undefined) {
+      setStoredValue(instanceStorageKeys.ACTIVE_LIST, internalActiveListId);
+    }
+  }, [persistState, externalActiveListId, internalActiveListId, instanceStorageKeys.ACTIVE_LIST]);
   
   // Generate a stable ID for this widget instance
   const marketWidgetId = useId();
@@ -708,26 +710,36 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
   
   const [internalSelectedQuoteAsset, setInternalSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(
-    getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL')
+    persistState ? getStoredValue<AssetTicker | 'ALL'>(instanceStorageKeys.SELECTED_QUOTE_ASSET, 'ALL') : 'ALL'
   );
   const selectedQuoteAsset = externalSelectedQuoteAsset !== undefined 
     ? externalSelectedQuoteAsset 
     : internalSelectedQuoteAsset;
   
   const [internalSecondaryCurrency, setInternalSecondaryCurrency] = useState<AssetTicker | null>(
-    getStoredValue<AssetTicker | null>(STORAGE_KEYS.SECONDARY_CURRENCY, null)
+    persistState ? getStoredValue<AssetTicker | null>(instanceStorageKeys.SECONDARY_CURRENCY, null) : null
   );
   const secondaryCurrency = externalSecondaryCurrency !== undefined 
     ? externalSecondaryCurrency 
     : internalSecondaryCurrency;
   
   // Initialize other state with values from localStorage
-  const [sorting, setSorting] = useState<SortingState>(
-    getStoredValue(STORAGE_KEYS.SORTING, [{ id: 'marketCap', desc: true }])
+  const [internalSorting, setInternalSorting] = useState<SortingState>(
+    persistState ? getStoredValue(instanceStorageKeys.SORTING, [{ id: 'marketCap', desc: true }]) : [{ id: 'marketCap', desc: true }]
   );
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-    getStoredValue(STORAGE_KEYS.COLUMN_VISIBILITY, {})
+  const sorting = externalSorting !== undefined ? externalSorting : internalSorting;
+  
+  const [internalColumnVisibility, setInternalColumnVisibility] = useState<VisibilityState>(
+    persistState ? getStoredValue(instanceStorageKeys.COLUMN_VISIBILITY, {}) : {}
   );
+  const columnVisibility = externalColumnVisibility !== undefined ? externalColumnVisibility : internalColumnVisibility;
+  
+  const [internalColumnOrder, setInternalColumnOrder] = useState<string[]>(
+    persistState ? getStoredValue(instanceStorageKeys.COLUMN_ORDER, 
+      ['pair', 'price', 'change24h', 'change7d', 'marketCap', 'volume']) : 
+      ['pair', 'price', 'change24h', 'change7d', 'marketCap', 'volume']
+  );
+  const columnOrder = externalColumnOrder !== undefined ? externalColumnOrder : internalColumnOrder;
   
   const containerRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -779,6 +791,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   
   // Batch column size updates to reduce flickering
   const batchedColumnSizeUpdate = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Add missing references needed for virtualized rendering
+  const headerRefs = useRef<Record<string, HTMLElement | null>>({});
   
   // Update column sizes based on container width
   const updateColumnSizes = useCallback(() => {
@@ -855,18 +870,18 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
   useEffect(() => {
     if (externalSelectedQuoteAsset === undefined) {
-      setStoredValue(STORAGE_KEYS.SELECTED_QUOTE_ASSET, internalSelectedQuoteAsset);
+      setStoredValue(instanceStorageKeys.SELECTED_QUOTE_ASSET, internalSelectedQuoteAsset);
     }
   }, [internalSelectedQuoteAsset, externalSelectedQuoteAsset]);
 
   useEffect(() => {
     if (externalSecondaryCurrency === undefined) {
-      setStoredValue(STORAGE_KEYS.SECONDARY_CURRENCY, internalSecondaryCurrency);
+      setStoredValue(instanceStorageKeys.SECONDARY_CURRENCY, internalSecondaryCurrency);
     }
   }, [internalSecondaryCurrency, externalSecondaryCurrency]);
 
   useEffect(() => {
-    setStoredValue(STORAGE_KEYS.SORTING, sorting);
+    setStoredValue(instanceStorageKeys.SORTING, sorting);
   }, [sorting]);
 
   const quoteAssets = useMemo(() => { // Get unique quote assets from market data
@@ -882,7 +897,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     }
   }, [quoteAssets, onQuoteAssetsChange]);
 
-  // Handler functions that respect external handlers
+  // Update handlers for state changes
   const handleSearchQueryChange = useCallback((value: string) => {
     if (externalSearchQueryChange) {
       externalSearchQueryChange(value);
@@ -896,16 +911,230 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       externalSelectedQuoteAssetChange(value);
     } else {
       setInternalSelectedQuoteAsset(value);
+      if (persistState) {
+        setStoredValue(instanceStorageKeys.SELECTED_QUOTE_ASSET, value);
+      }
     }
-  }, [externalSelectedQuoteAssetChange]);
+  }, [externalSelectedQuoteAssetChange, persistState, instanceStorageKeys.SELECTED_QUOTE_ASSET]);
 
   const handleSecondaryCurrencyChange = useCallback((value: AssetTicker | null) => {
     if (externalSecondaryCurrencyChange) {
       externalSecondaryCurrencyChange(value);
     } else {
       setInternalSecondaryCurrency(value);
+      if (persistState) {
+        setStoredValue(instanceStorageKeys.SECONDARY_CURRENCY, value);
+      }
     }
-  }, [externalSecondaryCurrencyChange]);
+  }, [externalSecondaryCurrencyChange, persistState, instanceStorageKeys.SECONDARY_CURRENCY]);
+
+  // After handleSecondaryCurrencyChange but before the event handler
+
+  const handleSortingChange = useCallback((value: SortingState) => {
+    if (onSortingChange) {
+      onSortingChange(value);
+    } else {
+      setInternalSorting(value);
+      if (persistState) {
+        setStoredValue(instanceStorageKeys.SORTING, value);
+      }
+    }
+  }, [onSortingChange, persistState, instanceStorageKeys.SORTING]);
+
+  const handleColumnVisibilityChange = useCallback((value: VisibilityState) => {
+    if (onColumnVisibilityChange) {
+      onColumnVisibilityChange(value);
+    } else {
+      setInternalColumnVisibility(value);
+      if (persistState) {
+        setStoredValue(instanceStorageKeys.COLUMN_VISIBILITY, value);
+      }
+    }
+  }, [onColumnVisibilityChange, persistState, instanceStorageKeys.COLUMN_VISIBILITY]);
+
+  const handleColumnOrderChange = useCallback((value: string[]) => {
+    if (onColumnOrderChange) {
+      onColumnOrderChange(value);
+    } else {
+      setInternalColumnOrder(value);
+      if (persistState) {
+        setStoredValue(instanceStorageKeys.COLUMN_ORDER, value);
+      }
+    }
+  }, [onColumnOrderChange, persistState, instanceStorageKeys.COLUMN_ORDER]);
+
+  // Custom list handlers
+  const handleCustomListsChange = useCallback((lists: CustomList[]) => {
+    if (onCustomListsChange) {
+      onCustomListsChange(lists);
+    } else {
+      setInternalCustomLists(lists);
+      if (persistState) {
+        setStoredValue(instanceStorageKeys.CUSTOM_LISTS, lists);
+      }
+    }
+  }, [onCustomListsChange, persistState, instanceStorageKeys.CUSTOM_LISTS]);
+
+  const handleActiveListChange = useCallback((listId: string | null) => {
+    if (onActiveListChange) {
+      onActiveListChange(listId);
+    } else {
+      setInternalActiveListId(listId);
+      if (persistState) {
+        setStoredValue(instanceStorageKeys.ACTIVE_LIST, listId);
+      }
+    }
+  }, [onActiveListChange, persistState, instanceStorageKeys.ACTIVE_LIST]);
+
+  // Listen for custom events but only if they match this instance ID or are global
+  useEffect(() => {
+    // Log initialization
+    console.log(`[MarketsWidget] Setting up event listeners for widget ${id}`);
+    
+    const handleListsUpdated = (event: CustomEvent) => {
+      // Process global list updates or this widget's specific updates
+      if ((event.detail.instanceId === 'all' || event.detail.instanceId === id) && event.detail?.lists) {
+        console.log(`[MarketsWidget] Widget ${id} received lists update from ${event.detail.instanceId}`);
+        if (!onCustomListsChange) { // Only update internal state if not externally controlled
+          setInternalCustomLists(event.detail.lists);
+        }
+      }
+    };
+    
+    const handleActiveListChanged = (event: CustomEvent) => {
+      // CRITICAL: Only process this event if it's specifically for this widget instance
+      console.log(`[MarketsWidget] Widget ${id} received list selection event from ${event.detail?.instanceId}:`, event.detail?.listId);
+      
+      if (event.detail?.instanceId === id && 'listId' in event.detail) {
+        console.log(`[MarketsWidget] Widget ${id} APPLYING list selection:`, event.detail.listId);
+        
+        if (!onActiveListChange) { // Only update internal state if not externally controlled
+          setInternalActiveListId(event.detail.listId);
+        } else {
+          onActiveListChange(event.detail.listId);
+        }
+      } else {
+        console.log(`[MarketsWidget] Widget ${id} IGNORING list selection event - different instance`);
+      }
+    };
+    
+    // Add event listeners
+    document.addEventListener('markets-lists-updated', handleListsUpdated as EventListener);
+    document.addEventListener('markets-active-list-changed', handleActiveListChanged as EventListener);
+    
+    // Cleanup event listeners
+    return () => {
+      document.removeEventListener('markets-lists-updated', handleListsUpdated as EventListener);
+      document.removeEventListener('markets-active-list-changed', handleActiveListChanged as EventListener);
+    };
+  }, [id, onCustomListsChange, onActiveListChange, setInternalActiveListId]);
+  
+  // Debug: Log active list changes
+  useEffect(() => {
+    console.log(`[MarketsWidget] Widget ${id} active list changed to:`, activeListId);
+  }, [activeListId, id]);
+  
+  // Initialize the widget
+  useEffect(() => {
+    // Ensure widget has an ID for proper instance management
+    if (!id) {
+      console.warn('MarketsWidget: No ID provided. Using default.');
+    }
+    
+    // Log widget initialization
+    console.log(`Initializing MarketsWidget ${id || 'default'}`);
+
+    // Load initial data will be handled in the data fetching useEffect
+    
+  }, [id]);
+  
+  // Load initial lists from the global storage
+  useEffect(() => {
+    // Only load lists if not externally controlled
+    if (externalCustomLists === undefined) {
+      // Ensure widget has an ID for proper instance management
+      if (!id) {
+        console.warn('MarketsWidget: No ID provided. Using default.');
+      }
+      
+      // Log widget initialization for lists
+      console.log(`Widget ${id || 'default'} loading lists`);
+      
+      // Get global lists
+      const lists = ListManager.getLists();
+      console.log(`Widget ${id} loading ${lists.length} global lists`);
+      setInternalCustomLists(lists);
+      
+      // Get instance-specific active list
+      const instanceActiveListId = ListManager.getActiveListId(id);
+      console.log(`Widget ${id} loading active list: ${instanceActiveListId}`);
+      if (instanceActiveListId !== null) {
+        setInternalActiveListId(instanceActiveListId);
+      }
+    }
+  }, [id, externalCustomLists]);
+
+  // Add/remove asset from list
+  const addAssetToList = useCallback((listId: string, asset: string) => {
+    // Format the asset in a consistent format (base:quote) before adding to the list
+    // If asset is a ticker, find the full market data for it
+    const formattedAsset = asset.includes(':') || asset.includes('/') 
+      ? asset 
+      : (() => {
+          // Find the market data for this asset
+          const marketItem = marketData.find(item => item.baseAsset === asset);
+          if (marketItem) {
+            return `${marketItem.baseAsset}:${marketItem.quoteAsset}`;
+          }
+          return asset;
+        })();
+    
+    // Use ListManager to update the global list
+    ListManager.addAssetToList(listId, formattedAsset, id);
+    
+    // Update our local state with the latest from ListManager
+    const updatedLists = ListManager.getLists();
+    handleCustomListsChange(updatedLists);
+  }, [id, handleCustomListsChange, marketData]);
+
+  const removeAssetFromList = useCallback((listId: string, asset: string) => {
+    // Format the asset in a consistent format (base:quote) before removing from the list
+    // If asset is a ticker, find the full market data for it
+    const formattedAsset = asset.includes(':') || asset.includes('/') 
+      ? asset 
+      : (() => {
+          // Find the market data for this asset
+          const marketItem = marketData.find(item => item.baseAsset === asset);
+          if (marketItem) {
+            return `${marketItem.baseAsset}:${marketItem.quoteAsset}`;
+          }
+          return asset;
+        })();
+    
+    // Use ListManager to update the global list
+    ListManager.removeAssetFromList(listId, formattedAsset, id);
+    
+    // Update our local state with the latest from ListManager
+    const updatedLists = ListManager.getLists();
+    handleCustomListsChange(updatedLists);
+  }, [id, handleCustomListsChange, marketData]);
+
+  // Show the add to list dialog
+  const handleShowAddToListDialog = useCallback((asset: string) => {
+    setSelectedAssetForList(asset);
+    setShowAddToListDialog(true);
+  }, []);
+
+  // Add a helper function to update active list with proper instance ID
+  const setActiveList = useCallback((listId: string | null) => {
+    console.log(`[MarketsWidget] Widget ${id} setting active list to:`, listId);
+    
+    // Use ListManager directly to set active list per widget instance
+    ListManager.setActiveListId(listId, id);
+    
+    // Update our internal state
+    handleActiveListChange(listId);
+  }, [id, handleActiveListChange]);
 
   // Helper function to check if an asset matches the search query
   const assetMatchesSearch = useCallback((item: MarketData, query: string) => {
@@ -935,87 +1164,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     
     if (quoteAssetFullName && quoteAssetFullName.includes(normalizedQuery)) return true;
     
-    // Check for combined searches like "eth usd" - only split if there's a space
-    if (normalizedQuery.includes(' ')) {
-      const queryParts = normalizedQuery.split(/\s+/);
-      if (queryParts.length > 1) {
-        const [queryBase, queryQuote] = queryParts;
-        
-        const baseMatches = 
-          baseAsset.toLowerCase().includes(queryBase) || 
-          (baseAssetFullName && baseAssetFullName.includes(queryBase));
-        
-        const quoteMatches = 
-          quoteAsset.toLowerCase().includes(queryQuote) || 
-          (quoteAssetFullName && quoteAssetFullName.includes(queryQuote));
-        
-        if (baseMatches && quoteMatches) return true;
-        
-        // Also check the reverse order
-        const baseMatchesReverse = 
-          baseAsset.toLowerCase().includes(queryQuote) || 
-          (baseAssetFullName && baseAssetFullName.includes(queryQuote));
-        
-        const quoteMatchesReverse = 
-          quoteAsset.toLowerCase().includes(queryBase) || 
-          (quoteAssetFullName && quoteAssetFullName.includes(queryBase));
-        
-        if (baseMatchesReverse && quoteMatchesReverse) return true;
-      }
-    }
-    
     return false;
   }, []);
 
-  // Update the filtering logic to apply list filters
-  useEffect(() => {
-    if (marketData.length === 0) {
-      setFilteredData([]);
-      return;
-    }
-
-    const debouncedFilter = () => {
-      // Skip logging
-      let filtered = [...marketData];
-      
-      // Apply filters: quote asset, search query, and custom list
-      if (selectedQuoteAsset !== 'ALL') {
-        filtered = filtered.filter(item => item.quoteAsset === selectedQuoteAsset);
-      }
-      
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter(item => 
-          item.baseAsset.toLowerCase().includes(query) || 
-          item.quoteAsset.toLowerCase().includes(query) ||
-          item.pair.toLowerCase().includes(query)
-        );
-      }
-      
-      if (activeListId) {
-        const activeList = customLists.find(list => list.id === activeListId);
-        if (activeList) {
-          filtered = filtered.filter(item => 
-            activeList.assets.includes(item.pair) || activeList.assets.includes(item.baseAsset)
-          );
-        }
-      }
-      
-      setFilteredData(filtered);
-    };
-    
-    const timeoutId = setTimeout(debouncedFilter, 50);
-    return () => clearTimeout(timeoutId);
-  }, [marketData, selectedQuoteAsset, searchQuery, activeListId, customLists]);
-
-  // Update the table with filtered data whenever filters change
-  useEffect(() => {
-    // Filtered data update logic - remove console logging
-  }, [filteredData]);
-
-  // Responsive column hiding logic will be implemented after table initialization
-  
-  // Now let's update the price column cell to show extra info when columns are hidden
+  // Define the columns
   const columns = useMemo<ColumnDef<MarketData>[]>(() => {
     return [
       {
@@ -1026,6 +1178,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           const baseAssetConfig = ASSETS[row.original.baseAsset];
           const quoteAssetConfig = ASSETS[row.original.quoteAsset];
           const marginMultiplier = row.original.marginMultiplier;
+          const asset = `${row.original.baseAsset}:${row.original.quoteAsset}`;
           
           return (
             <div className="flex items-center gap-2 justify-between group">
@@ -1059,6 +1212,21 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                     </span>
                   )}
                 </div>
+              </div>
+              
+              {/* Add context menu for lists */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 w-6 p-0 rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleShowAddToListDialog(asset);
+                  }}
+                >
+                  <PlusIcon className="h-3 w-3" />
+                </Button>
               </div>
             </div>
           );
@@ -1217,7 +1385,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           );
         },
       }
-    ]
+    ];
   }, [secondaryCurrency]);
 
   // Apply sizes separately in a lightweight memo
@@ -1228,54 +1396,120 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     }));
   }, [columns, columnSizes]);
 
-  // Setup column order
-  const [columnOrder, setColumnOrder] = useState<string[]>(
-    getStoredValue(STORAGE_KEYS.COLUMN_ORDER, columns.map((column) => column.id as string))
-  );
-
-  // Persist column order changes
+  // Update the filtering logic to apply list filters
   useEffect(() => {
-    setStoredValue(STORAGE_KEYS.COLUMN_ORDER, columnOrder);
-  }, [columnOrder]);
+    if (marketData.length === 0) {
+      setFilteredData([]);
+      return;
+    }
 
-  // Detect theme from document class list
-  useEffect(() => {
-    const updateTheme = () => {
-      const isDark = document.documentElement.classList.contains('dark');
-      setCurrentTheme(isDark ? 'dark' : 'light');
-    };
+    const debouncedFilter = () => {
+      let filtered = [...marketData];
 
-    updateTheme();
-
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === 'class') {
-          updateTheme();
-        }
-      });
-    });
-
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class']
-    });
-
-    return () => observer.disconnect();
-  }, []);
-  // Debounced localStorage setter
-  const setStoredValue = useCallback(<T,>(key: string, value: T): void => {
-    if (typeof window === 'undefined') return;
-    const saveToStorage = () => {
-      try {
-        window.localStorage.setItem(key, JSON.stringify(value));
-      } catch (error) {
-        console.error(`Error writing to localStorage for key ${key}:`, error);
+      // Apply filters: quote asset, search query, and custom list
+      if (selectedQuoteAsset !== 'ALL') {
+        filtered = filtered.filter(item => item.quoteAsset === selectedQuoteAsset);
       }
+      
+      if (searchQuery) {
+        filtered = filtered.filter(item => assetMatchesSearch(item, searchQuery));
+      }
+      
+      if (activeListId) {
+        console.log(`Widget ${id} filtering by list: ${activeListId}`);
+        // Get the list data from the global lists
+        const activeList = customLists.find(list => list.id === activeListId);
+        if (activeList) {
+          console.log(`List ${activeList.name} has ${activeList.assets.length} assets`);
+          filtered = filtered.filter(item => {
+            // Check multiple formats that might be used in the assets array
+            const isIncluded = (
+              // Check if the asset is in the list in any of the possible formats
+              activeList.assets.includes(item.pair) || 
+              activeList.assets.includes(item.baseAsset) ||
+              activeList.assets.includes(`${item.baseAsset}:${item.quoteAsset}`) ||
+              activeList.assets.includes(`${item.baseAsset}/${item.quoteAsset}`)
+            );
+            return isIncluded;
+          });
+          console.log(`Filtered to ${filtered.length} assets`);
+        } else {
+          console.log(`List ${activeListId} not found in ${customLists.length} lists`);
+        }
+      }
+      
+      setFilteredData(filtered);
     };
-    setTimeout(saveToStorage, 300);
-  }, []);
+    
+    const timeoutId = setTimeout(debouncedFilter, 50);
+    return () => clearTimeout(timeoutId);
+  }, [marketData, selectedQuoteAsset, searchQuery, activeListId, customLists, assetMatchesSearch, id]);
+  
+  // Update the table with instance-specific settings
+  const table = useReactTable({
+    data: filteredData,
+    columns: columnsWithSizes,
+    state: {
+      sorting,
+      columnOrder,
+      columnVisibility,
+    },
+    columnResizeMode: 'onChange',
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: (updater) => {
+      const newSorting = typeof updater === 'function' ? updater(sorting) : updater;
+      handleSortingChange(newSorting);
+    },
+    onColumnOrderChange: (updater) => {
+      const newOrder = typeof updater === 'function' ? updater(columnOrder) : updater;
+      handleColumnOrderChange(newOrder);
+    },
+    onColumnVisibilityChange: (updater) => {
+      const newVisibility = typeof updater === 'function' ? updater(columnVisibility) : updater;
+      handleColumnVisibilityChange(newVisibility);
+      setTimeout(() => {
+        updateColumnSizes();
+      }, 50);
+    },
+    enableSortingRemoval: false,
+    meta: {
+      updateColumnSizes,
+    },
+  });
+  
+  // Get total width of all columns for table sizing
+  const getTotalColumnsWidth = useCallback(() => {
+    const visibleColumns = table.getVisibleLeafColumns().filter(column => {
+      const columnId = column.id;
+      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
+    });
+    
+    return visibleColumns.reduce(
+      (total, column) => {
+        const columnId = column.id as keyof typeof columnSizes;
+        return total + (columnSizes[columnId] || 100);
+      },
+      0
+    );
+  }, [table, columnSizes, columnVisibility, dynamicVisibility]);
 
-  const [lastUpdateTime, setLastUpdateTime] = useState<string>(''); // For visual debugging
+  // Get row data for virtualization
+  const { rows } = table.getRowModel();
+  
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 48,
+    overscan: 10,
+  });
+
+  useImperativeHandle(ref, () => ({
+    getTable: () => table
+  }), [table]);
+  
+  // For visual debugging
+  const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
   
   // Constants for controlling data variations
   const MAX_PRICE_CHANGE_PERCENT = 0.001; // Max 0.1% change per update
@@ -1376,8 +1610,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       setIsRefreshing(false);
       setIsInitialLoading(false);
     }
-  }, [dataSource, marketData.length]);
+  }, [dataSource, marketData.length, isRefreshing]);
   
+  // Set up data fetching with regular updates
   useEffect(() => {
     let updateInterval: NodeJS.Timeout | null = null;
     let lastUpdateTime = Date.now();
@@ -1390,7 +1625,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         isUpdating = true;
         requestAnimationFrame(() => {
           fetchMarketData().catch(err => {
-            // Skip error logging
+            console.error('Error refreshing market data:', err);
           });
         });
         lastUpdateTime = Date.now();
@@ -1421,6 +1656,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       }
     };
 
+    // Initial data fetch
     debouncedFetchData();
     scheduleNextUpdate();
 
@@ -1432,172 +1668,9 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchMarketData]);
+  }, []); // Removed fetchMarketData from the dependency array since it's a stable reference
 
-  const table = useReactTable({
-    data: filteredData,
-    columns: columnsWithSizes,
-    state: {
-      sorting,
-      columnOrder,
-      columnVisibility,
-    },
-    columnResizeMode: 'onChange',
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSorting,
-    onColumnOrderChange: setColumnOrder,
-    onColumnVisibilityChange: (newState) => {
-      setColumnVisibility(newState);
-      setTimeout(() => {
-        updateColumnSizes();
-      }, 50);
-    },
-    enableSortingRemoval: false,
-    meta: {
-      updateColumnSizes,
-    },
-  });
-
-  useImperativeHandle(ref, () => ({
-    getTable: () => table
-  }), [table]);
-
-  const { rows } = table.getRowModel();
-  
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => 48,
-    overscan: 0,
-  });
-
-  const headerRefs = useRef<Record<string, HTMLElement | null>>({});
-
-  const getTotalColumnsWidth = useCallback(() => {
-    const visibleColumns = table.getVisibleLeafColumns().filter(column => {
-      const columnId = column.id;
-      return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
-    });
-    
-    return visibleColumns.reduce(
-      (total, column) => {
-        const columnId = column.id as keyof typeof columnSizes;
-        return total + (columnSizes[columnId] || 100);
-      },
-      0
-    );
-  }, [table, columnSizes, columnVisibility, dynamicVisibility]);
-
-  // Apply improved dynamic column hiding based on widget registry sizes
-  useEffect(() => {
-    const checkWidth = () => {
-      try {
-        if (!containerRef.current) return;
-        
-        const containerWidth = containerRef.current.clientWidth;
-        
-        // Get user preferences and ensure 'pair' column is first
-        const userColumnOrder = table.getState().columnOrder || [];
-        const userVisibility = table.getState().columnVisibility || {};
-        const orderedColumns = userColumnOrder.filter(col => userVisibility[col] !== false);
-        
-        if (!orderedColumns.includes('pair')) {
-          orderedColumns.unshift('pair');
-        } else if (orderedColumns[0] !== 'pair') {
-          orderedColumns.splice(orderedColumns.indexOf('pair'), 1);
-          orderedColumns.unshift('pair');
-        }
-        
-        // Calculate how many columns can fit
-        const minPairWidth = 150;
-        const minDataColWidth = 100;
-        let maxFittingColumns = Math.max(2, Math.floor((containerWidth - minPairWidth) / minDataColWidth) + 1);
-        maxFittingColumns = Math.max(2, maxFittingColumns - 1);
-        
-        // Determine columns to show and create visibility state
-        let columnsToShow = orderedColumns.slice(0, maxFittingColumns);
-        const newDynamicVisibility: VisibilityState = {};
-        
-        userColumnOrder.forEach(columnId => {
-          if (!columnsToShow.includes(columnId)) {
-            newDynamicVisibility[columnId] = false;
-          }
-        });
-        
-        // Check if visibility changed before updating
-        const hasVisibilityChanged = userColumnOrder.some(columnId => {
-          const isCurrentlyHidden = dynamicVisibility[columnId] === false;
-          const willBeHidden = newDynamicVisibility[columnId] === false;
-          return isCurrentlyHidden !== willBeHidden;
-        });
-        
-        if (hasVisibilityChanged) {
-          requestAnimationFrame(() => {
-            setDynamicVisibility(newDynamicVisibility);
-            updateColumnSizes();
-          });
-        }
-      } catch (error) {
-        console.error('Error in responsive column hiding:', error);
-      }
-    };
-    
-    // Debounced width check to prevent flickering
-    const debouncedCheckWidth = (() => {
-      let timeout: NodeJS.Timeout | null = null;
-      return () => {
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-        timeout = setTimeout(() => {
-          requestAnimationFrame(() => checkWidth());
-        }, 200);
-      };
-    })();
-    
-    requestAnimationFrame(checkWidth);
-    
-    const resizeObserver = new ResizeObserver(debouncedCheckWidth);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-    
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [table, updateColumnSizes, dynamicVisibility]);
-
-  if (error) {
-    return (
-      <div className={cn("h-full flex flex-col", className)}>
-        <div className="flex-1 flex flex-col items-center justify-center p-6">
-          <div className="w-full max-w-md bg-[hsl(var(--color-widget-highlight-bg))] rounded-lg p-6 text-center">
-            <AlertTriangleIcon className="h-12 w-12 mx-auto mb-4 text-amber-500" />
-            <h3 className="text-lg font-medium mb-2">Unable to load market data</h3>
-            <p className="text-[hsl(var(--color-widget-muted-text))] mb-4">
-              {error.includes('Invalid API response') 
-                ? 'The market data service is currently unavailable. This could be due to maintenance or API changes.'
-                : error}
-            </p>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setError(null);
-                setIsInitialLoading(true);
-                fetchMarketData?.(); // Fix the fetchMarketData reference
-              }}
-              className="mx-auto"
-            >
-              <RefreshCwIcon className="mr-2 h-4 w-4" />
-              Try Again
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Actual component rendering with full functionality
   return (
     <div 
       className={cn("h-full flex flex-col relative", className)}
@@ -1605,7 +1678,6 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     >
       <div className="flex-1 min-h-0 relative w-full">
         <div className="h-full w-full relative">
-          {/* Remove the MarketsWidgetHeader since it's now in the widget container header */}
           <div 
             className="h-full overflow-y-auto overflow-x-auto scrollbar-thin" 
             ref={tableContainerRef}
@@ -1685,7 +1757,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                                 value={pair}
                                 onSelect={() => {
                                   if (activeListId) {
-                                    ListManager.addAssetToList(activeListId, pair);
+                                    addAssetToList(activeListId, pair);
                                   }
                                 }}
                               >
@@ -1860,7 +1932,11 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                       variant="outline" 
                       onClick={() => {
                         if (selectedAssetForList) {
-                          addAssetToList(list.id, selectedAssetForList);
+                          // Use the instance-specific method to add assets
+                          ListManager.addAssetToList(list.id, selectedAssetForList, id);
+                          // Update our local state with the latest from ListManager
+                          const updatedLists = ListManager.getLists(id);
+                          handleCustomListsChange(updatedLists);
                           setShowAddToListDialog(false);
                         }
                       }}
@@ -1894,15 +1970,8 @@ export default MarketsWidget;
 
 // Define storage key prefix for localStorage
 const STORAGE_KEY_PREFIX = 'markets-widget-';
-const STORAGE_KEYS = {
-  SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}selected-quote-asset`,
-  SECONDARY_CURRENCY: `${STORAGE_KEY_PREFIX}secondary-currency`,
-  COLUMN_VISIBILITY: `${STORAGE_KEY_PREFIX}column-visibility`,
-  COLUMN_ORDER: `${STORAGE_KEY_PREFIX}column-order`,
-  SORTING: `${STORAGE_KEY_PREFIX}sorting`,
-};
 
-// Add the missing getStoredValue function
+// Helper functions for localStorage persistence
 const getStoredValue = <T,>(key: string, defaultValue: T): T => {
   if (typeof window === 'undefined') return defaultValue;
   try {
@@ -1915,17 +1984,15 @@ const getStoredValue = <T,>(key: string, defaultValue: T): T => {
   }
 };
 
-// Add these constants at the top level after imports
-const UPDATE_INTERVAL_VISIBLE = 7000; // 7 seconds when tab is visible (was 5s)
-const UPDATE_DEBOUNCE_TIME = 300;     // 0.3 second debounce (was 0.5s)
-
-// LocalStorage keys for custom lists
-const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
-const ACTIVE_LIST_KEY = 'markets-widget-active-list';
-
-// Interface for custom lists
-interface CustomList {
-  id: string;
-  name: string;
-  assets: string[];
-}
+// Debounced localStorage setter
+const setStoredValue = <T,>(key: string, value: T): void => {
+  if (typeof window === 'undefined') return;
+  const saveToStorage = () => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error(`Error writing to localStorage for key ${key}:`, error);
+    }
+  };
+  setTimeout(saveToStorage, 300);
+};

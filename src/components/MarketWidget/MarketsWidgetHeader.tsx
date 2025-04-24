@@ -145,11 +145,11 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   // Check for active list 
   useEffect(() => {
     const checkActiveList = () => {
-      const listId = ListManager.getActiveListId();
+      const listId = ListManager.getActiveListId(widgetId);
       setActiveListId(listId);
       
       if (listId) {
-        const lists = ListManager.getLists();
+        const lists = ListManager.getLists(widgetId);
         const activeList = lists.find(list => list.id === listId);
         setActiveListName(activeList?.name || 'Custom List');
       } else {
@@ -160,14 +160,21 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     // Check on mount
     checkActiveList();
     
-    // Listen for list changes
-    const handleListChanged = () => checkActiveList();
-    document.addEventListener('markets-active-list-changed', handleListChanged);
+    // Listen for list changes, but only respond to events for this widget ID
+    const handleListChanged = (event: CustomEvent) => {
+      // Only process if the event is for this widget
+      if (event.detail?.instanceId === widgetId) {
+        console.log(`[MarketsWidgetHeader] Received list change event for widget ${widgetId}:`, event.detail);
+        checkActiveList();
+      }
+    };
+    
+    document.addEventListener('markets-active-list-changed', handleListChanged as EventListener);
     
     return () => {
-      document.removeEventListener('markets-active-list-changed', handleListChanged);
+      document.removeEventListener('markets-active-list-changed', handleListChanged as EventListener);
     };
-  }, []);
+  }, [widgetId]);
   
   // Update isFiltersActive whenever filters change
   useEffect(() => {
@@ -207,7 +214,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     
     // Store the full trading pair instead of just the base asset
     // This prevents adding multiple pairs with the same base asset
-    ListManager.addAssetToList(activeListId, pairToAdd);
+    ListManager.addAssetToList(activeListId, pairToAdd, widgetId);
     setSelectedPair('');
     setPairPopoverOpen(false);
   };
@@ -246,6 +253,18 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     : availablePairs.filter((pair) =>
         pair.toLowerCase().includes(pairSearchValue.toLowerCase())
       );
+
+  // Listen for tab click events
+  const handleTabClick = (value: string) => {
+    console.log(`[MarketsWidgetHeader] Tab clicked: ${value} for widget ${widgetId}`);
+    if (value === 'markets') {
+      // Deactivate any active list
+      ListManager.setActiveListId(null, widgetId);
+    } else if (value.startsWith('list-')) {
+      const listId = value.substring(5); // Remove 'list-' prefix
+      ListManager.setActiveListId(listId, widgetId);
+    }
+  };
 
   return (
     <div className="flex items-center gap-2">

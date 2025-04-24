@@ -424,23 +424,29 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
     );
   }
   
-  // If this is the header component, render the header controls
+  // If this is the header component, render the header
   if (isHeader) {
     return (
       <MarketsWidgetHeader
+        widgetId={widgetId}
         onSearchQueryChange={handleSearchQueryChange}
         onSelectedQuoteAssetChange={handleSelectedQuoteAssetChange}
         onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
         quoteAssets={quoteAssets}
-        widgetId={widgetId}
         tableRef={tableRef}
       />
     );
   }
   
-  // For the main content, pass the props to the MarketsWidget component
+  // If this is the filter content component, render nothing (handled by DropdownContent)
+  if (isFilterContent) {
+    return null;
+  }
+  
+  // Main widget content - render the widget component with the current state
   return (
     <WidgetComponent
+      id={widgetId}
       ref={tableRef}
       searchQuery={searchQuery}
       onSearchQueryChange={handleSearchQueryChange}
@@ -449,7 +455,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       secondaryCurrency={secondaryCurrency}
       onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
       onQuoteAssetsChange={handleQuoteAssetsChange}
-      onRemove={onRemove}
     />
   );
 }; 

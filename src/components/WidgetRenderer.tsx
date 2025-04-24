@@ -18,8 +18,6 @@ import {
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
-import { useReactTable } from '@tanstack/react-table';
-import { BalancesWidgetWrapper } from './BalancesWidgetWrapper';
 
 // Create a wrapper component for Markets widget to use hooks properly
 const MarketsWidgetContainer = ({ 
@@ -37,6 +35,7 @@ const MarketsWidgetContainer = ({
     <WidgetContainer
       title={title}
       onRemove={onRemove}
+      widgetId={widgetId}
       headerControls={
         <MarketsWidgetWrapper 
           isHeader 
