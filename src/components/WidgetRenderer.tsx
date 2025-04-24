@@ -19,7 +19,7 @@ import {
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
 import { useReactTable } from '@tanstack/react-table';
-import { BalancesWidgetWrapper } from './BalancesWidgetWrapper';
+import EarnWidget from './EarnWidget';
 
 // Create a wrapper component for Markets widget to use hooks properly
 const MarketsWidgetContainer = ({ 
@@ -286,6 +286,37 @@ export const createWidget = ({
         </DataSourceProvider>
       );
     }
+    // For earn widget, use EarnWidget
+    else if (widgetType === 'earn') {
+      component = (
+        <DataSourceProvider>
+          <WidgetContainer
+            title={widgetTitles[widgetType]}
+            onRemove={() => {
+              console.log('Earn widget header remove callback triggered');
+              // Try both event approaches for maximum compatibility
+              document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+              
+              // Direct call fallback if window.handleRemoveWidget is available
+              try {
+                if ((window as any).handleGridStackWidgetRemove) {
+                  (window as any).handleGridStackWidgetRemove(widgetId);
+                }
+              } catch (e) {
+                console.error('Direct removal fallback failed:', e);
+              }
+              
+              return true;
+            }}
+          >
+            <EarnWidget 
+              widgetId={widgetId} 
+              onRemove={() => true} 
+            />
+          </WidgetContainer>
+        </DataSourceProvider>
+      );
+    }
     // For all other widgets, use standard wrapper
     else {
       component = (
@@ -406,6 +437,22 @@ export const renderWidgetIntoElement = (
               title={widgetTitles[widgetType]}
               onRemove={onRemove}
             />
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    } else if (widgetType === 'earn') {
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={onRemove}
+            >
+              <EarnWidget 
+                widgetId={widgetId} 
+                onRemove={onRemove} 
+              />
+            </WidgetContainer>
           </DataSourceProvider>
         </React.StrictMode>
       );

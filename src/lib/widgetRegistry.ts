@@ -12,6 +12,7 @@ import { TransactionsWidget } from '@/components/TransactionsWidget';
 import { InsightWidget } from '@/components/InsightWidget';
 import { ReferralsWrapper } from '@/components/ReferralsWidget';
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
+import EarnWidget from '@/components/EarnWidget';
 
 // Widget Registry - Single source of truth for widget configuration
 export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
@@ -110,6 +111,14 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     defaultSize: { w: 6, h: 6 },
     minSize: { w: 4, h: 4 },
     maxSize: { w: 12, h: 9 }
+  },
+  'earn': {
+    id: 'earn',
+    title: 'Earn',
+    component: EarnWidget,
+    defaultSize: { w: 6, h: 6 },
+    minSize: { w: 4, h: 4 },
+    maxSize: { w: 12, h: 9 }
   }
 };
 
@@ -126,9 +135,21 @@ export const widgetComponents: Record<string, React.FC<WidgetComponentProps>> = 
   Object.entries(WIDGET_REGISTRY).map(([key, config]) => [key, config.component as React.FC<WidgetComponentProps>])
 );
 
-export const widgetTitles: Record<string, string> = Object.fromEntries(
-  Object.entries(WIDGET_REGISTRY).map(([key, config]) => [key, config.title])
-);
+export const widgetTitles: Record<string, string> = {
+  'market-overview': 'Market Overview',
+  'order-book': 'Order Book',
+  'recent-trades': 'Recent Trades',
+  'trading-view-chart': 'Chart',
+  'trade-form': 'Trade',
+  'balances': 'Balances',
+  'markets': 'Markets',
+  'performance': 'Performance',
+  'treemap': 'Portfolio Breakdown',
+  'transactions': 'Transactions',
+  'insight': 'Insight',
+  'referrals': 'Referrals',
+  'earn': 'Earn',
+};
 
 // Helper function for performance titles
 export const getPerformanceTitle = (variant: ChartVariant): string => {

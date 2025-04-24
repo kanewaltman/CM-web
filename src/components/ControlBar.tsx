@@ -1,5 +1,5 @@
-import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette, Sun, Moon, Monitor } from '../components/ui-icons';
-import { Lock, Unlock } from 'lucide-react';
+import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette, Sun, Moon, Monitor, ChevronRight } from '../components/ui-icons';
+import { Lock, Unlock, Wallet, LineChart, PieChart, TrendingUp, Receipt, Sparkles, Users, DollarSign, PanelRight } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -18,6 +18,16 @@ import {
   DialogFooter,
   DialogClose,
 } from './ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose,
+} from './ui/sheet';
 import {
   Tooltip,
   TooltipContent,
@@ -422,48 +432,65 @@ export function ControlBar({
               </div>
               <DropdownMenuSeparator />
               <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
-              <div className="px-1 py-1 pb-2">
-                {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
-                  .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions' || type === 'insight' || type === 'referrals')
-                  .map(([type, config]) => (
-                  <div
-                    key={type}
-                    draggable={!isTauriEnv}
-                    onDragStart={(e) => handleDragStart(e, type)}
-                    onClick={() => handleWidgetClick(type)}
-                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer active:bg-accent/80"
-                  >
-                    <div
-                      className="bg-background flex size-8 items-center justify-center rounded-md border"
-                      aria-hidden="true"
-                    >
-                      <LayoutGrid className="h-4 w-4 opacity-60" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">{config.title}</div>
-                      <div className="text-muted-foreground text-xs">
-                        {isTauriEnv ? 'Click to add to dashboard' : 'Click or drag to add to dashboard'}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="px-3 py-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
+                    .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions' || type === 'insight' || type === 'referrals' || type === 'earn')
+                    .map(([type, config]) => {
+                      // Choose the appropriate icon based on widget type
+                      const IconComponent = {
+                        'balances': Wallet,
+                        'performance': LineChart,
+                        'treemap': PieChart,
+                        'markets': TrendingUp,
+                        'transactions': Receipt,
+                        'insight': Sparkles,
+                        'referrals': Users,
+                        'earn': DollarSign
+                      }[type] || LayoutGrid;
+                      
+                      return (
+                        <div
+                          key={type}
+                          draggable={!isTauriEnv}
+                          onDragStart={(e) => handleDragStart(e, type)}
+                          onClick={() => handleWidgetClick(type)}
+                          className="relative flex flex-col items-start justify-center select-none rounded-lg border p-3 h-20 text-sm hover:bg-accent hover:text-accent-foreground hover:border-primary cursor-pointer active:bg-accent/80 transition-all overflow-hidden group"
+                        >
+                          <div style={{ fontSize: 0 }}>
+                            <IconComponent className="h-5 w-5 mb-2 text-primary" style={{ width: '16px', height: '16px' }} />
+                          </div>
+                          <div className="text-sm font-medium">{config.title}</div>
+                          
+                          <div className="absolute inset-0 bg-accent/90 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                            <div className="text-accent-foreground text-xs font-medium transform translate-y-4 group-hover:translate-y-0 transition-transform duration-200">
+                              {isTauriEnv ? 'Click to add' : 'Click or drag'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
               <DropdownMenuSeparator />
               <div className="p-2">
-                <Dialog open={isAppearanceOpen} onOpenChange={setIsAppearanceOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full">
-                      <Palette className="h-4 w-4 mr-2 opacity-80" />
-                      <span>Edit Appearance</span>
+                <Sheet open={isAppearanceOpen} onOpenChange={setIsAppearanceOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" className="w-full flex items-center justify-between group/appearance hover:border-primary hover:text-primary transition-all py-3 h-11">
+                      <div className="flex items-center">
+                        <Palette className="h-4 w-4 mr-2 opacity-80 group-hover/appearance:opacity-100" />
+                        <span>Edit Appearance</span>
+                      </div>
+                      <PanelRight className="h-4 w-4 opacity-50 group-hover/appearance:opacity-80" />
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader className="pb-2">
-                      <DialogTitle className="text-xl">Appearance Settings</DialogTitle>
-                      <DialogDescription>
+                  </SheetTrigger>
+                  <SheetContent>
+                    <SheetHeader className="pb-2">
+                      <SheetTitle className="text-xl">Appearance Settings</SheetTitle>
+                      <SheetDescription>
                         Customize the look and feel of your dashboard.
-                      </DialogDescription>
-                    </DialogHeader>
+                      </SheetDescription>
+                    </SheetHeader>
                     <div className="py-6 space-y-6">
                       <div>
                         <div className="mb-3 text-sm font-medium">Theme</div>
@@ -516,18 +543,18 @@ export function ControlBar({
                       </div>
                       
                       <div>
-                        <div className="mb-3 text-sm font-medium">Grid Style</div>
+                        <div className="mb-2 text-sm font-medium">Grid Style</div>
                         <div className="grid grid-cols-2 gap-4">
                           <div 
                             className={cn(
-                              "border rounded-xl p-4 cursor-pointer transition-all",
+                              "border rounded-xl p-3 cursor-pointer transition-all",
                               gridStyle === 'rounded' 
                                 ? "border-primary bg-accent/50 ring-1 ring-primary" 
                                 : "hover:border-primary/50 hover:bg-accent/20"
                             )}
                             onClick={() => applyGridStyle('rounded')}
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-2">
                               <div className="text-sm font-medium">Rounded</div>
                               <div className={cn(
                                 "w-5 h-5 rounded-full",
@@ -536,23 +563,23 @@ export function ControlBar({
                                 {gridStyle === 'rounded' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 p-2">
-                              <div className="bg-primary/15 h-14 rounded-3xl"></div>
-                              <div className="bg-primary/15 h-14 rounded-3xl"></div>
+                            <div className="grid grid-cols-2 gap-4 p-1">
+                              <div className="bg-primary/15 h-8 rounded-3xl"></div>
+                              <div className="bg-primary/15 h-8 rounded-3xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-3">24px radius, 8px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-2">24px radius, 8px spacing</div>
                           </div>
                           
                           <div 
                             className={cn(
-                              "border rounded-xl p-4 cursor-pointer transition-all",
+                              "border rounded-xl p-3 cursor-pointer transition-all",
                               gridStyle === 'dense' 
                                 ? "border-primary bg-accent/50 ring-1 ring-primary" 
                                 : "hover:border-primary/50 hover:bg-accent/20"
                             )}
                             onClick={() => applyGridStyle('dense')}
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-2">
                               <div className="text-sm font-medium">Dense</div>
                               <div className={cn(
                                 "w-5 h-5 rounded-full",
@@ -561,17 +588,22 @@ export function ControlBar({
                                 {gridStyle === 'dense' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 p-2">
-                              <div className="bg-primary/15 h-14 rounded-xl"></div>
-                              <div className="bg-primary/15 h-14 rounded-xl"></div>
+                            <div className="grid grid-cols-2 gap-2 p-1">
+                              <div className="bg-primary/15 h-8 rounded-xl"></div>
+                              <div className="bg-primary/15 h-8 rounded-xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-3">16px radius, 4px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-2">16px radius, 4px spacing</div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </DialogContent>
-                </Dialog>
+                    <SheetFooter className="pt-4">
+                      <SheetClose asChild>
+                        <Button>Done</Button>
+                      </SheetClose>
+                    </SheetFooter>
+                  </SheetContent>
+                </Sheet>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

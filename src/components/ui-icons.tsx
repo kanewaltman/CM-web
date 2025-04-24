@@ -20,6 +20,7 @@ import {
   Clipboard,
   Palette,
   Monitor,
+  ChevronRight,
   // Added icons for Markets dropdown
   ListChecks,
   Plus,
@@ -47,6 +48,7 @@ export {
   Clipboard,
   Palette,
   Monitor,
+  ChevronRight,
   // Added icons for Markets dropdown
   ListChecks,
   Plus,

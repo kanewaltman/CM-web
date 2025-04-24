@@ -10,6 +10,7 @@ export interface BaseWidgetProps {
 export interface RemovableWidgetProps extends BaseWidgetProps {
   widgetId: string;
   onRemove?: () => void;
+  className?: string;
 }
 
 export interface PerformanceWidgetProps extends RemovableWidgetProps {
@@ -30,10 +31,14 @@ export interface ReferralsWidgetProps extends RemovableWidgetProps {
   onViewModeChange?: (mode: ReferralsViewMode) => void;
 }
 
+export interface EarnWidgetProps extends RemovableWidgetProps {
+  // Add any specific props for EarnWidget if needed
+}
+
 export interface WidgetConfig {
   id: string;
   title: string;
-  component: React.FC<RemovableWidgetProps | PerformanceWidgetProps | ReferralsWidgetProps>;
+  component: React.FC<any>;
   defaultSize: { w: number; h: number };
   minSize: { w: number; h: number };
   maxSize: { w: number; h: number };
