@@ -89,6 +89,24 @@ export const WidgetContainer = memo(function WidgetContainer({
   // Track whether we've found the DOM ID
   const [foundDomId, setFoundDomId] = useState(false);
 
+  // Add state to properly track the active list name for display in the title
+  const [activeListName, setActiveListName] = useState<string | null>(null);
+  
+  // Function to update the active list name whenever active list changes
+  const updateActiveListName = useCallback((listId: string | null, lists: CustomList[]) => {
+    if (!listId) {
+      setActiveListName(null);
+      return;
+    }
+    
+    const list = lists.find(list => list.id === listId);
+    if (list) {
+      setActiveListName(list.name);
+    } else {
+      setActiveListName(null);
+    }
+  }, []);
+
   // When the component mounts, try to get a better ID from the DOM
   useEffect(() => {
     if (!externalWidgetId && isMarketsWidget && containerRef.current) {
@@ -132,15 +150,33 @@ export const WidgetContainer = memo(function WidgetContainer({
         const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
         
         if (savedLists) {
-          setCustomLists(JSON.parse(savedLists));
+          const parsedLists = JSON.parse(savedLists);
+          setCustomLists(parsedLists);
+          
+          // If we already have an active list ID from earlier effect, update name
+          if (activeList) {
+            updateActiveListName(activeList, parsedLists);
+          }
         }
         
-        // The active list is loaded in the widget ID effect above
+        // Check for active list if not loaded yet
+        if (!activeList && widgetId.current) {
+          const storedActiveList = localStorage.getItem(`${ACTIVE_LIST_KEY}-${widgetId.current}`);
+          if (storedActiveList) {
+            const listId = JSON.parse(storedActiveList);
+            setActiveList(listId);
+            
+            // If we have lists loaded, update the active list name
+            if (savedLists) {
+              updateActiveListName(listId, JSON.parse(savedLists));
+            }
+          }
+        }
       } catch (error) {
         console.error('Error loading custom lists:', error);
       }
     }
-  }, [isMarketsWidget]);
+  }, [isMarketsWidget, activeList, updateActiveListName]);
 
   // Save custom lists to localStorage
   const saveCustomLists = useCallback((lists: CustomList[]) => {
@@ -178,6 +214,9 @@ export const WidgetContainer = memo(function WidgetContainer({
       localStorage.setItem(`${ACTIVE_LIST_KEY}-${instanceId}`, JSON.stringify(listId));
       setActiveList(listId);
       
+      // Update the active list name for the widget title
+      updateActiveListName(listId, customLists);
+      
       // Dispatch a custom event that the Markets widget can listen for
       // Make sure this event only targets this specific widget instance
       const event = new CustomEvent('markets-active-list-changed', {
@@ -192,7 +231,7 @@ export const WidgetContainer = memo(function WidgetContainer({
     } catch (error) {
       console.error('Error saving active list:', error);
     }
-  }, []);
+  }, [customLists, updateActiveListName]);
 
   // Handle creating a new list
   const handleCreateList = () => {
@@ -281,20 +320,27 @@ export const WidgetContainer = memo(function WidgetContainer({
   }, [customLists]);
   
   // Handle saving the renamed list
-  const handleSaveRenamedList = useCallback(() => {
-    if (renameListName.trim() === '') return;
+  const handleSaveRenamedList = () => {
+    if (!renameListId || renameListName.trim() === '') return;
     
-    const updatedLists = customLists.map(list => 
-      list.id === renameListId ? { ...list, name: renameListName.trim() } : list
-    );
+    const updatedLists = customLists.map(list => {
+      if (list.id === renameListId) {
+        return { ...list, name: renameListName.trim() };
+      }
+      return list;
+    });
     
     saveCustomLists(updatedLists);
     
-    // Reset and close dialog
+    // If this is the currently active list, update the display name
+    if (activeList === renameListId) {
+      setActiveListName(renameListName.trim());
+    }
+    
+    setRenameListDialogOpen(false);
     setRenameListId(null);
     setRenameListName('');
-    setRenameListDialogOpen(false);
-  }, [renameListId, renameListName, customLists, saveCustomLists]);
+  };
 
   const handleExpand = useCallback(async () => {
     if (!containerRef.current) return;
@@ -400,10 +446,6 @@ export const WidgetContainer = memo(function WidgetContainer({
   // Render dropdown content based on widget type
   const renderTitleDropdownContent = () => {
     if (isMarketsWidget) {
-      const activeListName = activeList 
-        ? customLists.find(list => list.id === activeList)?.name || 'All Markets'
-        : 'All Markets';
-        
       return (
         <>
           {/* All Markets option */}
@@ -507,8 +549,8 @@ export const WidgetContainer = memo(function WidgetContainer({
               <DropdownMenuTrigger asChild>
                 <div className="flex items-center cursor-pointer group">
                   <h2 key={title} className="text-sm font-semibold group-hover:text-primary">
-                    {isMarketsWidget && activeList 
-                      ? (customLists.find(list => list.id === activeList)?.name || 'Markets') 
+                    {isMarketsWidget && activeList && activeListName 
+                      ? activeListName
                       : title}
                   </h2>
                   <Button variant="ghost" size="icon" className="h-4 w-4 p-0 ml-1 hover:bg-transparent">
@@ -559,7 +601,7 @@ export const WidgetContainer = memo(function WidgetContainer({
         </div>
 
         {/* Content wrapper */}
-        <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 select-text">
+        <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1 select-text">
           {children}
         </div>
       </div>

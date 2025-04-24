@@ -24,33 +24,19 @@ import {
   ListChecks,
   ChevronsUpDown,
   AlertCircle,
-  ListIcon,
-  ListXIcon,
-  XIcon
+  Minus as MinusIcon
 } from 'lucide-react';
 import { 
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '../ui/dropdown-menu';
-import { ListManager } from './MarketsWidgetMenu';
+import { CustomList, ListManager, MarketDataAsset } from './MarketLists';
+import { AssetListDialog } from './MarketsWidgetMenu';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
-} from '../ui/dialog';
+
 import ValueFlash from './ValueFlash';
-import { Badge } from '../ui/badge';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
-import { ScrollArea } from '../ui/scroll-area';
-import { WidgetTab } from './WidgetTab';
-import { Tooltip } from '../ui/tooltip';
+
 
 // TanStack Table imports
 import {
@@ -216,12 +202,6 @@ interface MarketData {
 }
 
 export type { MarketData };
-
-interface CustomList {
-  id: string;
-  name: string;
-  assets: string[];
-}
 
 interface MarketsWidgetProps {
   className?: string;
@@ -658,6 +638,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     SORTING: `${STORAGE_KEY_PREFIX}${id}-sorting`,
     CUSTOM_LISTS: `${STORAGE_KEY_PREFIX}${id}-custom-lists`,
     ACTIVE_LIST: `${STORAGE_KEY_PREFIX}${id}-active-list`,
+    SEARCH_FILTER: `${STORAGE_KEY_PREFIX}${id}-search-filter`,
+    COLUMN_SIZES: `${STORAGE_KEY_PREFIX}${id}-column-sizes`,
   }), [id]);
   
   // Add custom lists state - use external if provided, otherwise internal
@@ -705,8 +687,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   // Generate a stable ID for this widget instance
   const marketWidgetId = useId();
   
-  // Use external state if provided, otherwise use local state
-  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  // Initialize search query from localStorage if persistence enabled
+  const [internalSearchQuery, setInternalSearchQuery] = useState(
+    persistState ? getStoredValue(instanceStorageKeys.SEARCH_FILTER, '') : ''
+  );
   const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
   
   const [internalSelectedQuoteAsset, setInternalSelectedQuoteAsset] = useState<AssetTicker | 'ALL'>(
@@ -984,7 +968,13 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         setStoredValue(instanceStorageKeys.ACTIVE_LIST, listId);
       }
     }
-  }, [onActiveListChange, persistState, instanceStorageKeys.ACTIVE_LIST]);
+    
+    // Trigger an immediate column size update when changing lists
+    // This helps eliminate the delay in column resizing
+    requestAnimationFrame(() => {
+      updateColumnSizes();
+    });
+  }, [onActiveListChange, persistState, instanceStorageKeys.ACTIVE_LIST, updateColumnSizes]);
 
   // Listen for custom events but only if they match this instance ID or are global
   useEffect(() => {
@@ -1074,50 +1064,34 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     }
   }, [id, externalCustomLists]);
 
+  // Replace the existing addAssetToList implementation with a call to the enhanced version in MarketLists.ts
   // Add/remove asset from list
   const addAssetToList = useCallback((listId: string, asset: string) => {
-    // Format the asset in a consistent format (base:quote) before adding to the list
-    // If asset is a ticker, find the full market data for it
-    const formattedAsset = asset.includes(':') || asset.includes('/') 
-      ? asset 
-      : (() => {
-          // Find the market data for this asset
-          const marketItem = marketData.find(item => item.baseAsset === asset);
-          if (marketItem) {
-            return `${marketItem.baseAsset}:${marketItem.quoteAsset}`;
-          }
-          return asset;
-        })();
-    
-    // Use ListManager to update the global list
-    ListManager.addAssetToList(listId, formattedAsset, id);
-    
-    // Update our local state with the latest from ListManager
-    const updatedLists = ListManager.getLists();
-    handleCustomListsChange(updatedLists);
+    ListManager.addAssetToListWithMarketData(
+      listId, 
+      asset, 
+      marketData, 
+      id, 
+      handleCustomListsChange
+    );
   }, [id, handleCustomListsChange, marketData]);
 
   const removeAssetFromList = useCallback((listId: string, asset: string) => {
-    // Format the asset in a consistent format (base:quote) before removing from the list
-    // If asset is a ticker, find the full market data for it
-    const formattedAsset = asset.includes(':') || asset.includes('/') 
-      ? asset 
-      : (() => {
-          // Find the market data for this asset
-          const marketItem = marketData.find(item => item.baseAsset === asset);
-          if (marketItem) {
-            return `${marketItem.baseAsset}:${marketItem.quoteAsset}`;
-          }
-          return asset;
-        })();
-    
-    // Use ListManager to update the global list
-    ListManager.removeAssetFromList(listId, formattedAsset, id);
-    
-    // Update our local state with the latest from ListManager
-    const updatedLists = ListManager.getLists();
-    handleCustomListsChange(updatedLists);
-  }, [id, handleCustomListsChange, marketData]);
+    ListManager.removeAssetFromListWithMarketData(
+      listId,
+      asset,
+      marketData,
+      id,
+      handleCustomListsChange,
+      activeListId,
+      (baseAsset, quoteAsset) => {
+        // Immediately update filteredData to reflect the removal
+        setFilteredData(prevData => 
+          prevData.filter(item => !(item.baseAsset === baseAsset && item.quoteAsset === quoteAsset))
+        );
+      }
+    );
+  }, [id, marketData, handleCustomListsChange, activeListId]);
 
   // Show the add to list dialog
   const handleShowAddToListDialog = useCallback((asset: string) => {
@@ -1127,14 +1101,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
 
   // Add a helper function to update active list with proper instance ID
   const setActiveList = useCallback((listId: string | null) => {
-    console.log(`[MarketsWidget] Widget ${id} setting active list to:`, listId);
-    
-    // Use ListManager directly to set active list per widget instance
     ListManager.setActiveListId(listId, id);
-    
-    // Update our internal state
     handleActiveListChange(listId);
-  }, [id, handleActiveListChange]);
+    updateColumnSizes();
+  }, [id, handleActiveListChange, updateColumnSizes]);
 
   // Helper function to check if an asset matches the search query
   const assetMatchesSearch = useCallback((item: MarketData, query: string) => {
@@ -1174,11 +1144,14 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         id: 'pair',
         header: 'Pair',
         accessorKey: 'pair',
-        cell: ({ row }) => {
+        cell: ({ row, table }) => {
           const baseAssetConfig = ASSETS[row.original.baseAsset];
           const quoteAssetConfig = ASSETS[row.original.quoteAsset];
           const marginMultiplier = row.original.marginMultiplier;
           const asset = `${row.original.baseAsset}:${row.original.quoteAsset}`;
+          
+          // Try to access component context via table meta first
+          let contextActions = (table as any)?.options?.meta;
           
           return (
             <div className="flex items-center gap-2 justify-between group">
@@ -1214,19 +1187,26 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                 </div>
               </div>
               
-              {/* Add context menu for lists */}
+              {/* Context menu - show different icons based on whether viewing a list */}
               <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 w-6 p-0 rounded-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleShowAddToListDialog(asset);
-                  }}
-                >
-                  <PlusIcon className="h-3 w-3" />
-                </Button>
+                {contextActions?.activeListId ? (
+                  // Show remove button when viewing a list
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 rounded-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log("[MarketsWidget] Remove button clicked", contextActions?.activeListId, asset);
+                      if (contextActions?.activeListId && contextActions?.removeAssetFromList) {
+                        contextActions.removeAssetFromList(contextActions.activeListId, asset);
+                      }
+                    }}
+                    title="Remove from list"
+                  >
+                    <MinusIcon className="h-3 w-3" />
+                  </Button>
+                ) : null /* Don't show any button when not viewing a list */}
               </div>
             </div>
           );
@@ -1438,6 +1418,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
         }
       }
       
+      // Update the filtered data first
       setFilteredData(filtered);
     };
     
@@ -1475,6 +1456,8 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     enableSortingRemoval: false,
     meta: {
       updateColumnSizes,
+      activeListId,
+      removeAssetFromList,
     },
   });
   
@@ -1669,6 +1652,143 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []); // Removed fetchMarketData from the dependency array since it's a stable reference
+
+  // Apply improved dynamic column hiding based on container width
+  useEffect(() => {
+    const checkWidth = () => {
+      try {
+        if (!containerRef.current) return;
+        
+        const containerWidth = containerRef.current.clientWidth;
+        
+        // Get user preferences and ensure 'pair' column is first
+        const userColumnOrder = table.getState().columnOrder || [];
+        const userVisibility = table.getState().columnVisibility || {};
+        const orderedColumns = userColumnOrder.filter(col => userVisibility[col] !== false);
+        
+        if (!orderedColumns.includes('pair')) {
+          orderedColumns.unshift('pair');
+        } else if (orderedColumns[0] !== 'pair') {
+          orderedColumns.splice(orderedColumns.indexOf('pair'), 1);
+          orderedColumns.unshift('pair');
+        }
+        
+        // Calculate how many columns can fit
+        const minPairWidth = 150;
+        const minDataColWidth = 100;
+        let maxFittingColumns = Math.max(2, Math.floor((containerWidth - minPairWidth) / minDataColWidth) + 1);
+        maxFittingColumns = Math.max(2, maxFittingColumns - 1);
+        
+        // Determine columns to show and create visibility state
+        let columnsToShow = orderedColumns.slice(0, maxFittingColumns);
+        const newDynamicVisibility: VisibilityState = {};
+        
+        userColumnOrder.forEach(columnId => {
+          if (!columnsToShow.includes(columnId)) {
+            newDynamicVisibility[columnId] = false;
+          }
+        });
+        
+        // Check if visibility changed before updating
+        const hasVisibilityChanged = userColumnOrder.some(columnId => {
+          const isCurrentlyHidden = dynamicVisibility[columnId] === false;
+          const willBeHidden = newDynamicVisibility[columnId] === false;
+          return isCurrentlyHidden !== willBeHidden;
+        });
+        
+        if (hasVisibilityChanged) {
+          // Use immediate update instead of animation frame for more consistent column sizing
+          setDynamicVisibility(newDynamicVisibility);
+          updateColumnSizes();
+        }
+      } catch (error) {
+        console.error('Error in responsive column hiding:', error);
+      }
+    };
+    
+    // Less debounce time for width check
+    const debouncedCheckWidth = debounce(checkWidth, 100);
+    
+    // Run checkWidth synchronously first for initial layout
+    checkWidth();
+    
+    const resizeObserver = new ResizeObserver(() => {
+      // Run immediately for better responsiveness
+      checkWidth();
+    });
+    
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [table, updateColumnSizes, dynamicVisibility, debounce]);
+
+  // Add a separate effect to handle active list changes
+  useEffect(() => {
+    if (activeListId !== null) {
+      // When switching to a list, update columns immediately
+      updateColumnSizes();
+    }
+  }, [activeListId, updateColumnSizes]);
+
+  // Keep original effect for filtered data changes
+  useEffect(() => {
+    updateColumnSizes();
+  }, [filteredData.length, updateColumnSizes]);
+
+  // Add a dedicated effect for column resizing when list changes
+  useEffect(() => {
+    // When list changes, we need to recalculate columns after data updates
+    if (activeListId !== undefined) {
+      // Small delay to ensure data filtering has completed
+      const timeoutId = setTimeout(() => {
+        updateColumnSizes();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeListId, updateColumnSizes]);
+  
+  // Ensure column sizes update after filtered data changes
+  useEffect(() => {
+    // Always update column sizes when filtered data changes, even if empty
+    // This is important for both populated lists and empty lists
+    const timeoutId = setTimeout(() => {
+      updateColumnSizes();
+    }, 50);
+    
+    return () => clearTimeout(timeoutId);
+  }, [filteredData, updateColumnSizes]);
+
+  // When search query changes, persist if using internal state
+  useEffect(() => {
+    if (persistState && externalSearchQuery === undefined) {
+      setStoredValue(instanceStorageKeys.SEARCH_FILTER, internalSearchQuery);
+    }
+  }, [persistState, externalSearchQuery, internalSearchQuery, instanceStorageKeys.SEARCH_FILTER]);
+
+  // Save column sizes to localStorage
+  useEffect(() => {
+    if (persistState) {
+      setStoredValue(instanceStorageKeys.COLUMN_SIZES, columnSizes);
+    }
+  }, [persistState, columnSizes, instanceStorageKeys.COLUMN_SIZES]);
+
+  // Load column sizes from localStorage on mount
+  useEffect(() => {
+    if (persistState) {
+      const savedColumnSizes = getStoredValue<Record<string, number> | null>(instanceStorageKeys.COLUMN_SIZES, null);
+      if (savedColumnSizes) {
+        setColumnSizes(prevSizes => ({
+          ...prevSizes,
+          ...savedColumnSizes
+        }));
+      }
+    }
+  }, [persistState, instanceStorageKeys.COLUMN_SIZES]);
 
   // Actual component rendering with full functionality
   return (
@@ -1904,61 +2024,14 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[hsl(var(--color-widget-bg))] to-transparent pointer-events-none z-30"></div>
         </div>
       </div>
-      
-      {/* Add the dialog for adding an asset to a list */}
-      <Dialog open={showAddToListDialog} onOpenChange={setShowAddToListDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add {selectedAssetForList} to List</DialogTitle>
-            <DialogDescription>
-              Choose a list to add this asset to.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4">
-            {customLists.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
-                No custom lists available. Create one using the dropdown menu on the widget header.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {customLists.map(list => (
-                  <div key={list.id} className="flex items-center justify-between p-2 border rounded-md">
-                    <div>
-                      <div className="font-medium">{list.name}</div>
-                      <div className="text-xs text-muted-foreground">{list.assets.length} assets</div>
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        if (selectedAssetForList) {
-                          // Use the instance-specific method to add assets
-                          ListManager.addAssetToList(list.id, selectedAssetForList, id);
-                          // Update our local state with the latest from ListManager
-                          const updatedLists = ListManager.getLists(id);
-                          handleCustomListsChange(updatedLists);
-                          setShowAddToListDialog(false);
-                        }
-                      }}
-                      disabled={selectedAssetForList ? list.assets.includes(selectedAssetForList) : false}
-                    >
-                      {selectedAssetForList && list.assets.includes(selectedAssetForList) 
-                        ? "Already in list" 
-                        : "Add"}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="secondary">Cancel</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+      {/* Asset list dialog */}
+      <AssetListDialog
+        open={showAddToListDialog}
+        onOpenChange={setShowAddToListDialog}
+        asset={selectedAssetForList || ''}
+        instanceId={id}
+      />
     </div>
   );
 });

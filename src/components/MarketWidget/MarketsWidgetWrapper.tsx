@@ -12,12 +12,10 @@ import { DropdownMenu, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparato
 
 // Constants for localStorage keys
 const STORAGE_KEY_PREFIX = 'markets-widget-';
-const STORAGE_KEYS = {
-  SELECTED_QUOTE_ASSET: `${STORAGE_KEY_PREFIX}selected-quote-asset`,
-  SECONDARY_CURRENCY: `${STORAGE_KEY_PREFIX}secondary-currency`,
-  COLUMN_VISIBILITY: `${STORAGE_KEY_PREFIX}column-visibility`,
-  COLUMN_ORDER: `${STORAGE_KEY_PREFIX}column-order`,
-  SORTING: `${STORAGE_KEY_PREFIX}sorting`,
+
+// Helper functions to generate instance-specific keys
+const getInstanceStorageKey = (widgetId: string, key: string) => {
+  return `${STORAGE_KEY_PREFIX}${widgetId}-${key}`;
 };
 
 // Helper functions for localStorage
@@ -70,6 +68,13 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   isFilterContent,
   onFilterDropdownClose,
 }) => {
+  // Generate instance-specific storage keys
+  const instanceStorageKeys = useMemo(() => ({
+    SELECTED_QUOTE_ASSET: getInstanceStorageKey(widgetId, 'selected-quote-asset'),
+    SECONDARY_CURRENCY: getInstanceStorageKey(widgetId, 'secondary-currency'),
+    SEARCH_QUERY: getInstanceStorageKey(widgetId, 'search-query'),
+  }), [widgetId]);
+
   // Initialize state either from registry or with defaults
   const initializeWidgetState = () => {
     let state = marketsWidgetRegistry.get(widgetId);
@@ -77,11 +82,11 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
     if (!state) {
       const tableRef = React.createRef<{ getTable: () => ReturnType<typeof useReactTable<MarketData>> | null }>();
       
-      // Create new state with defaults
+      // Create new state with defaults and load from localStorage
       state = {
-        searchQuery: '',
-        selectedQuoteAsset: getStoredValue<AssetTicker | 'ALL'>(STORAGE_KEYS.SELECTED_QUOTE_ASSET, 'ALL'),
-        secondaryCurrency: getStoredValue<AssetTicker | null>(STORAGE_KEYS.SECONDARY_CURRENCY, null),
+        searchQuery: getStoredValue<string>(instanceStorageKeys.SEARCH_QUERY, ''),
+        selectedQuoteAsset: getStoredValue<AssetTicker | 'ALL'>(instanceStorageKeys.SELECTED_QUOTE_ASSET, 'ALL'),
+        secondaryCurrency: getStoredValue<AssetTicker | null>(instanceStorageKeys.SECONDARY_CURRENCY, null),
         quoteAssets: [],
         tableRef
       };
@@ -139,7 +144,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
     if (state) {
       state.searchQuery = value;
     }
-  }, [widgetId]);
+    // Persist search query for this widget instance
+    setStoredValue(instanceStorageKeys.SEARCH_QUERY, value);
+  }, [widgetId, instanceStorageKeys.SEARCH_QUERY]);
   
   const handleSelectedQuoteAssetChange = useCallback((value: AssetTicker | 'ALL') => {
     setSelectedQuoteAsset(value);
@@ -147,8 +154,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
     if (state) {
       state.selectedQuoteAsset = value;
     }
-    setStoredValue(STORAGE_KEYS.SELECTED_QUOTE_ASSET, value);
-  }, [widgetId]);
+    // Persist selected quote asset for this widget instance
+    setStoredValue(instanceStorageKeys.SELECTED_QUOTE_ASSET, value);
+  }, [widgetId, instanceStorageKeys.SELECTED_QUOTE_ASSET]);
   
   const handleSecondaryCurrencyChange = useCallback((value: AssetTicker | null) => {
     console.log('Wrapper changing secondary currency to:', value);
@@ -186,8 +194,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
         }
       }
     }
-    setStoredValue(STORAGE_KEYS.SECONDARY_CURRENCY, value);
-  }, [widgetId]);
+    // Persist secondary currency for this widget instance
+    setStoredValue(instanceStorageKeys.SECONDARY_CURRENCY, value);
+  }, [widgetId, instanceStorageKeys.SECONDARY_CURRENCY]);
   
   const handleQuoteAssetsChange = useCallback((assets: AssetTicker[]) => {
     setQuoteAssets(assets);
@@ -455,6 +464,8 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       secondaryCurrency={secondaryCurrency}
       onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
       onQuoteAssetsChange={handleQuoteAssetsChange}
+      onRemove={onRemove}
+      persistState={true}
     />
   );
 }; 

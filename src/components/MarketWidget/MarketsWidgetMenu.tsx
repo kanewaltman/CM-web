@@ -30,6 +30,7 @@ import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { DialogClose } from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
+import { ListManager, CustomList } from './MarketLists';
 import { 
   X,
   ChevronLeft, 
@@ -53,17 +54,6 @@ import {
   ChevronsLeftRight,
   MoreVertical 
 } from 'lucide-react';
-
-// LocalStorage keys for custom lists
-const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
-const ACTIVE_LIST_KEY = 'markets-widget-active-list';
-
-// Interface for custom lists
-interface CustomList {
-  id: string;
-  name: string;
-  assets: string[];
-}
 
 export const MarketsWidgetMenu: React.FC<{
   tableRef?: React.RefObject<{ getTable: () => ReturnType<typeof useReactTable<any>> | null }>
@@ -89,140 +79,6 @@ export const MarketsWidgetMenu: React.FC<{
   );
 };
 
-// Utility class for managing lists
-export class ListManager {
-  // Load custom lists from localStorage
-  static getLists(instanceId: string = 'default'): CustomList[] {
-    try {
-      // Lists are stored globally (without instance ID)
-      const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
-      return savedLists ? JSON.parse(savedLists) : [];
-    } catch (error) {
-      console.error('Error loading custom lists:', error);
-      return [];
-    }
-  }
-  
-  // Save custom lists to localStorage
-  static saveLists(lists: CustomList[], instanceId: string = 'default'): void {
-    try {
-      // Save lists globally (without instance ID)
-      localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(lists));
-      
-      // Dispatch event for other components
-      const event = new CustomEvent('markets-lists-updated', {
-        detail: { 
-          lists,
-          instanceId: 'all' // Signal update to all widgets
-        },
-        bubbles: true
-      });
-      document.dispatchEvent(event);
-    } catch (error) {
-      console.error('Error saving custom lists:', error);
-    }
-  }
-  
-  // Get active list ID
-  static getActiveListId(instanceId: string = 'default'): string | null {
-    try {
-      // Each widget instance has its own active list
-      const key = `${ACTIVE_LIST_KEY}-${instanceId}`;
-      const saved = localStorage.getItem(key);
-      
-      // Debug logging
-      console.log(`[ListManager] Getting active list for widget ${instanceId}:`, saved ? JSON.parse(saved) : null);
-      
-      return saved ? JSON.parse(saved) : null;
-    } catch (error) {
-      console.error('Error getting active list:', error);
-      return null;
-    }
-  }
-  
-  // Set active list ID
-  static setActiveListId(listId: string | null, instanceId: string = 'default'): void {
-    try {
-      console.log(`[ListManager] Setting active list for widget ${instanceId}:`, listId);
-      
-      // Active list is per widget instance
-      const key = `${ACTIVE_LIST_KEY}-${instanceId}`;
-      localStorage.setItem(key, JSON.stringify(listId));
-      
-      // Dispatch event for other components - IMPORTANT: This should only affect the specific widget
-      const event = new CustomEvent('markets-active-list-changed', {
-        detail: { 
-          listId,
-          instanceId, // Must match the specific instance
-          timestamp: Date.now() // Add timestamp to ensure event uniqueness
-        },
-        bubbles: true
-      });
-      document.dispatchEvent(event);
-    } catch (error) {
-      console.error('Error saving active list:', error);
-    }
-  }
-  
-  // Add asset to list
-  static addAssetToList(listId: string, asset: string, instanceId: string = 'default'): void {
-    // Get global lists
-    const lists = this.getLists();
-    const updatedLists = lists.map(list => {
-      if (list.id === listId && !list.assets.includes(asset)) {
-        return {
-          ...list,
-          assets: [...list.assets, asset]
-        };
-      }
-      return list;
-    });
-    
-    // Save globally but notify the widget that made the change
-    this.saveLists(updatedLists, instanceId);
-    
-    // Dispatch custom event instead of showing alert
-    const event = new CustomEvent('asset-added-to-list', {
-      detail: { 
-        asset, 
-        listId,
-        instanceId
-      },
-      bubbles: true
-    });
-    document.dispatchEvent(event);
-  }
-  
-  // Remove asset from list
-  static removeAssetFromList(listId: string, asset: string, instanceId: string = 'default'): void {
-    // Get global lists
-    const lists = this.getLists();
-    const updatedLists = lists.map(list => {
-      if (list.id === listId) {
-        return {
-          ...list,
-          assets: list.assets.filter(a => a !== asset)
-        };
-      }
-      return list;
-    });
-    
-    // Save globally but notify the widget that made the change
-    this.saveLists(updatedLists, instanceId);
-    
-    // Dispatch custom event instead of showing alert
-    const event = new CustomEvent('asset-removed-from-list', {
-      detail: { 
-        asset, 
-        listId,
-        instanceId
-      },
-      bubbles: true
-    });
-    document.dispatchEvent(event);
-  }
-}
-
 // Component for Asset management dialog
 export const AssetListDialog: React.FC<{
   open: boolean;
@@ -238,33 +94,6 @@ export const AssetListDialog: React.FC<{
       setLists(ListManager.getLists(instanceId));
     }
   }, [open, instanceId]);
-  
-  // Helper function to check if an asset is in a list
-  // It checks different possible formats of the same asset
-  const isAssetInList = (list: CustomList, assetToCheck: string): boolean => {
-    if (list.assets.includes(assetToCheck)) return true;
-    
-    // Check if this is a base asset (without quote) and find any format in the list
-    if (!assetToCheck.includes(':') && !assetToCheck.includes('/')) {
-      return list.assets.some(listAsset => 
-        listAsset.startsWith(`${assetToCheck}:`) || 
-        listAsset.startsWith(`${assetToCheck}/`)
-      );
-    }
-    
-    // Check if list contains the same asset in different formats
-    if (assetToCheck.includes(':')) {
-      const [base, quote] = assetToCheck.split(':');
-      return list.assets.includes(`${base}/${quote}`) || list.assets.includes(base);
-    }
-    
-    if (assetToCheck.includes('/')) {
-      const [base, quote] = assetToCheck.split('/');
-      return list.assets.includes(`${base}:${quote}`) || list.assets.includes(base);
-    }
-    
-    return false;
-  };
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -289,7 +118,7 @@ export const AssetListDialog: React.FC<{
                     <div className="font-medium">{list.name}</div>
                     <div className="text-xs text-muted-foreground">{list.assets.length} assets</div>
                   </div>
-                  {isAssetInList(list, asset) ? (
+                  {ListManager.isAssetInList(list, asset) ? (
                     <Button 
                       variant="outline"
                       className="text-destructive border-destructive"
@@ -318,8 +147,24 @@ export const AssetListDialog: React.FC<{
         </div>
         
         <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              const listName = prompt('Enter a name for your new list:');
+              if (listName?.trim()) {
+                const newListId = ListManager.createList(listName, instanceId);
+                // Add the asset to the new list
+                ListManager.addAssetToList(newListId, asset, instanceId);
+                // Refresh the list
+                setLists(ListManager.getLists(instanceId));
+              }
+            }}
+          >
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Create New List
+          </Button>
           <DialogClose asChild>
-            <Button variant="secondary">Close</Button>
+            <Button>Done</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>

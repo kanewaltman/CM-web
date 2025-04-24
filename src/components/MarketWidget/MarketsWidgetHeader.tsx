@@ -38,7 +38,8 @@ import {
   DropdownMenuLabel,
 } from '../ui/dropdown-menu';
 import { useReactTable } from '@tanstack/react-table';
-import { MarketsWidgetMenu, ListManager } from './MarketsWidgetMenu';
+import { MarketsWidgetMenu } from './MarketsWidgetMenu';
+import { ListManager } from './MarketLists';
 import { MarketsWidgetColumnVisibility } from './MarketsWidget';
 import { 
   Dialog, 
