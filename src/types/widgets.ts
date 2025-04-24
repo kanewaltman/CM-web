@@ -22,12 +22,16 @@ export interface PerformanceWidgetProps extends RemovableWidgetProps {
   onTitleChange?: (title: string) => void;
   onDateRangeChange?: (dateRange: { from: Date; to: Date } | undefined) => void;
   dateRange?: { from: Date; to: Date };
+  inDialog?: boolean;
+  titleClickHandler?: (e: React.MouseEvent) => void;
 }
 
 export interface ReferralsWidgetProps extends RemovableWidgetProps {
   widgetId: string;
   defaultViewMode?: ReferralsViewMode;
   onViewModeChange?: (mode: ReferralsViewMode) => void;
+  inDialog?: boolean;
+  titleClickHandler?: (e: React.MouseEvent) => void;
 }
 
 export interface WidgetConfig {
@@ -51,6 +55,8 @@ export interface WidgetComponentProps {
   onTitleChange?: (title: string) => void;
   onDateRangeChange?: (dateRange: { from: Date; to: Date } | undefined) => void;
   dateRange?: { from: Date; to: Date };
+  inDialog?: boolean;
+  titleClickHandler?: (e: React.MouseEvent) => void;
 }
 
 export interface LayoutWidget {

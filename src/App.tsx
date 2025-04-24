@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import 'gridstack/dist/gridstack.min.css';
+import { GridStack } from 'gridstack';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
 import { Footer } from './components/Footer';
@@ -18,6 +19,16 @@ import { WIDGET_REGISTRY, widgetIds, widgetTypes, widgetTitles } from './lib/wid
 import { isValidLayout } from './layouts/dashboardLayout';
 import { ExchangeRatesProvider } from './contexts/ExchangeRatesContext';
 import ExchangeRatesTester from './components/ExchangeRatesTester';
+import { useWidgetDialogInit } from '@/hooks/useWidgetDialogInit';
+import { checkDirectDialogNavigation, getDirectDialogNavigationData } from '@/lib/widgetDialogService';
+import { GlobalWidgetDialogRenderer } from './components/GlobalWidgetDialogRenderer';
+
+// Check for direct dialog navigation as early as possible
+// This happens before any React component mounts
+const dialogNavigation = checkDirectDialogNavigation();
+if (dialogNavigation.isDirectDialogLoad) {
+  console.log('🔍 Early detection of direct dialog navigation:', dialogNavigation);
+}
 
 function AppContent() {
   const { dataSource, setDataSource } = useDataSource();
@@ -508,13 +519,87 @@ function AppContent() {
 }
 
 function App() {
+  const [dialogInitialized, setDialogInitialized] = useState(false);
+  const dialogData = useRef(checkDirectDialogNavigation());
+  
+  // Handle dialog initialization with proper timing
+  useEffect(() => {
+    // If this is a direct dialog navigation, add a delay to ensure components are mounted
+    if (dialogData.current.isDirectDialogLoad) {
+      // Small delay to ensure GridStack and widgets are ready
+      const timer = setTimeout(() => {
+        console.log('🔄 Initializing widget dialog system after delay for direct load');
+        setDialogInitialized(true);
+      }, 200);
+      
+      return () => clearTimeout(timer);
+    } else {
+      // Regular initialization for non-dialog loads
+      setDialogInitialized(true);
+    }
+  }, []);
+  
+  // Only initialize the dialog system after proper timing
+  useEffect(() => {
+    if (dialogInitialized) {
+      // Safe to initialize dialog system now
+      console.log('🔄 Widget dialog system ready');
+    }
+  }, [dialogInitialized]);
+
   return (
     <DataSourceProvider>
       <ExchangeRatesProvider refreshInterval={30000}>
         <AppContent />
+        {dialogInitialized && <DialogInitializer />}
+        <GlobalWidgetDialogRenderer />
       </ExchangeRatesProvider>
     </DataSourceProvider>
   );
+}
+
+// Separate component for dialog initialization to ensure it only happens once
+function DialogInitializer() {
+  const [ready, setReady] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+  
+  useEffect(() => {
+    // Ensure we only initialize once
+    if (initialized) return;
+    
+    // Wait for the next animation frame to ensure all widgets are mounted
+    requestAnimationFrame(() => {
+      // Add a small delay to ensure grid stack and layouts are complete
+      setTimeout(() => {
+        console.log('🔄 Dialog initializer ready after widgets mounted');
+        setReady(true);
+      }, 300); // Increased timeout for reliability
+    });
+    
+    return () => {
+      // Mark as initialized so we don't attempt again if component remounts
+      setInitialized(true);
+    };
+  }, [initialized]);
+  
+  // Only initialize dialog system after widgets are mounted
+  if (!ready) return null;
+  
+  return (
+    <WidgetDialogInitWrapper />
+  );
+}
+
+// Final wrapper to ensure useWidgetDialogInit only runs once with clean dependencies
+function WidgetDialogInitWrapper() {
+  // Using key to ensure fresh hook usage
+  return <DialogHookRunner key={`dialog-init-${Date.now()}`} />;
+}
+
+// Component to actually run the hook
+function DialogHookRunner() {
+  useWidgetDialogInit();
+  return null;
 }
 
 export default App;

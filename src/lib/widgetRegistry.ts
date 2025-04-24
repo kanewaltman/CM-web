@@ -148,4 +148,29 @@ export const getPerformanceTitle = (variant: ChartVariant): string => {
     default:
       return 'Performance';
   }
+};
+
+/**
+ * Utility function to check if a widget exists in the registry by its ID
+ * @param widgetId The ID of the widget to check
+ * @returns An object with information about the widget, or null if not found
+ */
+export const findWidgetById = (widgetId: string): { type: string; config: WidgetConfig } | null => {
+  // Handle instance-specific IDs by extracting the base ID
+  // Format is typically baseId-timestamp (e.g., transactions-1745505290237)
+  const baseId = widgetId.split('-')[0];
+  
+  // Try first with the full ID
+  let entry = Object.entries(WIDGET_REGISTRY).find(([_, config]) => config.id === widgetId);
+  
+  // If not found, try with the base ID
+  if (!entry && baseId !== widgetId) {
+    entry = Object.entries(WIDGET_REGISTRY).find(([_, config]) => config.id === baseId);
+    console.log('📊 Found widget using base ID:', baseId, 'from full ID:', widgetId);
+  }
+  
+  if (!entry) return null;
+  
+  const [type, config] = entry;
+  return { type, config };
 }; 
