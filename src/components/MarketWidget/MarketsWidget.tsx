@@ -34,6 +34,7 @@ import { CustomList, ListManager, MarketDataAsset } from './MarketLists';
 import { AssetListDialog } from './MarketsWidgetMenu';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
+import { TableWithAddAssetRow } from './TableWithAddAssetRow';
 
 import ValueFlash from './ValueFlash';
 
@@ -1999,9 +2000,3 @@ const setStoredValue = <T,>(key: string, value: T): void => {
   };
   setTimeout(saveToStorage, 300);
 };
-
-// Import the AddAssetRow component
-import { AddAssetRow } from './MarketsWidgetAddAssetRow';
-
-// Add the import at the top with other imports
-import { TableWithAddAssetRow } from './TableWithAddAssetRow';
