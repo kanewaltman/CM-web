@@ -1,0 +1,664 @@
+import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette, Sun, Moon, Monitor } from '../components/ui-icons';
+import { Lock, Unlock, Wallet, LineChart, PieChart, TrendingUp, Receipt, Sparkles, Users, DollarSign, PanelRight, Award } from 'lucide-react';
+import { Button } from './ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from './ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from './ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/tooltip';
+import { useTheme } from 'next-themes';
+import { cn, getThemeValues } from '@/lib/utils';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import { WIDGET_REGISTRY } from '@/lib/widgetRegistry';
+// Import GridStack directly
+import { GridStack } from 'gridstack';
+// Import Tauri API
+import { isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+
+// Custom style types for grid layout
+type GridStyle = 'rounded' | 'dense';
+
+interface ControlBarProps {
+  onResetLayout: () => void;
+  onCopyLayout: () => string;
+  onPasteLayout: (layout: string) => void;
+  // Add optional props for controlling state
+  initialGridStyle?: GridStyle;
+  defaultIsOpen?: boolean;
+  defaultIsAppearanceOpen?: boolean;
+  // Add new prop for handling widget addition
+  onAddWidget?: (widgetType: string) => void;
+  // Add new prop for data source
+  dataSource: 'demo' | 'sample';
+  onDataSourceChange?: (source: 'demo' | 'sample') => void;
+  // Add new prop for controlling layout lock
+  onToggleLayoutLock?: (locked: boolean) => void;
+  initialLayoutLocked?: boolean;
+  // Add new prop for content width
+  contentWidth?: number;
+}
+
+export function ControlBar({ 
+  onResetLayout, 
+  onCopyLayout, 
+  onPasteLayout,
+  initialGridStyle = 'rounded',
+  defaultIsOpen = false,
+  defaultIsAppearanceOpen = false,
+  onAddWidget,
+  dataSource,
+  onDataSourceChange,
+  onToggleLayoutLock,
+  initialLayoutLocked = false,
+  contentWidth = 1940
+}: ControlBarProps) {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const colors = getThemeValues(resolvedTheme || theme, 0, 0, 0);
+  const [isOpen, setIsOpen] = useState(defaultIsOpen);
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(defaultIsAppearanceOpen);
+  const [gridStyle, setGridStyle] = useState<GridStyle>(initialGridStyle);
+  const [isTauriEnv, setIsTauriEnv] = useState(false);
+  const [isLayoutLocked, setIsLayoutLocked] = useState(initialLayoutLocked);
+
+  // Check if we're in Tauri environment
+  useEffect(() => {
+    setIsTauriEnv(isTauri());
+  }, []);
+
+  // Initialize grid style on mount
+  useEffect(() => {
+    setCSSVariables(initialGridStyle);
+    setGridStyle(initialGridStyle);
+  }, [initialGridStyle]);
+
+  // Handle theme initialization
+  useEffect(() => {
+    // Force a re-render when the theme/resolvedTheme changes
+    // This ensures correct styling when the app first loads
+    console.log('Theme changed:', { theme, resolvedTheme });
+  }, [theme, resolvedTheme]);
+
+  // Separate function to just set CSS variables without toast or grid manipulation
+  const setCSSVariables = (style: GridStyle) => {
+    const root = document.documentElement;
+    const margin = style === 'rounded' ? 8 : 4;
+    const borderRadius = style === 'rounded' ? '24px' : '16px';
+    
+    // Set CSS variables
+    root.style.setProperty('--grid-item-border-radius', borderRadius);
+    root.style.setProperty('--grid-margin', margin + 'px');
+  };
+  
+  const applyGridStyle = (style: GridStyle, showToast = true) => {
+    // Set the CSS variables first
+    setCSSVariables(style);
+    
+    try {
+      // Get GridStack instance directly - try multiple methods
+      const gridElement = document.querySelector('.grid-stack') as HTMLElement;
+      
+      // Try to get grid instance from the element
+      let gridInstance = (gridElement as any)?.gridstack;
+      
+      // If not found via element property, try accessing through window
+      if (!gridInstance && (window as any).grid) {
+        gridInstance = (window as any).grid;
+      }
+      
+      if (gridInstance) {
+        // Apply margin directly
+        if (typeof gridInstance.margin === 'function') {
+          gridInstance.margin(style === 'rounded' ? 8 : 4);
+        }
+        
+        // Update all grid items to use the new border radius
+        document.querySelectorAll('.grid-stack-item-content').forEach(item => {
+          (item as HTMLElement).style.borderRadius = style === 'rounded' ? '24px' : '16px';
+        });
+        
+        // Force a layout update
+        if (typeof gridInstance.float === 'function') {
+          const wasFloating = gridInstance.getFloat();
+          gridInstance.float(!wasFloating);
+          gridInstance.float(wasFloating);
+        }
+        
+        // Compact and relayout grid
+        if (typeof gridInstance.compact === 'function') {
+          gridInstance.compact();
+        }
+      }
+      
+      // Save preference
+      localStorage.setItem('grid-style', style);
+      setGridStyle(style);
+      
+      // Only show toast when explicitly applying a style (not during initialization)
+      if (showToast) {
+        toast.success(`Applied ${style} grid style`);
+      }
+    } catch (error) {
+      console.error('Error applying grid style:', error);
+      // Still set the CSS variables and save preference
+      localStorage.setItem('grid-style', style);
+      setGridStyle(style);
+      
+      // Only show toast when explicitly applying a style (not during initialization)
+      if (showToast) {
+        toast.info(`Applied ${style} style (CSS only)`);
+      }
+    }
+  };
+
+  // Apply the styles immediately on component mount to prevent flashing
+  useEffect(() => {
+    const savedStyle = localStorage.getItem('grid-style') as GridStyle | null;
+    
+    // Set the CSS variables immediately to prevent layout shift
+    if (savedStyle === 'rounded' || savedStyle === 'dense') {
+      // Apply CSS variables immediately
+      setCSSVariables(savedStyle);
+      setGridStyle(savedStyle);
+    } else {
+      // Default to rounded
+      setCSSVariables('rounded');
+      setGridStyle('rounded');
+    }
+    
+    // Apply the full grid style (with grid manipulation) after a delay
+    // but without showing the toast notification
+    const timer = setTimeout(() => {
+      try {
+        if (savedStyle === 'rounded' || savedStyle === 'dense') {
+          applyGridStyle(savedStyle, false); // false = don't show toast
+        } else {
+          applyGridStyle('rounded', false); // false = don't show toast
+        }
+      } catch (error) {
+        console.error('Error applying grid style on load:', error);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleCopyLayout = () => {
+    try {
+      // Get layout data
+      const layoutData = onCopyLayout();
+      if (!layoutData) {
+        throw new Error('No layout data available');
+      }
+      
+      // Get custom lists from localStorage
+      const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
+      const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
+      const customLists = savedLists ? JSON.parse(savedLists) : [];
+      
+      // Create a combined data object with layout and lists
+      const combinedData = {
+        layout: JSON.parse(layoutData),
+        customLists: customLists
+      };
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(JSON.stringify(combinedData)).then(() => {
+        toast.success("Layout copied", {
+          description: "Layout configuration has been copied to clipboard",
+        });
+      }).catch((err) => {
+        console.error('Failed to copy layout:', err);
+        toast.error("Failed to copy", {
+          description: "Could not copy layout to clipboard",
+        });
+      });
+    } catch (err) {
+      console.error('Failed to prepare layout for copy:', err);
+      toast.error("Failed to copy", {
+        description: "Could not prepare layout data",
+      });
+    }
+  };
+
+  const handlePasteLayout = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      // Parse the clipboard data
+      const clipboardData = JSON.parse(text);
+      
+      // Check if it's the new combined format
+      if (clipboardData.layout && Array.isArray(clipboardData.layout)) {
+        // Handle new format with custom lists
+        if (clipboardData.customLists && Array.isArray(clipboardData.customLists)) {
+          // Save custom lists to localStorage
+          const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
+          localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(clipboardData.customLists));
+          
+          // Trigger a custom event to notify components that lists have been updated
+          const event = new CustomEvent('markets-lists-updated', {
+            detail: { 
+              lists: clipboardData.customLists,
+              instanceId: 'all' // Signal update to all widgets
+            },
+            bubbles: true
+          });
+          document.dispatchEvent(event);
+        }
+        
+        // Apply the layout
+        onPasteLayout(JSON.stringify(clipboardData.layout));
+        toast.success("Layout pasted", {
+          description: "New layout with custom lists has been applied",
+        });
+      } else if (Array.isArray(clipboardData)) {
+        // Handle legacy format (just layout array)
+        onPasteLayout(text);
+        toast.success("Layout pasted", {
+          description: "New layout has been applied",
+        });
+      } else {
+        throw new Error('Invalid layout format');
+      }
+    } catch (err) {
+      console.error('Failed to paste layout:', err);
+      toast.error("Failed to paste", {
+        description: "Invalid layout data in clipboard",
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (isOpen) {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isOpen]);
+
+  // Handle drag and drop events
+  useEffect(() => {
+    if (isTauri()) {
+      // Listen for drag and drop events in Tauri
+      const unlisten = listen('tauri://drag-and-drop', (event) => {
+        try {
+          // In Tauri, we'll just use click-only behavior
+          // The drag and drop event is not needed
+        } catch (error) {
+          console.error('Error handling drag and drop:', error);
+        }
+      });
+
+      return () => {
+        unlisten.then(fn => fn());
+      };
+    }
+  }, [onAddWidget]);
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, widgetType: string) => {
+    if (isTauri()) {
+      // In Tauri, prevent drag and drop
+      e.preventDefault();
+      return;
+    }
+    
+    // In web, use standard drag and drop
+    e.dataTransfer.setData('text/plain', widgetType);
+    e.dataTransfer.setData('widget/type', widgetType);
+    e.dataTransfer.setData('application/json', JSON.stringify({ type: widgetType }));
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const handleWidgetClick = (widgetType: string) => {
+    if (onAddWidget) {
+      onAddWidget(widgetType);
+      setIsOpen(false); // Close dropdown after adding
+    }
+  };
+
+  // Handle data source change
+  const handleDataSourceChange = (source: 'demo' | 'sample') => {
+    onDataSourceChange?.(source);
+    toast.success(`Switched to ${source === 'demo' ? 'Demo API' : 'Sample Data'}`);
+  };
+
+  const handleToggleLayoutLock = () => {
+    const newLockedState = !isLayoutLocked;
+    setIsLayoutLocked(newLockedState);
+    if (onToggleLayoutLock) {
+      onToggleLayoutLock(newLockedState);
+    }
+    toast.success(newLockedState ? "Layout locked" : "Layout unlocked", {
+      description: newLockedState 
+        ? "Widgets cannot be moved or resized" 
+        : "Widgets can now be moved and resized"
+    });
+  };
+
+  return (
+    <div className={cn(
+      "w-full py-4",
+      "bg-[hsl(var(--color-bg-base))]"
+    )}>
+      {/* Left Section - Account Selector and Balance */}
+      <div 
+        className="flex items-center justify-between mx-auto"
+        style={{ 
+          maxWidth: `${contentWidth}px`,
+          paddingLeft: `calc(${gridStyle === 'rounded' ? '8px' : '4px'} + var(--grid-margin))`, 
+          paddingRight: `calc(${gridStyle === 'rounded' ? '8px' : '4px'} + var(--grid-margin))` 
+        }}
+      >
+        <div className="flex items-center space-x-6">
+          <Button 
+            variant="outline"
+            className={cn(
+              "flex items-center space-x-2 px-2",
+              "bg-[hsl(var(--card))]",
+              "text-foreground",
+              "border border-border",
+              "shadow-sm",
+              "rounded-[calc(var(--grid-item-border-radius)/2)]",
+              "[padding-top:1.4rem] [padding-bottom:1.4rem]"
+            )}
+          >
+            <div className="w-8 h-8 rounded-full bg-[hsl(var(--primary))]/10 flex items-center justify-center text-base">
+              🐂
+            </div>
+            <span className="font-bold">Main</span>
+            <ChevronDown className="h-4 w-4 opacity-50" />
+          </Button>
+        </div>
+
+        {/* Right Section - Grid Controls */}
+        <div className="flex items-center space-x-3">
+          {/* Edit Dropdown Menu */}
+          <DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "px-4 text-base",
+                  "text-foreground",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "[padding-top:1.4rem] [padding-bottom:1.4rem]"
+                )}
+              >
+                <LayoutGrid className="h-5 w-5 mr-2 opacity-50" />
+                <span>Edit</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} className="w-72">
+              <div className="flex items-center justify-between p-2">
+                <div className="flex items-center gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handleCopyLayout}>
+                          <Copy className="h-4 w-4 opacity-80" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="tooltip-content">
+                        <p>Copy Layout</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handlePasteLayout}>
+                          <Clipboard className="h-4 w-4 opacity-80" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="tooltip-content">
+                        <p>Paste Layout</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handleToggleLayoutLock}>
+                          {isLayoutLocked ? (
+                            <Lock className="h-4 w-4 opacity-80" />
+                          ) : (
+                            <Unlock className="h-4 w-4 opacity-80" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="tooltip-content">
+                        <p>{isLayoutLocked ? "Unlock Layout" : "Lock Layout"}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+
+                <Button variant="ghost" size="sm" onClick={onResetLayout}>
+                  <RotateCcw className="h-4 w-4 mr-2 opacity-80" />
+                  <span>Reset</span>
+                </Button>
+              </div>
+              <DropdownMenuSeparator />
+              <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
+              <div className="px-3 py-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {(() => {
+                    const filteredWidgets = (Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
+                      .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions' || type === 'insight' || type === 'referrals' || type === 'earn');
+                    
+                    // Check if we need a placeholder (odd number of widgets)
+                    const needsPlaceholder = filteredWidgets.length % 2 !== 0;
+                    
+                    // Render all widgets
+                    const renderedWidgets = filteredWidgets.map(([type, config]) => {
+                      // Choose the appropriate icon based on widget type
+                      const IconComponent = {
+                        'balances': Wallet,
+                        'performance': LineChart,
+                        'treemap': PieChart,
+                        'markets': TrendingUp,
+                        'transactions': Receipt,
+                        'insight': Sparkles,
+                        'referrals': Users,
+                        'earn': DollarSign
+                      }[type] || LayoutGrid;
+                      
+                      return (
+                        <div
+                          key={type}
+                          draggable={!isTauriEnv}
+                          onDragStart={(e) => handleDragStart(e, type)}
+                          onClick={() => handleWidgetClick(type)}
+                          className="relative flex flex-col items-start justify-center select-none rounded-lg border p-3 h-20 text-sm hover:bg-accent hover:text-accent-foreground hover:border-primary cursor-pointer active:bg-accent/80 transition-all overflow-hidden group"
+                        >
+                          <div style={{ fontSize: 0 }}>
+                            <IconComponent className="h-5 w-5 mb-2 text-primary" style={{ width: '16px', height: '16px' }} />
+                          </div>
+                          <div className="text-sm font-medium">{config.title}</div>
+                          
+                          <div className="absolute inset-0 bg-accent/90 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                            <div className="text-accent-foreground text-xs font-medium transform translate-y-4 group-hover:translate-y-0 transition-transform duration-200">
+                              {isTauriEnv ? 'Click to add' : 'Click or drag'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                    
+                    // If we need a placeholder, add it
+                    if (needsPlaceholder) {
+                      renderedWidgets.push(
+                        <div
+                          key="placeholder"
+                          className="relative flex flex-col items-center justify-center select-none rounded-lg border border-dashed p-3 h-20 text-sm"
+                        >
+                          <div className="text-sm text-muted-foreground mb-1">More widgets</div>
+                          <div className="text-xs text-muted-foreground/70">coming soon</div>
+                        </div>
+                      );
+                    }
+                    
+                    return renderedWidgets;
+                  })()}
+                </div>
+              </div>
+              <DropdownMenuSeparator />
+              <div className="p-2">
+                <Dialog open={isAppearanceOpen} onOpenChange={setIsAppearanceOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full flex items-center justify-between group/appearance hover:border-primary hover:text-primary transition-all py-3 h-11">
+                      <div className="flex items-center">
+                        <Palette className="h-4 w-4 mr-2 opacity-80 group-hover/appearance:opacity-100" />
+                        <span>Edit Appearance</span>
+                      </div>
+                      <PanelRight className="h-4 w-4 opacity-50 group-hover/appearance:opacity-80" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader className="pb-2">
+                      <DialogTitle className="text-xl">Appearance Settings</DialogTitle>
+                      <DialogDescription>
+                        Customize the look and feel of your dashboard.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-6 space-y-6">
+                      <div>
+                        <div className="mb-3 text-sm font-medium">Theme</div>
+                        <div className="flex space-x-3">
+                          <Button 
+                            variant={theme === 'light' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => setTheme('light')}
+                          >
+                            <Sun className="h-4 w-4 mr-2" />
+                            <span>Light</span>
+                          </Button>
+                          <Button 
+                            variant={theme === 'dark' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => setTheme('dark')}
+                          >
+                            <Moon className="h-4 w-4 mr-2" />
+                            <span>Dark</span>
+                          </Button>
+                          <Button 
+                            variant={theme === 'system' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => setTheme('system')}
+                          >
+                            <Monitor className="h-4 w-4 mr-2" />
+                            <span>System</span>
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <div className="mb-3 text-sm font-medium">Data Source</div>
+                        <div className="flex space-x-3">
+                          <Button 
+                            variant={dataSource === 'demo' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => handleDataSourceChange('demo')}
+                          >
+                            <span>Demo API</span>
+                          </Button>
+                          <Button 
+                            variant={dataSource === 'sample' ? 'default' : 'outline'} 
+                            className="flex-1 h-11"
+                            onClick={() => handleDataSourceChange('sample')}
+                          >
+                            <span>Sample Data</span>
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <div className="mb-2 text-sm font-medium">Grid Style</div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div 
+                            className={cn(
+                              "border rounded-xl p-3 cursor-pointer transition-all",
+                              gridStyle === 'rounded' 
+                                ? "border-primary bg-accent/50 ring-1 ring-primary" 
+                                : "hover:border-primary/50 hover:bg-accent/20"
+                            )}
+                            onClick={() => applyGridStyle('rounded')}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-medium">Rounded</div>
+                              <div className={cn(
+                                "w-5 h-5 rounded-full",
+                                gridStyle === 'rounded' ? "bg-primary" : "border border-muted-foreground"
+                              )}>
+                                {gridStyle === 'rounded' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 p-1">
+                              <div className="bg-primary/15 h-8 rounded-3xl"></div>
+                              <div className="bg-primary/15 h-8 rounded-3xl"></div>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-2">24px radius, 8px spacing</div>
+                          </div>
+                          
+                          <div 
+                            className={cn(
+                              "border rounded-xl p-3 cursor-pointer transition-all",
+                              gridStyle === 'dense' 
+                                ? "border-primary bg-accent/50 ring-1 ring-primary" 
+                                : "hover:border-primary/50 hover:bg-accent/20"
+                            )}
+                            onClick={() => applyGridStyle('dense')}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-medium">Dense</div>
+                              <div className={cn(
+                                "w-5 h-5 rounded-full",
+                                gridStyle === 'dense' ? "bg-primary" : "border border-muted-foreground"
+                              )}>
+                                {gridStyle === 'dense' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 p-1">
+                              <div className="bg-primary/15 h-8 rounded-xl"></div>
+                              <div className="bg-primary/15 h-8 rounded-xl"></div>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-2">16px radius, 4px spacing</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter className="pt-4">
+                      <DialogClose asChild>
+                        <Button>Done</Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </div>
+  );
+}
