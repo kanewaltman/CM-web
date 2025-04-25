@@ -204,11 +204,25 @@ export function ControlBar({
 
   const handleCopyLayout = () => {
     try {
+      // Get layout data
       const layoutData = onCopyLayout();
       if (!layoutData) {
         throw new Error('No layout data available');
       }
-      navigator.clipboard.writeText(layoutData).then(() => {
+      
+      // Get custom lists from localStorage
+      const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
+      const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
+      const customLists = savedLists ? JSON.parse(savedLists) : [];
+      
+      // Create a combined data object with layout and lists
+      const combinedData = {
+        layout: JSON.parse(layoutData),
+        customLists: customLists
+      };
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(JSON.stringify(combinedData)).then(() => {
         toast.success("Layout copied", {
           description: "Layout configuration has been copied to clipboard",
         });
@@ -229,15 +243,42 @@ export function ControlBar({
   const handlePasteLayout = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      // Validate that the text is valid JSON and has the expected structure
-      const parsedLayout = JSON.parse(text);
-      if (!Array.isArray(parsedLayout)) {
+      // Parse the clipboard data
+      const clipboardData = JSON.parse(text);
+      
+      // Check if it's the new combined format
+      if (clipboardData.layout && Array.isArray(clipboardData.layout)) {
+        // Handle new format with custom lists
+        if (clipboardData.customLists && Array.isArray(clipboardData.customLists)) {
+          // Save custom lists to localStorage
+          const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
+          localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(clipboardData.customLists));
+          
+          // Trigger a custom event to notify components that lists have been updated
+          const event = new CustomEvent('markets-lists-updated', {
+            detail: { 
+              lists: clipboardData.customLists,
+              instanceId: 'all' // Signal update to all widgets
+            },
+            bubbles: true
+          });
+          document.dispatchEvent(event);
+        }
+        
+        // Apply the layout
+        onPasteLayout(JSON.stringify(clipboardData.layout));
+        toast.success("Layout pasted", {
+          description: "New layout with custom lists has been applied",
+        });
+      } else if (Array.isArray(clipboardData)) {
+        // Handle legacy format (just layout array)
+        onPasteLayout(text);
+        toast.success("Layout pasted", {
+          description: "New layout has been applied",
+        });
+      } else {
         throw new Error('Invalid layout format');
       }
-      onPasteLayout(text);
-      toast.success("Layout pasted", {
-        description: "New layout has been applied",
-      });
     } catch (err) {
       console.error('Failed to paste layout:', err);
       toast.error("Failed to paste", {
