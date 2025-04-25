@@ -204,6 +204,13 @@ interface MarketData {
 
 export type { MarketData };
 
+// Export type for QuoteAssets with counts
+export interface QuoteAssetsWithCounts {
+  assets: AssetTicker[];
+  counts: Record<string, number>;
+  totalCount: number;
+}
+
 interface MarketsWidgetProps {
   className?: string;
   compact?: boolean;
@@ -216,7 +223,7 @@ interface MarketsWidgetProps {
   onSelectedQuoteAssetChange?: (value: AssetTicker | 'ALL') => void;
   secondaryCurrency?: AssetTicker | null;
   onSecondaryCurrencyChange?: (value: AssetTicker | null) => void;
-  onQuoteAssetsChange?: (assets: AssetTicker[]) => void;
+  onQuoteAssetsChange?: (assetsData: QuoteAssetsWithCounts) => void;
   
   // Column controls
   sorting?: SortingState;
@@ -869,18 +876,63 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     setStoredValue(instanceStorageKeys.SORTING, sorting);
   }, [sorting]);
 
-  const quoteAssets = useMemo(() => { // Get unique quote assets from market data
+  // Define a type for the quote assets with counts
+  type QuoteAssetsWithCounts = {
+    assets: AssetTicker[];
+    counts: Record<string, number>;
+    totalCount: number;
+  };
+  
+  const quoteAssets = useMemo<QuoteAssetsWithCounts>(() => { // Get unique quote assets from market data
     const assets = new Set<AssetTicker>();
-    marketData.forEach(item => assets.add(item.quoteAsset));
-    return Array.from(assets);
-  }, [marketData]);
+    const assetCounts: Record<string, number> = {};
+    
+    // Add from the raw market data rather than filtered data to maintain all options
+    marketData.forEach(item => {
+      const quoteAsset = item.quoteAsset;
+      assets.add(quoteAsset);
+      
+      // Count the number of pairs for each quote asset
+      if (!assetCounts[quoteAsset]) {
+        assetCounts[quoteAsset] = 1;
+      } else {
+        assetCounts[quoteAsset]++;
+      }
+      
+      // Update our global tracking variable
+      if (!allQuoteAssets.includes(quoteAsset)) {
+        allQuoteAssets.push(quoteAsset);
+      }
+    });
+    
+    // Include all previously seen assets to ensure dropdown stays complete
+    allQuoteAssets.forEach(asset => {
+      assets.add(asset);
+      // Ensure all assets have a count (even if 0)
+      if (!assetCounts[asset]) {
+        assetCounts[asset] = 0;
+      }
+    });
+    
+    // Sort assets by count (descending)
+    const sortedAssets = Array.from(assets).sort((a, b) => {
+      return (assetCounts[b] || 0) - (assetCounts[a] || 0);
+    });
+    
+    // Return both the sorted assets and their counts
+    return {
+      assets: sortedAssets,
+      counts: assetCounts,
+      totalCount: marketData.length // Total number of pairs
+    };
+  }, [marketData, id]);
 
   // Notify parent component of quote assets change
   useEffect(() => {
-    if (onQuoteAssetsChange && quoteAssets.length > 0) {
+    if (onQuoteAssetsChange && quoteAssets.assets.length > 0) {
       onQuoteAssetsChange(quoteAssets);
     }
-  }, [quoteAssets, onQuoteAssetsChange]);
+  }, [quoteAssets, onQuoteAssetsChange, id]);
 
   // Update handlers for state changes
   const handleSearchQueryChange = useCallback((value: string) => {
@@ -1527,6 +1579,11 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                 // Verify the assets exist in our asset registry
                 if (!(baseAsset in ASSETS) || !(quoteAsset in ASSETS)) return null;
                 
+                // Record this quote asset in the global tracking variable
+                if (!allQuoteAssets.includes(quoteAsset)) {
+                  allQuoteAssets.push(quoteAsset);
+                }
+                
                 // Create market data item with explicit quote asset
                 return {
                   pair,
@@ -2000,3 +2057,6 @@ const setStoredValue = <T,>(key: string, value: T): void => {
   };
   setTimeout(saveToStorage, 300);
 };
+
+// Keep track of all available quote assets, even during filtering
+let allQuoteAssets: AssetTicker[] = [];

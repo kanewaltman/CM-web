@@ -2,12 +2,12 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { MarketsWidgetHeader } from './MarketsWidgetHeader';
 import { MarketsWidgetMenu } from './MarketsWidgetMenu';
-import { MarketData } from './MarketsWidget';
+import { MarketData, QuoteAssetsWithCounts } from './MarketsWidget';
 import { useReactTable } from '@tanstack/react-table';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check, ListIcon, BanIcon, RotateCcw, Search, X } from 'lucide-react';
+import { Check, ListIcon, RotateCcw, Search, X, Coins, CircleSlash } from 'lucide-react';
 import { DropdownMenu, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu';
 
 // Constants for localStorage keys
@@ -45,7 +45,7 @@ const marketsWidgetRegistry = new Map<string, {
   searchQuery: string;
   selectedQuoteAsset: AssetTicker | 'ALL';
   secondaryCurrency: AssetTicker | null;
-  quoteAssets: AssetTicker[];
+  quoteAssets: QuoteAssetsWithCounts;
   tableRef: React.RefObject<{ getTable: () => ReturnType<typeof useReactTable<MarketData>> | null }>;
 }>();
 
@@ -87,7 +87,17 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
         searchQuery: getStoredValue<string>(instanceStorageKeys.SEARCH_QUERY, ''),
         selectedQuoteAsset: getStoredValue<AssetTicker | 'ALL'>(instanceStorageKeys.SELECTED_QUOTE_ASSET, 'ALL'),
         secondaryCurrency: getStoredValue<AssetTicker | null>(instanceStorageKeys.SECONDARY_CURRENCY, null),
-        quoteAssets: [],
+        quoteAssets: {
+          assets: ['USDT', 'BTC', 'ETH', 'USD', 'EUR'] as AssetTicker[],  // Default quote assets to show
+          counts: {
+            'USDT': 0,
+            'BTC': 0,
+            'ETH': 0,
+            'USD': 0,
+            'EUR': 0
+          },
+          totalCount: 0
+        },
         tableRef
       };
       
@@ -131,11 +141,16 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
         if (updatedState.secondaryCurrency !== secondaryCurrency) {
           setSecondaryCurrency(updatedState.secondaryCurrency);
         }
+        // Also check for quote assets changes
+        if (updatedState.quoteAssets.assets.length > 0 && 
+            JSON.stringify(updatedState.quoteAssets.assets) !== JSON.stringify(quoteAssets.assets)) {
+          setQuoteAssets(updatedState.quoteAssets);
+        }
       }
     }, 100); // Check for changes every 100ms
 
     return () => clearInterval(interval);
-  }, [widgetId, searchQuery, selectedQuoteAsset, secondaryCurrency]);
+  }, [widgetId, searchQuery, selectedQuoteAsset, secondaryCurrency, quoteAssets]);
   
   // Handlers that update both local state and registry
   const handleSearchQueryChange = useCallback((value: string) => {
@@ -159,7 +174,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   }, [widgetId, instanceStorageKeys.SELECTED_QUOTE_ASSET]);
   
   const handleSecondaryCurrencyChange = useCallback((value: AssetTicker | null) => {
-    console.log('Wrapper changing secondary currency to:', value);
     setSecondaryCurrency(value);
     const state = marketsWidgetRegistry.get(widgetId);
     if (state) {
@@ -198,7 +212,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
     setStoredValue(instanceStorageKeys.SECONDARY_CURRENCY, value);
   }, [widgetId, instanceStorageKeys.SECONDARY_CURRENCY]);
   
-  const handleQuoteAssetsChange = useCallback((assets: AssetTicker[]) => {
+  const handleQuoteAssetsChange = useCallback((assets: QuoteAssetsWithCounts) => {
     setQuoteAssets(assets);
     const state = marketsWidgetRegistry.get(widgetId);
     if (state) {
@@ -250,7 +264,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
               selectedQuoteAsset === 'ALL' && "opacity-75"
             )}>
               {selectedQuoteAsset === 'ALL' ? (
-                <ListIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                <Coins className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
               ) : ASSETS[selectedQuoteAsset]?.icon ? (
                 <img 
                   src={ASSETS[selectedQuoteAsset].icon} 
@@ -258,7 +272,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
                   className="w-4 h-4 mr-2 rounded-full shrink-0" 
                 />
               ) : (
-                <div className="w-4 h-4 mr-2 shrink-0"></div>
+                <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                  <span className="text-[10px] font-medium">{selectedQuoteAsset.charAt(0)}</span>
+                </div>
               )}
               <span className="flex-1 text-left truncate">
                 Quote: {selectedQuoteAsset === 'ALL' ? 'All Pairs' : selectedQuoteAsset}
@@ -276,7 +292,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
                       className="text-xs h-8 flex items-center justify-between"
                     >
                       <div className="flex items-center flex-1 truncate">
-                        <ListIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                        <Coins className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
                         <span className="truncate">All Pairs</span>
                       </div>
                       <Check
@@ -286,7 +302,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
                         )}
                       />
                     </CommandItem>
-                    {quoteAssets.map((asset) => {
+                    {quoteAssets.assets.map((asset) => {
                       const assetConfig = ASSETS[asset];
                       return (
                         <CommandItem
@@ -306,7 +322,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
                                 className="w-4 h-4 mr-2 rounded-full shrink-0" 
                               />
                             ) : (
-                              <div className="w-4 h-4 mr-2 shrink-0"></div>
+                              <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                                <span className="text-[10px] font-medium">{asset.charAt(0)}</span>
+                              </div>
                             )}
                             <span className="truncate">{asset}</span>
                           </div>
@@ -331,7 +349,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
               secondaryCurrency === null && "opacity-75"
             )}>
               {secondaryCurrency === null ? (
-                <BanIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
               ) : ASSETS[secondaryCurrency]?.icon ? (
                 <img 
                   src={ASSETS[secondaryCurrency].icon} 
@@ -339,7 +357,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
                   className="w-4 h-4 mr-2 rounded-full shrink-0" 
                 />
               ) : (
-                <div className="w-4 h-4 mr-2 shrink-0"></div>
+                <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                  <span className="text-[10px] font-medium">{secondaryCurrency?.charAt(0)}</span>
+                </div>
               )}
               <span className="flex-1 text-left truncate">
                 {secondaryCurrency ? `Show in: ${secondaryCurrency}` : 'Secondary: None'}
@@ -357,7 +377,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
                       className="text-xs h-8 flex items-center justify-between"
                     >
                       <div className="flex items-center flex-1 truncate">
-                        <BanIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                        <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
                         <span className="truncate">None</span>
                       </div>
                       <Check
@@ -387,7 +407,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
                                 className="w-4 h-4 mr-2 rounded-full shrink-0" 
                               />
                             ) : (
-                              <div className="w-4 h-4 mr-2 shrink-0"></div>
+                              <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                                <span className="text-[10px] font-medium">{currency.charAt(0)}</span>
+                              </div>
                             )}
                             <span className="truncate">Show in {currency}</span>
                           </div>
@@ -464,8 +486,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       secondaryCurrency={secondaryCurrency}
       onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
       onQuoteAssetsChange={handleQuoteAssetsChange}
+      tableRef={tableRef}
       onRemove={onRemove}
-      persistState={true}
+      persistState={false}
     />
   );
 }; 

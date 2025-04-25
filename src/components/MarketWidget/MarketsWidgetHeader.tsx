@@ -14,7 +14,9 @@ import {
   Ban as BanIcon,
   Columns as ColumnsIcon,
   ChevronsUpDown,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Coins,
+  CircleSlash
 } from 'lucide-react';
 import {
   Command,
@@ -40,6 +42,7 @@ import { useReactTable } from '@tanstack/react-table';
 import { MarketsWidgetMenu } from './MarketsWidgetMenu';
 import { ListManager } from './MarketLists';
 import { MarketsWidgetColumnVisibility } from './MarketsWidget';
+import { QuoteAssetsWithCounts } from './MarketsWidget';
 import { 
   Dialog, 
   DialogContent, 
@@ -77,7 +80,7 @@ interface MarketsWidgetHeaderProps {
   onSearchQueryChange: (value: string) => void;
   onSelectedQuoteAssetChange: (value: AssetTicker | 'ALL') => void;
   onSecondaryCurrencyChange: (value: AssetTicker | null) => void;
-  quoteAssets: AssetTicker[];
+  quoteAssets: QuoteAssetsWithCounts;
   widgetId?: string;
   table?: ReturnType<typeof useReactTable<any>> | null;
   tableRef?: React.RefObject<{ getTable: () => ReturnType<typeof useReactTable<any>> | null }>;
@@ -257,7 +260,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                   selectedQuoteAsset === 'ALL' && "opacity-75"
                 )}>
                   {selectedQuoteAsset === 'ALL' ? (
-                    <ListIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                    <Coins className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
                   ) : ASSETS[selectedQuoteAsset]?.icon ? (
                     <img 
                       src={ASSETS[selectedQuoteAsset].icon} 
@@ -265,7 +268,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                       className="w-4 h-4 mr-2 rounded-full shrink-0" 
                     />
                   ) : (
-                    <div className="w-4 h-4 mr-2 shrink-0"></div>
+                    <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                      <span className="text-[10px] font-medium">{selectedQuoteAsset.charAt(0)}</span>
+                    </div>
                   )}
                   <span className="flex-1 text-left truncate">
                     Quote: {selectedQuoteAsset === 'ALL' ? 'All Pairs' : selectedQuoteAsset}
@@ -283,8 +288,11 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                           className="text-xs h-8 flex items-center justify-between"
                         >
                           <div className="flex items-center flex-1 truncate">
-                            <ListIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                            <Coins className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
                             <span className="truncate">All Pairs</span>
+                            <span className="ml-1 text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500">
+                              {quoteAssets.totalCount || 0}
+                            </span>
                           </div>
                           <Check
                             className={cn(
@@ -293,8 +301,10 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                             )}
                           />
                         </CommandItem>
-                        {quoteAssets.map((asset) => {
+                        {quoteAssets.assets.map((asset) => {
                           const assetConfig = ASSETS[asset];
+                          const assetCount = quoteAssets.counts[asset] || 0;
+                          
                           return (
                             <CommandItem
                               key={asset}
@@ -312,9 +322,14 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                                     className="w-4 h-4 mr-2 rounded-full shrink-0" 
                                   />
                                 ) : (
-                                  <div className="w-4 h-4 mr-2 shrink-0"></div>
+                                  <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                                    <span className="text-[10px] font-medium">{asset.charAt(0)}</span>
+                                  </div>
                                 )}
                                 <span className="truncate">{asset}</span>
+                                <span className="ml-1 text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500">
+                                  {assetCount}
+                                </span>
                               </div>
                               <Check
                                 className={cn(
@@ -337,7 +352,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                   secondaryCurrency === null && "opacity-75"
                 )}>
                   {secondaryCurrency === null ? (
-                    <BanIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                    <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
                   ) : ASSETS[secondaryCurrency]?.icon ? (
                     <img 
                       src={ASSETS[secondaryCurrency].icon} 
@@ -345,7 +360,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                       className="w-4 h-4 mr-2 rounded-full shrink-0" 
                     />
                   ) : (
-                    <div className="w-4 h-4 mr-2 shrink-0"></div>
+                    <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                      <span className="text-[10px] font-medium">{secondaryCurrency.charAt(0)}</span>
+                    </div>
                   )}
                   <span className="flex-1 text-left truncate">
                     {secondaryCurrency ? `Show in: ${secondaryCurrency}` : 'Secondary: None'}
@@ -363,7 +380,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                           className="text-xs h-8 flex items-center justify-between"
                         >
                           <div className="flex items-center flex-1 truncate">
-                            <BanIcon className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                            <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
                             <span className="truncate">None</span>
                           </div>
                           <Check
@@ -392,7 +409,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                                     className="w-4 h-4 mr-2 rounded-full shrink-0" 
                                   />
                                 ) : (
-                                  <div className="w-4 h-4 mr-2 shrink-0"></div>
+                                  <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                                    <span className="text-[10px] font-medium">{currency.charAt(0)}</span>
+                                  </div>
                                 )}
                                 <span className="truncate">Show in {currency}</span>
                               </div>
