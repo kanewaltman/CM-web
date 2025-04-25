@@ -11,5 +11,12 @@
 export { default as MarketsWidget } from './MarketsWidget';
 export { MarketsWidgetWrapper } from './MarketsWidgetWrapper';
 export { MarketsWidgetHeader } from './MarketsWidgetHeader';
-export { MarketsWidgetMenu } from './MarketsWidgetMenu'; 
-export { default as ValueFlash } from './ValueFlash'; 
+export { MarketsWidgetMenu } from './MarketsWidgetMenu';
+export { TableWithAddAssetRow } from './TableWithAddAssetRow';
+export { WidgetTab } from './WidgetTab';
+export { default as ValueFlash } from './ValueFlash';
+
+// Export market list related functionality
+export { MarketsListMenu, RenameListDialog, DeleteListDialog } from './ListManager';
+export { useMarketsList } from './useMarketsList';
+export type { CustomList } from './useMarketsList'; 

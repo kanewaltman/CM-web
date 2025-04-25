@@ -11,37 +11,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
 } from './ui/dropdown-menu';
 import { 
   Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription, 
-  DialogFooter 
+  DialogContent
 } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from './ui/alert-dialog';
-
-interface CustomList {
-  id: string;
-  name: string;
-  assets: string[];
-}
 
 interface WidgetContainerProps {
   children: React.ReactNode;
@@ -53,10 +27,6 @@ interface WidgetContainerProps {
   widgetMenu?: React.ReactNode;
   widgetId?: string;
 }
-
-// LocalStorage key for saving custom lists
-const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
-const ACTIVE_LIST_KEY = 'markets-widget-active-list';
 
 export const WidgetContainer = memo(function WidgetContainer({ 
   children, 
@@ -71,42 +41,16 @@ export const WidgetContainer = memo(function WidgetContainer({
 }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [titleMenuOpen, setTitleMenuOpen] = useState(false);
-  const [customLists, setCustomLists] = useState<CustomList[]>([]);
-  const [activeList, setActiveList] = useState<string | null>(null);
   const isMarketsWidget = title === "Markets";
-  
-  // State for handling custom lists
-  const [newListName, setNewListName] = useState('');
-  const [renameListId, setRenameListId] = useState<string | null>(null);
-  const [renameListName, setRenameListName] = useState('');
-  const [renameListDialogOpen, setRenameListDialogOpen] = useState(false);
-
-  // State for delete dialog
-  const [deleteListId, setDeleteListId] = useState<string | null>(null);
-  const [deleteListDialogOpen, setDeleteListDialogOpen] = useState(false);
   
   // Get the widget ID for proper instance tracking - set default immediately
   const widgetId = useRef<string>(externalWidgetId || `widget-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
   // Track whether we've found the DOM ID
   const [foundDomId, setFoundDomId] = useState(false);
-
-  // Add state to properly track the active list name for display in the title
-  const [activeListName, setActiveListName] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   
-  // Function to update the active list name whenever active list changes
-  const updateActiveListName = useCallback((listId: string | null, lists: CustomList[]) => {
-    if (!listId) {
-      setActiveListName(null);
-      return;
-    }
-    
-    const list = lists.find(list => list.id === listId);
-    if (list) {
-      setActiveListName(list.name);
-    } else {
-      setActiveListName(null);
-    }
-  }, []);
+  // Use the custom hook for Markets widget list functionality
+  const marketsList = isMarketsWidget ? useMarketsList(widgetId.current) : null;
 
   // When the component mounts, try to get a better ID from the DOM
   useEffect(() => {
@@ -118,18 +62,6 @@ export const WidgetContainer = memo(function WidgetContainer({
           widgetId.current = domId;
           console.log(`[WidgetContainer] Widget ID updated to:`, widgetId.current);
           setFoundDomId(true);
-          
-          // Check if there's a stored active list for this widget
-          try {
-            const storedActiveList = localStorage.getItem(`${ACTIVE_LIST_KEY}-${domId}`);
-            if (storedActiveList) {
-              const listId = JSON.parse(storedActiveList);
-              console.log(`[WidgetContainer] Found stored active list for widget ${domId}:`, listId);
-              setActiveList(listId);
-            }
-          } catch (err) {
-            console.error('Error loading active list for widget:', err);
-          }
         }
       };
       
@@ -360,31 +292,10 @@ export const WidgetContainer = memo(function WidgetContainer({
           <head>
             <title>${title}</title>
             <style>
-              :root {
-                color-scheme: light dark;
-              }
-              body {
-                margin: 0;
-                padding: 16px;
-                background: var(--background, white);
-                color: var(--foreground, black);
-                font-family: system-ui, -apple-system, sans-serif;
-              }
-              .widget-content {
-                height: 100%;
-                overflow: auto;
-                background: var(--background);
-                color: var(--foreground);
-                border-radius: 8px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                padding: 1rem;
-              }
-              @media (prefers-color-scheme: dark) {
-                body {
-                  background: rgb(9, 9, 11);
-                  color: rgb(250, 250, 250);
-                }
-              }
+              :root { color-scheme: light dark; }
+              body { margin: 0; padding: 16px; background: var(--background, white); color: var(--foreground, black); font-family: system-ui, -apple-system, sans-serif; }
+              .widget-content { height: 100%; overflow: auto; background: var(--background); color: var(--foreground); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1rem; }
+              @media (prefers-color-scheme: dark) { body { background: rgb(9, 9, 11); color: rgb(250, 250, 250); } }
             </style>
           </head>
           <body>
@@ -446,77 +357,19 @@ export const WidgetContainer = memo(function WidgetContainer({
 
   // Render dropdown content based on widget type
   const renderTitleDropdownContent = () => {
-    if (isMarketsWidget) {
+    if (isMarketsWidget && marketsList) {
       return (
-        <>
-          {/* All Markets option */}
-          <DropdownMenuItem 
-            onClick={() => saveActiveList(null)}
-            className={activeList === null ? "bg-accent" : ""}
-          >
-            <Globe className="h-4 w-4 mr-2 opacity-70" />
-            All Markets
-          </DropdownMenuItem>
-          
-          {/* Custom lists */}
-          {customLists.map(list => (
-            <DropdownMenuSub key={list.id}>
-              <DropdownMenuSubTrigger 
-                className={activeList === list.id ? "bg-accent" : ""}
-                onClick={() => saveActiveList(list.id)}
-              >
-                <ListChecks className="h-4 w-4 mr-2 opacity-70" />
-                {list.name}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem onClick={() => handleRenameList(list.id)}>
-                  <Edit className="h-4 w-4 mr-2 opacity-70" />
-                  Rename List
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => handleDeleteList(list.id)}
-                  className="text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2 opacity-70" />
-                  Delete List
-                </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          ))}
-          
-          <DropdownMenuSeparator />
-          
-          {/* Create new list - inline form instead of modal */}
-          <div className="p-2">
-            <div className="flex items-center space-x-2">
-              <Input 
-                value={newListName} 
-                onChange={(e) => setNewListName(e.target.value)}
-                placeholder="New list name..."
-                className="h-8 text-xs"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newListName.trim() !== '') {
-                    handleSaveNewList();
-                    setTitleMenuOpen(false);
-                  }
-                }}
-              />
-              <Button 
-                size="sm" 
-                className="h-8 px-2"
-                onClick={() => {
-                  if (newListName.trim() !== '') {
-                    handleSaveNewList();
-                    setTitleMenuOpen(false);
-                  }
-                }}
-                disabled={newListName.trim() === ''}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </>
+        <MarketsListMenu
+          customLists={marketsList.customLists}
+          activeList={marketsList.activeList}
+          newListName={marketsList.newListName}
+          onSaveActiveList={marketsList.saveActiveList}
+          onRenameList={marketsList.handleRenameList}
+          onDeleteList={marketsList.handleDeleteList}
+          onNewListNameChange={marketsList.setNewListName}
+          onSaveNewList={marketsList.handleSaveNewList}
+          onCloseMenu={() => setTitleMenuOpen(false)}
+        />
       );
     } else {
       // Default dropdown content for non-Markets widgets
@@ -687,29 +540,26 @@ export const WidgetContainer = memo(function WidgetContainer({
           </DialogContent>
         </Dialog>
         
-        {/* Delete List Dialog */}
-        <AlertDialog open={deleteListDialogOpen} onOpenChange={setDeleteListDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete this list and remove all assets from it.
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDeleteListId(null)}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={confirmDeleteList}
-                className="bg-destructive hover:bg-destructive/90"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {/* Markets widget dialogs */}
+        {isMarketsWidget && marketsList && (
+          <>
+            {/* Rename List Dialog */}
+            <RenameListDialog
+              open={marketsList.renameListDialogOpen}
+              onOpenChange={marketsList.setRenameListDialogOpen}
+              listName={marketsList.renameListName}
+              onListNameChange={marketsList.setRenameListName}
+              onSave={marketsList.handleSaveRenamedList}
+            />
+            
+            {/* Delete List Dialog */}
+            <DeleteListDialog
+              open={marketsList.deleteListDialogOpen}
+              onOpenChange={marketsList.setDeleteListDialogOpen}
+              onConfirm={marketsList.confirmDeleteList}
+            />
+          </>
+        )}
     </div>
   );
 }); 

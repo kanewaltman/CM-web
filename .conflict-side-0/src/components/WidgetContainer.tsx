@@ -66,7 +66,8 @@ export const WidgetContainer = memo(function WidgetContainer({
   onRemove,
   isMobile = false,
   widgetMenu,
-  widgetId: externalWidgetId
+  widgetId: externalWidgetId,
+  titleClickHandler
 }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [titleMenuOpen, setTitleMenuOpen] = useState(false);
@@ -579,9 +580,16 @@ export const WidgetContainer = memo(function WidgetContainer({
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center cursor-pointer group">
+                    <h2 key={title} className="text-sm font-semibold group-hover:text-primary">
+                      {isMarketsWidget && activeList && activeListName 
+                        ? activeListName
+                        : title}
+                    </h2>
+                    <Button variant="ghost" size="icon" className="h-4 w-4 p-0 ml-1 hover:bg-transparent">
+                      <ChevronDown className="h-4 w-4 opacity-50 group-hover:opacity-100" />
+                    </Button>
+                  </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {widgetMenu && (
@@ -597,8 +605,37 @@ export const WidgetContainer = memo(function WidgetContainer({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+            
+            <div className="flex items-center space-x-1">
+              {extraControls}
+              {headerControls}
+              <div className="flex items-center space-x-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {widgetMenu && (
+                      <>
+                        {widgetMenu}
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={handleExpand} title={`Expand widget ${isTauri ? 'to new window' : 'in browser'}`}>
+                      <Maximize2 className="h-4 w-4 mr-2 opacity-50" />
+                      <span>Popout</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleRemove} className="text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2 opacity-50" />
+                      <span>Remove</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           </div>
-        </div>
 
         {/* Content wrapper */}
         <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1 select-text">
@@ -633,47 +670,46 @@ export const WidgetContainer = memo(function WidgetContainer({
                 }}
               />
             </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setRenameListDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSaveRenamedList}
-              disabled={renameListName.trim() === ''}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Delete List Dialog */}
-      <AlertDialog open={deleteListDialogOpen} onOpenChange={setDeleteListDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this list and remove all assets from it.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteListId(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteList}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setRenameListDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveRenamedList}
+                disabled={renameListName.trim() === ''}
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Delete List Dialog */}
+        <AlertDialog open={deleteListDialogOpen} onOpenChange={setDeleteListDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete this list and remove all assets from it.
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDeleteListId(null)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDeleteList}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }); 

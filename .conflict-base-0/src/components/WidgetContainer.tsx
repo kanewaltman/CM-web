@@ -1,7 +1,7 @@
 import { ChevronDown, Maximize2, MoreHorizontal, Trash2, ListChecks, Plus, Edit, Globe, ListFilter } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { useRef, useCallback, memo, useState, useEffect, useState, useEffect } from 'react';
+import { useRef, useCallback, memo, useState, useEffect } from 'react';
 import { createPopoutWindow } from '../utils/windowManager';
 import { isTauri } from '../utils/platform';
 import {
@@ -42,7 +42,6 @@ interface CustomList {
   name: string;
   assets: string[];
 }
-import { Dialog, DialogContent } from './ui/dialog';
 import { 
   getWidgetIdFromHash, 
   markHashHandled, 
@@ -64,7 +63,6 @@ interface WidgetContainerProps {
   widgetMenu?: React.ReactNode;
   widgetId?: string;
   titleClickHandler?: (e: React.MouseEvent) => void;
-  widgetId?: string; // Optional for backward compatibility, but needed for dialog functionality
 }
 
 // Track which dialogs are currently open to prevent duplicates
@@ -85,7 +83,8 @@ export const WidgetContainer = memo(function WidgetContainer({
   onRemove,
   isMobile = false,
   widgetMenu,
-  widgetId: externalWidgetId
+  widgetId: externalWidgetId,
+  titleClickHandler
 }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [titleMenuOpen, setTitleMenuOpen] = useState(false);
@@ -378,7 +377,7 @@ export const WidgetContainer = memo(function WidgetContainer({
   // Set up dialog from URL when component mounts or hash changes
   useEffect(() => {
     // Use provided widgetId or try to get from DOM
-    const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+    const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
     if (!effectiveWidgetId) return; // Skip if no widgetId can be found
 
     // Keep track of dialog open state locally to prevent duplicate opens
@@ -579,12 +578,12 @@ export const WidgetContainer = memo(function WidgetContainer({
         openDialogs.delete(effectiveWidgetId);
       }
     };
-  }, [widgetId, isDialogOpen]);
+  }, [externalWidgetId, isDialogOpen]);
 
   // Handle dialog opening/closing via Dialog component's onOpenChange
   const handleDialogOpenChange = (open: boolean) => {
     // Use provided widgetId or try to get from DOM
-    const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+    const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
     
     if (open && !isDialogOpen) {
       // Generate a unique event ID to prevent duplicate handling
@@ -646,7 +645,7 @@ export const WidgetContainer = memo(function WidgetContainer({
     e.preventDefault();
     
     // Try to get widgetId from DOM if not provided in props
-    const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+    const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
     const gridItem = containerRef.current?.closest('.grid-stack-item');
     const domWidgetId = gridItem?.getAttribute('gs-id') || gridItem?.id;
     
@@ -903,141 +902,142 @@ export const WidgetContainer = memo(function WidgetContainer({
   };
 
   // Determine effective widget ID for dialog rendering
-  const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+  const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
 
   return (
-    <div ref={containerRef} className="grid-stack-item-content">
-      <div className="widget-inner-container flex flex-col h-full">
-        {/* Header */}
-        <div className={cn(
-          "widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0",
-          !isMobile && "cursor-move" // Only show move cursor on desktop
-        )}>
-          <div className="flex items-center space-x-2">
-            <DropdownMenu open={titleMenuOpen} onOpenChange={setTitleMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <div className="flex items-center cursor-pointer group">
-                  <h2 key={title} className="text-sm font-semibold group-hover:text-primary">
-                    {isMarketsWidget && activeList && activeListName 
-                      ? activeListName
-                      : title}
-                  </h2>
-                  <Button variant="ghost" size="icon" className="h-4 w-4 p-0 ml-1 hover:bg-transparent">
-                    <ChevronDown className="h-4 w-4 opacity-50 group-hover:opacity-100" />
-                  </Button>
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                {renderTitleDropdownContent()}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          
-          <div className="flex items-center space-x-1">
-            {extraControls}
-            {headerControls}
-            <div className="flex items-center space-x-1">
-              <DropdownMenu>
+    <>
+      <div ref={containerRef} className="grid-stack-item-content">
+        <div className="widget-inner-container flex flex-col h-full">
+          {/* Header */}
+          <div className={cn(
+            "widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0",
+            !isMobile && "cursor-move" // Only show move cursor on desktop
+          )}>
+            <div className="flex items-center space-x-2">
+              <DropdownMenu open={titleMenuOpen} onOpenChange={setTitleMenuOpen}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center cursor-pointer group">
+                    <h2 key={title} className="text-sm font-semibold group-hover:text-primary">
+                      {isMarketsWidget && activeList && activeListName 
+                        ? activeListName
+                        : title}
+                    </h2>
+                    <Button variant="ghost" size="icon" className="h-4 w-4 p-0 ml-1 hover:bg-transparent">
+                      <ChevronDown className="h-4 w-4 opacity-50 group-hover:opacity-100" />
+                    </Button>
+                  </div>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {widgetMenu && (
-                    <>
-                      {widgetMenu}
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuItem onClick={handleExpand} title={`Expand widget ${isTauri ? 'to new window' : 'in browser'}`}>
-                    <Maximize2 className="h-4 w-4 mr-2 opacity-50" />
-                    <span>Popout</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleRemove} className="text-destructive">
-                    <Trash2 className="h-4 w-4 mr-2 opacity-50" />
-                    <span>Remove</span>
-                  </DropdownMenuItem>
+                <DropdownMenuContent align="start" className="w-56">
+                  {renderTitleDropdownContent()}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+            
+            <div className="flex items-center space-x-1">
+              {extraControls}
+              {headerControls}
+              <div className="flex items-center space-x-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {widgetMenu && (
+                      <>
+                        {widgetMenu}
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={handleExpand} title={`Expand widget ${isTauri ? 'to new window' : 'in browser'}`}>
+                      <Maximize2 className="h-4 w-4 mr-2 opacity-50" />
+                      <span>Popout</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleRemove} className="text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2 opacity-50" />
+                      <span>Remove</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           </div>
-        </div>
 
           {/* Content wrapper */}
           <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1 select-text">
             {children}
           </div>
         </div>
-      
-      {/* Rename List Dialog */}
-      <Dialog open={renameListDialogOpen} onOpenChange={setRenameListDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Rename List</DialogTitle>
-            <DialogDescription>
-              Enter a new name for your list.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="rename-list" className="text-right">
-                List Name
-              </Label>
-              <Input 
-                id="rename-list" 
-                value={renameListName} 
-                onChange={(e) => setRenameListName(e.target.value)}
-                className="col-span-3"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSaveRenamedList();
-                  }
-                }}
-              />
+        
+        {/* Rename List Dialog */}
+        <Dialog open={renameListDialogOpen} onOpenChange={setRenameListDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Rename List</DialogTitle>
+              <DialogDescription>
+                Enter a new name for your list.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="rename-list" className="text-right">
+                  List Name
+                </Label>
+                <Input 
+                  id="rename-list" 
+                  value={renameListName} 
+                  onChange={(e) => setRenameListName(e.target.value)}
+                  className="col-span-3"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSaveRenamedList();
+                    }
+                  }}
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setRenameListDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSaveRenamedList}
-              disabled={renameListName.trim() === ''}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Delete List Dialog */}
-      <AlertDialog open={deleteListDialogOpen} onOpenChange={setDeleteListDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this list and remove all assets from it.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteListId(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteList}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setRenameListDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveRenamedList}
+                disabled={renameListName.trim() === ''}
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Delete List Dialog */}
+        <AlertDialog open={deleteListDialogOpen} onOpenChange={setDeleteListDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete this list and remove all assets from it.
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDeleteListId(null)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDeleteList}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Widget Dialog - render only if we have an effective widget ID */}
