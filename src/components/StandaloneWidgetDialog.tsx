@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Dialog, DialogContent } from './ui/dialog';
 import { ChevronDown } from './ui-icons';
 import { WIDGET_REGISTRY, widgetTitles, findWidgetById } from '@/lib/widgetRegistry';
@@ -59,6 +59,7 @@ export function StandaloneWidgetDialog({
 }: StandaloneWidgetDialogProps) {
   const dataSource = useDataSource();
   const [isLoading, setIsLoading] = useState(true);
+  const contentRef = useRef<HTMLDivElement>(null);
   
   // Find widget in registry using the helper function (which handles compound IDs)
   const widgetInfo = findWidgetById(widgetId);
@@ -87,6 +88,20 @@ export function StandaloneWidgetDialog({
       document.body.classList.remove('widget-dialog-open');
     }
   }, [open, widgetId]);
+
+  // Handle focus prevention for direct URL navigation
+  useEffect(() => {
+    if (open && contentRef.current) {
+      // Remove focus styling
+      contentRef.current.style.outline = 'none';
+      contentRef.current.setAttribute('tabindex', '-1');
+      
+      // Move focus to body
+      setTimeout(() => {
+        document.body.focus();
+      }, 50);
+    }
+  }, [open]);
 
   // Handle dialog closing via the Dialog component's onOpenChange
   const handleOpenChange = (newOpenState: boolean) => {
@@ -120,8 +135,15 @@ export function StandaloneWidgetDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[var(--max-widget-width,1200px)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0">
-        <div className="flex flex-col h-full">
+      <DialogContent 
+        ref={contentRef}
+        className="DialogContent w-[var(--max-widget-width,1200px)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0 overflow-hidden"
+        onOpenAutoFocus={(e) => {
+          // Prevent default focus behavior
+          e.preventDefault();
+        }}
+      >
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
           <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
             <div className="flex items-center space-x-2">

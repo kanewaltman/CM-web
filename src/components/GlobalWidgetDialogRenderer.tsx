@@ -28,60 +28,88 @@ export function GlobalWidgetDialogRenderer() {
         return;
       }
       
+      // Skip title-click events which should only be handled by the specific container
+      if (eventId && eventId.startsWith('title-click-')) {
+        console.log('🌐 Skipping global handling for title-click event:', eventId);
+        return;
+      }
+      
       // Skip if this dialog was opened by a container directly
       if (e.detail?.source === 'container') {
         console.log('🌐 Skipping global handling for container-sourced dialog:', widgetId);
         return;
       }
       
-      console.log('🌐 Global dialog renderer handling widget:', widgetId);
-      
-      // If event has an ID, mark it as handled
-      if (eventId) {
-        handledGlobalEvents.add(eventId);
-        
-        // Cleanup - limit size to prevent memory issues
-        if (handledGlobalEvents.size > 20) {
-          const oldestEvent = handledGlobalEvents.values().next().value;
-          if (oldestEvent) handledGlobalEvents.delete(oldestEvent);
-        }
-      }
-      
-      // Check if the widget exists in the registry using the helper function
-      // findWidgetById now handles compound IDs with timestamps
-      const widgetInfo = findWidgetById(widgetId);
-      if (!widgetInfo) {
-        console.warn(`Widget with ID "${widgetId}" not found in registry.`);
+      // If exactMatchOnly is set and a widget container will handle it, skip global handling
+      if (e.detail?.exactMatchOnly === true) {
+        // Give containers a chance to handle it first
+        setTimeout(() => {
+          // Check if any container has already opened a dialog (which would be the case if there's an exact match)
+          if (document.body.classList.contains('widget-dialog-open')) {
+            console.log('🌐 Skipping global handling for exact match widget that was handled by container:', widgetId);
+            return;
+          }
+          
+          // If we get here, no container handled it, so the global renderer can show it
+          console.log('🌐 No exact container match found, global renderer will handle widget:', widgetId);
+          handleGlobalDialog();
+        }, 300);
         return;
       }
       
-      // Extract base widget ID for DOM queries (without timestamp)
-      const baseWidgetId = widgetId.split('-')[0];
+      // Continue with normal dialog handling
+      handleGlobalDialog();
       
-      // Check if any existing widget container has already handled this event
-      // Give a short delay to allow widget containers to handle their own dialogs
-      setTimeout(() => {
-        // For exact match - look for the exact widget ID
-        const exactMatch = document.querySelector(`.grid-stack-item[gs-id="${widgetId}"] .widget-dialog-open`);
+      function handleGlobalDialog() {
+        console.log('🌐 Global dialog renderer handling widget:', widgetId);
         
-        // For fuzzy match - look for any widget with the same base ID
-        const fuzzyMatch = !exactMatch && 
-          document.querySelector(`.grid-stack-item[gs-id^="${baseWidgetId}-"] .widget-dialog-open`);
-        
-        const dialogOpenedByContainer = document.body.classList.contains('widget-dialog-open') && 
-                                      !document.querySelector('.standalone-widget-dialog');
-        
-        // If no dialog is open for this widget yet, open it in the global renderer
-        if (!exactMatch && !fuzzyMatch && !dialogOpenedByContainer) {
-          console.log('🌐 Opening widget in global renderer:', widgetId, 'Type:', widgetInfo.type);
-          setOpenWidgets(prev => ({
-            ...prev,
-            [widgetId]: true
-          }));
-        } else {
-          console.log('🌐 Dialog already handled by a widget container, skipping global renderer');
+        // If event has an ID, mark it as handled
+        if (eventId) {
+          handledGlobalEvents.add(eventId);
+          
+          // Cleanup - limit size to prevent memory issues
+          if (handledGlobalEvents.size > 20) {
+            const oldestEvent = handledGlobalEvents.values().next().value;
+            if (oldestEvent) handledGlobalEvents.delete(oldestEvent);
+          }
         }
-      }, 150);
+        
+        // Check if the widget exists in the registry using the helper function
+        // findWidgetById now handles compound IDs with timestamps
+        const widgetInfo = findWidgetById(widgetId);
+        if (!widgetInfo) {
+          console.warn(`Widget with ID "${widgetId}" not found in registry.`);
+          return;
+        }
+        
+        // Extract base widget ID for DOM queries (without timestamp)
+        const baseWidgetId = widgetId.split('-')[0];
+        
+        // Check if any existing widget container has already handled this event
+        // Give a short delay to allow widget containers to handle their own dialogs
+        setTimeout(() => {
+          // For exact match - look for the exact widget ID
+          const exactMatch = document.querySelector(`.grid-stack-item[gs-id="${widgetId}"] .widget-dialog-open`);
+          
+          // For fuzzy match - look for any widget with the same base ID
+          const fuzzyMatch = !exactMatch && 
+            document.querySelector(`.grid-stack-item[gs-id^="${baseWidgetId}-"] .widget-dialog-open`);
+          
+          const dialogOpenedByContainer = document.body.classList.contains('widget-dialog-open') && 
+                                        !document.querySelector('.standalone-widget-dialog');
+          
+          // If no dialog is open for this widget yet, open it in the global renderer
+          if (!exactMatch && !fuzzyMatch && !dialogOpenedByContainer) {
+            console.log('🌐 Opening widget in global renderer:', widgetId, 'Type:', widgetInfo.type);
+            setOpenWidgets(prev => ({
+              ...prev,
+              [widgetId]: true
+            }));
+          } else {
+            console.log('🌐 Dialog already handled by a widget container, skipping global renderer');
+          }
+        }, 150);
+      }
     };
     
     // Listen for close all dialogs event

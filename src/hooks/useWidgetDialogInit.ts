@@ -93,11 +93,16 @@ export function useWidgetDialogInit() {
       setTimeout(() => {
         // Only dispatch open event if no dialog has been opened yet
         if (markDialogOpened(widgetIdFromHash)) {
+          // Generate a unique event ID for direct navigation that includes the exact widget ID
+          const directNavEventId = `direct-nav-exact-${widgetIdFromHash}-${Date.now()}`;
+          
           // Dispatch a custom event to open the dialog
           const event = new CustomEvent('open-widget-dialog', {
             detail: { 
               widgetId: widgetIdFromHash,
-              directLoad: isDirectDialogLoad || !!earlyNavigationData
+              directLoad: isDirectDialogLoad || !!earlyNavigationData,
+              eventId: directNavEventId,
+              exactMatchOnly: true // Flag to indicate only exact matches should respond
             },
             bubbles: true
           });
@@ -110,7 +115,9 @@ export function useWidgetDialogInit() {
                 widgetDialog: true, 
                 widgetId: widgetIdFromHash,
                 directLoad: true,
-                timestamp: Date.now() 
+                timestamp: Date.now(),
+                eventId: directNavEventId,
+                exactMatchOnly: true
               }, 
               '', 
               `${window.location.pathname}${window.location.search}#widget=${widgetIdFromHash}`
@@ -144,12 +151,17 @@ export function useWidgetDialogInit() {
         // Mark hash as handled first
         markHashHandled(widgetId);
         
+        // Generate a unique event ID for this navigation
+        const popstateEventId = `popstate-exact-${widgetId}-${Date.now()}`;
+        
         console.log('🔄 Opening widget dialog from popstate:', widgetId);
         // Dispatch event to open the dialog
         const event = new CustomEvent('open-widget-dialog', {
           detail: { 
             widgetId,
-            directLoad: isDirectNavigationState
+            directLoad: isDirectNavigationState,
+            eventId: popstateEventId,
+            exactMatchOnly: true // Ensure only the exact widget responds
           },
           bubbles: true
         });
@@ -217,7 +229,8 @@ export function useWidgetDialogInit() {
             widgetId,
             directLoad: false,
             isManualNavigation: isSameUrlNavigation,
-            eventId
+            eventId,
+            exactMatchOnly: true // Ensure only the exact widget responds
           },
           bubbles: true
         });

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Dialog, DialogContent } from './ui/dialog';
 import { ChevronDown } from './ui-icons';
 import { cn } from '@/lib/utils';
@@ -25,11 +25,27 @@ export function WidgetDialog({
   children,
   widgetId
 }: WidgetDialogProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
   // Handle dialog state changes with centralized management
   useEffect(() => {
     if (open) {
       // Let the service handle URL updates
       openWidgetDialog(widgetId, 'container');
+    }
+  }, [open, widgetId]);
+
+  // Handle auto-focus prevention
+  useEffect(() => {
+    // Check if URL contains this widget ID
+    const urlWidgetId = new URLSearchParams(window.location.hash.substring(1)).get('widget');
+    if (open && urlWidgetId === widgetId && contentRef.current) {
+      // Remove focus outline via DOM manipulation
+      contentRef.current.style.outline = 'none';
+      contentRef.current.setAttribute('tabindex', '-1');
+      
+      // Ensure focus doesn't stay on the dialog by moving it elsewhere
+      document.body.focus();
     }
   }, [open, widgetId]);
 
@@ -45,8 +61,15 @@ export function WidgetDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[var(--max-widget-width)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0">
-        <div className="flex flex-col h-full">
+      <DialogContent 
+        ref={contentRef}
+        className="DialogContent w-[var(--max-widget-width)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0 overflow-hidden"
+        onOpenAutoFocus={(e) => {
+          // Prevent default autofocus behavior 
+          e.preventDefault();
+        }}
+      >
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
           <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
             <div className="flex items-center space-x-2">
@@ -60,7 +83,7 @@ export function WidgetDialog({
           </div>
 
           {/* Content wrapper */}
-          <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1 select-text">
+          <div className="widget-content flex-1 min-h-0 overflow-auto pt-0 px-1 pb-1 select-text">
             {children}
           </div>
         </div>
