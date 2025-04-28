@@ -19,10 +19,33 @@ let ignoreHashChanges = false;
 const openDialogs = new Set<string>();
 
 // Extracts widget ID from URL hash
-export function getWidgetIdFromHash(): string | null {
+export function getWidgetIdFromHash(): { widgetId: string | null, asset: string | null } {
   const hash = window.location.hash;
-  const match = hash.match(/widget=([^&]*)/);
-  return match ? match[1] : null;
+  const widgetMatch = hash.match(/widget=([^&]*)/);
+  const assetMatch = hash.match(/asset=([^&]*)/);
+  
+  // Extract the widget ID string
+  let widgetId = widgetMatch ? widgetMatch[1] : null;
+  
+  // Clean up widgetId if it contains [object Object]
+  if (widgetId === '[object%20Object]' || widgetId === '[object Object]') {
+    console.warn('⚠️ Invalid widget ID format detected in URL:', widgetId);
+    widgetId = null;
+    
+    // Clean up the URL to prevent further errors
+    const newUrl = new URL(window.location.href);
+    newUrl.hash = '';
+    window.history.replaceState(
+      { cleanedInvalidHash: true, timestamp: Date.now() },
+      '',
+      newUrl.toString()
+    );
+  }
+  
+  return { 
+    widgetId: widgetId,
+    asset: assetMatch ? assetMatch[1] : null
+  };
 }
 
 // Create a unique event ID for tracking dialog events
@@ -47,7 +70,7 @@ export function isProcessingEvent(eventId: string): boolean {
 export function checkDirectDialogNavigation(): { isDirectDialogLoad: boolean; widgetId: string | null } {
   const hash = window.location.hash;
   const isDirectDialogLoad = hash.includes('widget=');
-  const widgetId = getWidgetIdFromHash();
+  const widgetId = getWidgetIdFromHash().widgetId;
   
   if (isDirectDialogLoad && widgetId) {
     console.log('🚩 Detected direct widget dialog navigation:', { widgetId, hash });
@@ -66,6 +89,11 @@ export function checkDirectDialogNavigation(): { isDirectDialogLoad: boolean; wi
 // Helper to check if two widget IDs refer to the same base widget
 // Handles both simple IDs and compound IDs with timestamps (e.g. "transactions-1745505290237")
 export function isSameBaseWidget(widgetId1: string, widgetId2: string): boolean {
+  // Always require exact match for earn widgets
+  if (widgetId1.startsWith('earn-') || widgetId2.startsWith('earn-')) {
+    return widgetId1 === widgetId2;
+  }
+  
   if (widgetId1 === widgetId2) return true;
   
   // Extract base IDs
@@ -109,9 +137,14 @@ export function getDirectDialogNavigationData(): {
  * Mark that a dialog has been opened in this session
  * Returns true if this is the first dialog opened, false if another was already opened
  */
-export function markDialogOpened(): boolean {
+export function markDialogOpened(widgetId?: string): boolean {
   if (dialogAlreadyOpened) {
     return false;
+  }
+  
+  if (widgetId) {
+    // Track the specific dialog that's open
+    openDialogs.add(widgetId);
   }
   
   dialogAlreadyOpened = true;
@@ -164,14 +197,22 @@ export function handleManualUrlNavigation(): void {
 /**
  * Centralized function to open a dialog
  */
-export function openWidgetDialog(widgetId: string, source?: 'container' | 'global' | 'direct'): void {
+export function openWidgetDialog(
+  widgetId: string, 
+  source?: 'container' | 'global' | 'direct',
+  asset?: string
+): void {
   // Temporarily ignore hash changes
   ignoreHashChanges = true;
   
   // Update URL
   const newUrl = new URL(window.location.href);
-  newUrl.hash = `widget=${widgetId}`;
-  window.history.replaceState({ widget: widgetId }, '', newUrl.toString());
+  let hashContent = `widget=${widgetId}`;
+  if (asset) {
+    hashContent += `&asset=${asset}`;
+  }
+  newUrl.hash = hashContent;
+  window.history.replaceState({ widget: widgetId, asset }, '', newUrl.toString());
   
   // Track this dialog as open
   openDialogs.add(widgetId);
@@ -185,6 +226,7 @@ export function openWidgetDialog(widgetId: string, source?: 'container' | 'globa
   const event = new CustomEvent('open-widget-dialog', {
     detail: { 
       widgetId,
+      asset,
       source: source || 'direct' // Track the source of the open request
     },
     bubbles: true
@@ -218,6 +260,8 @@ export function closeWidgetDialog(widgetId: string): void {
     
     // Reset dialog state
     resetDialogOpenedState();
+    // Also clear any storage items to prevent persisting dialogs on refresh
+    sessionStorage.removeItem('directDialogNavigation');
   }
   
   // Reset flags after a short delay
@@ -260,7 +304,7 @@ export function useWidgetDialog(widgetId: string) {
       // Skip if we're explicitly ignoring hash changes
       if (ignoreHashChanges) return;
       
-      const widgetIdFromHash = getWidgetIdFromHash();
+      const widgetIdFromHash = getWidgetIdFromHash().widgetId;
       
       if (widgetIdFromHash && isSameBaseWidget(widgetIdFromHash, widgetId)) {
         if (!isOpen) {

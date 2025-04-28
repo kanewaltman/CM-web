@@ -40,6 +40,12 @@ if (dialogNavigation.isDirectDialogLoad) {
   console.log('🔍 Early detection of direct dialog navigation:', dialogNavigation);
 }
 
+// Track the last time a widget from URL was handled
+let lastWidgetHandleTime = 0;
+
+// Track if we're currently handling a dialog
+let isCurrentlyHandlingDialog = false;
+
 function AppContent() {
   const { dataSource, setDataSource } = useDataSource();
   const { resolvedTheme } = useTheme();
@@ -177,10 +183,28 @@ function AppContent() {
 
     // Handle browser back/forward navigation
     const handlePopState = (event: PopStateEvent) => {
-      console.log('🔄 PopState event triggered:', { 
-        state: event.state, 
-        pathname: window.location.pathname 
+      const hasWidgetId = event.state && event.state.widgetId;
+      
+      // Log more details about the popstate event
+      console.log('🔄 PopState event in App.tsx:', {
+        hasWidgetId,
+        state: event.state,
+        url: window.location.href,
+        hash: window.location.hash
       });
+      
+      // If we're already processing, don't do duplicate work
+      if (isCurrentlyHandlingDialog) {
+        console.log('⏭️ Already handling a dialog, skipping popstate handler');
+        return;
+      }
+      
+      isCurrentlyHandlingDialog = true;
+      
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        isCurrentlyHandlingDialog = false;
+      }, 300);
       
       // If we have state with a page property, use it directly
       if (event.state && typeof event.state.page === 'string') {
@@ -601,10 +625,19 @@ function App() {
       
       if (hash.includes('widget=')) {
         const widgetIdMatch = hash.match(/widget=([^&]+)/);
+        const assetMatch = hash.match(/asset=([^&]+)/);
         const widgetId = widgetIdMatch ? widgetIdMatch[1] : null;
+        const asset = assetMatch ? assetMatch[1] : null;
         
         if (widgetId) {
-          console.log('📱 Detected widget in URL bar navigation:', widgetId);
+          console.log('📱 Detected widget in URL bar navigation:', widgetId, asset ? `with asset: ${asset}` : '');
+          
+          // Check if dialog was already opened by another process
+          if (isCurrentlyHandlingDialog) {
+            console.log('📌 Dialog already opened by popstate, skipping URL handler');
+            processingUrl = false;
+            return;
+          }
           
           // Mark as processing to prevent reentry
           processingUrl = true;
@@ -666,13 +699,14 @@ function App() {
                 markHashHandled(widgetId as string);
                 
                 // Directly dispatch the open dialog event instead of using popstate
-                // which might not be supported in all browsers
                 const event = new CustomEvent('open-widget-dialog', {
                   detail: { 
                     widgetId,
+                    asset,
                     directLoad: true,
                     isManualNavigation,
-                    eventId // Pass the event ID to track which widgets have handled it
+                    eventId, // Pass the event ID to track which widgets have handled it
+                    exactMatchOnly: true // Always require exact match for widgets
                   },
                   bubbles: true
                 });
@@ -683,6 +717,7 @@ function App() {
                   { 
                     widgetDialog: true, 
                     widgetId: widgetId,
+                    asset: asset,
                     directLoad: true,
                     timestamp: Date.now(),
                     processed: true // Mark as processed in state
@@ -727,7 +762,6 @@ function App() {
     
     // Prevent duplicate dialog opening detection
     let lastWidgetId: string | null = null;
-    let lastWidgetHandleTime = 0;
     
     // Handle popstate events with debouncing
     const handlePopState = (event: PopStateEvent) => {
@@ -790,24 +824,81 @@ function App() {
       }
     }
     
-    // Add event listener for input URL navigation
-    window.addEventListener('beforeunload', (e) => {
-      // This will fire before the page refreshes or navigates
-      // Save the current URL to sessionStorage to detect if we're refreshing or navigating to the same URL
-      sessionStorage.setItem('lastUrl', window.location.href);
-      
-      // Don't actually prevent navigation
-      delete e.returnValue;
-    });
-
     // Check if we're navigating to the same URL when the page loads
     window.addEventListener('load', () => {
       const lastUrl = sessionStorage.getItem('lastUrl');
+      
+      // Clean up invalid dialog state on page load
+      if (window.location.hash) {
+        // Check for invalid widget hash and clean it up
+        const hash = window.location.hash;
+        if (hash.includes('#widget=[object') || hash.includes('%20Object]') || hash === '#widget=undefined') {
+          console.log('🧹 Cleaning up invalid widget hash on page load');
+          // Clear the invalid hash to prevent errors
+          window.history.replaceState(
+            { cleanedHash: true, timestamp: Date.now() },
+            '',
+            window.location.pathname + window.location.search
+          );
+          
+          // Reset dialog state to ensure clean startup
+          handleManualUrlNavigation();
+          return;
+        }
+      }
+      
+      // Handle the case where URL contains a valid widget hash but we should be at the root
+      if (window.location.hash.includes('#widget=')) {
+        // Check if we're coming from a page close/refresh and the hash isn't actually needed
+        const isRefreshWithWidget = sessionStorage.getItem('navigatingAway') !== 'true';
+        
+        if (isRefreshWithWidget) {
+          console.log('🧹 Cleaning up stale widget hash on page load');
+          // Clear the widget hash to prevent unintended dialog reopening
+          window.history.replaceState(
+            { cleanedHash: true, timestamp: Date.now() },
+            '',
+            window.location.pathname + window.location.search
+          );
+          
+          // Reset dialog state to ensure clean startup
+          handleManualUrlNavigation();
+          // Reset session storage to avoid persistence issues
+          sessionStorage.removeItem('directDialogNavigation');
+          return;
+        }
+      }
+      
+      // Original behavior for intentional navigation to widget URLs
       if (lastUrl === window.location.href && lastUrl?.includes('#widget=')) {
         console.log('🔄 Detected navigation to same URL with widget hash');
         handleManualUrlNavigation();
         debouncedCheckUrl();
       }
+      
+      // Clear navigation flag after handling
+      sessionStorage.removeItem('navigatingAway');
+    });
+    
+    // Set a flag when actually navigating away (not just refreshing)
+    window.addEventListener('beforeunload', (e) => {
+      // This will fire before the page refreshes or navigates
+      // Save the current URL to sessionStorage to detect if we're refreshing or navigating to the same URL
+      sessionStorage.setItem('lastUrl', window.location.href);
+      
+      // Only set navigating flag for actual navigation (not refresh)
+      if (e.currentTarget === window && e.type === 'beforeunload') {
+        const navType = (performance?.getEntriesByType('navigation')[0] as any)?.type;
+        if (navType !== 'reload') {
+          sessionStorage.setItem('navigatingAway', 'true');
+        } else {
+          // Explicitly clear the dialog navigation data on page refresh
+          sessionStorage.removeItem('directDialogNavigation');
+        }
+      }
+      
+      // Don't actually prevent navigation
+      delete e.returnValue;
     });
     
     return () => {
@@ -864,20 +955,16 @@ function DialogInitializer() {
   // Only initialize dialog system after widgets are mounted
   if (!ready) return null;
   
-  return (
-    <WidgetDialogInitWrapper />
-  );
+  return <WidgetDialogInit />;
 }
 
-// Final wrapper to ensure useWidgetDialogInit only runs once with clean dependencies
-function WidgetDialogInitWrapper() {
-  // Using key to ensure fresh hook usage
-  return <DialogHookRunner key={`dialog-init-${Date.now()}`} />;
-}
-
-// Component to actually run the hook
-function DialogHookRunner() {
-  useWidgetDialogInit();
+// Simplified component to run the hook without unnecessary complexity
+function WidgetDialogInit() {
+  try {
+    useWidgetDialogInit();
+  } catch (err) {
+    console.error('Error initializing widget dialog system:', err);
+  }
   return null;
 }
 

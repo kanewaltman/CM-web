@@ -75,7 +75,7 @@ export const WidgetContainer = memo(function WidgetContainer({
     let isAlreadyOpened = false;
 
     const checkHash = () => {
-      const widgetIdFromHash = getWidgetIdFromHash();
+      const { widgetId: widgetIdFromHash } = getWidgetIdFromHash();
       
       // Only proceed if this widget matches the hash (using base ID comparison)
       if (widgetIdFromHash && isSameBaseWidget(widgetIdFromHash, effectiveWidgetId)) {
@@ -111,7 +111,7 @@ export const WidgetContainer = memo(function WidgetContainer({
       
       // If this appears to be a fresh navigation to the same URL (paste and enter),
       // reset the dialog state to allow it to open
-      if (e.oldURL === e.newURL && e.newURL.includes(`widget=${getWidgetIdFromHash()}`)) {
+      if (e.oldURL === e.newURL && e.newURL.includes(`widget=${getWidgetIdFromHash().widgetId}`)) {
         console.log('🔄 Detected navigation to same widget URL, attempting to reopen');
       }
       

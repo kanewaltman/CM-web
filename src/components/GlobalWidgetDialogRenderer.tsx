@@ -17,7 +17,12 @@ export function GlobalWidgetDialogRenderer() {
     // Listen for open widget dialog events
     const handleOpenDialog = (e: CustomEvent) => {
       const widgetId = e.detail?.widgetId;
-      if (!widgetId) return;
+      
+      // Make sure we have a valid string widgetId, not an object
+      if (!widgetId || typeof widgetId !== 'string') {
+        console.log('🌐 Invalid widget ID received:', widgetId);
+        return;
+      }
       
       // Get event ID if available
       const eventId = typeof e.detail?.eventId === 'string' ? e.detail.eventId : null;

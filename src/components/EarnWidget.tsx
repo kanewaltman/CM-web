@@ -16,6 +16,7 @@ import { DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
 import { Slider } from './ui/slider';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { ChartContainer, ChartConfig } from './ui/chart';
+import { openWidgetDialog } from '@/lib/widgetDialogService';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -88,6 +89,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   const [forcedTheme, setForcedTheme] = useState<'light' | 'dark' | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const isInitialized = useRef(false);
+  const [initialAsset, setInitialAsset] = useState<string | undefined>(undefined);
 
   // Track current view mode for immediate updates without waiting for state system
   const [currentViewMode, setCurrentViewMode] = useState<EarnViewMode>(() => {
@@ -96,6 +98,27 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
     if (props.widgetId === 'earn-promo') return 'ripple';
     return props.defaultViewMode || 'ripple';
   });
+  
+  // Listen for dialog open events with asset data
+  useEffect(() => {
+    const handleDialogOpen = (e: CustomEvent) => {
+      if (e.detail?.widgetId === props.widgetId && e.detail?.asset) {
+        // If there's an asset specified and it's valid
+        if (stakingTokens.includes(e.detail.asset)) {
+          setInitialAsset(e.detail.asset);
+          // If we have an asset specified, switch to stake view
+          setCurrentViewMode('stake');
+        }
+      }
+    };
+    
+    // TypeScript doesn't recognize CustomEvent by default
+    document.addEventListener('open-widget-dialog' as any, handleDialogOpen);
+    
+    return () => {
+      document.removeEventListener('open-widget-dialog' as any, handleDialogOpen);
+    };
+  }, [props.widgetId]);
   
   // Add a safety timeout to prevent loading state from getting stuck
   useEffect(() => {
@@ -280,7 +303,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
       ) : currentViewMode === 'cards' ? (
         <CardGridView forcedTheme={forcedTheme} />
       ) : (
-        <StakeView forcedTheme={forcedTheme} />
+        <StakeView forcedTheme={forcedTheme} initialAsset={initialAsset} />
       )}
     </div>
   );
@@ -288,59 +311,103 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
 
 // Ripple View component
 const RippleView: React.FC = () => {
+  // Choose a featured token (this could be dynamic based on promotion, highest APY, etc.)
+  const featuredToken = 'XCM';
+
+  const handleGetStartedClick = () => {
+    // Close any existing dialogs first to prevent multiple dialogs
+    const closeEvent = new CustomEvent('close-widget-dialogs', {
+      bubbles: true
+    });
+    document.dispatchEvent(closeEvent);
+    
+    // Wait a small delay to ensure dialogs are closed
+    setTimeout(() => {
+      openWidgetDialog('earn-stake', 'direct', featuredToken);
+    }, 100);
+  };
+
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden bg-background/50 p-6">
-      <div className="relative z-10 text-center">
-        <h2 className="text-2xl font-bold mb-4">Start Earning Rewards</h2>
+    <div className="relative w-full h-full flex flex-col items-center justify-center p-4 overflow-hidden">
+      <Ripple 
+        className="absolute inset-0" 
+        mainCircleSize={280}
+        mainCircleOpacity={0.15}
+        numCircles={10}
+      />
+      <div className="z-10 text-center max-w-md mx-auto">
+        <h2 className="text-2xl font-bold mb-2">Earn Rewards</h2>
         <p className="text-muted-foreground mb-6">
-          Stake your assets to earn passive income with competitive APY rates
+          Stake your assets and earn passive income with competitive APY rates and flexible lock periods.
         </p>
-        <Button size="lg" className="font-semibold">
-          Explore Staking Options
-        </Button>
-      </div>
-      <div className="absolute inset-0">
-        <Ripple 
-          className="w-full h-full" 
-          mainCircleSize={280} 
-          mainCircleOpacity={0.15}
-          numCircles={10}
-        />
+        <div className="flex flex-col space-y-2 items-center">
+          <div className="p-3 bg-primary/10 rounded-full mb-2">
+            <div className="text-xl font-bold">{featuredToken}</div>
+            <div className="text-emerald-500 font-medium text-sm">
+              {tokenData.find(t => t.symbol === featuredToken)?.apy} APY
+            </div>
+          </div>
+          <Button onClick={handleGetStartedClick}>
+            Get Started with {featuredToken}
+          </Button>
+        </div>
       </div>
     </div>
   );
 };
 
-// Card Grid View component
+// Card Grid View component for token browsing
 const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedTheme }) => {
+  // Function to open stake view with a specific asset
+  const handleStakeClick = (token: string) => {
+    // Close any existing dialogs first to prevent multiple dialogs
+    const closeEvent = new CustomEvent('close-widget-dialogs', {
+      bubbles: true
+    });
+    document.dispatchEvent(closeEvent);
+    
+    // Wait a small delay to ensure dialogs are closed
+    setTimeout(() => {
+      openWidgetDialog('earn-stake', 'direct', token);
+    }, 100);
+  };
+  
   return (
     <div className="w-full h-full overflow-auto p-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {tokenData.map((token) => (
-          <Card key={token.symbol} className={cn(
-            "flex flex-col h-full",
-            forcedTheme === 'dark' ? "border-slate-800" : "border-slate-100"
-          )}>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between">
-                <span>{token.symbol}</span>
-                <span className="text-sm font-normal text-emerald-500">{token.apy} APY</span>
-              </CardTitle>
+          <Card 
+            key={token.symbol} 
+            className={cn(
+              "overflow-hidden hover:shadow-md transition-shadow",
+              forcedTheme === 'dark' ? "border-slate-800" : "border-slate-100"
+            )}
+          >
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-lg">{token.symbol}</CardTitle>
             </CardHeader>
-            <CardContent className="py-2">
-              <div className="text-sm text-muted-foreground">
-                <div className="flex justify-between mb-1">
-                  <span>Min Stake:</span>
-                  <span>{token.minStake} {token.symbol}</span>
+            <CardContent className="p-4 pt-0 pb-2">
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">APY</span>
+                  <span className="text-sm text-emerald-500 font-medium">{token.apy}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Lock Period:</span>
-                  <span>{token.lockPeriod}</span>
+                  <span className="text-sm font-medium">Min Stake</span>
+                  <span className="text-sm">{token.minStake} {token.symbol}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Lock Period</span>
+                  <span className="text-sm">{token.lockPeriod}</span>
                 </div>
               </div>
             </CardContent>
-            <CardFooter className="mt-auto pt-2">
-              <Button variant="outline" size="sm" className="w-full">
+            <CardFooter className="p-4 pt-2">
+              <Button 
+                className="w-full" 
+                size="sm"
+                onClick={() => handleStakeClick(token.symbol)}
+              >
                 Stake {token.symbol}
               </Button>
             </CardFooter>
@@ -352,8 +419,13 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
 };
 
 // Stake View component for detailed staking options
-const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedTheme }) => {
-  const [selectedAsset, setSelectedAsset] = useState(stakingTokens[0]);
+const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: string }> = ({ forcedTheme, initialAsset }) => {
+  const [selectedAsset, setSelectedAsset] = useState(() => {
+    // Use initialAsset if provided, otherwise default to first token
+    return initialAsset && stakingTokens.includes(initialAsset) 
+      ? initialAsset 
+      : stakingTokens[0];
+  });
   const [stakeAmount, setStakeAmount] = useState(100);
   const [sliderValue, setSliderValue] = useState(25);
   
@@ -588,4 +660,24 @@ export const EarnWidgetWrapper: React.FC<EarnWidgetProps> = (props) => {
       />
     </WidgetContainer>
   );
-}; 
+};
+
+// Function to open earn widget with a specific asset
+export function openEarnWidgetWithAsset(asset: string) {
+  if (!stakingTokens.includes(asset)) {
+    console.warn('Invalid asset selected:', asset);
+    return;
+  }
+  
+  // Close any existing dialogs first to prevent multiple dialogs
+  const closeEvent = new CustomEvent('close-widget-dialogs', {
+    bubbles: true
+  });
+  document.dispatchEvent(closeEvent);
+  
+  // Wait a small delay to ensure dialogs are closed
+  setTimeout(() => {
+    // Use the widget dialog service to open the dialog with the asset parameter
+    openWidgetDialog('earn-stake', 'direct', asset);
+  }, 100);
+} 
