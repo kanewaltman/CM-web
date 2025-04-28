@@ -131,6 +131,24 @@ const handleTokenStake = (token: string) => {
   }, 350); // Increased timeout to ensure previous dialog is fully closed
 };
 
+// Add a function to handle dialog closed events
+const handleDialogClosed = () => {
+  // Clear session storage to prevent reopening when navigating back
+  sessionStorage.removeItem('selected_stake_asset');
+  
+  // Also ensure URL hash is cleaned if we're on the earn page
+  if (window.location.pathname === '/earn') {
+    // Only clear if the hash contains widget parameter
+    if (window.location.hash.includes('widget=')) {
+      window.history.replaceState(
+        { dialogClosed: true, timestamp: Date.now() },
+        '',
+        window.location.pathname
+      );
+    }
+  }
+};
+
 // Modified function for the ripple view staking button
 const handleGetStartedClick = () => {
   // Always force reset dialog state first
@@ -626,14 +644,24 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
       }
     };
     
+    // Listen for dialog closed events
+    const handleCloseDialogs = () => {
+      // Clear session storage and URL hash when dialogs are closed
+      handleDialogClosed();
+    };
+    
     // TypeScript doesn't recognize CustomEvent by default
     document.addEventListener('open-widget-dialog' as any, handleDialogOpen);
+    
+    // Add listener for close events
+    document.addEventListener('close-all-widget-dialogs' as any, handleCloseDialogs);
     
     // Check for direct asset URLs when component mounts
     detectAndHandleAssetUrl();
     
     return () => {
       document.removeEventListener('open-widget-dialog' as any, handleDialogOpen);
+      document.removeEventListener('close-all-widget-dialogs' as any, handleCloseDialogs);
     };
   }, [props.widgetId]);
   

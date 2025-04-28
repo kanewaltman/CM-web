@@ -279,13 +279,21 @@ export function closeWidgetDialog(widgetId: string): void {
     
     // Reset dialog state
     resetDialogOpenedState();
+    
     // Also clear any storage items to prevent persisting dialogs on refresh
     sessionStorage.removeItem('directDialogNavigation');
+    
+    // Clear specific storage items related to dialogs
+    if (widgetId.startsWith('earn-')) {
+      sessionStorage.removeItem('selected_stake_asset');
+    }
+    
+    // Add more specific storage cleanups here as needed
     
     // Dispatch a global close event to clean up any lingering dialog state
     const globalCloseEvent = new CustomEvent('close-all-widget-dialogs', {
       bubbles: true,
-      detail: { source: 'closeWidgetDialog', timestamp: Date.now() }
+      detail: { source: 'closeWidgetDialog', timestamp: Date.now(), widgetId }
     });
     document.dispatchEvent(globalCloseEvent);
   }
@@ -298,6 +306,11 @@ export function closeWidgetDialog(widgetId: string): void {
     // Extra check to make sure we reset dialog state if all dialogs should be closed
     if (openDialogs.size === 0) {
       resetDialogOpenedState();
+      
+      // Double check storage clearance
+      if (widgetId.startsWith('earn-')) {
+        sessionStorage.removeItem('selected_stake_asset');
+      }
     }
   }, 250); // Increased to ensure complete cleanup
 }

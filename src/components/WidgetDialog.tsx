@@ -54,6 +54,21 @@ export function WidgetDialog({
     if (!newOpenState && open) {
       // Dialog is being closed
       closeWidgetDialog(widgetId);
+      
+      // Clear any session storage values that might cause dialogs to reopen
+      if (widgetId === 'earn-stake') {
+        sessionStorage.removeItem('selected_stake_asset');
+      }
+      
+      // Clear any other specific dialog-related storage here as needed
+      // If dialog is for earn, also dispatch a custom event
+      if (widgetId.startsWith('earn-')) {
+        const closeEvent = new CustomEvent('close-all-widget-dialogs', {
+          bubbles: true,
+          detail: { source: 'dialog-component', widgetId }
+        });
+        document.dispatchEvent(closeEvent);
+      }
     }
     // Forward the change to the parent
     onOpenChange(newOpenState);
