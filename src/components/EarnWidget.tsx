@@ -61,6 +61,15 @@ export interface EarnWidgetProps {
   onViewModeChange?: (mode: EarnViewMode) => void;
 }
 
+// Helper function to check if we're in a dialog
+const isInDialog = (): boolean => {
+  // Find dialog elements in the DOM
+  return !!document.querySelector('[role="dialog"]') || 
+         !!document.querySelector('.dialog-content') ||
+         !!document.querySelector('.DialogContent') ||
+         !!document.querySelector('.DialogOverlay');
+};
+
 // Helper function to update URL with asset parameter
 const updateUrlWithAsset = (asset: string) => {
   if (!asset || !stakingTokens.includes(asset)) return;
@@ -69,10 +78,18 @@ const updateUrlWithAsset = (asset: string) => {
     const url = new URL(window.location.href);
     const currentPath = url.pathname;
     const isEarnPage = currentPath === '/earn';
+    const isDialogOpen = isInDialog();
     
-    // Don't modify URL on the earn page
-    if (isEarnPage) return;
+    // Don't modify URL on the earn page unless in a dialog
+    if (isEarnPage && !isDialogOpen) return;
     
+    // On earn page in dialog, use simplified URL format
+    if (isEarnPage && isDialogOpen) {
+      history.replaceState(null, '', `${currentPath}#asset=${asset}`);
+      return;
+    }
+    
+    // Otherwise, use normal URL formatting
     // Parse current hash parts
     const currentHash = url.hash || '#';
     const hashParts = currentHash.substring(1).split('&').filter(part => 
@@ -83,7 +100,7 @@ const updateUrlWithAsset = (asset: string) => {
     hashParts.push(`asset=${asset}`);
     
     // Only add widget parameter if we're not on the earn page and it's not already present
-    if (!hashParts.some(part => part.startsWith('widget='))) {
+    if (!isEarnPage && !hashParts.some(part => part.startsWith('widget='))) {
       hashParts.push('widget=earn-stake');
     }
     
@@ -459,6 +476,7 @@ const RippleView: React.FC = () => {
   const handleGetStartedClick = () => {
     // Check if we're on the earn page
     const isEarnPage = window.location.pathname === '/earn';
+    const dialogOpen = isInDialog();
     
     // Close any existing dialogs first to prevent multiple dialogs
     const closeEvent = new CustomEvent('close-widget-dialogs', {
@@ -469,8 +487,14 @@ const RippleView: React.FC = () => {
     // Reset dialog state to ensure clean handling
     resetDialogOpenedState();
     
-    // Update URL with the asset parameter
-    updateUrlWithAsset(featuredToken);
+    // When on earn page, update URL differently to avoid unwanted parameters
+    if (isEarnPage) {
+      // Use a simpler URL format on the earn page for dialogs
+      history.replaceState(null, '', `${window.location.pathname}#asset=${featuredToken}`);
+    } else {
+      // Update URL with the asset parameter for non-earn pages
+      updateUrlWithAsset(featuredToken);
+    }
     
     // Wait a small delay to ensure dialogs are closed
     setTimeout(() => {
@@ -514,6 +538,7 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
   const handleStakeClick = (token: string) => {
     // Check if we're on the earn page
     const isEarnPage = window.location.pathname === '/earn';
+    const dialogOpen = isInDialog();
     
     // Close any existing dialogs first to prevent multiple dialogs
     const closeEvent = new CustomEvent('close-widget-dialogs', {
@@ -524,8 +549,14 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
     // Reset dialog state to ensure clean handling
     resetDialogOpenedState();
     
-    // Update URL with the asset parameter
-    updateUrlWithAsset(token);
+    // When on earn page, update URL differently to avoid unwanted parameters
+    if (isEarnPage) {
+      // Use a simpler URL format on the earn page for dialogs
+      history.replaceState(null, '', `${window.location.pathname}#asset=${token}`);
+    } else {
+      // Update URL with the asset parameter for non-earn pages
+      updateUrlWithAsset(token);
+    }
     
     // Wait a small delay to ensure dialogs are closed
     setTimeout(() => {
@@ -590,14 +621,71 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
   });
   const [stakeAmount, setStakeAmount] = useState(100);
   const [sliderValue, setSliderValue] = useState(25);
+  const inDialogRef = useRef(false);
   
-  // Update URL when selected asset changes - but only when not on earn page directly
+  // Improved dialog detection
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    // Don't update URL when on the earn page directly
+    // Find all parent elements to check if we're in a dialog
+    const checkIfInDialog = () => {
+      let element = document.activeElement;
+      let maxDepth = 10; // Prevent infinite loops
+      
+      while (element && maxDepth > 0) {
+        if (
+          element.classList?.contains('dialog-content') || 
+          element.getAttribute?.('role') === 'dialog' ||
+          element.classList?.contains('DialogContent')
+        ) {
+          return true;
+        }
+        element = element.parentElement;
+        maxDepth--;
+      }
+      
+      // Alternative detection method
+      return !!document.querySelector('[role="dialog"]') || 
+             !!document.querySelector('.dialog-content') ||
+             !!document.querySelector('.DialogContent');
+    };
+    
+    inDialogRef.current = checkIfInDialog();
+    
+    // Re-check periodically since dialogs can open/close
+    const intervalId = setInterval(() => {
+      inDialogRef.current = checkIfInDialog();
+    }, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
+  
+  // Handle asset selection change
+  const handleAssetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newAsset = e.target.value;
+    setSelectedAsset(newAsset);
+    
+    // Directly update URL when asset is changed
     const isEarnPage = window.location.pathname === '/earn';
-    if (isEarnPage) return;
+    
+    if (isEarnPage) {
+      // Use a simpler URL format on the earn page for dialogs
+      history.replaceState(null, '', `${window.location.pathname}#asset=${newAsset}`);
+    } else {
+      // Update URL with the asset parameter for non-earn pages
+      updateUrlWithAsset(newAsset);
+    }
+  };
+  
+  // Update URL when selected asset changes - but only when not on earn page directly or we're in a dialog
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const isEarnPage = window.location.pathname === '/earn';
+    const isInDialog = inDialogRef.current;
+    
+    // Always update URL in dialog even on earn page, but skip URL update on earn page outside dialog
+    if (isEarnPage && !isInDialog) return;
     
     updateUrlWithAsset(selectedAsset);
   }, [selectedAsset]);
@@ -677,7 +765,7 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
             <label className="text-sm font-medium">Select Asset</label>
             <select 
               value={selectedAsset}
-              onChange={(e) => setSelectedAsset(e.target.value)}
+              onChange={handleAssetChange}
               className={cn(
                 "w-full h-10 px-3 py-2 rounded-md border text-sm",
                 forcedTheme === 'dark' ? "bg-background border-slate-100" : "bg-background border-slate-100"
@@ -857,6 +945,7 @@ export function openEarnWidgetWithAsset(asset: string) {
   
   // Check if we're on the earn page
   const isEarnPage = window.location.pathname === '/earn';
+  const dialogOpen = isInDialog();
   
   // Close any existing dialogs first to prevent multiple dialogs
   const closeEvent = new CustomEvent('close-widget-dialogs', {
@@ -867,8 +956,14 @@ export function openEarnWidgetWithAsset(asset: string) {
   // Reset dialog state to ensure clean handling
   resetDialogOpenedState();
   
-  // Update URL with the asset parameter
-  updateUrlWithAsset(asset);
+  // When on earn page, update URL differently to avoid unwanted parameters
+  if (isEarnPage) {
+    // Use a simpler URL format on the earn page for dialogs
+    history.replaceState(null, '', `${window.location.pathname}#asset=${asset}`);
+  } else {
+    // Update URL with the asset parameter for non-earn pages
+    updateUrlWithAsset(asset);
+  }
   
   // Wait a small delay to ensure dialogs are closed
   setTimeout(() => {
