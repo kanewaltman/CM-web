@@ -58,13 +58,6 @@ export interface EarnWidgetProps {
 
 // Function to synchronize the view mode to the layout
 const synchronizeViewModeToLayout = (viewMode: EarnViewMode, widgetId: string) => {
-  // For fixed view widgets, ensure the view mode matches the expected one
-  if (widgetId === 'earn-promo' && viewMode !== 'ripple') {
-    viewMode = 'ripple';
-  } else if (widgetId === 'earn-assets' && viewMode !== 'cards') {
-    viewMode = 'cards';
-  }
-  
   try {
     const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
     if (savedLayout) {
@@ -220,11 +213,6 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
 
   // Handle view mode change
   const handleViewModeChange = useCallback((newMode: EarnViewMode) => {
-    // Don't allow changing view mode for widgets with fixed views
-    if (props.widgetId === 'earn-promo' || props.widgetId === 'earn-assets') {
-      return;
-    }
-    
     if (!widgetState || newMode === widgetState.viewMode) return;
     
     // Set current view mode immediately for a responsive UI
