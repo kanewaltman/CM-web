@@ -126,13 +126,34 @@ export function GlobalWidgetDialogRenderer() {
       }
     };
     
+    // Listen for global close all dialogs event (new)
+    const handleGlobalCloseAllDialogs = (e: CustomEvent) => {
+      console.log('🌐 Global dialog renderer received close-all command', e.detail);
+      
+      // Force close all widget dialogs
+      setOpenWidgets({});
+      
+      // Reset all dialog state completely
+      resetDialogOpenedState();
+      
+      // Clean up DOM state
+      document.body.classList.remove('widget-dialog-open');
+      document.querySelectorAll('.widget-dialog-open').forEach(el => {
+        el.classList.remove('widget-dialog-open');
+      });
+      
+      console.log('🌐 All dialogs have been forcibly closed and state reset');
+    };
+    
     // Register event listeners
     document.addEventListener('open-widget-dialog', handleOpenDialog as EventListener);
     document.addEventListener('close-widget-dialogs', handleCloseDialogs);
+    document.addEventListener('close-all-widget-dialogs', handleGlobalCloseAllDialogs as EventListener);
     
     return () => {
       document.removeEventListener('open-widget-dialog', handleOpenDialog as EventListener);
       document.removeEventListener('close-widget-dialogs', handleCloseDialogs);
+      document.removeEventListener('close-all-widget-dialogs', handleGlobalCloseAllDialogs as EventListener);
     };
   }, [openWidgets]);
   

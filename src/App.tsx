@@ -594,6 +594,7 @@ function App() {
       
       const currentUrl = window.location.href;
       const hash = window.location.hash;
+      const pathname = window.location.pathname;
       
       // Check for dialog closed flag in history state to skip processing
       if (window.history.state?.dialogClosed) {
@@ -620,6 +621,72 @@ function App() {
           console.log('⏭️ Skipping URL check - too soon after last handling');
           processingUrl = false;
           return; // Exit early to prevent recursive handling
+        }
+      }
+      
+      // Check for simple asset parameter on earn page
+      if (pathname === '/earn' && hash.includes('asset=') && !hash.includes('widget=')) {
+        const assetMatch = hash.match(/asset=([^&]+)/);
+        const asset = assetMatch ? assetMatch[1] : null;
+        
+        if (asset) {
+          console.log('📱 Detected asset in URL on earn page:', asset);
+          
+          // Check if dialog was already opened by another process
+          if (isCurrentlyHandlingDialog) {
+            console.log('📌 Dialog already opened by another process, skipping URL handler');
+            processingUrl = false;
+            return;
+          }
+          
+          // Mark as processing to prevent reentry
+          processingUrl = true;
+          
+          // Remember this URL to prevent infinite loops
+          processedUrls.add(currentUrl);
+          
+          // Generate a unique event ID for this opening attempt
+          const eventId = generateEventId();
+          
+          // Set as current event
+          setCurrentEventId(eventId);
+          
+          // Reset dialog state to allow opening again
+          resetDialogOpenedState();
+          
+          // Store the asset in sessionStorage as a backup to ensure it's used
+          if (asset) {
+            sessionStorage.setItem('selected_stake_asset', asset);
+          }
+          
+          // Update URL to include widget parameter - ensure both widget and asset are set
+          window.history.replaceState(
+            { widgetDialog: true, widgetId: 'earn-stake', asset },
+            '',
+            `${window.location.pathname}#widget=earn-stake&asset=${asset}`
+          );
+          
+          // Directly dispatch the open dialog event
+          const event = new CustomEvent('open-widget-dialog', {
+            detail: { 
+              widgetId: 'earn-stake',
+              asset,
+              directLoad: true,
+              isManualNavigation,
+              eventId,
+              exactMatchOnly: true
+            },
+            bubbles: true
+          });
+          document.dispatchEvent(event);
+          
+          // Release the processing lock and clear event ID after a short delay
+          window.setTimeout(() => {
+            processingUrl = false;
+            setCurrentEventId(null);
+          }, 500);
+          
+          return;
         }
       }
       

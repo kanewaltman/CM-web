@@ -156,8 +156,21 @@ export function markDialogOpened(widgetId?: string): boolean {
  * Useful for testing or when we want to allow another dialog to open
  */
 export function resetDialogOpenedState(): void {
+  // Reset dialog flags
   dialogAlreadyOpened = false;
   hashDialogHandled = false;
+  currentEventId = null;
+  
+  // Clear stored dialogs
+  openDialogs.clear();
+  
+  // Ensure we're not ignoring hash changes
+  ignoreHashChanges = false;
+  
+  // Reset closing dialog state
+  isClosingDialog = false;
+  
+  console.log('🔄 Dialog state has been fully reset');
 }
 
 /**
@@ -268,13 +281,25 @@ export function closeWidgetDialog(widgetId: string): void {
     resetDialogOpenedState();
     // Also clear any storage items to prevent persisting dialogs on refresh
     sessionStorage.removeItem('directDialogNavigation');
+    
+    // Dispatch a global close event to clean up any lingering dialog state
+    const globalCloseEvent = new CustomEvent('close-all-widget-dialogs', {
+      bubbles: true,
+      detail: { source: 'closeWidgetDialog', timestamp: Date.now() }
+    });
+    document.dispatchEvent(globalCloseEvent);
   }
   
-  // Reset flags after a short delay
+  // Reset flags after a short delay, slightly longer than before
   setTimeout(() => {
     isClosingDialog = false;
     ignoreHashChanges = false;
-  }, 150);
+    
+    // Extra check to make sure we reset dialog state if all dialogs should be closed
+    if (openDialogs.size === 0) {
+      resetDialogOpenedState();
+    }
+  }, 250); // Increased to ensure complete cleanup
 }
 
 /**
