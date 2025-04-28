@@ -605,27 +605,8 @@ function App() {
       // Flag to track if this is manual navigation to same URL
       let isManualNavigation = false;
       
-      // Check if this is a manual navigation (paste and enter) with same URL
-      // We can detect this by checking if the URL is already in our processed set
-      // and by checking the timestamp of the last URL processing
-      if (processedUrls.has(currentUrl)) {
-        const now = Date.now();
-        // Only treat as manual navigation if enough time has passed (at least 2 seconds)
-        // to avoid recursive triggers during normal dialog opening
-        if (now - lastWidgetHandleTime > 2000) {
-          console.log('🔄 Detected manual URL navigation with same URL - resetting dialog state');
-          handleManualUrlNavigation();
-          processedUrls.delete(currentUrl); // Remove so we handle it again
-          isManualNavigation = true; // Set the flag
-        } else {
-          console.log('⏭️ Skipping URL check - too soon after last handling');
-          processingUrl = false;
-          return; // Exit early to prevent recursive handling
-        }
-      }
-      
       // Check for simple asset parameter on earn page
-      if (pathname === '/earn' && hash.includes('asset=') && !hash.includes('widget=')) {
+      if (pathname === '/earn' && hash.includes('asset=')) {
         const assetMatch = hash.match(/asset=([^&]+)/);
         const asset = assetMatch ? assetMatch[1] : null;
         
@@ -656,10 +637,12 @@ function App() {
           
           // Store the asset in sessionStorage as a backup to ensure it's used
           if (asset) {
+            console.log('📝 Storing asset in session storage from URL handler:', asset);
             sessionStorage.setItem('selected_stake_asset', asset);
           }
           
           // Update URL to include widget parameter - ensure both widget and asset are set
+          console.log('🔄 Updating URL with widget and asset parameters:', asset);
           window.history.replaceState(
             { widgetDialog: true, widgetId: 'earn-stake', asset },
             '',
@@ -667,6 +650,7 @@ function App() {
           );
           
           // Directly dispatch the open dialog event
+          console.log('🚀 Dispatching open-widget-dialog event with asset:', asset);
           const event = new CustomEvent('open-widget-dialog', {
             detail: { 
               widgetId: 'earn-stake',

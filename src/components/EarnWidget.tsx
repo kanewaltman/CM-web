@@ -341,7 +341,30 @@ const synchronizeViewModeToLayout = (viewMode: EarnViewMode, widgetId: string) =
   }
 };
 
-// Add this new function to detect and handle asset-only URLs on the earn page
+// Modify the getInitialAssetFromAllSources function to add more logging
+export function getInitialAssetFromAllSources(): string {
+  // First check for asset in URL hash since direct navigation should have highest priority
+  const urlAsset = getAssetFromUrl();
+  if (urlAsset && stakingTokens.includes(urlAsset)) {
+    console.log('📱 Using asset from URL for initial load:', urlAsset);
+    return urlAsset;
+  }
+  
+  // Then check session storage
+  if (typeof window !== 'undefined') {
+    const sessionAsset = sessionStorage.getItem('selected_stake_asset');
+    if (sessionAsset && stakingTokens.includes(sessionAsset)) {
+      console.log('📱 Using asset from session storage for initial load:', sessionAsset);
+      return sessionAsset;
+    }
+  }
+  
+  // Add more detailed logging when defaulting to XCM
+  console.log('⚠️ No asset found in URL or session storage, defaulting to XCM');
+  return 'XCM';
+}
+
+// Modify the detectAndHandleAssetUrl function to immediately preserve the URL asset
 const detectAndHandleAssetUrl = () => {
   // Only run on the earn page
   if (window.location.pathname !== '/earn') return;
@@ -349,8 +372,23 @@ const detectAndHandleAssetUrl = () => {
   // Skip if dialog is already open
   if (isInDialog()) return;
   
-  // Check for both widget and asset parameters first
+  // Extract asset from URL first thing, before any modifications
   const hash = window.location.hash;
+  let assetFromUrl: string | null = null;
+  
+  // Check for asset parameter with highest priority
+  if (hash) {
+    const assetMatch = hash.match(/asset=([^&]*)/);
+    if (assetMatch && assetMatch[1] && stakingTokens.includes(assetMatch[1])) {
+      assetFromUrl = assetMatch[1];
+      console.log('🔍 Detected asset in URL during initial URL check:', assetFromUrl);
+      
+      // IMPORTANT: Immediately store in session storage to ensure it persists
+      sessionStorage.setItem('selected_stake_asset', assetFromUrl);
+    }
+  }
+  
+  // Check for both widget and asset parameters first
   if (hash && hash.includes('widget=earn-stake') && hash.includes('asset=')) {
     const assetMatch = hash.match(/asset=([^&]*)/);
     const asset = assetMatch ? assetMatch[1] : null;
@@ -398,8 +436,8 @@ const detectAndHandleAssetUrl = () => {
     // Open dialog with this asset after a short delay
     setTimeout(() => {
       openWidgetDialog('earn-stake', 'direct', sessionAsset, true);
-      // Clear the session storage after use
-      sessionStorage.removeItem('selected_stake_asset');
+      // Don't clear session storage until dialog is fully opened
+      setTimeout(() => sessionStorage.removeItem('selected_stake_asset'), 1000);
     }, 250);
     
     return;
@@ -433,28 +471,6 @@ const detectAndHandleAssetUrl = () => {
     }
   }
 };
-
-// Add this new function to check and honor the URL asset parameter on initial load
-export function getInitialAssetFromAllSources(): string {
-  // First check for asset in URL hash since direct navigation should have highest priority
-  const urlAsset = getAssetFromUrl();
-  if (urlAsset && stakingTokens.includes(urlAsset)) {
-    console.log('📱 Using asset from URL for initial load:', urlAsset);
-    return urlAsset;
-  }
-  
-  // Then check session storage
-  if (typeof window !== 'undefined') {
-    const sessionAsset = sessionStorage.getItem('selected_stake_asset');
-    if (sessionAsset && stakingTokens.includes(sessionAsset)) {
-      console.log('📱 Using asset from session storage for initial load:', sessionAsset);
-      return sessionAsset;
-    }
-  }
-  
-  // Default to XCM only if nothing is specified
-  return 'XCM';
-}
 
 export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   const { resolvedTheme } = useTheme();
@@ -498,11 +514,20 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   // Listen for dialog open events with asset data
   useEffect(() => {
     const handleDialogOpen = (e: CustomEvent) => {
+      console.log('📣 Dialog open event received with details:', e.detail);
+      
       // Store widgetState reference for use in event handler
       const currentWidgetState = widgetStateRegistry.get(props.widgetId) as EarnWidgetState | undefined;
       
+      // Use exact match only flag if provided
+      const exactMatchOnly = e.detail?.exactMatchOnly === true;
+      console.log('🧩 Dialog exactMatchOnly flag:', exactMatchOnly);
+      
       // Check if we have a session storage asset that should take priority
       const sessionAsset = sessionStorage.getItem('selected_stake_asset');
+      if (sessionAsset) {
+        console.log('📦 Found asset in session storage during dialog open:', sessionAsset);
+      }
       
       // Process asset priority: event detail > session storage > URL
       let finalAsset: string | undefined = undefined;
@@ -518,8 +543,14 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
         else if (sessionAsset && stakingTokens.includes(sessionAsset)) {
           finalAsset = sessionAsset;
           console.log('📱 Using asset from session storage:', finalAsset);
-          // Clear session storage to prevent stale values
-          setTimeout(() => sessionStorage.removeItem('selected_stake_asset'), 1000);
+          // Clear session storage to prevent stale values - but with a delay
+          // and only if exactMatchOnly is not set
+          if (!exactMatchOnly) {
+            setTimeout(() => {
+              console.log('🧹 Clearing session storage for selected_stake_asset');
+              sessionStorage.removeItem('selected_stake_asset');
+            }, 2000);
+          }
         }
         // Finally try URL as last resort
         else {
@@ -532,6 +563,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
         
         // If we found an asset, use it and set the view mode
         if (finalAsset) {
+          console.log('✅ Setting initial asset to:', finalAsset);
           setInitialAsset(finalAsset);
           setCurrentViewMode('stake');
           
@@ -540,8 +572,10 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
             currentWidgetState.setViewMode('stake');
           }
           
-          // Ensure URL reflects the correct asset
-          if (window.location.pathname === '/earn') {
+          // Ensure URL reflects the correct asset - but only if exactMatchOnly is not set
+          // or if it's a direct load from URL
+          if (window.location.pathname === '/earn' && (e.detail?.directLoad === true || !exactMatchOnly)) {
+            console.log('🔄 Updating URL with proper asset during dialog open:', finalAsset);
             window.history.replaceState(
               null, 
               '', 
@@ -562,20 +596,26 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
         if (!finalAsset) {
           // Try to get asset from session storage or URL if not specified in the event
           if (sessionAsset && stakingTokens.includes(sessionAsset)) {
+            console.log('📦 Using session storage asset for earn-stake widget:', sessionAsset);
             setInitialAsset(sessionAsset);
             finalAsset = sessionAsset;
-            // Clear storage to prevent stale values on future visits
-            setTimeout(() => sessionStorage.removeItem('selected_stake_asset'), 1000);
+            // Clear storage to prevent stale values on future visits - but with delay
+            // and only if exactMatchOnly is not set
+            if (!exactMatchOnly) {
+              setTimeout(() => sessionStorage.removeItem('selected_stake_asset'), 2000);
+            }
           } else {
             const assetFromUrl = getAssetFromUrl();
             if (assetFromUrl) {
+              console.log('🔍 Using URL asset for earn-stake widget:', assetFromUrl);
               setInitialAsset(assetFromUrl);
               finalAsset = assetFromUrl;
             }
           }
           
-          // If we found an asset, ensure URL reflects it
-          if (finalAsset && window.location.pathname === '/earn') {
+          // If we found an asset, ensure URL reflects it - but only if it's a direct load or exactMatchOnly is not set
+          if (finalAsset && window.location.pathname === '/earn' && (e.detail?.directLoad === true || !exactMatchOnly)) {
+            console.log('🔄 Updating URL with proper asset parameter:', finalAsset);
             window.history.replaceState(
               null, 
               '', 
@@ -601,6 +641,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   useEffect(() => {
     // Function to handle hash changes
     const handleHashChange = () => {
+      console.log('🔄 Hash change detected, checking for asset parameters');
       detectAndHandleAssetUrl();
     };
     
@@ -821,15 +862,50 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
 
 // Ripple View component
 const RippleView: React.FC = () => {
-  // Use the function to determine featured token from URL first
-  const featuredToken = getInitialAssetFromAllSources();
+  // Store the initial asset from URL to use in the component
+  const [featuredToken, setFeaturedToken] = useState(() => {
+    // Use our helper function to get the initial asset with priority for URL parameters
+    return getInitialAssetFromAllSources();
+  });
+
+  // Prevent hash change loops
+  const ignoreNextHashChange = useRef(false);
+
+  // Use an effect to detect and respond to URL changes
+  useEffect(() => {
+    // Check URL hash on mount
+    const urlAsset = getAssetFromUrl();
+    if (urlAsset) {
+      console.log('📱 RippleView updating featured token from URL:', urlAsset);
+      setFeaturedToken(urlAsset);
+    }
+    
+    // Handle URL hash changes
+    const handleHashChange = () => {
+      // Skip if this hash change was caused by our own URL updates
+      if (ignoreNextHashChange.current) {
+        console.log('⏭️ RippleView ignoring hash change as it was triggered internally');
+        ignoreNextHashChange.current = false;
+        return;
+      }
+      
+      const newUrlAsset = getAssetFromUrl();
+      if (newUrlAsset && newUrlAsset !== featuredToken) {
+        console.log('📱 RippleView updating featured token from hash change:', newUrlAsset);
+        setFeaturedToken(newUrlAsset);
+      }
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [featuredToken]);
 
   const handleGetStartedClick = () => {
     // Always force reset dialog state first
     forceResetDialogState();
     
     // Feature a random token
-    const featuredToken = stakingTokens[Math.floor(Math.random() * stakingTokens.length)];
+    const randomToken = stakingTokens[Math.floor(Math.random() * stakingTokens.length)];
     
     // Create a cleanup event
     const closeEvent = new CustomEvent('close-widget-dialogs', {
@@ -839,23 +915,26 @@ const RippleView: React.FC = () => {
     // Dispatch the close event
     document.dispatchEvent(closeEvent);
     
+    // Flag that we're about to change the URL to avoid loops
+    ignoreNextHashChange.current = true;
+    
     // When on earn page, update URL properly
     if (window.location.pathname === '/earn') {
       // Use proper format with widget parameter
       window.history.replaceState(
         null, 
         '', 
-        `${window.location.pathname}#widget=earn-stake&asset=${featuredToken}`
+        `${window.location.pathname}#widget=earn-stake&asset=${randomToken}`
       );
     } else {
       // Not on earn page, use updateUrlWithAsset
-      updateUrlWithAsset(featuredToken);
+      updateUrlWithAsset(randomToken);
     }
     
     // Put a small delay to ensure everything is cleared
     setTimeout(() => {
       // Use the updated openWidgetDialog function with exactMatchOnly parameter
-      openWidgetDialog('earn-stake', 'direct', featuredToken, true);
+      openWidgetDialog('earn-stake', 'direct', randomToken, true);
     }, 350); // Increased timeout to ensure previous dialog is fully closed
   };
 
@@ -977,28 +1056,78 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
   // Track if the initial asset has been applied
   const initialAssetApplied = useRef(false);
   
+  // More debug logging to track what's happening
+  console.log('🏗️ StakeView rendering with initialAsset:', initialAsset);
+  
+  // Flag to track if change is from user vs URL
+  const isUserChange = useRef(false);
+  // Flag to prevent responding to our own URL changes
+  const ignoreNextHashChange = useRef(false);
+  
+  // Use state initialization with a clear priority order
   const [selectedAsset, setSelectedAsset] = useState(() => {
     // First check if initialAsset is provided (highest priority)
     if (initialAsset && stakingTokens.includes(initialAsset)) {
       initialAssetApplied.current = true;
-      console.log('📱 Using initialAsset on mount:', initialAsset);
+      console.log('📱 StakeView using initialAsset prop on mount:', initialAsset);
       return initialAsset;
     }
     
-    // Then use the universal getter function for consistent behavior
-    return getInitialAssetFromAllSources();
+    // Check the URL next for direct navigations
+    const urlAsset = getAssetFromUrl();
+    if (urlAsset && stakingTokens.includes(urlAsset)) {
+      initialAssetApplied.current = true;
+      console.log('📱 StakeView using URL asset on mount:', urlAsset);
+      return urlAsset;
+    }
+    
+    // Then check session storage
+    if (typeof window !== 'undefined') {
+      const sessionAsset = sessionStorage.getItem('selected_stake_asset');
+      if (sessionAsset && stakingTokens.includes(sessionAsset)) {
+        initialAssetApplied.current = true;
+        console.log('📱 StakeView using session storage asset on mount:', sessionAsset);
+        // Keep the session storage for now - will be cleared elsewhere
+        return sessionAsset;
+      }
+    }
+    
+    // Finally, use the first staking token as default
+    console.log('⚠️ StakeView using default token (first in list):', stakingTokens[0]);
+    return stakingTokens[0];
   });
+  
   const [stakeAmount, setStakeAmount] = useState(100);
   const [sliderValue, setSliderValue] = useState(25);
   const inDialogRef = useRef(false);
   
   // Update selected asset if initialAsset changes after first render
+  // But only if it wasn't from a user selection
   useEffect(() => {
-    if (initialAsset && stakingTokens.includes(initialAsset) && 
+    if (!isUserChange.current && 
+        initialAsset && 
+        stakingTokens.includes(initialAsset) && 
         (!initialAssetApplied.current || initialAsset !== selectedAsset)) {
-      console.log('📱 Updating selected asset from props:', initialAsset);
+      console.log('📱 StakeView updating selected asset from prop change:', initialAsset);
       setSelectedAsset(initialAsset);
       initialAssetApplied.current = true;
+      
+      // Ensure URL reflects this asset
+      if (window.location.pathname === '/earn') {
+        const isInDialogNow = isInDialog();
+        if (isInDialogNow) {
+          console.log('🔄 StakeView updating URL from initialAsset prop change:', initialAsset);
+          
+          // Flag that we're about to change the URL so we should ignore the next hash change
+          ignoreNextHashChange.current = true;
+          
+          window.history.replaceState(
+            null, 
+            '', 
+            `${window.location.pathname}#widget=earn-stake&asset=${initialAsset}`
+          );
+        }
+      }
     }
   }, [initialAsset, selectedAsset]);
   
@@ -1039,15 +1168,24 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     return () => clearInterval(intervalId);
   }, []);
   
-  // Handle asset selection change
+  // Handle asset selection change from dropdown
   const handleAssetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newAsset = e.target.value;
+    console.log('🔄 User changed asset selection to:', newAsset);
+    
+    // Mark this as a user-initiated change
+    isUserChange.current = true;
+    
+    // Update state
     setSelectedAsset(newAsset);
     
     // Directly update URL when asset is changed
     const isEarnPage = window.location.pathname === '/earn';
     
     if (isEarnPage) {
+      // Flag that we're about to change the URL so we should ignore the next hash change
+      ignoreNextHashChange.current = true;
+      
       // Use proper URL format with widget parameter for dialogs
       const currentUrl = new URL(window.location.href);
       
@@ -1059,23 +1197,35 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
           const newHash = currentUrl.hash.replace(/asset=[^&]*/, `asset=${newAsset}`);
           if (!newHash.includes('asset=')) {
             // Add asset parameter if it doesn't exist
+            console.log('🔄 Adding asset parameter to URL:', newAsset);
             history.replaceState(null, '', `${window.location.pathname}${newHash}&asset=${newAsset}`);
           } else {
             // Just update the existing asset parameter
+            console.log('🔄 Updating existing asset parameter in URL:', newAsset);
             history.replaceState(null, '', `${window.location.pathname}${newHash}`);
           }
         } else {
           // Set proper URL format
+          console.log('🔄 Setting full widget URL format with asset:', newAsset);
           history.replaceState(null, '', `${window.location.pathname}#widget=earn-stake&asset=${newAsset}`);
         }
       } else {
         // Outside dialog, use simple format
+        console.log('🔄 Setting simple asset URL format:', newAsset);
         history.replaceState(null, '', `${window.location.pathname}#asset=${newAsset}`);
       }
     } else {
       // Not on earn page, use updateUrlWithAsset
       updateUrlWithAsset(newAsset);
     }
+    
+    // Also ensure this is saved to session storage to make it persistent
+    sessionStorage.setItem('selected_stake_asset', newAsset);
+    
+    // Reset the user change flag after a delay to allow future URL-based updates
+    setTimeout(() => {
+      isUserChange.current = false;
+    }, 500);
   };
   
   // Update URL when selected asset changes - but only when not on earn page directly or we're in a dialog
@@ -1083,28 +1233,59 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     if (typeof window === 'undefined') return;
     
     const isEarnPage = window.location.pathname === '/earn';
-    const isInDialog = inDialogRef.current;
+    const isInDialogNow = inDialogRef.current;
     
     // When on earn page and in dialog, always keep URL updated with correct asset
-    if (isEarnPage && isInDialog) {
-      // Use proper URL format with widget parameter
-      window.history.replaceState(
-        null, 
-        '', 
-        `${window.location.pathname}#widget=earn-stake&asset=${selectedAsset}`
-      );
+    if (isEarnPage && isInDialogNow) {
+      // Skip URL update if this change came from URL itself to avoid loops
+      if (!isUserChange.current) {
+        const currentUrl = new URL(window.location.href);
+        const currentUrlAsset = currentUrl.hash.match(/asset=([^&]*)/)?.[1];
+        
+        // Only update if the URL doesn't already have the correct asset
+        if (currentUrlAsset !== selectedAsset) {
+          console.log('🔄 Updating URL to match current asset state:', selectedAsset);
+          
+          // Flag that we're about to change the URL
+          ignoreNextHashChange.current = true;
+          
+          // Use proper URL format with widget parameter
+          window.history.replaceState(
+            null, 
+            '', 
+            `${window.location.pathname}#widget=earn-stake&asset=${selectedAsset}`
+          );
+        }
+      }
     } else if (!isEarnPage) {
       // Not on earn page, use updateUrlWithAsset
       updateUrlWithAsset(selectedAsset);
     }
   }, [selectedAsset]);
 
-  // Handle asset change from URL
+  // Handle asset change from URL directly - but only if not from our own URL updates
   useEffect(() => {
     const handleHashChange = () => {
+      // Skip if this hash change was caused by our own URL updates
+      if (ignoreNextHashChange.current) {
+        console.log('⏭️ Ignoring hash change as it was triggered by us');
+        ignoreNextHashChange.current = false;
+        return;
+      }
+      
+      // Skip if the user is currently changing the asset
+      if (isUserChange.current) {
+        console.log('⏭️ Ignoring hash change as user is currently selecting asset');
+        return;
+      }
+      
       const assetFromUrl = getAssetFromUrl();
       if (assetFromUrl && assetFromUrl !== selectedAsset) {
+        console.log('📱 StakeView detected external hash change with new asset:', assetFromUrl);
         setSelectedAsset(assetFromUrl);
+        
+        // Also store in session storage for persistence
+        sessionStorage.setItem('selected_stake_asset', assetFromUrl);
       }
     };
     
