@@ -8,6 +8,7 @@ import {
   generateEventId,
   setCurrentEventId
 } from '@/lib/widgetDialogService';
+import { getPageFromPath } from '@/layouts/pageManager';
 
 // Used to avoid duplicate initialization attempts
 let initializationAttempted = false;
@@ -36,6 +37,27 @@ export function useWidgetDialogInit() {
     const originalUrl = window.location.href;
     const originalHash = window.location.hash;
     const isDirectDialogLoad = originalHash.includes('widget=');
+    
+    // Check if we're on the earn page
+    const currentPath = window.location.pathname;
+    const currentPage = getPageFromPath(currentPath);
+    const isEarnPage = currentPage === 'earn';
+    
+    // Don't auto-open dialogs when navigating directly to the earn page
+    if (isEarnPage && isDirectDialogLoad) {
+      console.log('📝 On earn page - suppressing automatic dialog open');
+      
+      // Prevent automatic dialog opening but keep URL intact
+      markHashHandled('earn-page-prevent-auto-open');
+      
+      // Clean up the URL by removing hash if it's malformed
+      if (originalHash.startsWith('#&') || originalHash === '#asset=undefined') {
+        console.log('🧹 Cleaning up malformed hash on earn page');
+        window.history.replaceState(null, '', currentPath);
+      }
+      
+      return;
+    }
     
     // Check URL hash on mount
     const hashData = getWidgetIdFromHash();
@@ -137,83 +159,35 @@ export function useWidgetDialogInit() {
         }
       }, 800); // Increased timeout to ensure components are ready
     }
-
-    // Handle browser back/forward navigation
-    const handlePopState = (event) => {
-      // Get widget ID from current URL hash
-      const hashData = getWidgetIdFromHash();
-      const widgetId = hashData.widgetId;
-      const isDirectNavigationState = event.state?.directLoad === true;
-      
-      // Log the navigation event with more details
-      console.log('🔄 PopState event for widget dialog:', { 
-        widgetId, 
-        hash: window.location.hash,
-        state: event.state,
-        isDirectNavigation: isDirectNavigationState
-      });
-      
-      // Check if hash contains a widget ID, regardless of state
-      if (widgetId) {
-        // Reset the dialog opened state when navigating to allow opening a dialog again
-        resetDialogOpenedState();
-        
-        // Mark hash as handled first
-        markHashHandled(widgetId);
-        
-        // Generate a unique event ID for this navigation
-        const popstateEventId = `popstate-exact-${widgetId}-${Date.now()}`;
-        
-        console.log('🔄 Opening widget dialog from popstate:', widgetId);
-        // Dispatch event to open the dialog
-        const event = new CustomEvent('open-widget-dialog', {
-          detail: { 
-            widgetId,
-            directLoad: isDirectNavigationState,
-            eventId: popstateEventId,
-            exactMatchOnly: true // Ensure only the exact widget responds
-          },
-          bubbles: true
-        });
-        document.dispatchEvent(event);
-        
-        // Ensure proper state for this navigation
-        if (!event.state) {
-          window.history.replaceState(
-            { 
-              widgetDialog: true, 
-              widgetId: widgetId,
-              directLoad: false,
-              timestamp: Date.now() 
-            }, 
-            '', 
-            window.location.href
-          );
-        }
-      } else {
-        console.log('🔄 Closing widget dialogs from popstate');
-        // Dispatch event to close all dialogs
-        const event = new CustomEvent('close-widget-dialogs', {
-          bubbles: true
-        });
-        document.dispatchEvent(event);
-      }
-    };
-
-    // Add popstate listener
-    window.addEventListener('popstate', handlePopState);
     
-    // Helper to handle URL hash changes that doesn't use hooks
-    const handleHashChange = (forceCheck = false) => {
-      // Skip if already processing or in a recovery state
-      if (globalState.isProcessingHashChange && !forceCheck) {
+    // Create a function to handle hash changes
+    const handleHashChange = (isManualChange = false) => {
+      // Skip if already processing a change
+      if (globalState.isProcessingHashChange) {
         return;
       }
       
+      // Set flag to prevent reentrant calls
       globalState.isProcessingHashChange = true;
       
-      // Get widget ID from hash
+      console.log('🔄 Processing hash change:', { 
+        isManualChange, 
+        currentURL: window.location.href,
+        closeOnNext: globalState.closeOnNext
+      });
+      
       const { widgetId, asset } = getWidgetIdFromHash();
+      
+      // Check if we're on the earn page - don't auto open dialogs here
+      const currentPath = window.location.pathname;
+      const currentPage = getPageFromPath(currentPath);
+      const isEarnPage = currentPage === 'earn';
+      
+      if (isEarnPage && !isManualChange) {
+        console.log('📝 Hash change on earn page - suppressing automatic dialog open');
+        globalState.isProcessingHashChange = false;
+        return;
+      }
       
       if (widgetId) {
         console.log('🔄 Detected widget dialog in URL:', widgetId);
@@ -277,10 +251,99 @@ export function useWidgetDialogInit() {
     // Add hashchange listener
     window.addEventListener('hashchange', onHashChange);
     
-    // Return cleanup function
+    // Add history state change listener - more reliable for certain navigation patterns
+    window.addEventListener('popstate', (event) => {
+      handlePopState(event);
+    });
+    
+    // Cleanup function
     return () => {
-      window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', handlePopState);
     };
-  }, []); // Empty dependency array to ensure this runs once
+  }, []);
+  
+  // Handle popstate events (history navigation)
+  const handlePopState = (event) => {
+    // Skip if already processing
+    if (globalState.isProcessingHashChange) {
+      return;
+    }
+    
+    // Reset the flag to allow a new hash change to be processed
+    globalState.closeOnNext = false;
+    
+    // Check if this is a dialog navigation event
+    const isDialogEvent = event.state && (
+      event.state.widgetDialog === true || 
+      event.state.widget ||
+      event.state.dialogClosed === true
+    );
+    
+    console.log('🔄 History state change:', {
+      state: event.state,
+      isDialogEvent,
+      currentHash: window.location.hash
+    });
+    
+    // If not a dialog event, ignore it
+    if (!isDialogEvent) {
+      return;
+    }
+    
+    // Mark as processing
+    globalState.isProcessingHashChange = true;
+    
+    // Extract widget ID from hash
+    const { widgetId, asset } = getWidgetIdFromHash();
+    
+    // Check if we're on the earn page - don't auto open dialogs here
+    const currentPath = window.location.pathname;
+    const currentPage = getPageFromPath(currentPath);
+    const isEarnPage = currentPage === 'earn';
+    
+    if (isEarnPage) {
+      console.log('📝 Pop state on earn page - suppressing automatic dialog open');
+      globalState.isProcessingHashChange = false;
+      return;
+    }
+    
+    if (widgetId) {
+      console.log('🔄 Detected widget dialog in URL:', widgetId);
+      
+      // Close state if needed
+      if (globalState.closeOnNext) {
+        globalState.closeOnNext = false;
+        globalState.isProcessingHashChange = false;
+        return;
+      }
+      
+      // Trigger dialog open event
+      window.requestAnimationFrame(() => {
+        const event = new CustomEvent('open-widget-dialog', {
+          detail: { 
+            widgetId,
+            asset,
+            source: 'hash',
+            exactMatchOnly: true // Always require exact match for hash-based navigation
+          },
+          bubbles: true
+        });
+        document.dispatchEvent(event);
+        
+        // Add a short delay before clearing processing state
+        setTimeout(() => {
+          globalState.isProcessingHashChange = false;
+        }, 50);
+      });
+    } else {
+      console.log('🔄 No widget dialog in URL, clearing state');
+      // Dispatch a close event
+      const event = new CustomEvent('close-widget-dialogs', {
+        bubbles: true
+      });
+      document.dispatchEvent(event);
+      globalState.isProcessingHashChange = false;
+    }
+  };
 } 

@@ -124,117 +124,62 @@ export const WidgetContainer = memo(function WidgetContainer({
 
     // Handle custom dialog open event for widgets
     const handleOpenDialog = (e: CustomEvent) => {
-      const requestedWidgetId = e.detail?.widgetId;
-      if (!requestedWidgetId) return;
+      // Skip if this container doesn't have a widget ID
+      const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+      if (!effectiveWidgetId) return;
       
-      // Get the unique event ID if provided in the event
+      // Get the event ID if available
       const eventId = typeof e.detail?.eventId === 'string' ? e.detail.eventId : null;
       
-      // Check if this event has already been handled by any container
+      // Skip if this event has already been handled by this container
       if (eventId && handledEvents.has(eventId)) {
-        console.log('⏭️ Event already handled by another widget container:', eventId);
-        return;
-      }
-
-      // Check for exact match only flag - require exact ID match, not just base ID match
-      const exactMatchOnly = e.detail?.exactMatchOnly === true;
-      
-      // For exactMatchOnly events, we need a perfect match on IDs
-      if (exactMatchOnly && requestedWidgetId !== effectiveWidgetId) {
-        console.log('⏭️ Skipping - exact match required but IDs differ:', { 
-          requested: requestedWidgetId, 
-          thisWidget: effectiveWidgetId 
-        });
+        console.log('⚠️ Event already handled by this container:', eventId);
         return;
       }
       
-      // For direct load events with exactMatchOnly false, check if the base IDs match
-      if (!exactMatchOnly && e.detail?.directLoad && requestedWidgetId !== effectiveWidgetId) {
-        if (isSameBaseWidget(requestedWidgetId, effectiveWidgetId)) {
-          // These are different instances of the same widget type
-          // For direct loads, still require exact match to prevent multi-dialog issues
-          console.log('⏭️ Skipping - different instance of same widget type:', { 
-            requested: requestedWidgetId, 
-            thisWidget: effectiveWidgetId 
-          });
-          return;
-        } else if (!isSameBaseWidget(requestedWidgetId, effectiveWidgetId)) {
-          // Base IDs don't match at all
-          return;
-        }
+      // Check if this event is for this widget (using exact or fuzzy matching)
+      const targetWidgetId = e.detail?.widgetId;
+      const isExactMatch = targetWidgetId === effectiveWidgetId;
+      const isFuzzyMatch = !isExactMatch && isSameBaseWidget(targetWidgetId, effectiveWidgetId);
+      
+      // If exactMatchOnly is true, only handle if this is an exact match
+      if (e.detail?.exactMatchOnly === true && !isExactMatch) {
+        console.log('⚠️ exactMatchOnly is true but this is not an exact match:', 
+          { target: targetWidgetId, container: effectiveWidgetId });
+        return;
       }
       
-      // For non-direct-load and non-exactMatchOnly events, check if base widget IDs match
-      if (!exactMatchOnly && !e.detail?.directLoad && !isSameBaseWidget(requestedWidgetId, effectiveWidgetId)) {
-        return; // Base IDs don't match, so skip
-      }
-      
-      // From this point on, all checks have passed, so this widget should handle the event
-      const isManualNavigation = !!e.detail?.isManualNavigation;
+      // Open dialog if this is the target widget
+      if (isExactMatch || isFuzzyMatch) {
+        console.log('📍 Opening widget dialog from event:', e.detail);
         
-      console.log('📍 Opening widget dialog from event:', { 
-        widgetId: effectiveWidgetId, 
-        requestedId: requestedWidgetId,
-        isDirectLoad: e.detail?.directLoad === true,
-        isManualNavigation,
-        alreadyOpen: isDialogOpen,
-        eventId: eventId || 'none',
-        exactMatchOnly
-      });
-      
-      // Mark this event as handled if it has an ID
-      if (eventId) {
-        handledEvents.add(eventId);
-        
-        // Cleanup - limit set size to prevent memory issues
-        if (handledEvents.size > 20) {
-          const oldestEvent = handledEvents.values().next().value;
-          if (oldestEvent) handledEvents.delete(oldestEvent);
+        // If this event has an ID, mark it as handled
+        if (eventId) {
+          handledEvents.add(eventId);
         }
-      }
-      
-      // If this is a title click event for a specific widget ID, only open it if it exactly matches this widget
-      if (eventId && eventId.startsWith('title-click-') && requestedWidgetId !== effectiveWidgetId) {
-        console.log('⏭️ Skipping event for another specific widget:', { requestedId: requestedWidgetId, thisId: effectiveWidgetId });
-        return;
-      }
-      
-      // Skip if already open, unless this is a manual navigation
-      if (isDialogOpen && !isManualNavigation) {
-        console.log('📍 Dialog already open, skipping redundant open');
-        return;
-      }
-      
-      // For manual navigation, force refresh the dialog state
-      if (isManualNavigation && isDialogOpen) {
-        console.log('🔄 Forcing dialog refresh for manual navigation');
-        // Remove from tracking first
-        openDialogs.delete(effectiveWidgetId);
-        // Then add back
-        openDialogs.add(effectiveWidgetId);
-      } else {
-        // Check if another dialog with the same ID is already open
-        if (openDialogs.has(effectiveWidgetId)) {
+        
+        // First check if dialog is already open to prevent duplicate renders
+        if (isDialogOpen) {
           console.log('⚠️ Dialog already open for this widget ID:', effectiveWidgetId);
           return;
         }
         
-        isAlreadyOpened = true;
-        
-        // Track this dialog as open
+        // Update local state
+        setIsDialogOpen(true);
         openDialogs.add(effectiveWidgetId);
+        
+        // Update classes
+        if (containerRef.current) {
+          containerRef.current.classList.add('widget-dialog-open');
+        }
+        document.body.classList.add('widget-dialog-open');
+        
+        // Don't dispatch a new custom event as that would cause an infinite loop
+        // Just mark hash as handled if needed
+        if (e.detail?.source === 'hash') {
+          markHashHandled(effectiveWidgetId);
+        }
       }
-      
-      // Update local state
-      setIsDialogOpen(true);
-      
-      // Mark the container that has the dialog open with a specific class
-      if (containerRef.current) {
-        containerRef.current.classList.add('widget-dialog-open');
-      }
-      
-      // Add a class to the body as well
-      document.body.classList.add('widget-dialog-open');
     };
 
     const handleCloseDialogs = () => {

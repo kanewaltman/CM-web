@@ -200,7 +200,8 @@ export function handleManualUrlNavigation(): void {
 export function openWidgetDialog(
   widgetId: string, 
   source?: 'container' | 'global' | 'direct',
-  asset?: string
+  asset?: string,
+  exactMatchOnly?: boolean
 ): void {
   // Temporarily ignore hash changes
   ignoreHashChanges = true;
@@ -222,12 +223,17 @@ export function openWidgetDialog(
     ignoreHashChanges = false;
   }, 50);
   
+  // Generate a unique event ID to ensure proper tracking
+  const eventId = `open-widget-${widgetId}-${Date.now()}`;
+  
   // Dispatch event to open dialog
   const event = new CustomEvent('open-widget-dialog', {
     detail: { 
       widgetId,
       asset,
-      source: source || 'direct' // Track the source of the open request
+      source: source || 'direct', // Track the source of the open request
+      exactMatchOnly: exactMatchOnly === true, // Only pass true if explicitly set
+      eventId
     },
     bubbles: true
   });

@@ -16,7 +16,7 @@ import { DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
 import { Slider } from './ui/slider';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { ChartContainer, ChartConfig } from './ui/chart';
-import { openWidgetDialog } from '@/lib/widgetDialogService';
+import { openWidgetDialog, resetDialogOpenedState } from '@/lib/widgetDialogService';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -61,8 +61,81 @@ export interface EarnWidgetProps {
   onViewModeChange?: (mode: EarnViewMode) => void;
 }
 
+// Helper function to update URL with asset parameter
+const updateUrlWithAsset = (asset: string) => {
+  if (!asset || !stakingTokens.includes(asset)) return;
+  
+  try {
+    const url = new URL(window.location.href);
+    const currentPath = url.pathname;
+    const isEarnPage = currentPath === '/earn';
+    
+    // Don't modify URL on the earn page
+    if (isEarnPage) return;
+    
+    // Parse current hash parts
+    const currentHash = url.hash || '#';
+    const hashParts = currentHash.substring(1).split('&').filter(part => 
+      part && !part.startsWith('asset=')
+    );
+    
+    // Add asset parameter if it's valid
+    hashParts.push(`asset=${asset}`);
+    
+    // Only add widget parameter if we're not on the earn page and it's not already present
+    if (!hashParts.some(part => part.startsWith('widget='))) {
+      hashParts.push('widget=earn-stake');
+    }
+    
+    // Build new hash - ensure it doesn't start with '&'
+    let newHash = '#' + hashParts.filter(part => part.length > 0).join('&');
+    
+    // Fix common URL formatting issues
+    if (newHash === '#') newHash = '';
+    if (newHash.startsWith('#&')) newHash = '#' + newHash.substring(2);
+    
+    // Only update if there's an actual change
+    if (newHash !== url.hash) {
+      history.replaceState(null, '', newHash || url.pathname);
+    }
+  } catch (error) {
+    console.error('Error updating URL with asset parameter:', error);
+  }
+};
+
+// Helper function to read asset parameter from URL
+const getAssetFromUrl = (): string | undefined => {
+  try {
+    const url = new URL(window.location.href);
+    
+    // If the hash starts with just '#&', it's malformed and should be ignored
+    if (url.hash.startsWith('#&')) {
+      return undefined;
+    }
+    
+    const assetParam = url.hash.match(/asset=([^&]*)/)?.[1];
+    if (assetParam && stakingTokens.includes(assetParam)) {
+      return assetParam;
+    }
+  } catch (error) {
+    console.error('Error parsing URL for asset parameter:', error);
+  }
+  return undefined;
+};
+
 // Function to synchronize the view mode to the layout
 const synchronizeViewModeToLayout = (viewMode: EarnViewMode, widgetId: string) => {
+  // Do not override specific widget types that have fixed views
+  if (widgetId === 'earn-promo' && viewMode !== 'ripple') {
+    return;
+  }
+  if (widgetId === 'earn-assets' && viewMode !== 'cards') {
+    return;
+  }
+  if (widgetId === 'earn-stake' && viewMode !== 'stake') {
+    return;
+  }
+
   try {
     const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
     if (savedLayout) {
@@ -89,25 +162,76 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   const [forcedTheme, setForcedTheme] = useState<'light' | 'dark' | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const isInitialized = useRef(false);
-  const [initialAsset, setInitialAsset] = useState<string | undefined>(undefined);
+  const [initialAsset, setInitialAsset] = useState<string | undefined>(() => {
+    // Try to get asset from URL if this is the earn-stake widget
+    if (props.widgetId === 'earn-stake') {
+      return getAssetFromUrl();
+    }
+    return undefined;
+  });
+
+  // Clean up URL if we're on the earn page and have malformed hash parameters
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const isEarnPage = window.location.pathname === '/earn';
+    if (isEarnPage) {
+      const hash = window.location.hash;
+      
+      // Check for malformed or unnecessary hash on earn page
+      if (hash && (hash.startsWith('#&') || hash === '#asset=undefined')) {
+        // Clear the hash without reloading page
+        history.replaceState(null, '', window.location.pathname);
+        console.log('Cleaned up unnecessary hash parameters on earn page');
+      }
+    }
+  }, []);
 
   // Track current view mode for immediate updates without waiting for state system
   const [currentViewMode, setCurrentViewMode] = useState<EarnViewMode>(() => {
     // Set initial default based on widget ID
     if (props.widgetId === 'earn-assets') return 'cards';
     if (props.widgetId === 'earn-promo') return 'ripple';
+    if (props.widgetId === 'earn-stake') return 'stake';
     return props.defaultViewMode || 'ripple';
   });
   
   // Listen for dialog open events with asset data
   useEffect(() => {
     const handleDialogOpen = (e: CustomEvent) => {
+      // Store widgetState reference for use in event handler
+      const currentWidgetState = widgetStateRegistry.get(props.widgetId) as EarnWidgetState | undefined;
+      
       if (e.detail?.widgetId === props.widgetId && e.detail?.asset) {
         // If there's an asset specified and it's valid
         if (stakingTokens.includes(e.detail.asset)) {
           setInitialAsset(e.detail.asset);
           // If we have an asset specified, switch to stake view
           setCurrentViewMode('stake');
+          
+          // Also update the widgetState if it exists
+          if (currentWidgetState) {
+            currentWidgetState.setViewMode('stake');
+          }
+          
+          // Update URL with the asset parameter
+          updateUrlWithAsset(e.detail.asset);
+        }
+      }
+      
+      // Force the stake view if this is the earn-stake widget regardless of asset
+      if (e.detail?.widgetId === 'earn-stake' && props.widgetId === 'earn-stake') {
+        setCurrentViewMode('stake');
+        if (currentWidgetState) {
+          currentWidgetState.setViewMode('stake');
+        }
+        
+        // Try to get asset from URL if not specified in the event
+        if (!e.detail?.asset) {
+          const assetFromUrl = getAssetFromUrl();
+          if (assetFromUrl) {
+            setInitialAsset(assetFromUrl);
+          }
         }
       }
     };
@@ -170,6 +294,8 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
         initialViewMode = 'cards';
       } else if (props.widgetId === 'earn-promo') {
         initialViewMode = 'ripple';
+      } else if (props.widgetId === 'earn-stake') {
+        initialViewMode = 'stake';
       } else {
         // For other widget IDs, try to restore from localStorage or use default
         initialViewMode = props.defaultViewMode || 'ripple';
@@ -242,6 +368,17 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   const handleViewModeChange = useCallback((newMode: EarnViewMode) => {
     if (!widgetState || newMode === widgetState.viewMode) return;
     
+    // Respect fixed view modes for specific widget IDs
+    if (props.widgetId === 'earn-promo' && newMode !== 'ripple') {
+      return;
+    }
+    if (props.widgetId === 'earn-assets' && newMode !== 'cards') {
+      return;
+    }
+    if (props.widgetId === 'earn-stake' && newMode !== 'stake') {
+      return;
+    }
+    
     // Set current view mode immediately for a responsive UI
     setCurrentViewMode(newMode);
     
@@ -262,7 +399,12 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
 
   // If this is being rendered for header controls only, return just the controls
   if (props.headerControls) {
-    // Keep the dropdown for all earn widgets for UI consistency
+    // For fixed view widgets, don't show a dropdown
+    if (props.widgetId === 'earn-promo' || props.widgetId === 'earn-assets' || props.widgetId === 'earn-stake') {
+      return <div className="flex items-center"></div>;
+    }
+    
+    // Keep the dropdown for all other earn widgets for UI consistency
     return (
       <div className="flex items-center">
         <DropdownMenu>
@@ -315,16 +457,26 @@ const RippleView: React.FC = () => {
   const featuredToken = 'XCM';
 
   const handleGetStartedClick = () => {
+    // Check if we're on the earn page
+    const isEarnPage = window.location.pathname === '/earn';
+    
     // Close any existing dialogs first to prevent multiple dialogs
     const closeEvent = new CustomEvent('close-widget-dialogs', {
       bubbles: true
     });
     document.dispatchEvent(closeEvent);
     
+    // Reset dialog state to ensure clean handling
+    resetDialogOpenedState();
+    
+    // Update URL with the asset parameter
+    updateUrlWithAsset(featuredToken);
+    
     // Wait a small delay to ensure dialogs are closed
     setTimeout(() => {
-      openWidgetDialog('earn-stake', 'direct', featuredToken);
-    }, 100);
+      // Use the updated openWidgetDialog function with exactMatchOnly parameter
+      openWidgetDialog('earn-stake', 'direct', featuredToken, true);
+    }, 150);
   };
 
   return (
@@ -360,16 +512,26 @@ const RippleView: React.FC = () => {
 const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedTheme }) => {
   // Function to open stake view with a specific asset
   const handleStakeClick = (token: string) => {
+    // Check if we're on the earn page
+    const isEarnPage = window.location.pathname === '/earn';
+    
     // Close any existing dialogs first to prevent multiple dialogs
     const closeEvent = new CustomEvent('close-widget-dialogs', {
       bubbles: true
     });
     document.dispatchEvent(closeEvent);
     
+    // Reset dialog state to ensure clean handling
+    resetDialogOpenedState();
+    
+    // Update URL with the asset parameter
+    updateUrlWithAsset(token);
+    
     // Wait a small delay to ensure dialogs are closed
     setTimeout(() => {
-      openWidgetDialog('earn-stake', 'direct', token);
-    }, 100);
+      // Use the updated openWidgetDialog function with exactMatchOnly parameter
+      openWidgetDialog('earn-stake', 'direct', token, true);
+    }, 150);
   };
   
   return (
@@ -429,6 +591,30 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
   const [stakeAmount, setStakeAmount] = useState(100);
   const [sliderValue, setSliderValue] = useState(25);
   
+  // Update URL when selected asset changes - but only when not on earn page directly
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Don't update URL when on the earn page directly
+    const isEarnPage = window.location.pathname === '/earn';
+    if (isEarnPage) return;
+    
+    updateUrlWithAsset(selectedAsset);
+  }, [selectedAsset]);
+
+  // Handle asset change from URL
+  useEffect(() => {
+    const handleHashChange = () => {
+      const assetFromUrl = getAssetFromUrl();
+      if (assetFromUrl && assetFromUrl !== selectedAsset) {
+        setSelectedAsset(assetFromUrl);
+      }
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [selectedAsset]);
+
   // Generate random APY history data for the selected asset
   const apyHistoryData = useMemo(() => {
     const numDataPoints = 30; // 30 days of data
@@ -669,15 +855,24 @@ export function openEarnWidgetWithAsset(asset: string) {
     return;
   }
   
+  // Check if we're on the earn page
+  const isEarnPage = window.location.pathname === '/earn';
+  
   // Close any existing dialogs first to prevent multiple dialogs
   const closeEvent = new CustomEvent('close-widget-dialogs', {
     bubbles: true
   });
   document.dispatchEvent(closeEvent);
   
+  // Reset dialog state to ensure clean handling
+  resetDialogOpenedState();
+  
+  // Update URL with the asset parameter
+  updateUrlWithAsset(asset);
+  
   // Wait a small delay to ensure dialogs are closed
   setTimeout(() => {
-    // Use the widget dialog service to open the dialog with the asset parameter
-    openWidgetDialog('earn-stake', 'direct', asset);
-  }, 100);
+    // Use the updated openWidgetDialog function with exactMatchOnly parameter
+    openWidgetDialog('earn-stake', 'direct', asset, true);
+  }, 150);
 } 
