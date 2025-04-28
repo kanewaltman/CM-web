@@ -21,6 +21,7 @@ The system consists of several key components:
 2. **useWidgetDialog**: A hook to manage dialog state with URL synchronization
 3. **withWidgetDialog**: A higher-order component (HOC) to add dialog functionality to any widget
 4. **EnhancedWidgetContainer**: An example implementation of a widget container with dialog support
+5. **useWidgetDialogInit**: A hook that initializes the dialog system at the app level
 
 ### Key Features
 
@@ -28,6 +29,7 @@ The system consists of several key components:
 - **Browser Navigation Support**: Back/forward browser navigation works with the dialog state
 - **Consistent UI**: Dialog maintains the same header controls as the original widget
 - **Responsive**: The dialog adjusts to screen size while maintaining readability
+- **Page Refresh Handling**: The system properly handles page refreshes, ensuring clean state restoration
 
 ## How to Use
 
@@ -101,4 +103,34 @@ Adjust these variables to change the appearance of all widget dialogs.
 
 ## Browser Support
 
-The widget dialog system works in all modern browsers and properly handles back/forward navigation. 
+The widget dialog system works in all modern browsers and properly handles back/forward navigation.
+
+## Troubleshooting
+
+### Page Refresh Behavior
+
+When a user refreshes the page:
+
+1. The system detects if the refresh happened while a dialog was open
+2. If the user intentionally navigated to a dialog URL, it will reopen after refresh
+3. If the dialog was opened during a session and the page is refreshed, it will return to the root URL for a clean state
+
+This prevents unintended dialog persistence after page refreshes.
+
+### URL Serialization
+
+The system uses proper URL serialization to ensure:
+
+1. No invalid objects (like `[object Object]`) appear in the URL
+2. Widget IDs are properly encoded and decoded
+3. Hash parameters are correctly parsed for both widget IDs and optional asset parameters
+
+### Implementation Details
+
+The dialog initialization system is designed to be resilient against React hook rules violations:
+
+1. Uses module-level state instead of React refs for cross-render persistence
+2. Avoids conditional hook calls that could cause React errors
+3. Properly cleans up session storage to prevent stale states
+
+This ensures stable performance across refreshes, navigation events, and widget operations. 
