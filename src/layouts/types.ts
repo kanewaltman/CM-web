@@ -19,4 +19,4 @@ export interface SerializedLayoutWidget extends LayoutWidget {
   baseId?: string;
 }
 
-export type PageType = 'dashboard' | 'spot' | 'margin' | 'stake'; 
+export type PageType = 'dashboard' | 'spot' | 'margin' | 'earn'; 

@@ -96,7 +96,7 @@ function AppContent() {
     }
   }, []);
 
-  const pageChangeRef = useRef<(page: 'dashboard' | 'spot' | 'margin' | 'stake') => void>();
+  const pageChangeRef = useRef<(page: 'dashboard' | 'spot' | 'margin' | 'earn') => void>();
 
   const handleResize = useCallback(() => {
     if (resizeFrameRef.current) {

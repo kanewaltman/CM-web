@@ -1,9 +1,9 @@
 import { LayoutWidget } from './types';
 
 /**
- * Default layout configuration for the staking page
+ * Default layout configuration for the earning page
  */
-export const getStakeLayout = (WIDGET_REGISTRY: Record<string, any>): LayoutWidget[] => [
+export const getEarnLayout = (WIDGET_REGISTRY: Record<string, any>): LayoutWidget[] => [
   { 
     x: 0, 
     y: 0, 

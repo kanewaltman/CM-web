@@ -5,7 +5,7 @@ import { PageType } from './types';
  */
 export function getPageFromPath(path: string): PageType {
   const pageName = path === '/' ? 'dashboard' : path.slice(1);
-  return ['dashboard', 'spot', 'margin', 'stake'].includes(pageName) 
+  return ['dashboard', 'spot', 'margin', 'earn'].includes(pageName) 
     ? pageName as PageType
     : 'dashboard';
 }
