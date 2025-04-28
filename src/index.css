@@ -72,7 +72,7 @@ html {
   --color-foreground-muted: 215.4 16.3% 46.9%;
   --color-foreground-subtle: 0 0% 45%;
 
-  --color-border-default: 214.3 31.8% 91.4%;
+  --color-border-default: 0 0% 50%;
   --color-border-muted: 0 0% 85%;
 
   --color-primary-default: 222.2 47.4% 11.2%;
@@ -1363,4 +1363,16 @@ number-flow-react::part(group-decimal) {
 [role="alertdialog"] [gs-id^="treemap"] .widget-content .recharts-wrapper {
   border-radius: calc(var(--grid-item-border-radius) - 4px);
   overflow: hidden;
+}
+
+/* Dark mode overrides for specific Tailwind classes */
+.dark .border-slate-100 {
+  --tw-border-opacity: 0.02;
+  border-color: rgb(255 255 255 / var(--tw-border-opacity));
+}
+
+/* Light mode overrides for specific Tailwind classes */
+.border-slate-100 {
+  --tw-border-opacity: 0.08; /* Adjusted opacity for better visibility in light mode */
+  border-color: rgb(0 0 0 / var(--tw-border-opacity));
 }

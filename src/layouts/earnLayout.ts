@@ -33,4 +33,18 @@ export const getEarnLayout = (WIDGET_REGISTRY: Record<string, any>): LayoutWidge
       viewMode: 'split' // Use standard viewMode for compatibility
     }
   },
+  // Third earn widget with stake view (detailed staking interface)
+  { 
+    x: 0, 
+    y: 15, 
+    w: Math.max(12, WIDGET_REGISTRY['earn'].minSize.w), 
+    h: 9, 
+    id: 'earn-stake', 
+    minW: WIDGET_REGISTRY['earn'].minSize.w, 
+    minH: WIDGET_REGISTRY['earn'].minSize.h,
+    viewState: {
+      earnViewMode: 'stake',
+      viewMode: 'split' // Use standard viewMode for compatibility
+    }
+  },
 ]; 
