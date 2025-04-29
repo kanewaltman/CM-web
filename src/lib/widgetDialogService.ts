@@ -24,6 +24,9 @@ let isInitialPageLoad = true;
 // Add flag to track if direct navigation is in progress
 let isHandlingDirectNavigation = false;
 
+// Add flag to track if another dialog is currently being opened
+let isOpeningDialog = false;
+
 // Extracts widget ID from URL hash
 export function getWidgetIdFromHash(): { widgetId: string | null, asset: string | null } {
   const hash = window.location.hash;
@@ -235,15 +238,43 @@ export function handleManualUrlNavigation(): void {
 }
 
 /**
- * Centralized function to open a dialog
+ * Open a widget dialog with centralized tracking
  */
 export function openWidgetDialog(
   widgetId: string, 
-  source?: 'container' | 'global' | 'direct',
+  source: 'url' | 'direct' | 'container' = 'direct',
   asset?: string,
-  exactMatchOnly?: boolean,
-  forceOpen?: boolean
+  exactMatchOnly: boolean = false
 ): void {
+  // Prevent opening if another dialog is currently being opened
+  if (isOpeningDialog) {
+    console.log('⚠️ Another dialog is currently being opened, ignoring this request:', widgetId);
+    return;
+  }
+
+  // Set a flag to indicate we're in the process of opening a dialog
+  isOpeningDialog = true;
+  
+  // Clear flag after a short delay to allow future openings
+  setTimeout(() => {
+    isOpeningDialog = false;
+  }, 500);
+
+  // Check if we already have this exact dialog open (prevents duplicate dialogs)
+  if (openDialogs.has(widgetId)) {
+    console.log('⚠️ Dialog already open, updating instead of creating duplicate:', widgetId);
+    
+    // Just update the URL if needed
+    if (source === 'direct' && widgetId === 'earn-stake' && asset) {
+      updateDialogUrl(widgetId, asset);
+    }
+    
+    // Don't proceed with opening a new instance
+    isOpeningDialog = false;
+    return;
+  }
+
+  // Proceed with normal dialog opening logic
   // Mark that we're no longer in initial page load
   isInitialPageLoad = false;
   
@@ -252,13 +283,13 @@ export function openWidgetDialog(
                              window.location.hash.includes(`widget=${widgetId}`);
   
   // For direct navigation from URL or force open, bypass recently closed check
-  if (forceOpen || isDirectNavigation) {
+  if (source === 'direct' || source === 'container') {
     // If force opening or direct navigation, clear the closure timestamp
     sessionStorage.removeItem('dialog_last_closed');
     console.log('🔓 Direct navigation or force opening dialog:', widgetId);
   }
   // Otherwise check if we should skip opening due to recent close
-  else if (!forceOpen) {
+  else if (source === 'url') {
     const lastCloseTime = parseInt(sessionStorage.getItem('dialog_last_closed') || '0', 10);
     if (Date.now() - lastCloseTime < 1000) { // Reduced from 2 seconds to 1 second
       console.log('⏭️ Skipping dialog open because a dialog was recently closed:', widgetId);
@@ -288,7 +319,7 @@ export function openWidgetDialog(
   
   // Generate a unique event ID to ensure proper tracking
   let eventId;
-  if (forceOpen) {
+  if (source === 'direct' || source === 'container') {
     eventId = `force-open-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   } else if (isDirectNavigation) {
     eventId = `direct-nav-${isInitialPageLoad ? 'init' : 'exact'}-${widgetId}-${Date.now()}`;
@@ -303,7 +334,7 @@ export function openWidgetDialog(
       asset,
       source: source || 'direct', // Track the source of the open request
       exactMatchOnly: exactMatchOnly === true, // Only pass true if explicitly set
-      forceOpen: forceOpen === true || isDirectNavigation, // Treat direct navigation as force open
+      forceOpen: source === 'direct' || source === 'container', // Treat direct navigation as force open
       isInitialNavigation: isInitialPageLoad,
       eventId
     },
@@ -422,6 +453,48 @@ export function handleDirectUrlNavigation(): void {
     // Reset the handling flag after the event is dispatched
     isHandlingDirectNavigation = false;
   }, 1000); // Use an even longer delay to ensure the app is fully rendered
+}
+
+/**
+ * Update URL for an existing dialog
+ */
+function updateDialogUrl(widgetId: string, asset?: string): void {
+  if (!widgetId) return;
+  
+  // Only relevant for earn dialogs with assets
+  if (widgetId !== 'earn-stake' || !asset) return;
+  
+  const currentPath = window.location.pathname;
+  const isEarnPage = currentPath === '/earn';
+  
+  console.log('🔄 Updating URL for existing dialog:', { widgetId, asset, isEarnPage });
+  
+  // Different URL handling based on current page
+  if (isEarnPage) {
+    // On earn page, use widget parameter format
+    window.history.replaceState(
+      { widgetDialog: true, widgetId, asset, timestamp: Date.now() },
+      '',
+      `${currentPath}#widget=${widgetId}&asset=${asset}`
+    );
+  } else {
+    // On other pages, use regular format
+    const url = new URL(window.location.href);
+    const hashParts = url.hash.substring(1).split('&').filter(part => 
+      part && !part.startsWith('asset=') && !part.startsWith('widget=')
+    );
+    
+    // Add new parameters
+    hashParts.push(`widget=${widgetId}`);
+    hashParts.push(`asset=${asset}`);
+    
+    // Update URL
+    window.history.replaceState(
+      { widgetDialog: true, widgetId, asset, timestamp: Date.now() },
+      '',
+      `${currentPath}#${hashParts.join('&')}`
+    );
+  }
 }
 
 /**

@@ -61,6 +61,9 @@ export interface EarnWidgetProps {
   onViewModeChange?: (mode: EarnViewMode) => void;
 }
 
+// Keep track of processed URLs to avoid duplicate processing
+const processedUrls = new Set<string>();
+
 // Helper function to check if we're in a dialog
 const isInDialog = (): boolean => {
   // Find dialog elements in the DOM
@@ -192,6 +195,29 @@ const handleGetStartedClick = () => {
 export function openEarnWidgetWithAsset(asset: string) {
   if (!asset || !stakingTokens.includes(asset)) {
     console.warn('Invalid asset for staking dialog:', asset);
+    return;
+  }
+  
+  // Check if we already have an open dialog
+  if (isInDialog()) {
+    console.log('📌 Dialog already open, just updating asset:', asset);
+    
+    // Store in session storage to ensure it's picked up
+    sessionStorage.setItem('selected_stake_asset', asset);
+    
+    // When on earn page, update URL differently to avoid unwanted parameters
+    if (window.location.pathname === '/earn') {
+      // Use proper format with widget parameter
+      window.history.replaceState(
+        null, 
+        '', 
+        `${window.location.pathname}#widget=earn-stake&asset=${asset}`
+      );
+    } else {
+      // Not on earn page, use updateUrlWithAsset
+      updateUrlWithAsset(asset);
+    }
+    
     return;
   }
   
@@ -394,53 +420,34 @@ export function getInitialAssetFromAllSources(): string {
   return 'XCM';
 }
 
-// Modify the detectAndHandleAssetUrl function to prevent reopening closed dialogs
+// Improved function to detect and handle asset URLs
 const detectAndHandleAssetUrl = () => {
-  // Only run on the earn page
-  if (window.location.pathname !== '/earn') return;
-
-  // Skip if dialog is already open
-  if (isInDialog()) return;
+  if (typeof window === 'undefined') return;
   
-  // Skip if we just closed a dialog (within the last 1 second - reduced from 2 seconds)
-  const lastCloseTime = parseInt(sessionStorage.getItem('dialog_last_closed') || '0', 10);
-  const now = Date.now();
-  if (now - lastCloseTime < 1000) {
-    console.log('🛑 Skipping URL detection because a dialog was recently closed');
+  // Skip URL handling on the earn page itself since it's handled specially
+  const pathname = window.location.pathname;
+  if (pathname === '/earn') return;
+  
+  // Check if we already have an open dialog by looking at DOM
+  const hasOpenDialog = isInDialog();
+  if (hasOpenDialog) {
+    console.log('📌 Dialog already open, skipping URL handler in EarnWidget');
     return;
   }
   
-  // Check if this is a direct URL navigation from fresh page load
-  const navData = sessionStorage.getItem('directDialogNavigation');
-  if (navData) {
-    try {
-      const data = JSON.parse(navData);
-      if (data.isInitialLoad && Date.now() - data.timestamp < 10000) { // Within 10 seconds of navigation
-        console.log('🚀 Detected direct navigation from fresh page load, handling...');
-        // Let the widget dialog service handle direct navigation
-        // and avoid duplicate dialog opens
-        return;
-      }
-    } catch (e) {
-      console.error('Error parsing direct dialog navigation data:', e);
-    }
+  // Don't process the URL if it's already been processed
+  const currentUrl = window.location.href;
+  if (processedUrls.has(currentUrl)) {
+    return;
   }
+  processedUrls.add(currentUrl);
   
-  // Extract asset from URL first thing, before any modifications
+  // Get current hash
   const hash = window.location.hash;
-  let assetFromUrl: string | null = null;
+  if (!hash) return;
   
-  // Check for asset parameter with highest priority
-  if (hash) {
-    const assetMatch = hash.match(/asset=([^&]*)/);
-    if (assetMatch && assetMatch[1] && stakingTokens.includes(assetMatch[1])) {
-      assetFromUrl = assetMatch[1];
-      console.log('🔍 Detected asset in URL during initial URL check:', assetFromUrl);
-      
-      // Store in session storage to ensure it persists
-      sessionStorage.setItem('selected_stake_asset', assetFromUrl);
-    }
-  }
+  // If we don't have 'asset=' in the hash, skip further processing
+  if (!hash.includes('asset=')) return;
   
   // Check for both widget and asset parameters first
   if (hash && hash.includes('widget=earn-stake') && hash.includes('asset=')) {
