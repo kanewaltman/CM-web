@@ -16,7 +16,7 @@ import { DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
 import { Slider } from './ui/slider';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { ChartContainer, ChartConfig } from './ui/chart';
-import { openWidgetDialog, resetDialogOpenedState } from '@/lib/widgetDialogService';
+import { openWidgetDialog, resetDialogOpenedState, forceOpenDialog } from '@/lib/widgetDialogService';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -131,9 +131,9 @@ const handleTokenStake = (token: string) => {
   }, 350); // Increased timeout to ensure previous dialog is fully closed
 };
 
-// Add a function to handle dialog closed events
+// Modified function to handle dialog closed events
 const handleDialogClosed = () => {
-  // Clear session storage to prevent reopening when navigating back
+  // ALWAYS clear session storage to prevent reopening when navigating back
   sessionStorage.removeItem('selected_stake_asset');
   
   // Also ensure URL hash is cleaned if we're on the earn page
@@ -153,6 +153,9 @@ const handleDialogClosed = () => {
 const handleGetStartedClick = () => {
   // Always force reset dialog state first
   forceResetDialogState();
+  
+  // Clear any recent closure protection
+  sessionStorage.removeItem('dialog_last_closed');
   
   // Feature a random token
   const featuredToken = stakingTokens[Math.floor(Math.random() * stakingTokens.length)];
@@ -180,9 +183,9 @@ const handleGetStartedClick = () => {
   
   // Put a small delay to ensure everything is cleared
   setTimeout(() => {
-    // Use the updated openWidgetDialog function with exactMatchOnly parameter
-    openWidgetDialog('earn-stake', 'direct', featuredToken, true);
-  }, 350); // Increased timeout to ensure previous dialog is fully closed
+    // Force open the dialog
+    forceOpenDialog('earn-stake', featuredToken);
+  }, 250);
 };
 
 // Refactored function to open staking dialogs from URL or direct calls
@@ -359,12 +362,21 @@ const synchronizeViewModeToLayout = (viewMode: EarnViewMode, widgetId: string) =
   }
 };
 
-// Modify the getInitialAssetFromAllSources function to add more logging
+// Modify the getInitialAssetFromAllSources function to add direct URL navigation support
 export function getInitialAssetFromAllSources(): string {
   // First check for asset in URL hash since direct navigation should have highest priority
   const urlAsset = getAssetFromUrl();
   if (urlAsset && stakingTokens.includes(urlAsset)) {
     console.log('📱 Using asset from URL for initial load:', urlAsset);
+    
+    // For URL navigation, also store in session storage
+    sessionStorage.setItem('selected_stake_asset', urlAsset);
+    
+    // When direct URL navigation is detected, remove any recent dialog closed timestamp
+    if (window.location.hash.includes('widget=earn-stake')) {
+      sessionStorage.removeItem('dialog_last_closed');
+    }
+    
     return urlAsset;
   }
   
@@ -382,13 +394,37 @@ export function getInitialAssetFromAllSources(): string {
   return 'XCM';
 }
 
-// Modify the detectAndHandleAssetUrl function to immediately preserve the URL asset
+// Modify the detectAndHandleAssetUrl function to prevent reopening closed dialogs
 const detectAndHandleAssetUrl = () => {
   // Only run on the earn page
   if (window.location.pathname !== '/earn') return;
 
   // Skip if dialog is already open
   if (isInDialog()) return;
+  
+  // Skip if we just closed a dialog (within the last 1 second - reduced from 2 seconds)
+  const lastCloseTime = parseInt(sessionStorage.getItem('dialog_last_closed') || '0', 10);
+  const now = Date.now();
+  if (now - lastCloseTime < 1000) {
+    console.log('🛑 Skipping URL detection because a dialog was recently closed');
+    return;
+  }
+  
+  // Check if this is a direct URL navigation from fresh page load
+  const navData = sessionStorage.getItem('directDialogNavigation');
+  if (navData) {
+    try {
+      const data = JSON.parse(navData);
+      if (data.isInitialLoad && Date.now() - data.timestamp < 10000) { // Within 10 seconds of navigation
+        console.log('🚀 Detected direct navigation from fresh page load, handling...');
+        // Let the widget dialog service handle direct navigation
+        // and avoid duplicate dialog opens
+        return;
+      }
+    } catch (e) {
+      console.error('Error parsing direct dialog navigation data:', e);
+    }
+  }
   
   // Extract asset from URL first thing, before any modifications
   const hash = window.location.hash;
@@ -401,7 +437,7 @@ const detectAndHandleAssetUrl = () => {
       assetFromUrl = assetMatch[1];
       console.log('🔍 Detected asset in URL during initial URL check:', assetFromUrl);
       
-      // IMPORTANT: Immediately store in session storage to ensure it persists
+      // Store in session storage to ensure it persists
       sessionStorage.setItem('selected_stake_asset', assetFromUrl);
     }
   }
@@ -541,10 +577,47 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
       const exactMatchOnly = e.detail?.exactMatchOnly === true;
       console.log('🧩 Dialog exactMatchOnly flag:', exactMatchOnly);
       
-      // Check if we have a session storage asset that should take priority
-      const sessionAsset = sessionStorage.getItem('selected_stake_asset');
-      if (sessionAsset) {
-        console.log('📦 Found asset in session storage during dialog open:', sessionAsset);
+      // Check if this is a duplicate event we should ignore
+      if (e.detail?.eventId) {
+        const lastProcessedEvent = sessionStorage.getItem('last_processed_dialog_event');
+        if (lastProcessedEvent === e.detail.eventId) {
+          console.log('🔄 Ignoring duplicate dialog open event:', e.detail.eventId);
+          return;
+        }
+        
+        // Store this event ID to prevent duplicates
+        sessionStorage.setItem('last_processed_dialog_event', e.detail.eventId);
+      }
+      
+      // Special handling for direct navigation and force open events
+      const isForceOpen = e.detail?.forceOpen === true || 
+                         (e.detail?.eventId?.startsWith('force-open-'));
+      const isDirectNavigation = e.detail?.isDirectNavigation === true || 
+                                (e.detail?.eventId?.startsWith('direct-nav-'));
+      const isInitialNavigation = e.detail?.isInitialNavigation === true || 
+                                 (e.detail?.eventId?.startsWith('direct-nav-init-'));
+      
+      // For force open or direct/initial navigation, clear recently closed flag
+      if (isForceOpen || isDirectNavigation || isInitialNavigation) {
+        console.log('🔓 Processing special navigation event');
+        sessionStorage.removeItem('dialog_last_closed');
+        
+        // If this is a direct navigation, skip checking for duplicates
+        if (isInitialNavigation) {
+          console.log('🔄 Initial navigation event, ensuring it processes');
+          // Clear any duplicate protection for direct navigation
+          sessionStorage.removeItem('last_processed_dialog_event');
+        }
+      }
+      
+      // Check if we just closed a dialog (skip for special events)
+      if (!isForceOpen && !isDirectNavigation && !isInitialNavigation) {
+        const lastCloseTime = parseInt(sessionStorage.getItem('dialog_last_closed') || '0', 10);
+        const now = Date.now();
+        if (now - lastCloseTime < 1000) {
+          console.log('🛑 Skipping dialog open because a dialog was recently closed');
+          return;
+        }
       }
       
       // Process asset priority: event detail > session storage > URL
@@ -556,26 +629,25 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
           // This is the highest priority asset source
           finalAsset = e.detail.asset;
           console.log('📱 Using asset from event detail:', finalAsset);
+          // Always store in session storage for consistency
+          sessionStorage.setItem('selected_stake_asset', finalAsset);
         } 
         // If no asset in event, try session storage next
-        else if (sessionAsset && stakingTokens.includes(sessionAsset)) {
-          finalAsset = sessionAsset;
-          console.log('📱 Using asset from session storage:', finalAsset);
-          // Clear session storage to prevent stale values - but with a delay
-          // and only if exactMatchOnly is not set
-          if (!exactMatchOnly) {
-            setTimeout(() => {
-              console.log('🧹 Clearing session storage for selected_stake_asset');
-              sessionStorage.removeItem('selected_stake_asset');
-            }, 2000);
-          }
-        }
-        // Finally try URL as last resort
         else {
-          const urlAsset = getAssetFromUrl();
-          if (urlAsset) {
-            finalAsset = urlAsset;
-            console.log('📱 Using asset from URL:', finalAsset);
+          const sessionAsset = sessionStorage.getItem('selected_stake_asset');
+          if (sessionAsset && stakingTokens.includes(sessionAsset)) {
+            finalAsset = sessionAsset;
+            console.log('📱 Using asset from session storage:', finalAsset);
+          }
+          // Finally try URL as last resort
+          else {
+            const urlAsset = getAssetFromUrl();
+            if (urlAsset) {
+              finalAsset = urlAsset;
+              console.log('📱 Using asset from URL:', finalAsset);
+              // Store in session storage for consistency
+              sessionStorage.setItem('selected_stake_asset', finalAsset);
+            }
           }
         }
         
@@ -590,15 +662,16 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
             currentWidgetState.setViewMode('stake');
           }
           
-          // Ensure URL reflects the correct asset - but only if exactMatchOnly is not set
-          // or if it's a direct load from URL
-          if (window.location.pathname === '/earn' && (e.detail?.directLoad === true || !exactMatchOnly)) {
-            console.log('🔄 Updating URL with proper asset during dialog open:', finalAsset);
-            window.history.replaceState(
-              null, 
-              '', 
-              `${window.location.pathname}#widget=earn-stake&asset=${finalAsset}`
-            );
+          // Update URL with correct asset for direct initial navigation
+          if (isInitialNavigation || isDirectNavigation) {
+            if (window.location.pathname === '/earn') {
+              console.log('🔄 Updating URL with proper asset during dialog open:', finalAsset);
+              window.history.replaceState(
+                null, 
+                '', 
+                `${window.location.pathname}#widget=earn-stake&asset=${finalAsset}`
+              );
+            }
           }
         }
       }
@@ -617,11 +690,6 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
             console.log('📦 Using session storage asset for earn-stake widget:', sessionAsset);
             setInitialAsset(sessionAsset);
             finalAsset = sessionAsset;
-            // Clear storage to prevent stale values on future visits - but with delay
-            // and only if exactMatchOnly is not set
-            if (!exactMatchOnly) {
-              setTimeout(() => sessionStorage.removeItem('selected_stake_asset'), 2000);
-            }
           } else {
             const assetFromUrl = getAssetFromUrl();
             if (assetFromUrl) {
@@ -648,6 +716,9 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
     const handleCloseDialogs = () => {
       // Clear session storage and URL hash when dialogs are closed
       handleDialogClosed();
+      
+      // Set a timestamp to prevent immediate reopening
+      sessionStorage.setItem('dialog_last_closed', Date.now().toString());
     };
     
     // TypeScript doesn't recognize CustomEvent by default
@@ -928,12 +999,12 @@ const RippleView: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [featuredToken]);
 
-  const handleGetStartedClick = () => {
-    // Always force reset dialog state first
-    forceResetDialogState();
+  const handleRippleGetStartedClick = () => {
+    // Clear any recent closure protection
+    sessionStorage.removeItem('dialog_last_closed');
     
-    // Feature a random token
-    const randomToken = stakingTokens[Math.floor(Math.random() * stakingTokens.length)];
+    // Force reset dialog state
+    forceResetDialogState();
     
     // Create a cleanup event
     const closeEvent = new CustomEvent('close-widget-dialogs', {
@@ -946,24 +1017,30 @@ const RippleView: React.FC = () => {
     // Flag that we're about to change the URL to avoid loops
     ignoreNextHashChange.current = true;
     
+    // Use the featured token from state
+    const tokenToUse = featuredToken || stakingTokens[0];
+    
+    // Store in session storage
+    sessionStorage.setItem('selected_stake_asset', tokenToUse);
+    
     // When on earn page, update URL properly
     if (window.location.pathname === '/earn') {
       // Use proper format with widget parameter
       window.history.replaceState(
         null, 
         '', 
-        `${window.location.pathname}#widget=earn-stake&asset=${randomToken}`
+        `${window.location.pathname}#widget=earn-stake&asset=${tokenToUse}`
       );
     } else {
       // Not on earn page, use updateUrlWithAsset
-      updateUrlWithAsset(randomToken);
+      updateUrlWithAsset(tokenToUse);
     }
     
     // Put a small delay to ensure everything is cleared
     setTimeout(() => {
-      // Use the updated openWidgetDialog function with exactMatchOnly parameter
-      openWidgetDialog('earn-stake', 'direct', randomToken, true);
-    }, 350); // Increased timeout to ensure previous dialog is fully closed
+      // Force open the dialog using the imported function
+      forceOpenDialog('earn-stake', tokenToUse);
+    }, 250);
   };
 
   return (
@@ -986,7 +1063,7 @@ const RippleView: React.FC = () => {
               {tokenData.find(t => t.symbol === featuredToken)?.apy} APY
             </div>
           </div>
-          <Button onClick={handleGetStartedClick}>
+          <Button onClick={handleRippleGetStartedClick}>
             Get Started with {featuredToken}
           </Button>
         </div>
@@ -999,6 +1076,9 @@ const RippleView: React.FC = () => {
 const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedTheme }) => {
   // Function to open stake view with a specific asset
   const handleStakeClick = (token: string) => {
+    // Clear any recent closure protection
+    sessionStorage.removeItem('dialog_last_closed');
+    
     // Always force reset dialog state first
     forceResetDialogState();
     
@@ -1028,9 +1108,9 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
     
     // Put a small delay to ensure everything is cleared
     setTimeout(() => {
-      // Use the updated openWidgetDialog function with exactMatchOnly parameter and preserve asset
-      openWidgetDialog('earn-stake', 'direct', token, true);
-    }, 350); // Increased timeout to ensure previous dialog is fully closed
+      // Force open the dialog
+      forceOpenDialog('earn-stake', token);
+    }, 250);
   };
   
   return (
@@ -1098,6 +1178,10 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     if (initialAsset && stakingTokens.includes(initialAsset)) {
       initialAssetApplied.current = true;
       console.log('📱 StakeView using initialAsset prop on mount:', initialAsset);
+      
+      // Also store in session storage for consistency
+      sessionStorage.setItem('selected_stake_asset', initialAsset);
+      
       return initialAsset;
     }
     
@@ -1106,6 +1190,10 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     if (urlAsset && stakingTokens.includes(urlAsset)) {
       initialAssetApplied.current = true;
       console.log('📱 StakeView using URL asset on mount:', urlAsset);
+      
+      // Store in session storage for consistency
+      sessionStorage.setItem('selected_stake_asset', urlAsset);
+      
       return urlAsset;
     }
     
@@ -1552,4 +1640,30 @@ export const EarnWidgetWrapper: React.FC<EarnWidgetProps> = (props) => {
       />
     </WidgetContainer>
   );
-}; 
+};
+
+// Add a function to force open a dialog regardless of recent closures
+export function forceOpenEarnDialog(asset: string) {
+  console.log('🔓 Force opening earn dialog with asset:', asset);
+  
+  // Clear any recently closed flags
+  sessionStorage.removeItem('dialog_last_closed');
+  
+  // Store the asset
+  sessionStorage.setItem('selected_stake_asset', asset);
+  
+  // Update URL
+  if (window.location.pathname === '/earn') {
+    window.history.replaceState(
+      null, 
+      '', 
+      `${window.location.pathname}#widget=earn-stake&asset=${asset}`
+    );
+  } else {
+    updateUrlWithAsset(asset);
+  }
+  
+  // Open dialog with a new event ID to ensure it's processed
+  const eventId = `force-open-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  openWidgetDialog('earn-stake', 'direct', asset, true);
+} 

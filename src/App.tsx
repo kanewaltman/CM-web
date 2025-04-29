@@ -29,7 +29,8 @@ import {
   handleManualUrlNavigation, 
   generateEventId, 
   setCurrentEventId,
-  isClosingDialog
+  isClosingDialog,
+  handleDirectUrlNavigation
 } from '@/lib/widgetDialogService';
 import { GlobalWidgetDialogRenderer } from './components/GlobalWidgetDialogRenderer';
 
@@ -573,7 +574,19 @@ function App() {
     }
   }, []);
   
-  // Handle direct URL navigation (when user pastes URL and hits Enter)
+  // Handle direct URL navigation with widget and asset parameters
+  useEffect(() => {
+    // Use a setTimeout to ensure the app is fully mounted
+    const timer = setTimeout(() => {
+      console.log('🔄 Initializing widget dialog system after delay for direct load');
+      // Call the function to handle direct URL navigation with assets
+      handleDirectUrlNavigation();
+    }, 800); // Use a longer delay to ensure the app is fully loaded
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Existing useEffect for checking current URL
   useEffect(() => {
     // Track processed URLs to prevent infinite loops
     const processedUrls = new Set<string>();
