@@ -230,9 +230,11 @@ export function handleManualUrlNavigation(): void {
   hashDialogHandled = false;
   dialogAlreadyOpened = false;
   currentEventId = null; // Clear any current event ID
+  isOpeningDialog = false; // Reset the opening dialog flag
   
   // Clear dialog_last_closed to prevent blocking dialog opens on manual navigation
   sessionStorage.removeItem('dialog_last_closed');
+  sessionStorage.removeItem('last_processed_dialog_event');
   
   console.log('🔄 Reset hash handled state for manual URL navigation');
 }

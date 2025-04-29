@@ -150,6 +150,9 @@ const handleDialogClosed = () => {
       );
     }
   }
+  
+  // Clear processed URLs to allow re-processing the same URL when manually reentered
+  processedUrls.clear();
 };
 
 // Modified function for the ripple view staking button
@@ -748,6 +751,17 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
     // Function to handle hash changes
     const handleHashChange = () => {
       console.log('🔄 Hash change detected, checking for asset parameters');
+      
+      // First check if this is after a dialog was closed
+      const lastCloseTime = parseInt(sessionStorage.getItem('dialog_last_closed') || '0', 10);
+      if (Date.now() - lastCloseTime < 500) {
+        console.log('⏭️ Skipping hash change handler right after dialog close');
+        return;
+      }
+      
+      // Clear processed URLs to allow reprocessing for manual navigation
+      processedUrls.clear();
+      
       detectAndHandleAssetUrl();
     };
     

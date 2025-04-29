@@ -813,6 +813,22 @@ function App() {
         // No widget hash found
         processingUrl = false;
       }
+      
+      // Don't check URL if it's been processed already, unless it's a manual navigation
+      if (!isManualNavigation && processedUrls.has(currentUrl)) {
+        console.log('📌 URL already processed, skipping automatic check:', currentUrl);
+        processingUrl = false;
+        return;
+      }
+      
+      // For manual navigation, clear processedUrls to ensure we can reprocess
+      if (isManualNavigation) {
+        console.log('🔄 Manual URL navigation detected, clearing processedUrls cache');
+        processedUrls.clear();
+      }
+      
+      // Add current URL to processed set
+      processedUrls.add(currentUrl);
     };
     
     // Debounced URL check to avoid rapid consecutive checks
