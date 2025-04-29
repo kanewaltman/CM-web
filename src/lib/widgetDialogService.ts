@@ -244,45 +244,36 @@ export function handleManualUrlNavigation(): void {
  */
 export function openWidgetDialog(
   widgetId: string, 
-  source: 'url' | 'direct' | 'container' = 'direct',
+  source: 'url' | 'direct' | 'global' | 'container' = 'direct',
   asset?: string,
   exactMatchOnly: boolean = false
 ): void {
   // Prevent opening if another dialog is currently being opened
   if (isOpeningDialog) {
-    console.log('⚠️ Another dialog is currently being opened, ignoring this request:', widgetId);
+    console.log('⚠️ Another dialog is currently being opened, skipping:', widgetId);
     return;
   }
-
-  // Set a flag to indicate we're in the process of opening a dialog
+  
+  // Set flag to indicate we're opening a dialog
   isOpeningDialog = true;
   
-  // Clear flag after a short delay to allow future openings
+  // Clear flag after a short delay
   setTimeout(() => {
     isOpeningDialog = false;
-  }, 500);
-
-  // Check if we already have this exact dialog open (prevents duplicate dialogs)
-  if (openDialogs.has(widgetId)) {
-    console.log('⚠️ Dialog already open, updating instead of creating duplicate:', widgetId);
-    
-    // Just update the URL if needed
-    if (source === 'direct' && widgetId === 'earn-stake' && asset) {
-      updateDialogUrl(widgetId, asset);
-    }
-    
-    // Don't proceed with opening a new instance
-    isOpeningDialog = false;
+  }, 100);
+  
+  // Special case: if this is a direct navigation through URL and it's a hash change
+  // and a dialog is already opened from that hash, don't do anything.
+  if (source === 'url' && dialogAlreadyOpened && hashDialogHandled) {
+    console.log('🚫 Dialog already opened from URL hash, skipping duplicate open');
     return;
   }
-
-  // Proceed with normal dialog opening logic
-  // Mark that we're no longer in initial page load
-  isInitialPageLoad = false;
   
-  // Check if this is a direct navigation from URL on initial page load
-  const isDirectNavigation = source === 'direct' && 
-                             window.location.hash.includes(`widget=${widgetId}`);
+  // Create flag that dialog is opened to prevent duplicates
+  dialogAlreadyOpened = true;
+  
+  // Store dialog ID to help with managing state
+  sessionStorage.setItem('open_dialog_id', widgetId);
   
   // For direct navigation from URL or force open, bypass recently closed check
   if (source === 'direct' || source === 'container') {
@@ -323,7 +314,7 @@ export function openWidgetDialog(
   let eventId;
   if (source === 'direct' || source === 'container') {
     eventId = `force-open-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  } else if (isDirectNavigation) {
+  } else if (source === 'url' || source === 'global') {
     eventId = `direct-nav-${isInitialPageLoad ? 'init' : 'exact'}-${widgetId}-${Date.now()}`;
   } else {
     eventId = `open-widget-${widgetId}-${Date.now()}`;

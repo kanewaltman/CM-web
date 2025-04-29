@@ -103,6 +103,12 @@ export function GlobalWidgetDialogRenderer() {
       // Get event ID if available
       const eventId = typeof e.detail?.eventId === 'string' ? e.detail.eventId : null;
       
+      // Skip events from container title clicks (source = 'container')
+      if (e.detail?.source === 'container') {
+        console.log('🌐 Skipping global renderer for container-sourced event:', widgetId);
+        return;
+      }
+      
       // Check for special flags
       const isDirectNavigation = e.detail?.isDirectNavigation === true;
       const isInitialNavigation = e.detail?.isInitialNavigation === true;
@@ -205,21 +211,22 @@ export function GlobalWidgetDialogRenderer() {
       function handleGlobalDialog() {
         console.log('🌐 Global dialog renderer handling widget:', widgetId);
         
-        // If event has an ID, mark it as handled
-        if (eventId) {
-          handledGlobalEvents.add(eventId);
-          
-          // Cleanup - limit size to prevent memory issues
-          if (handledGlobalEvents.size > 20) {
-            const oldestEvent = handledGlobalEvents.values().next().value;
-            if (oldestEvent) handledGlobalEvents.delete(oldestEvent);
-          }
+        // Skip if dialog was recently closed unless this is a force open or direct navigation
+        if (wasDialogRecentlyClosed() && !isForceOpen && !isDirectNavigation) {
+          console.log('⏯️ Dialog was recently closed, skipping:', widgetId);
+          return;
         }
         
-        // Check if the widget exists in the registry using the helper function
+        // Skip if this is a container-sourced event (header click)
+        if (e.detail?.source === 'container') {
+          console.log('🌐 Skipping global dialog for container-sourced event:', widgetId);
+          return;
+        }
+        
+        // Look up widget information
         const widgetInfo = findWidgetById(widgetId);
         if (!widgetInfo) {
-          console.warn(`Widget with ID "${widgetId}" not found in registry.`);
+          console.error('🌐 Widget not found in registry:', widgetId);
           return;
         }
         
@@ -236,8 +243,15 @@ export function GlobalWidgetDialogRenderer() {
           const fuzzyMatch = !exactMatch && 
             document.querySelector(`.grid-stack-item[gs-id^="${baseWidgetId}-"] .widget-dialog-open`);
           
+          // Check if any container dialog is open at all by looking for body class but not standalone dialog
           const dialogOpenedByContainer = document.body.classList.contains('widget-dialog-open') && 
                                         !document.querySelector('.standalone-widget-dialog');
+          
+          // If source is 'container', skip global dialog entirely
+          if (e.detail?.source === 'container') {
+            console.log('🌐 Skipping global renderer for container-sourced event:', widgetId);
+            return;
+          }
           
           // If no dialog is open for this widget yet, open it in the global renderer
           if (!exactMatch && !fuzzyMatch && !dialogOpenedByContainer) {
