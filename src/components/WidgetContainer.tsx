@@ -596,7 +596,7 @@ export const WidgetContainer = memo(function WidgetContainer({
                         className="h-6 ml-2 px-2 py-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center"
                       >
                         <Edit className="h-3.5 w-3.5 opacity-70" />
-                        <span className="text-xs">Edit list</span>
+                        <span className="text-xs">Edit</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-56">

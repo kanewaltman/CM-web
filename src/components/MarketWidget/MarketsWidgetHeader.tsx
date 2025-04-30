@@ -218,13 +218,13 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
           <Button 
             variant={isFiltersActive ? "default" : "outline"}
             size="sm" 
-            className="h-8 px-3 text-xs whitespace-nowrap flex items-center gap-1.5"
+            className="h-7 px-2.5 text-xs whitespace-nowrap max-w-[180px] flex items-center"
           >
-            <FilterIcon className="h-3.5 w-3.5" /> 
-            Filter
+            <FilterIcon className="mr-1 h-3 w-3 flex-shrink-0" /> 
+            <span className="truncate leading-none">Filter</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64 p-1" align="start">
+        <DropdownMenuContent className="w-64 p-1" align="end">
           {/* Improved filter implementation */}
           <>
             <div className="relative mb-1 px-1" onClick={(e) => e.stopPropagation()} onFocus={(e) => e.stopPropagation()}>
@@ -454,13 +454,13 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
           <Button 
             variant="outline" 
             size="sm" 
-            className="h-8 px-3 text-xs whitespace-nowrap flex items-center gap-1.5"
+            className="h-7 px-2.5 text-xs whitespace-nowrap max-w-[180px] flex items-center"
           >
-            <ColumnsIcon className="h-3.5 w-3.5" /> 
-            Columns
+            <ColumnsIcon className="mr-1 h-3 w-3 flex-shrink-0" /> 
+            <span className="truncate leading-none">Columns</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64 p-1" align="start">
+        <DropdownMenuContent className="w-64 p-1" align="end">
           {actualTable ? (
             <MarketsWidgetColumnVisibility table={actualTable} />
           ) : (
