@@ -271,7 +271,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                       <span className="text-[10px] font-medium">{selectedQuoteAsset.charAt(0)}</span>
                     </div>
                   )}
-                  <span className="flex-1 text-left truncate">
+                  <span className="flex-1 text-left truncate   text-sm ">
                     Quote: {selectedQuoteAsset === 'ALL' ? 'All Pairs' : selectedQuoteAsset}
                   </span>
                 </DropdownMenuSubTrigger>
@@ -279,7 +279,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                   <Command>
                     <CommandInput placeholder="Filter pair..." className="h-8 text-xs" autoFocus />
                     <CommandList>
-                      <CommandEmpty>No pair found.</CommandEmpty>
+                      <CommandEmpty>
+                        <div className="  text-sm  py-2 text-center">No pair found.</div>
+                      </CommandEmpty>
                       <CommandGroup>
                         <CommandItem
                           value="ALL"
@@ -288,7 +290,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                         >
                           <div className="flex items-center flex-1 truncate">
                             <Coins className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
-                            <span className="truncate">All Pairs</span>
+                            <span className="truncate   text-sm ">All Pairs</span>
                             <span className="ml-1 text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500">
                               {quoteAssets.totalCount || 0}
                             </span>
@@ -325,7 +327,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                                     <span className="text-[10px] font-medium">{asset.charAt(0)}</span>
                                   </div>
                                 )}
-                                <span className="truncate">{asset}</span>
+                                <span className="truncate   text-sm ">{asset}</span>
                                 <span className="ml-1 text-xs px-1.5 py-0.5 rounded-sm bg-neutral-500/20 text-neutral-500">
                                   {assetCount}
                                 </span>
@@ -363,7 +365,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                       <span className="text-[10px] font-medium">{secondaryCurrency.charAt(0)}</span>
                     </div>
                   )}
-                  <span className="flex-1 text-left truncate">
+                  <span className="flex-1 text-left truncate   text-sm ">
                     {secondaryCurrency ? `Show in: ${secondaryCurrency}` : 'Secondary: None'}
                   </span>
                 </DropdownMenuSubTrigger>
@@ -371,7 +373,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                   <Command>
                     <CommandInput placeholder="Filter currency..." className="h-8 text-xs" autoFocus />
                     <CommandList>
-                      <CommandEmpty>No currency found.</CommandEmpty>
+                      <CommandEmpty>
+                        <div className="  text-sm  py-2 text-center">No currency found.</div>
+                      </CommandEmpty>
                       <CommandGroup>
                         <CommandItem
                           value=""
@@ -380,7 +384,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                         >
                           <div className="flex items-center flex-1 truncate">
                             <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
-                            <span className="truncate">None</span>
+                            <span className="truncate   text-sm ">None</span>
                           </div>
                           <Check
                             className={cn(
@@ -412,7 +416,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                                     <span className="text-[10px] font-medium">{currency.charAt(0)}</span>
                                   </div>
                                 )}
-                                <span className="truncate">Show in {currency}</span>
+                                <span className="truncate   text-sm ">Show in {currency}</span>
                               </div>
                               <Check
                                 className={cn(
@@ -443,7 +447,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
               disabled={!isFiltersActive}
             >
               <RotateCcw className="mr-2 h-3.5 w-3.5 opacity-80" />
-              <span>Clear All Filters</span>
+              <span className="  text-sm ">Clear All Filters</span>
             </DropdownMenuItem>
           </>
         </DropdownMenuContent>
@@ -465,9 +469,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
             <MarketsWidgetColumnVisibility table={actualTable} />
           ) : (
             <>
-              <DropdownMenuLabel>Column Options</DropdownMenuLabel>
+              <DropdownMenuLabel className="  text-sm ">Column Options</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <div className="p-2 text-xs text-muted-foreground text-center">
+              <div className="p-2   text-sm  text-muted-foreground text-center">
                 Table not available
               </div>
             </>

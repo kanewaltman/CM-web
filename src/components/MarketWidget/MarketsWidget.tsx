@@ -355,7 +355,7 @@ const DraggableMenuItem = ({
           </div>
         </div>
         
-        <span className="text-sm select-none">
+        <span className="opacity-80 text-sm leading-[150%] select-none">
           {children}
         </span>
       </div>
@@ -435,7 +435,7 @@ export const MarketsWidgetColumnVisibility: React.FC<{
 
   return (
     <>
-      <DropdownMenuLabel>Customize Columns</DropdownMenuLabel>
+      <DropdownMenuLabel className="opacity-80 text-sm leading-[150%]">Customize Columns</DropdownMenuLabel>
       <DropdownMenuSeparator />
       <div className="max-h-[300px] overflow-auto py-1">
         <DndContext
@@ -1219,7 +1219,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
                   </div>
                 </div>
                 <div className="ml-2 flex items-center gap-2">
-                  <span className="font-jakarta font-semibold text-sm">
+                  <span className=" font-semibold text-sm">
                     {row.original.baseAsset}
                     <span className="text-muted-foreground font-semibold">/{row.original.quoteAsset}</span>
                   </span>
@@ -1277,7 +1277,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
             row.original.price;
           
           return (
-            <div className="text-right font-jakarta font-mono font-semibold text-sm leading-[150%] tabular-nums">
+            <div className="text-right  font-mono font-semibold text-sm leading-[150%] tabular-nums">
               <ValueFlash 
                 value={displayPrice} 
                 formatter={(price) => `${pricePrefix}${formatPrice(price)}`}
@@ -1362,7 +1362,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           const isSignificant = displayMarketCap > 100; // Only show values above $100 or equivalent
           
           return (
-            <div className="text-right font-jakarta font-semibold text-sm leading-[150%] tabular-nums">
+            <div className="text-right  font-semibold text-sm leading-[150%] tabular-nums">
               {isSignificant ? (
                 <ValueFlash 
                   value={displayMarketCap} 
@@ -1398,7 +1398,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
           const isSignificant = displayVolume > 100; // Only show values above $100 or equivalent
           
           return (
-            <div className="text-right font-jakarta font-semibold text-sm leading-[150%] tabular-nums">
+            <div className="text-right  font-semibold text-sm leading-[150%] tabular-nums">
               {isSignificant ? (
                 <ValueFlash 
                   value={displayVolume} 
