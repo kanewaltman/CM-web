@@ -1261,7 +1261,7 @@ const RippleView: React.FC = () => {
               className="mx-auto text-sm mb-2"
               onClick={handleRippleGetStartedClick}
             >
-              Stake {featuredToken}
+              Earn more {featuredToken}
             </ShimmerButton>
             <div className="p-1 pl-2 pr-2 bg-primary/10 rounded-full">
               <div className="text-emerald-500 font-medium text-sm">
@@ -1353,7 +1353,7 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
                 size="sm"
                 onClick={() => handleStakeClick(token.symbol)}
               >
-                Stake {token.symbol}
+                Earn {token.symbol}
               </Button>
             </CardFooter>
           </Card>
