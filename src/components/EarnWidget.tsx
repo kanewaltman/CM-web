@@ -10,13 +10,14 @@ import {
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { Ripple } from './magicui/ripple';
+import { MatterStacking } from './magicui/MatterStacking';
 import { EarnWidgetState, widgetStateRegistry, createDefaultEarnWidgetState } from '@/lib/widgetState';
 import { DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
 import { Slider } from './ui/slider';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { ChartContainer, ChartConfig } from './ui/chart';
 import { openWidgetDialog, resetDialogOpenedState, forceOpenDialog } from '@/lib/widgetDialogService';
+import { ShimmerButton } from './magicui/shimmer-button';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -538,6 +539,7 @@ const detectAndHandleAssetUrl = () => {
 
 export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   const { resolvedTheme } = useTheme();
+  
   const [forcedTheme, setForcedTheme] = useState<'light' | 'dark' | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const isInitialized = useRef(false);
@@ -640,7 +642,9 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
           finalAsset = e.detail.asset;
           console.log('📱 Using asset from event detail:', finalAsset);
           // Always store in session storage for consistency
-          sessionStorage.setItem('selected_stake_asset', finalAsset);
+          if (finalAsset) {
+            sessionStorage.setItem('selected_stake_asset', finalAsset);
+          }
         } 
         // If no asset in event, try session storage next
         else {
@@ -696,6 +700,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
         // If we haven't already set an asset, try to find one
         if (!finalAsset) {
           // Try to get asset from session storage or URL if not specified in the event
+          const sessionAsset = sessionStorage.getItem('selected_stake_asset');
           if (sessionAsset && stakingTokens.includes(sessionAsset)) {
             console.log('📦 Using session storage asset for earn-stake widget:', sessionAsset);
             setInitialAsset(sessionAsset);
@@ -980,16 +985,36 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   );
 };
 
-// Ripple View component
+// Replace the entire RippleView component
 const RippleView: React.FC = () => {
-  // Store the initial asset from URL to use in the component
-  const [featuredToken, setFeaturedToken] = useState(() => {
-    // Use our helper function to get the initial asset with priority for URL parameters
-    return getInitialAssetFromAllSources();
-  });
-
-  // Prevent hash change loops
+  const { resolvedTheme } = useTheme();
+  const [hasError, setHasError] = useState(false);
+  const [featuredToken, setFeaturedToken] = useState<string>(
+    stakingTokens[Math.floor(Math.random() * stakingTokens.length)]
+  );
   const ignoreNextHashChange = useRef(false);
+
+  // Force update of the gradient when theme changes
+  const [gradientKey, setGradientKey] = useState<number>(Date.now());
+  
+  // Debug theme detection
+  useEffect(() => {
+    console.log('Current theme detection:', { 
+      resolvedTheme, 
+      documentClassList: typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : 'N/A',
+      htmlHasDarkClass: typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : 'N/A'
+    });
+  }, [resolvedTheme]);
+  
+  useEffect(() => {
+    // Update gradient key whenever theme changes to force a re-render
+    setGradientKey(Date.now());
+  }, [resolvedTheme]);
+  
+  const handleMatterError = (error: any) => {
+    console.error('Error in Matter.js component:', error);
+    setHasError(true);
+  };
 
   // Use an effect to detect and respond to URL changes
   useEffect(() => {
@@ -1064,29 +1089,187 @@ const RippleView: React.FC = () => {
     }, 250);
   };
 
+  // Handler for token clicks from the MatterStacking component
+  const handleTokenClick = (tokenName: string) => {
+    // Find the token data (using the imported tokenData array)
+    const token = tokenData.find(t => t.symbol === tokenName);
+    if (token) {
+      // Update featured token
+      setFeaturedToken(tokenName);
+      
+      // Open the dialog when a token is clicked
+      // Clear any recent closure protection
+      sessionStorage.removeItem('dialog_last_closed');
+      
+      // Force reset dialog state
+      forceResetDialogState();
+      
+      // Create a cleanup event
+      const closeEvent = new CustomEvent('close-widget-dialogs', {
+        bubbles: true
+      });
+      
+      // Dispatch the close event
+      document.dispatchEvent(closeEvent);
+      
+      // Flag that we're about to change the URL to avoid loops
+      ignoreNextHashChange.current = true;
+      
+      // Store in session storage
+      sessionStorage.setItem('selected_stake_asset', tokenName);
+      
+      // When on earn page, update URL properly
+      if (window.location.pathname === '/earn') {
+        // Use proper format with widget parameter
+        window.history.replaceState(
+          null, 
+          '', 
+          `${window.location.pathname}#widget=earn-stake&asset=${tokenName}`
+        );
+      } else {
+        // Not on earn page, use updateUrlWithAsset
+        updateUrlWithAsset(tokenName);
+      }
+      
+      // Put a small delay to ensure everything is cleared
+      setTimeout(() => {
+        // Force open the dialog using the imported function
+        forceOpenDialog('earn-stake', tokenName);
+      }, 250);
+    }
+  };
+
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center p-4 overflow-hidden">
-      <Ripple 
-        className="absolute inset-0" 
-        mainCircleSize={280}
-        mainCircleOpacity={0.15}
-        numCircles={10}
-      />
-      <div className="z-10 text-center max-w-md mx-auto">
-        <h2 className="text-2xl font-bold mb-2">Earn Rewards</h2>
-        <p className="text-muted-foreground mb-6">
-          Stake your assets and earn passive income with competitive APY rates and flexible lock periods.
-        </p>
-        <div className="flex flex-col space-y-2 items-center">
-          <div className="p-3 bg-primary/10 rounded-full mb-2">
-            <div className="text-xl font-bold">{featuredToken}</div>
-            <div className="text-emerald-500 font-medium text-sm">
-              {tokenData.find(t => t.symbol === featuredToken)?.apy} APY
+      {!hasError ? (
+        <MatterStacking 
+          className="absolute inset-0" 
+          tokens={stakingTokens}
+          interval={1000}
+          maxObjects={30}
+          hardLimit={40}
+          density={0.0008}
+          restitution={0.4}
+          /// this is the token click handler for the ripple view
+          /// onTokenClick={handleTokenClick}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+          Could not load physics animation
+        </div>
+      )}
+      <div className="z-10 text-center max-w-md mx-auto relative">
+        <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
+        <style>{`
+          .radial-gradient-bg {
+            position: absolute;
+            width: 400%;
+            height: 400%;
+            left: -150%;
+            top: -150%;
+            pointer-events: none;
+            background: radial-gradient(circle at center, 
+                        ${resolvedTheme === 'dark' ? 'rgb(15, 15, 15)' : 'rgb(250, 250, 250)'} 0%, 
+                        ${resolvedTheme === 'dark' ? 'rgba(15, 15, 15, 0.85)' : 'rgba(250, 250, 250, 0.85)'} 20%, 
+                        ${resolvedTheme === 'dark' ? 'rgba(15, 15, 15, 0.7)' : 'rgba(250, 250, 250, 0.7)'} 40%, 
+                        ${resolvedTheme === 'dark' ? 'rgba(15, 15, 15, 0.5)' : 'rgba(250, 250, 250, 0.5)'} 60%, 
+                        ${resolvedTheme === 'dark' ? 'rgba(15, 15, 15, 0.2)' : 'rgba(250, 250, 250, 0.2)'} 75%, 
+                        ${resolvedTheme === 'dark' ? 'rgba(15, 15, 15, 0)' : 'rgba(250, 250, 250, 0)'} 90%);
+          }
+          
+          /* Dark OLED theme (pure black) */
+          html.dark.oled .radial-gradient-bg,
+          html.dark[data-theme="dark-0led"] .radial-gradient-bg {
+            background: radial-gradient(circle at center, 
+                        rgb(0, 0, 0) 0%, 
+                        rgba(0, 0, 0, 0.85) 20%, 
+                        rgba(0, 0, 0, 0.7) 40%, 
+                        rgba(0, 0, 0, 0.5) 60%, 
+                        rgba(0, 0, 0, 0.2) 75%, 
+                        rgba(0, 0, 0, 0) 90%);
+          }
+          
+          /* Dark default theme */
+          html.dark:not(.oled):not([data-theme="dark-backlit"]) .radial-gradient-bg,
+          html.dark[data-theme="dark-default"] .radial-gradient-bg {
+            background: radial-gradient(circle at center, 
+                        rgb(15, 15, 15) 0%, 
+                        rgba(15, 15, 15, 0.85) 20%, 
+                        rgba(15, 15, 15, 0.7) 40%, 
+                        rgba(15, 15, 15, 0.5) 60%, 
+                        rgba(15, 15, 15, 0.2) 75%, 
+                        rgba(15, 15, 15, 0) 90%);
+          }
+          
+          /* Dark Backlit theme (slightly blueish) */
+          html.dark[data-theme="dark-backlit"] .radial-gradient-bg {
+            background: radial-gradient(circle at center, 
+                        rgb(25, 25, 30) 0%, 
+                        rgba(25, 25, 30, 0.85) 20%, 
+                        rgba(25, 25, 30, 0.7) 40%, 
+                        rgba(25, 25, 30, 0.5) 60%, 
+                        rgba(25, 25, 30, 0.2) 75%, 
+                        rgba(25, 25, 30, 0) 90%);
+          }
+          
+          /* Light Cool theme */
+          html:not(.dark)[data-theme="light-cool"] .radial-gradient-bg {
+            background: radial-gradient(circle at center, 
+                        rgb(240, 245, 250) 0%, 
+                        rgba(240, 245, 250, 0.85) 20%, 
+                        rgba(240, 245, 250, 0.7) 40%, 
+                        rgba(240, 245, 250, 0.5) 60%, 
+                        rgba(240, 245, 250, 0.2) 75%, 
+                        rgba(240, 245, 250, 0) 90%);
+          }
+          
+          /* Light default theme */
+          html:not(.dark):not([data-theme="light-cool"]):not([data-theme="light-warm"]) .radial-gradient-bg,
+          html:not(.dark)[data-theme="light-default"] .radial-gradient-bg {
+            background: radial-gradient(circle at center, 
+                        rgb(250, 250, 250) 0%, 
+                        rgba(250, 250, 250, 0.85) 20%, 
+                        rgba(250, 250, 250, 0.7) 40%, 
+                        rgba(250, 250, 250, 0.5) 60%, 
+                        rgba(250, 250, 250, 0.2) 75%, 
+                        rgba(250, 250, 250, 0) 90%);
+          }
+          
+          /* Light Warm theme */
+          html:not(.dark)[data-theme="light-warm"] .radial-gradient-bg {
+            background: radial-gradient(circle at center, 
+                        rgb(250, 245, 235) 0%, 
+                        rgba(250, 245, 235, 0.85) 20%, 
+                        rgba(250, 245, 235, 0.7) 40%, 
+                        rgba(250, 245, 235, 0.5) 60%, 
+                        rgba(250, 245, 235, 0.2) 75%, 
+                        rgba(250, 245, 235, 0) 90%);
+          }
+        `}</style>
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-2">Let your assets pile up</h2>
+          <p className="text-muted-foreground mb-8">
+            Stake to earn passive income with competitive APY rates and flexible lock periods.
+          </p>
+          <div className="flex flex-col space-y-2 items-center">
+            <ShimmerButton
+              shimmerColor="rgba(255, 255, 255, 0.5)"
+              shimmerSize="0.05em"
+              shimmerDuration="6s"
+              borderRadius="8px"
+              background="rgb(0, 0, 0)"
+              className="mx-auto text-sm mb-2"
+              onClick={handleRippleGetStartedClick}
+            >
+              Earn more {featuredToken}
+            </ShimmerButton>
+            <div className="p-1 pl-2 pr-2 bg-primary/10 rounded-full">
+              <div className="text-emerald-500 font-medium text-sm">
+                {tokenData.find(t => t.symbol === featuredToken)?.apy} APY
+              </div>
             </div>
+            
           </div>
-          <Button onClick={handleRippleGetStartedClick}>
-            Get Started with {featuredToken}
-          </Button>
         </div>
       </div>
     </div>
@@ -1170,7 +1353,7 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
                 size="sm"
                 onClick={() => handleStakeClick(token.symbol)}
               >
-                Stake {token.symbol}
+                Earn {token.symbol}
               </Button>
             </CardFooter>
           </Card>
