@@ -224,7 +224,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
             <span className="truncate leading-none">Filter</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64 p-1" align="end">
+        <DropdownMenuContent className="w-full p-1" align="end">
           {/* Improved filter implementation */}
           <>
             <div className="relative mb-1 px-1" onClick={(e) => e.stopPropagation()} onFocus={(e) => e.stopPropagation()}>
@@ -460,7 +460,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
             <span className="truncate leading-none">Columns</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64 p-1" align="end">
+        <DropdownMenuContent className="w-full p-1" align="end">
           {actualTable ? (
             <MarketsWidgetColumnVisibility table={actualTable} />
           ) : (
