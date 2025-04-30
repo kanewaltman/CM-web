@@ -58,8 +58,11 @@ export function MarketsListMenu({
     <>
       {/* All Markets option */}
       <DropdownMenuItem 
-        onClick={() => onSaveActiveList(null)}
-        className={activeList === null ? "bg-accent" : ""}
+        onClick={() => {
+          onSaveActiveList(null);
+          onCloseMenu();
+        }}
+        className={activeList === null ? "text-primary font-medium" : ""}
       >
         <Globe className="h-4 w-4 mr-2 opacity-70" />
         All Markets
@@ -69,8 +72,12 @@ export function MarketsListMenu({
       {customLists.map(list => (
         <DropdownMenuSub key={list.id}>
           <DropdownMenuSubTrigger 
-            className={activeList === list.id ? "bg-accent" : ""}
-            onClick={() => onSaveActiveList(list.id)}
+            className={activeList === list.id ? "text-primary font-medium" : ""}
+            onClick={(e) => {
+              e.preventDefault();
+              onSaveActiveList(list.id);
+              onCloseMenu();
+            }}
           >
             <ListChecks className="h-4 w-4 mr-2 opacity-70" />
             {list.name}
