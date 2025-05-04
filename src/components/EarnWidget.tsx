@@ -18,6 +18,7 @@ import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip }
 import { ChartContainer, ChartConfig } from './ui/chart';
 import { openWidgetDialog, resetDialogOpenedState, forceOpenDialog } from '@/lib/widgetDialogService';
 import { ShimmerButton } from './magicui/shimmer-button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -1276,7 +1277,7 @@ const RippleView: React.FC = () => {
               shimmerDuration="6s"
               borderRadius="8px"
               background="rgb(0, 0, 0)"
-              className="mx-auto text-sm mb-2"
+              className="mx-auto text-base mb-2 font-medium py-3 px-6"
               onClick={handleRippleGetStartedClick}
             >
               Earn more {featuredToken}
@@ -1378,23 +1379,67 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
             <CardContent className="p-4 pt-0 pb-2">
               <div className="space-y-1 ">
                 <div className="flex justify-between bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
-                  <span className="text-md text-muted-foreground">APY</span>
+                  <span className="text-md text-muted-foreground">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="border-b border-dotted border-muted-foreground">APY</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Annual Percentage Yield - the yearly return on your staked assets.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </span>
                   <span className="text-md text-emerald-500 font-medium">{token.apy}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1">
                   <div className="bg-[hsl(var(--color-widget-bg))] rounded-lg p-6 pt-4 pb-4 flex flex-col items-left">
-                    <span className="text-sm text-muted-foreground">30d Avg APY</span>
+                    <span className="text-sm text-muted-foreground pb-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="border-b border-dotted border-muted-foreground">30d Avg APY</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Average Annual Percentage Yield over the last 30 days.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </span>
                     <span className="text-md font-medium">8.97%</span>
                   </div>
                   <div className="bg-[hsl(var(--color-widget-bg))] rounded-lg p-6 pt-4 pb-4 flex flex-col items-left">
-                    <span className="text-sm text-muted-foreground">30d Prediction</span>
+                    <span className="text-sm text-muted-foreground pb-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="border-b border-dotted border-muted-foreground">30d Prediction</span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Estimated APY for the next 30 days based on recent trends.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </span>
                     <div className="flex flex-col items-left">
                       <span className="text-md font-medium text-emerald-500">&gt;7.45%</span>
                     </div>
                   </div>
                 </div>
-                <div className="pt-2 pb-4 bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
-                  <div className="text-sm text-muted-foreground mt-2 mb-0.5">Historical APY</div>
+                <div className="pt-2 pb-3 bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
+                  <div className="text-sm text-muted-foreground mt-2 pb-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="border-b border-dotted border-muted-foreground">Historical APY</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Past APY performance over different time periods.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                   <div className="flex justify-between">
                     <div className="flex flex-col items-center">
                       <span className="text-xs text-muted-foreground">24h</span>
@@ -1414,8 +1459,8 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
             </CardContent>
             <CardFooter className="p-4 pt-2">
               <Button 
-                className="w-full" 
-                size="sm"
+                className="w-full bg-primary/10 text-primary hover:bg-primary/20 font-medium text-base py-6" 
+                size="lg"
                 onClick={() => handleStakeClick(token.symbol)}
               >
                 Earn {token.symbol}
@@ -1815,7 +1860,7 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
             </div>
           </div>
           
-          <Button className="w-full">Continue to Stake</Button>
+          <Button className="w-full bg-primary/10 text-primary hover:bg-primary/20 font-medium text-base py-3" size="lg">Continue to Stake</Button>
         </div>
         
         {/* Right column - APY Chart */}
