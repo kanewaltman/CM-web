@@ -1393,7 +1393,7 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
                     </div>
                   </div>
                 </div>
-                <div className="pt-2 pb-3 bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
+                <div className="pt-2 pb-4 bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
                   <div className="text-sm text-muted-foreground mt-2 mb-0.5">Historical APY</div>
                   <div className="flex justify-between">
                     <div className="flex flex-col items-center">
