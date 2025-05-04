@@ -39,6 +39,23 @@ const stakingTokens = [
   'DOT', 'KSM', 'LTO', 'MATIC', 'XTZ', 'ETH'
 ];
 
+// Networks for tokens
+const tokenNetworks: Record<string, string> = {
+  'XCM': 'Ethereum',
+  'LILAI': 'Ethereum',
+  'FLUX': 'Ethereum',
+  'KDA': 'Kadena',
+  'THT': 'Ethereum',
+  'VSP': 'Ethereum',
+  'ADA': 'Cardano',
+  'DOT': 'Polkadot',
+  'KSM': 'Kusama',
+  'LTO': 'Ethereum',
+  'MATIC': 'Polygon',
+  'XTZ': 'Tezos',
+  'ETH': 'Ethereum'
+};
+
 // Mock data for staking APY
 const getRandomAPY = () => {
   return (3 + Math.random() * 12).toFixed(2) + '%';
@@ -48,6 +65,7 @@ const getRandomAPY = () => {
 const tokenData = stakingTokens.map(token => ({
   symbol: token,
   name: token, // In a real app, we would have the full names
+  network: tokenNetworks[token] || 'Unknown',
   apy: getRandomAPY(),
   minStake: Math.floor(Math.random() * 100),
   lockPeriod: Math.floor(Math.random() * 30) + ' days'
@@ -1317,6 +1335,13 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
     }, 250);
   };
   
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = e.target as HTMLImageElement;
+    const token = target.alt;
+    // Replace with letter placeholder on image load error
+    target.outerHTML = `<div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">${token.charAt(0)}</div>`;
+  };
+  
   return (
     <div className="w-full h-full overflow-auto p-4">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1328,8 +1353,21 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
               forcedTheme === 'dark' ? "border-slate-800" : "border-slate-100"
             )}
           >
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-lg">{token.symbol}</CardTitle>
+            <CardHeader className="p-4 pb-4">
+              <div className="flex items-center">
+                <div className="w-10 h-10 mr-2 flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={`/assets/symbols/${token.symbol}.svg`} 
+                    alt={token.symbol}
+                    className="w-full h-full object-contain"
+                    onError={handleImageError}
+                  />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">{token.symbol}</CardTitle>
+                  <p className="text-xs text-muted-foreground">on {token.network}</p>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-4 pt-0 pb-2">
               <div className="space-y-2">
