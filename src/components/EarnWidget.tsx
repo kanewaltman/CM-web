@@ -1145,9 +1145,9 @@ const RippleView: React.FC = () => {
         <MatterStacking 
           className="absolute inset-0" 
           tokens={stakingTokens}
-          interval={1000}
-          maxObjects={30}
-          hardLimit={40}
+          interval={400}
+          maxObjects={45}
+          hardLimit={60}
           density={0.0008}
           restitution={0.4}
           /// this is the token click handler for the ripple view
