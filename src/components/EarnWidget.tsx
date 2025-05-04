@@ -60,6 +60,7 @@ export interface EarnWidgetProps {
   headerControls?: boolean;
   defaultViewMode?: EarnViewMode;
   onViewModeChange?: (mode: EarnViewMode) => void;
+  viewState?: Record<string, any>;
 }
 
 // Keep track of processed URLs to avoid duplicate processing
@@ -570,10 +571,17 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
 
   // Track current view mode for immediate updates without waiting for state system
   const [currentViewMode, setCurrentViewMode] = useState<EarnViewMode>(() => {
+    // First check if there's an earnViewMode in props.viewState (highest priority for static widgets)
+    if (props.viewState?.earnViewMode) {
+      console.log(`Using earnViewMode from props.viewState: ${props.viewState.earnViewMode} for ${props.widgetId}`);
+      return props.viewState.earnViewMode as EarnViewMode;
+    }
+    
     // Set initial default based on widget ID
-    if (props.widgetId === 'earn-assets') return 'cards';
-    if (props.widgetId === 'earn-promo') return 'ripple';
-    if (props.widgetId === 'earn-stake') return 'stake';
+    if (props.widgetId === 'earn-assets' || props.widgetId === 'earn-assets-static') return 'cards';
+    if (props.widgetId === 'earn-promo' || props.widgetId === 'earn-promo-static') return 'ripple';
+    if (props.widgetId === 'earn-stake' || props.widgetId === 'earn-stake-static') return 'stake';
+    
     return props.defaultViewMode || 'ripple';
   });
   
@@ -813,22 +821,29 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   const widgetState = useMemo(() => {
     let state = widgetStateRegistry.get(props.widgetId);
     
-    // Check if the state is an EarnWidgetState
-    if (state && !(state instanceof EarnWidgetState)) {
-      // If it's not, we'll remove it and create a new one
-      widgetStateRegistry.delete(props.widgetId);
-      state = undefined;
+    // Force widget state based on viewState props for static widgets if provided
+    if (props.viewState?.earnViewMode && (
+      props.widgetId === 'earn-promo-static' || 
+      props.widgetId === 'earn-assets-static' || 
+      props.widgetId === 'earn-stake-static'
+    )) {
+      console.log(`Creating state with forced viewMode ${props.viewState.earnViewMode} for static widget ${props.widgetId}`);
+      state = createDefaultEarnWidgetState(props.viewState.earnViewMode as EarnViewMode, props.widgetId);
+      widgetStateRegistry.set(props.widgetId, state);
+      setCurrentViewMode(props.viewState.earnViewMode as EarnViewMode);
+      setIsLoading(false);
+      return state as EarnWidgetState;
     }
     
     if (!state) {
       // Determine initial view mode based on widget ID for specific widget instances
       let initialViewMode: EarnViewMode;
       
-      if (props.widgetId === 'earn-assets') {
+      if (props.widgetId === 'earn-assets' || props.widgetId === 'earn-assets-static') {
         initialViewMode = 'cards';
-      } else if (props.widgetId === 'earn-promo') {
+      } else if (props.widgetId === 'earn-promo' || props.widgetId === 'earn-promo-static') {
         initialViewMode = 'ripple';
-      } else if (props.widgetId === 'earn-stake') {
+      } else if (props.widgetId === 'earn-stake' || props.widgetId === 'earn-stake-static') {
         initialViewMode = 'stake';
       } else {
         // For other widget IDs, try to restore from localStorage or use default
@@ -885,7 +900,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
     }
     
     return state as EarnWidgetState;
-  }, [props.widgetId, props.defaultViewMode]);
+  }, [props.widgetId, props.defaultViewMode, props.viewState]);
 
   // Subscribe to widget state changes
   useEffect(() => {
@@ -971,16 +986,36 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
     return <div className="w-full h-full flex items-center justify-center">Loading...</div>;
   }
 
-  // Render the main widget content
+  // For static widgets, ensure viewState is respected
+  let effectiveViewMode = currentViewMode;
+  if (props.viewState?.earnViewMode && (
+    props.widgetId === 'earn-promo-static' || 
+    props.widgetId === 'earn-assets-static' || 
+    props.widgetId === 'earn-stake-static'
+  )) {
+    effectiveViewMode = props.viewState.earnViewMode as EarnViewMode;
+    console.log(`Rendering ${props.widgetId} with forced view mode: ${effectiveViewMode}`);
+  }
+
+  // Determine the component to render based on the view mode
+  const contentComponent = effectiveViewMode === 'ripple' ? (
+    <RippleView />
+  ) : effectiveViewMode === 'cards' ? (
+    <CardGridView forcedTheme={forcedTheme} widgetId={props.widgetId} />
+  ) : (
+    <StakeView forcedTheme={forcedTheme} initialAsset={initialAsset} />
+  );
+
+  // If useContentOnly is set, render only the content without any wrapper
+  if (props.viewState?.useContentOnly) {
+    console.log(`Rendering ${props.widgetId} in content-only mode`);
+    return contentComponent;
+  }
+
+  // Render the main widget content with wrapper
   return (
     <div className="w-full h-full flex flex-col">
-      {currentViewMode === 'ripple' ? (
-        <RippleView />
-      ) : currentViewMode === 'cards' ? (
-        <CardGridView forcedTheme={forcedTheme} />
-      ) : (
-        <StakeView forcedTheme={forcedTheme} initialAsset={initialAsset} />
-      )}
+      {contentComponent}
     </div>
   );
 };
@@ -1276,8 +1311,13 @@ const RippleView: React.FC = () => {
   );
 };
 
+// For special handling in CardGridView
+const isStaticWidget = (widgetId: string): boolean => {
+  return widgetId.includes('-static');
+};
+
 // Card Grid View component for token browsing
-const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedTheme }) => {
+const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark', widgetId?: string }> = ({ forcedTheme, widgetId }) => {
   // Function to open stake view with a specific asset
   const handleStakeClick = (token: string) => {
     // Clear any recent closure protection
@@ -1317,8 +1357,26 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
     }, 250);
   };
   
+<<<<<<< Updated upstream
+=======
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = e.target as HTMLImageElement;
+    const token = target.alt;
+    // Replace with letter placeholder on image load error
+    target.outerHTML = `<div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">${token.charAt(0)}</div>`;
+  };
+  
+  // Check if this is a static widget (on EarnPage)
+  const isOnStaticPage = widgetId ? isStaticWidget(widgetId) : false;
+  
+  // Log rendering mode
+  useEffect(() => {
+    console.log(`CardGridView rendering with widgetId: ${widgetId}, isStatic: ${isOnStaticPage}`);
+  }, [widgetId, isOnStaticPage]);
+
+>>>>>>> Stashed changes
   return (
-    <div className="w-full h-full overflow-auto p-4">
+    <div className={`w-full ${isOnStaticPage ? '' : 'h-full overflow-auto'} p-4`}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {tokenData.map((token) => (
           <Card 
@@ -1814,6 +1872,19 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
 
 // The exported wrapper component that includes the widget container
 export const EarnWidgetWrapper: React.FC<EarnWidgetProps> = (props) => {
+  // If we're in content-only mode, just return the EarnWidget itself without container
+  if (props.viewState?.useContentOnly) {
+    console.log(`EarnWidgetWrapper rendering in content-only mode: ${props.widgetId}`);
+    return (
+      <EarnWidget
+        widgetId={props.widgetId}
+        defaultViewMode={props.defaultViewMode}
+        onViewModeChange={props.onViewModeChange}
+        viewState={props.viewState}
+      />
+    );
+  }
+  
   // Set appropriate title based on widget ID
   let title = 'Earn';
   if (props.widgetId === 'earn-promo') {
@@ -1834,6 +1905,7 @@ export const EarnWidgetWrapper: React.FC<EarnWidgetProps> = (props) => {
           widgetId={props.widgetId}
           defaultViewMode={props.defaultViewMode}
           onViewModeChange={props.onViewModeChange}
+          viewState={props.viewState}
         />
       }
     >
@@ -1841,6 +1913,7 @@ export const EarnWidgetWrapper: React.FC<EarnWidgetProps> = (props) => {
         widgetId={props.widgetId}
         defaultViewMode={props.defaultViewMode}
         onViewModeChange={props.onViewModeChange}
+        viewState={props.viewState}
       />
     </WidgetContainer>
   );
