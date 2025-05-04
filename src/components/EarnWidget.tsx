@@ -1353,35 +1353,65 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
               forcedTheme === 'dark' ? "border-slate-800" : "border-slate-100"
             )}
           >
-            <CardHeader className="p-4 pb-4">
-              <div className="flex items-center">
-                <div className="w-10 h-10 mr-2 flex items-center justify-center overflow-hidden">
-                  <img 
-                    src={`/assets/symbols/${token.symbol}.svg`} 
-                    alt={token.symbol}
-                    className="w-full h-full object-contain"
-                    onError={handleImageError}
-                  />
+            <CardHeader className="p-6 pb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 mr-4 flex items-center justify-center overflow-hidden">
+                    <img 
+                      src={`/assets/symbols/${token.symbol}.svg`} 
+                      alt={token.symbol}
+                      className="w-full h-full object-contain"
+                      onError={handleImageError}
+                    />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl">{token.symbol}</CardTitle>
+                    <p className="text-xs text-muted-foreground">on {token.network}</p>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-lg">{token.symbol}</CardTitle>
-                  <p className="text-xs text-muted-foreground">on {token.network}</p>
+                <div className="text-right">
+                  <div className="text-lg font-bold">${(token.minStake * 23.5).toFixed(2)}M</div>
+                  <div className="text-xs text-muted-foreground">TVL</div>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="p-4 pt-0 pb-2">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">APY</span>
-                  <span className="text-sm text-emerald-500 font-medium">{token.apy}</span>
+              <div className="space-y-1 ">
+                <div className="flex justify-between bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
+                  <span className="text-md text-muted-foreground">APY</span>
+                  <span className="text-md text-emerald-500 font-medium">{token.apy}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">Min Stake</span>
-                  <span className="text-sm">{token.minStake} {token.symbol}</span>
+                <div className="flex justify-between bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
+                  <span className="text-md text-muted-foreground">30d Avg APY</span>
+                  <span className="text-md">8.97%</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium">Lock Period</span>
-                  <span className="text-sm">{token.lockPeriod}</span>
+                <div className="flex justify-between bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
+                  <span className="text-md text-muted-foreground">30d Prediction</span>
+                  <span className="text-md flex items-center">
+                    <span className="text-emerald-500">&gt;7.45%</span>
+                    <span className="ml-2 inline-flex flex-col justify-center">
+                      <span className="block w-5 h-0.5 bg-emerald-500 mb-0.5 rounded-full"></span>
+                      <span className="block w-4 h-0.5 bg-emerald-500 mb-0.5 rounded-full"></span>
+                      <span className="block w-3 h-0.5 bg-emerald-500 rounded-full"></span>
+                    </span>
+                  </span>
+                </div>
+                <div className="pt-1 bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
+                  <div className="text-md text-muted-foreground mt-1 mb-0.5">Historical APY</div>
+                  <div className="flex justify-between">
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs text-muted-foreground">24h</span>
+                      <span className="text-sm">-</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs text-muted-foreground">7d</span>
+                      <span className="text-sm text-emerald-500">9.53%</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xs text-muted-foreground">30d</span>
+                      <span className="text-sm text-emerald-500">9.57%</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
