@@ -1381,23 +1381,20 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark' }> = ({ forcedThem
                   <span className="text-md text-muted-foreground">APY</span>
                   <span className="text-md text-emerald-500 font-medium">{token.apy}</span>
                 </div>
-                <div className="flex justify-between bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
-                  <span className="text-md text-muted-foreground">30d Avg APY</span>
-                  <span className="text-md">8.97%</span>
+                <div className="grid grid-cols-2 gap-1">
+                  <div className="bg-[hsl(var(--color-widget-bg))] rounded-lg p-6 pt-4 pb-4 flex flex-col items-left">
+                    <span className="text-sm text-muted-foreground">30d Avg APY</span>
+                    <span className="text-md font-medium">8.97%</span>
+                  </div>
+                  <div className="bg-[hsl(var(--color-widget-bg))] rounded-lg p-6 pt-4 pb-4 flex flex-col items-left">
+                    <span className="text-sm text-muted-foreground">30d Prediction</span>
+                    <div className="flex flex-col items-left">
+                      <span className="text-md font-medium text-emerald-500">&gt;7.45%</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
-                  <span className="text-md text-muted-foreground">30d Prediction</span>
-                  <span className="text-md flex items-center">
-                    <span className="text-emerald-500">&gt;7.45%</span>
-                    <span className="ml-2 inline-flex flex-col justify-center">
-                      <span className="block w-5 h-0.5 bg-emerald-500 mb-0.5 rounded-full"></span>
-                      <span className="block w-4 h-0.5 bg-emerald-500 mb-0.5 rounded-full"></span>
-                      <span className="block w-3 h-0.5 bg-emerald-500 rounded-full"></span>
-                    </span>
-                  </span>
-                </div>
-                <div className="pt-1 bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
-                  <div className="text-md text-muted-foreground mt-1 mb-0.5">Historical APY</div>
+                <div className="pt-2 pb-3 bg-[hsl(var(--color-widget-bg))] rounded-lg p-6">
+                  <div className="text-sm text-muted-foreground mt-2 mb-0.5">Historical APY</div>
                   <div className="flex justify-between">
                     <div className="flex flex-col items-center">
                       <span className="text-xs text-muted-foreground">24h</span>
