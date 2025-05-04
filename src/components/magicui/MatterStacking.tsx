@@ -80,6 +80,10 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
     
     // Clear the engine
     if (engineRef.current) {
+      // Remove all entities from the world
+      Matter.Composite.remove(engineRef.current.world, engineRef.current.world.bodies);
+      Matter.Composite.remove(engineRef.current.world, engineRef.current.world.constraints);
+      Matter.Composite.remove(engineRef.current.world, engineRef.current.world.composites);
       Matter.Engine.clear(engineRef.current);
       engineRef.current = null;
     }
@@ -89,14 +93,39 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
       while (tokensContainerRef.current.firstChild) {
         tokensContainerRef.current.removeChild(tokensContainerRef.current.firstChild);
       }
+      
+      // Remove the container itself if it exists
+      if (tokensContainerRef.current.parentNode) {
+        tokensContainerRef.current.parentNode.removeChild(tokensContainerRef.current);
+      }
+      // Set to null using mutable ref pattern
+      const mutableRef = tokensContainerRef as React.MutableRefObject<HTMLDivElement | null>;
+      mutableRef.current = null;
     }
     
+    // Clear token elements array
     tokenElementsRef.current = [];
+    
+    // Clear mouse constraint
     mouseConstraintRef.current = null;
     
     // Log cleanup
-    console.log(`Cleaning up MatterStacking instance ${instanceId.current}`);
+    console.log(`Completely destroyed MatterStacking instance ${instanceId.current}`);
   };
+
+  // Add a new effect specifically for cleanup on unmount
+  useEffect(() => {
+    // This effect only handles unmounting
+    return () => {
+      // Force immediate cleanup on unmount
+      cleanup();
+      
+      // Set a flag to indicate this instance is no longer valid
+      instanceCountRef.current = -1;
+      
+      console.log(`Component unmounted - MatterStacking instance ${instanceId.current} cleanup complete`);
+    };
+  }, []);
 
   // Create a token element with better performance
   const createTokenElement = (
@@ -189,9 +218,18 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
     
     console.log(`Initializing MatterStacking instance ${instanceId.current}`);
     
+    // Perform cleanup before initializing a new instance
+    cleanup();
+    
     // Wait for the container to be measured
     const initTimeout = setTimeout(() => {
       try {
+        // If component has been unmounted, don't initialize
+        if (instanceCountRef.current === -1) {
+          console.log(`Aborting initialization of instance ${instanceId.current} because component was unmounted`);
+          return;
+        }
+        
         // If another instance has been created since, don't initialize
         if (instanceCountRef.current !== myInstanceCount) {
           console.log(`Aborting initialization of instance ${instanceId.current} due to newer instance`);
@@ -217,9 +255,6 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
         }
         
         console.log(`Initializing Matter.js with container dimensions: ${containerWidth}x${containerHeight}`);
-        
-        // Clean up any existing setup
-        cleanup();
         
         // Create tokens container
         if (!tokensContainerRef.current) {
@@ -356,13 +391,15 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
           
           // Hard limit check to prevent excessive memory usage
           if (tokenElementsRef.current.length >= hardLimit) {
-            // If we hit the hard limit, stop creating new elements until some are removed
+            // If we hit the hard limit, only remove tokens that are outside the view
             console.log(`Reached hard limit of ${hardLimit} tokens, waiting for cleanup...`);
             
-            // Remove the oldest elements when at hard limit
-            const excessCount = tokenElementsRef.current.length - hardLimit + 5; // Remove 5 extra to make room
-            if (excessCount > 0) {
-              const elementsToRemove = tokenElementsRef.current.slice(0, excessCount);
+            // Only remove tokens that have fallen below the container
+            const elementsToRemove = tokenElementsRef.current.filter(te => 
+              te.body.position.y > containerHeight + 100
+            );
+            
+            if (elementsToRemove.length > 0) {
               elementsToRemove.forEach(tokenElement => {
                 // Remove from Matter.js world
                 if (engineRef.current) {
@@ -376,19 +413,23 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
               });
               
               // Update the array
-              tokenElementsRef.current = tokenElementsRef.current.slice(excessCount);
+              tokenElementsRef.current = tokenElementsRef.current.filter(te => 
+                !elementsToRemove.includes(te)
+              );
             }
             
-            return;
+            // Only skip token creation if we're still at hard limit after cleanup
+            if (tokenElementsRef.current.length >= hardLimit) {
+              return;
+            }
           }
           
           // If we've reached max objects, slow down generation exponentially
           if (counter >= maxObjects) {
             const excess = counter - maxObjects;
             
-            // Stop creating new tokens if we're significantly over the limit
-            // Allow a few excess tokens for a smooth transition
-            if (excess > 10) {
+            // Allow more excess tokens before completely stopping generation
+            if (excess > 20 && tokenElementsRef.current.length >= maxObjects) {
               console.log(`Reached max objects limit (${maxObjects}) plus buffer, stopping token generation`);
               if (tokenIntervalId) {
                 clearInterval(tokenIntervalId);
@@ -474,8 +515,7 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
                 // Remove bodies from Matter world
                 Composite.remove(engineRef.current.world, elementsToRemove.map(te => te.body));
                 
-                // Remove elements from DOM in a batch
-                const fragment = document.createDocumentFragment();
+                // Remove elements from DOM
                 elementsToRemove.forEach(tokenElement => {
                   if (tokenElement.element && tokenElement.element.parentNode) {
                     tokenElement.element.parentNode.removeChild(tokenElement.element);
@@ -565,6 +605,59 @@ export const MatterStacking: React.FC<MatterStackingProps> = ({
       window.removeEventListener('resize', handleResize);
       if (resizeTimeout) {
         clearTimeout(resizeTimeout);
+      }
+    };
+  }, [isInitialized]);
+
+  // Add an effect to handle visibility change and navigation events
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    // Handler for when page becomes hidden (tab switch, navigation)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log(`Page hidden - pausing MatterStacking instance ${instanceId.current}`);
+        // If page is hidden, pause the runner
+        if (runnerRef.current) {
+          Matter.Runner.stop(runnerRef.current);
+        }
+      } else {
+        // Only restart if we still have a valid runner
+        if (runnerRef.current && engineRef.current) {
+          console.log(`Page visible - resuming MatterStacking instance ${instanceId.current}`);
+          Matter.Runner.start(runnerRef.current, engineRef.current);
+        }
+      }
+    };
+
+    // Handler for beforeunload (page navigation)
+    const handleBeforeUnload = () => {
+      console.log(`Page unloading - cleaning up MatterStacking instance ${instanceId.current}`);
+      cleanup();
+    };
+
+    // For single page apps, also listen to route changes
+    const handleRouteChange = () => {
+      console.log(`Route change detected - cleaning up MatterStacking instance ${instanceId.current}`);
+      cleanup();
+    };
+
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Listen for page unload
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // For SPA route changes - use history API if available
+    if (typeof window.history !== 'undefined') {
+      window.addEventListener('popstate', handleRouteChange);
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (typeof window.history !== 'undefined') {
+        window.removeEventListener('popstate', handleRouteChange);
       }
     };
   }, [isInitialized]);
