@@ -184,6 +184,17 @@ function AppContent() {
 
     window.addEventListener('resize', handleResize);
 
+    // Listen for custom navigation events from the EarnPage component
+    const handleCustomNavigation = (event: CustomEvent) => {
+      if (event.detail && event.detail.page) {
+        console.log('🔄 Received custom navigation event:', event.detail);
+        // Use the same page change handler as the TopBar component
+        setCurrentPage(event.detail.page);
+      }
+    };
+
+    document.addEventListener('app-navigation', handleCustomNavigation as EventListener);
+
     // Handle browser back/forward navigation
     const handlePopState = (event: PopStateEvent) => {
       const hasWidgetId = event.state && event.state.widgetId;
@@ -241,6 +252,7 @@ function AppContent() {
       }
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('app-navigation', handleCustomNavigation as EventListener);
     };
   }, [isMobile, currentPage, handleResize]);
 

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { WidgetContentOnly } from '@/components/WidgetContentOnly';
 import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
+import { PageType } from '@/layouts/types';
 
 /**
  * A static Earn page that renders the earn widgets directly without GridStack
@@ -13,10 +14,25 @@ export const EarnPage: React.FC = () => {
     console.log('EarnPage rendering widgets');
   }, []);
 
+  const handlePageChange = (page: PageType) => {
+    console.log('EarnPage handling page change to:', page);
+    
+    // Create and dispatch a custom event for the App component to listen for
+    const navigationEvent = new CustomEvent('app-navigation', {
+      detail: { page },
+      bubbles: true
+    });
+    document.dispatchEvent(navigationEvent);
+    
+    // Also update URL without page reload as a fallback
+    const url = page === 'dashboard' ? '/' : `/${page}`;
+    window.history.pushState({ page, timestamp: Date.now() }, '', url);
+  };
+
   return (
     <div className="flex flex-col h-screen">
       {/* Fixed header */}
-      <TopBar currentPage="earn" onPageChange={() => {}} />
+      <TopBar currentPage="earn" onPageChange={handlePageChange} />
       
       {/* Scrollable content area that takes remaining height */}
       <main className="flex-1 overflow-auto mt-16">
