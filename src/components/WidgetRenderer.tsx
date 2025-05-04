@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
+import { WidgetContentOnly } from './WidgetContentOnly';
 import { PerformanceWidgetWrapper } from './PerformanceWidgetWrapper';
 import { InsightWidgetControls } from './InsightWidget';
 import { ReferralsWrapper } from './ReferralsWidget';
@@ -18,6 +19,24 @@ import {
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
 
+// Check if widget should use content-only view
+const shouldUseContentOnly = (widgetId: string): boolean => {
+  try {
+    const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+    if (savedLayout) {
+      const layout = JSON.parse(savedLayout);
+      const widgetData = layout.find((item: any) => item.id === widgetId);
+      
+      if (widgetData?.viewState?.useContentOnly) {
+        return true;
+      }
+    }
+  } catch (error) {
+    console.error('Error checking for content-only flag:', error);
+  }
+  return false;
+};
+
 /**
  * Creates a new widget DOM element for GridStack
  */
@@ -29,7 +48,8 @@ export const createWidget = ({
   w = 3, 
   h = 4, 
   minW = 2, 
-  minH = 2 
+  minH = 2,
+  viewState
 }: CreateWidgetParams): HTMLElement | null => {
   if (!widgetType || !widgetId) {
     console.error('Invalid widget parameters:', { widgetType, widgetId });
@@ -82,11 +102,43 @@ export const createWidget = ({
   widgetElement.appendChild(widgetContent);
 
   try {
-    // Create wrapper for special components or use generic wrapper
-    let component;
+    // Check if this widget should use content-only mode
+    const useContentOnly = viewState?.useContentOnly || shouldUseContentOnly(widgetId);
     
-    // For performance widget, use specialized wrapper with header controls
-    if (widgetType === 'performance') {
+    // Declare component variable before using it
+    let component: React.ReactNode;
+    
+    if (useContentOnly) {
+      console.log(`Rendering widget ${widgetId} with content-only mode`);
+      // Get the widget's viewState
+      let effectiveViewState = viewState || {};
+      if (!viewState) {
+        try {
+          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          if (savedLayout) {
+            const layout = JSON.parse(savedLayout);
+            const widgetData = layout.find((item: any) => item.id === widgetId);
+            if (widgetData?.viewState) {
+              effectiveViewState = widgetData.viewState;
+            }
+          }
+        } catch (error) {
+          console.error('Error getting viewState for content-only widget:', error);
+        }
+      }
+
+      component = (
+        <DataSourceProvider>
+          <WidgetContentOnly
+            widgetType={widgetType}
+            widgetId={widgetId}
+            viewState={effectiveViewState}
+          />
+        </DataSourceProvider>
+      );
+    }
+    // Create wrapper for special components or use generic wrapper
+    else if (widgetType === 'performance') {
       // Get correct title from localStorage for performance widgets
       const widgetTitle = getPerformanceWidgetTitle(widgetId);
       
@@ -326,7 +378,23 @@ export const updateWidgetsDataSource = (
         x: node.x || 0,
         y: node.y || 0,
         w: node.w,
-        h: node.h
+        h: node.h,
+        // Pass the viewState from the layout to preserve content-only flag
+        viewState: (() => {
+          try {
+            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+            if (savedLayout) {
+              const layout = JSON.parse(savedLayout);
+              const widgetData = layout.find((item: any) => item.id === node.id);
+              if (widgetData?.viewState) {
+                return widgetData.viewState;
+              }
+            }
+          } catch (e) {
+            console.error('Error retrieving viewState during update:', e);
+          }
+          return undefined;
+        })()
       };
       
       // Remove the old element and replace with a new one
