@@ -98,7 +98,6 @@ export interface CreateWidgetParams {
   h?: number;
   minW?: number;
   minH?: number;
-  viewState?: Record<string, any>;
 }
 
 // Useful constants

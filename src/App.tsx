@@ -33,7 +33,6 @@ import {
   handleDirectUrlNavigation
 } from '@/lib/widgetDialogService';
 import { GlobalWidgetDialogRenderer } from './components/GlobalWidgetDialogRenderer';
-import { EarnPage } from './pages/EarnPage';
 
 // Check for direct dialog navigation as early as possible
 // This happens before any React component mounts
@@ -142,10 +141,9 @@ function AppContent() {
     pageChangeRef.current = handlePageChange;
   }, [handlePageChange]);
 
-  // Skip grid initialization on exchange rates route and earn page
+  // Skip grid initialization on exchange rates route
   useEffect(() => {
-    // Skip for exchange rates route and earn page
-    if (isExchangeRatesRoute || currentPage === 'earn') return;
+    if (isExchangeRatesRoute) return;
     
     try {
       if (!gridElementRef.current) {
@@ -500,20 +498,6 @@ function AppContent() {
         </div>
         <Toaster position="bottom-right" />
       </div>
-    );
-  }
-
-  // If we're on the earn page, render the custom EarnPage component
-  if (currentPage === 'earn') {
-    return (
-      <DataSourceProvider>
-        <EarnPage />
-        <Toaster 
-          position="bottom-right"
-          expand={false}
-          visibleToasts={16}
-        />
-      </DataSourceProvider>
     );
   }
 

@@ -16,7 +16,6 @@ export interface LayoutWidget {
     viewMode?: 'split' | 'cumulative' | 'combined';
     referralViewMode?: ReferralsViewMode;
     earnViewMode?: EarnViewMode;
-    useContentOnly?: boolean;
   };
 }
 
