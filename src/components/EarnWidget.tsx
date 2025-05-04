@@ -1357,8 +1357,6 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark', widgetId?: string
     }, 250);
   };
   
-<<<<<<< Updated upstream
-=======
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const target = e.target as HTMLImageElement;
     const token = target.alt;
@@ -1374,7 +1372,6 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark', widgetId?: string
     console.log(`CardGridView rendering with widgetId: ${widgetId}, isStatic: ${isOnStaticPage}`);
   }, [widgetId, isOnStaticPage]);
 
->>>>>>> Stashed changes
   return (
     <div className={`w-full ${isOnStaticPage ? '' : 'h-full overflow-auto'} p-4`}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
