@@ -37,11 +37,10 @@ export const EarnPage: React.FC = () => {
       {/* Scrollable content area that takes remaining height */}
       <main className="flex-1 overflow-auto mt-16">
         <div className="container mx-auto px-4 py-8 mb-0">
-          <h1 className="text-3xl font-bold mb-8">Earn</h1>
           
           {/* Promotional ripple section - matches earn-promo in earnLayout.ts */}
           <section className="mb-12">
-            <div className="bg-card rounded-lg shadow-sm overflow-hidden" style={{ height: '400px', position: 'relative' }}>
+            <div className="bg-card rounded-[2rem] shadow-sm overflow-hidden" style={{ height: '520px', position: 'relative' }}>
               <WidgetContentOnly 
                 key="earn-promo-widget"
                 widgetType="earn" 
@@ -53,9 +52,9 @@ export const EarnPage: React.FC = () => {
           
           {/* Staking cards section - matches earn-assets in earnLayout.ts */}
           <section className="mb-20">
-            <h2 className="text-2xl font-semibold mb-4">Staking Opportunities</h2>
+            {/* <h2 className="text-2xl font-semibold mb-4">Staking Opportunities</h2> */}
             {/* No fixed height, let content determine height */}
-            <div className="bg-card rounded-lg shadow-sm mb-4">
+            <div className="rounded-lg shadow-sm mb-4">
               <WidgetContentOnly 
                 key="earn-assets-widget"
                 widgetType="earn" 
