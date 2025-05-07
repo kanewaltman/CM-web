@@ -12,6 +12,47 @@ export const EarnPage: React.FC = () => {
   // Log widget rendering for debugging
   useEffect(() => {
     console.log('EarnPage rendering widgets');
+    
+    // Set up dialog height constraint
+    if (typeof window !== 'undefined') {
+      // Set a flag to enforce the 900px height constraint
+      sessionStorage.setItem('earn_dialog_height_constraint', 'true');
+      
+      // Add additional styles specifically for dialogs
+      const styleEl = document.createElement('style');
+      styleEl.setAttribute('id', 'earn-page-dialog-styles');
+      styleEl.textContent = `
+        /* Ensure dialogs from EarnPage are constrained to 900px */
+        [role="dialog"],
+        .dialog-content,
+        .DialogContent,
+        .DialogOverlay {
+          max-height: 750px !important;
+          overflow: hidden !important;
+        }
+        
+        /* For dialog content */
+        [role="dialog"] > div,
+        .dialog-content > div,
+        .DialogContent > div {
+          max-height: calc(900px - 2rem) !important;
+          overflow-y: auto !important;
+        }
+      `;
+      
+      // Only add if not already present
+      if (!document.getElementById('earn-page-dialog-styles')) {
+        document.head.appendChild(styleEl);
+      }
+      
+      return () => {
+        // Clean up styles and session flag when leaving the page
+        sessionStorage.removeItem('earn_dialog_height_constraint');
+        if (document.getElementById('earn-page-dialog-styles')) {
+          document.head.removeChild(styleEl);
+        }
+      };
+    }
   }, []);
 
   const handlePageChange = (page: PageType) => {

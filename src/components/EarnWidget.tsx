@@ -18,12 +18,28 @@ import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip }
 import { ChartContainer, ChartConfig } from './ui/chart';
 import { openWidgetDialog, resetDialogOpenedState, forceOpenDialog } from '@/lib/widgetDialogService';
 import { ShimmerButton } from './magicui/shimmer-button';
+import { Input } from './ui/input';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from './ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select';
+
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from './ui/table';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -129,14 +145,20 @@ const handleTokenStake = (token: string) => {
   // Set a flag in sessionStorage to indicate the exact asset we want to maintain
   sessionStorage.setItem('selected_stake_asset', token);
   
+  // Check if we're on the EarnPage to add the max-height constraint
+  const isEarnPage = window.location.pathname === '/earn';
+  
   // When on earn page, update URL with the correct asset parameter
-  if (window.location.pathname === '/earn') {
+  if (isEarnPage) {
     // Don't clear the hash first - instead set the properly formatted URL directly
     window.history.replaceState(
       null, 
       '', 
       `${window.location.pathname}#widget=earn-stake&asset=${token}`
     );
+    
+    // Set a flag for the dialog height constraint
+    sessionStorage.setItem('earn_dialog_height_constraint', 'true');
   }
   
   // Put a small delay to ensure everything is cleared
@@ -228,6 +250,9 @@ export function openEarnWidgetWithAsset(asset: string) {
         '', 
         `${window.location.pathname}#widget=earn-stake&asset=${asset}`
       );
+      
+      // Set a flag for the dialog height constraint
+      sessionStorage.setItem('earn_dialog_height_constraint', 'true');
     } else {
       // Not on earn page, use updateUrlWithAsset
       updateUrlWithAsset(asset);
@@ -255,6 +280,9 @@ export function openEarnWidgetWithAsset(asset: string) {
       '', 
       `${window.location.pathname}#widget=earn-stake&asset=${asset}`
     );
+    
+    // Set a flag for the dialog height constraint
+    sessionStorage.setItem('earn_dialog_height_constraint', 'true');
   } else {
     // Not on earn page, use updateUrlWithAsset
     updateUrlWithAsset(asset);
@@ -1388,7 +1416,7 @@ const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark', widgetId?: string
         <Card 
           key={token.symbol} 
           className={cn(
-            "overflow-hidden hover:shadow-md transition-shadow bg-[hsl(var(--color-primary-foreground))]",
+            "overflow-hidden hover:shadow-md transition-shadow bg-[hsl(var(--primary-foreground))]",
             forcedTheme === 'dark' ? "border-border" : "border-border"
           )}
         >
@@ -1566,6 +1594,7 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
   
   const [stakeAmount, setStakeAmount] = useState(100);
   const [sliderValue, setSliderValue] = useState(25);
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState("1y");
   const inDialogRef = useRef(false);
   
   // Update selected asset if initialAsset changes after first render
@@ -1636,8 +1665,7 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
   }, []);
   
   // Handle asset selection change from dropdown
-  const handleAssetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newAsset = e.target.value;
+  const handleAssetChange = (newAsset: string) => {
     console.log('🔄 User changed asset selection to:', newAsset);
     
     // Mark this as a user-initiated change
@@ -1783,15 +1811,42 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     return data;
   }, [selectedAsset]);
   
-  // Get estimated earnings based on stake amount and current APY
-  const estimatedEarnings = useMemo(() => {
+  // Get estimated earnings and modifiers for all time frames
+  const estimatedEarningsWithModifiers = useMemo(() => {
     const currentApy = apyHistoryData[apyHistoryData.length - 1].apy;
     const annual = (stakeAmount * currentApy) / 100;
+    
+    // Time frame modifiers (realistic multipliers that would apply for different durations)
+    const modifiers = {
+      "1m": { factor: 0.75, label: "-25%" },  // Lower APY for 1 month lockup
+      "3m": { factor: 0.9, label: "-10%" },   // Slightly lower for 3 month lockup
+      "6m": { factor: 1.0, label: "BASE" },   // Base rate for 6 month lockup
+      "1y": { factor: 1.15, label: "+15%" },  // Bonus for 1 year lockup
+      "2y": { factor: 1.25, label: "+25%" }   // Maximum bonus for 2 year lockup
+    };
+    
+    // Calculate earnings for each time frame
     return {
-      daily: (annual / 365).toFixed(2),
-      weekly: (annual / 52).toFixed(2),
-      monthly: (annual / 12).toFixed(2),
-      annual: annual.toFixed(2)
+      "1m": {
+        earnings: ((annual / 12) * modifiers["1m"].factor).toFixed(2),
+        modifier: modifiers["1m"].label
+      },
+      "3m": {
+        earnings: ((annual / 4) * modifiers["3m"].factor).toFixed(2),
+        modifier: modifiers["3m"].label
+      },
+      "6m": {
+        earnings: ((annual / 2) * modifiers["6m"].factor).toFixed(2),
+        modifier: modifiers["6m"].label
+      },
+      "1y": {
+        earnings: (annual * modifiers["1y"].factor).toFixed(2),
+        modifier: modifiers["1y"].label
+      },
+      "2y": {
+        earnings: (annual * 2 * modifiers["2y"].factor).toFixed(2), // 2 years
+        modifier: modifiers["2y"].label
+      }
     };
   }, [stakeAmount, apyHistoryData]);
   
@@ -1813,49 +1868,66 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     setStakeAmount(Math.round((newValue / 100) * 1000));
   };
 
+  // Handle time frame changes
+  const handleTimeFrameChange = (value: string) => {
+    setSelectedTimeFrame(value);
+  };
+
   return (
-    <div className="w-full h-full overflow-auto p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left column - Asset selection and amount */}
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Select Asset</label>
-            <select 
-              value={selectedAsset}
-              onChange={handleAssetChange}
-              className={cn(
-                "w-full h-10 px-3 py-2 rounded-md border text-sm",
-                forcedTheme === 'dark' ? "bg-background border-slate-100" : "bg-background border-slate-100"
-              )}
-            >
-              {stakingTokens.map(token => (
-                <option key={token} value={token}>{token}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Stake Amount</label>
-            <div className="relative">
-              <input
-                type="number"
-                value={stakeAmount}
-                onChange={handleAmountChange}
-                min="0"
-                className={cn(
-                  "w-full h-10 px-3 py-2 rounded-md border text-sm",
-                  forcedTheme === 'dark' ? "bg-background border-slate-100" : "bg-background border-slate-100"
-                )}
-              />
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm font-medium">
-                {selectedAsset}
+    <div className="w-full h-full flex flex-col overflow-auto p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow">
+        {/* Left column - Asset selection and amount (order-2 makes it appear second on mobile) */}
+        <div className="space-y-6 order-2 lg:order-1 flex flex-col">
+          <div className="flex gap-4">
+            <div className="w-1/3 flex flex-col gap-2">
+              <label className="text-sm font-medium">Select Asset</label>
+              <Select
+                value={selectedAsset}
+                onValueChange={handleAssetChange}
+              >
+                <SelectTrigger className={cn(
+                  "w-full", 
+                  "border-[hsl(var(--color-widget-inset-border))]"
+                )}>
+                  <SelectValue>{selectedAsset}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {stakingTokens.map(token => (
+                    <SelectItem key={token} value={token}>{token}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex-1 flex flex-col gap-2">
+              <label className="text-sm font-medium">Stake Amount</label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  value={stakeAmount}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value) && value >= 0) {
+                      setStakeAmount(value);
+                      setSliderValue(Math.min(100, Math.round((value / 1000) * 100)));
+                    }
+                  }}
+                  min="0"
+                  className={cn(
+                    "pr-12",
+                    "border-[hsl(var(--color-widget-inset-border))]"
+                  )}
+                />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm font-medium">
+                  {selectedAsset}
+                </div>
               </div>
             </div>
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <label className="text-sm font-medium">Adjust Amount</label>
+              <label className="text-sm font-medium pb-2">Adjust Amount</label>
               <span className="text-xs text-muted-foreground">{sliderValue}%</span>
             </div>
             <Slider
@@ -1863,60 +1935,168 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
               min={0}
               max={100}
               step={1}
-              onValueChange={handleSliderChange}
-              className="my-4"
+              onValueChange={(value) => {
+                const newValue = value[0];
+                setSliderValue(newValue);
+                // Update stake amount based on slider (max 1000)
+                setStakeAmount(Math.round((newValue / 100) * 1000));
+              }}
+              className={cn("my-4", "border-[hsl(var(--color-widget-inset-border))]")}
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>0 {selectedAsset}</span>
               <span>1000 {selectedAsset}</span>
             </div>
           </div>
-          
-          <div className={cn(
-            "rounded-md border p-4",
-            forcedTheme === 'dark' ? "border-slate-800" : "border-slate-100"
-          )}>
-            <h3 className="text-sm font-medium mb-3">Estimated Earnings</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Daily</span>
-                <span>{estimatedEarnings.daily} {selectedAsset}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Weekly</span>
-                <span>{estimatedEarnings.weekly} {selectedAsset}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Monthly</span>
-                <span>{estimatedEarnings.monthly} {selectedAsset}</span>
-              </div>
-              <div className="flex justify-between font-medium">
-                <span>Annual</span>
-                <span>{estimatedEarnings.annual} {selectedAsset}</span>
-              </div>
-            </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-mediu pb-2">Time Frame</label>
+            <Tabs value={selectedTimeFrame} onValueChange={handleTimeFrameChange} className="w-full">
+              <TabsList className="grid grid-cols-5 w-full">
+                <TabsTrigger value="1m">1M</TabsTrigger>
+                <TabsTrigger value="3m">3M</TabsTrigger>
+                <TabsTrigger value="6m">6M</TabsTrigger>
+                <TabsTrigger value="1y">1Y</TabsTrigger>
+                <TabsTrigger value="2y">2Y</TabsTrigger>
+              </TabsList>
+              <TabsContent value="1m" />
+              <TabsContent value="3m" />
+              <TabsContent value="6m" />
+              <TabsContent value="1y" />
+              <TabsContent value="2y" />
+            </Tabs>
           </div>
           
-          <Button className="w-full">Continue to Stake</Button>
+          <Button 
+            className={cn("w-full mb-4")}
+            variant="default"
+            size="lg"
+          >
+            Continue to Stake
+          </Button>
+
+          <Card className={cn(
+            "border-[hsl(var(--color-widget-inset-border))]",
+            "flex-grow"
+          )}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium pb-2">Estimated Earnings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time Frame</TableHead>
+                    <TableHead>Modifier</TableHead>
+                    <TableHead className="text-right">Earnings</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow className={selectedTimeFrame === "1m" ? "bg-accent/40" : ""}>
+                    <TableCell className="font-medium">1 Month</TableCell>
+                    <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["1m"].modifier}</TableCell>
+                    <TableCell className="text-right">{estimatedEarningsWithModifiers["1m"].earnings} {selectedAsset}</TableCell>
+                  </TableRow>
+                  <TableRow className={selectedTimeFrame === "3m" ? "bg-accent/40" : ""}>
+                    <TableCell className="font-medium">3 Months</TableCell>
+                    <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["3m"].modifier}</TableCell>
+                    <TableCell className="text-right">{estimatedEarningsWithModifiers["3m"].earnings} {selectedAsset}</TableCell>
+                  </TableRow>
+                  <TableRow className={selectedTimeFrame === "6m" ? "bg-accent/40" : ""}>
+                    <TableCell className="font-medium">6 Months</TableCell>
+                    <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["6m"].modifier}</TableCell>
+                    <TableCell className="text-right">{estimatedEarningsWithModifiers["6m"].earnings} {selectedAsset}</TableCell>
+                  </TableRow>
+                  <TableRow className={selectedTimeFrame === "1y" ? "bg-accent/40" : ""}>
+                    <TableCell className="font-medium">1 Year</TableCell>
+                    <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["1y"].modifier}</TableCell>
+                    <TableCell className="text-right">{estimatedEarningsWithModifiers["1y"].earnings} {selectedAsset}</TableCell>
+                  </TableRow>
+                  <TableRow className={selectedTimeFrame === "2y" ? "bg-accent/40" : ""}>
+                    <TableCell className="font-medium">2 Years</TableCell>
+                    <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["2y"].modifier}</TableCell>
+                    <TableCell className="text-right">{estimatedEarningsWithModifiers["2y"].earnings} {selectedAsset}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </div>
         
-        {/* Right column - APY Chart */}
-        <div className={cn(
-          "rounded-md border p-4 flex flex-col",
-          forcedTheme === 'dark' ? "border-slate-800" : "border-slate-100"
+        {/* Right column - APY Chart (order-1 makes it appear first on mobile) */}
+        <Card className={cn(
+          "flex flex-col order-1 lg:order-2 h-full",
+          "border-[hsl(var(--color-widget-inset-border))]"
         )}>
-          <h3 className="text-sm font-medium mb-2">APY History ({selectedAsset})</h3>
-          <div className="text-emerald-500 text-2xl font-semibold mb-4">
-            {apyHistoryData[apyHistoryData.length - 1].apy}%
-          </div>
-          <div className="flex-1 min-h-[300px]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Estimated Earnings ({selectedAsset})</CardTitle>
+            <div className="text-emerald-500 text-2xl font-semibold">
+              {estimatedEarningsWithModifiers[selectedTimeFrame as keyof typeof estimatedEarningsWithModifiers].earnings} {selectedAsset}
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 h-full">
+            <style>{`
+              /* Chart theme compatibility styles */
+              .recharts-wrapper .recharts-cartesian-axis-tick text {
+                fill: hsl(var(--muted-foreground));
+              }
+              
+              .recharts-cartesian-grid-horizontal line,
+              .recharts-cartesian-grid-vertical line {
+                stroke: hsl(var(--border));
+              }
+              
+              .recharts-active-dot {
+                stroke: hsl(var(--background));
+              }
+            `}</style>
+            
             <ChartContainer
-              config={{ apy: { label: 'APY %', color: 'hsl(var(--primary))' } }}
+              config={{ earnings: { label: 'Earnings', color: 'hsl(var(--primary))' } }}
               className="h-full w-full"
             >
               <LineChart
-                data={apyHistoryData}
+                data={[
+                  {
+                    timeFrame: "1m",
+                    label: "1 Month",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["1m"].earnings),
+                    isSelected: selectedTimeFrame === "1m"
+                  },
+                  {
+                    timeFrame: "3m",
+                    label: "3 Months",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["3m"].earnings),
+                    isSelected: selectedTimeFrame === "3m"
+                  },
+                  {
+                    timeFrame: "6m",
+                    label: "6 Months",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["6m"].earnings),
+                    isSelected: selectedTimeFrame === "6m"
+                  },
+                  {
+                    timeFrame: "1y",
+                    label: "1 Year",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["1y"].earnings),
+                    isSelected: selectedTimeFrame === "1y"
+                  },
+                  {
+                    timeFrame: "2y",
+                    label: "2 Years",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["2y"].earnings),
+                    isSelected: selectedTimeFrame === "2y"
+                  }
+                ]}
                 margin={{ left: 0, right: 20, top: 10, bottom: 0 }}
+                onClick={(data) => {
+                  if (data && data.activePayload && data.activePayload[0]) {
+                    const payload = data.activePayload[0].payload;
+                    if (payload && payload.timeFrame) {
+                      handleTimeFrameChange(payload.timeFrame);
+                    }
+                  }
+                }}
               >
                 <CartesianGrid 
                   strokeDasharray="3 3" 
@@ -1924,36 +2104,127 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
                   stroke="hsl(var(--color-border-muted))"
                 />
                 <XAxis 
-                  dataKey="timestamp" 
+                  dataKey="label" 
                   tickLine={false}
-                  tickFormatter={(value) => {
-                    const date = new Date(value);
-                    return `${date.getDate()}/${date.getMonth() + 1}`;
-                  }}
                   stroke="hsl(var(--color-border-muted))"
+                  tick={(props) => {
+                    const { x, y, payload } = props;
+                    
+                    // Define the order of time frames for comparison
+                    const timeFrameOrder = ["1 Month", "3 Months", "6 Months", "1 Year", "2 Years"];
+                    const selectedTimeLabel = selectedTimeFrame === "1m" ? "1 Month" :
+                                              selectedTimeFrame === "3m" ? "3 Months" :
+                                              selectedTimeFrame === "6m" ? "6 Months" :
+                                              selectedTimeFrame === "1y" ? "1 Year" : "2 Years";
+                    
+                    // Check if this label is before or equal to the selected time frame
+                    const currentIndex = timeFrameOrder.indexOf(payload.value);
+                    const selectedIndex = timeFrameOrder.indexOf(selectedTimeLabel);
+                    const shouldHighlight = currentIndex <= selectedIndex;
+                    
+                    // Apply styles directly with !important to override global CSS
+                    const style = {
+                      fill: shouldHighlight ? "hsl(var(--primary))" : "hsl(var(--foreground))",
+                      fontWeight: shouldHighlight ? 600 : 400,
+                    };
+                    
+                    return (
+                      <g style={{ fontFamily: 'inherit' }}>
+                        <text 
+                          x={x} 
+                          y={y + 10} 
+                          textAnchor="middle" 
+                          fontSize="12px"
+                          style={style}
+                        >
+                          {payload.value}
+                        </text>
+                      </g>
+                    );
+                  }}
                 />
                 <YAxis 
                   tickLine={false}
                   axisLine={false}
                   domain={['dataMin - 1', 'dataMax + 1']}
-                  tickFormatter={(value) => `${value}%`}
+                  tickFormatter={(value) => `${value} ${selectedAsset}`}
+                  tick={(props) => {
+                    const { x, y, payload } = props;
+                    
+                    // Style to match overall theme
+                    const style = {
+                      fill: 'hsl(var(--muted-foreground))',
+                      fontSize: '11px'
+                    };
+                    
+                    return (
+                      <g transform={`translate(${x},${y})`}>
+                        <text 
+                          x={0} 
+                          y={0} 
+                          dy={3}
+                          textAnchor="end"
+                          style={style}
+                        >
+                          {`${payload.value} ${selectedAsset}`}
+                        </text>
+                      </g>
+                    );
+                  }}
                 />
                 <Line
                   type="monotone"
-                  dataKey="apy"
-                  stroke="hsl(var(--primary))"
+                  dataKey="earnings"
+                  stroke="hsl(var(--color-widget-inset-border))"
                   strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 6 }}
+                  className="recharts-line-earnings"
+                  dot={(props) => {
+                    const { cx, cy, payload } = props;
+                    return payload.isSelected ? (
+                      <circle cx={cx} cy={cy} r={6} fill="hsl(var(--primary))" />
+                    ) : (
+                      <circle cx={cx} cy={cy} r={4} fill="hsl(var(--primary))" />
+                    );
+                  }}
+                  activeDot={{
+                    r: 8,
+                    fill: 'hsl(var(--primary))',
+                    stroke: 'hsl(var(--background))',
+                    strokeWidth: 2,
+                    className: 'earnings-active-dot'
+                  }}
                 />
-                <ChartTooltip
-                  labelFormatter={(value) => `Date: ${value}`}
-                  formatter={(value: number) => [`${value}%`, 'APY']}
+                <ChartTooltip 
+                  cursor={{
+                    stroke: 'hsl(var(--primary))',
+                    strokeWidth: 1,
+                    strokeDasharray: '3 3'
+                  }}
+                  content={(props) => {
+                    const { active, payload, label } = props || {};
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="p-2 rounded-md shadow-md border text-sm" 
+                          style={{
+                            backgroundColor: 'hsl(var(--background))', 
+                            borderColor: 'hsl(var(--border))',
+                            color: 'hsl(var(--foreground))'
+                          }}
+                        >
+                          <p className="font-medium mb-1">Time Frame: {label}</p>
+                          <p className="font-semibold" style={{ color: 'hsl(var(--primary))' }}>
+                            {payload[0].value} {selectedAsset}
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
               </LineChart>
             </ChartContainer>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -2025,6 +2296,9 @@ export function forceOpenEarnDialog(asset: string) {
       '', 
       `${window.location.pathname}#widget=earn-stake&asset=${asset}`
     );
+    
+    // Set a flag for the dialog height constraint
+    sessionStorage.setItem('earn_dialog_height_constraint', 'true');
   } else {
     updateUrlWithAsset(asset);
   }
@@ -2032,4 +2306,96 @@ export function forceOpenEarnDialog(asset: string) {
   // Open dialog with a new event ID to ensure it's processed
   const eventId = `force-open-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   openWidgetDialog('earn-stake', 'direct', asset, true);
+}
+
+// Add this new function to apply the dialog height constraint styles
+function applyDialogHeightConstraints() {
+  // Add a MutationObserver to watch for dialog elements being added to the DOM
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.addedNodes.length) {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const element = node as Element;
+            
+            // Check if this is a dialog or contains a dialog
+            const dialogs = [
+              ...Array.from(element.querySelectorAll('[role="dialog"]')), 
+              ...Array.from(element.querySelectorAll('.dialog-content')),
+              ...Array.from(element.querySelectorAll('.DialogContent')),
+              ...Array.from(element.querySelectorAll('.DialogOverlay'))
+            ];
+            
+            // If we're on the earn page and the constraint flag is set
+            if (window.location.pathname === '/earn' && 
+                sessionStorage.getItem('earn_dialog_height_constraint') === 'true') {
+              // Apply height constraint to all found dialog elements
+              dialogs.forEach(dialog => {
+                console.log('📏 Applying max height constraint to dialog:', dialog);
+                
+                // Apply the max height directly
+                (dialog as HTMLElement).style.maxHeight = '900px';
+                
+                // Also add a class for any CSS styling
+                dialog.classList.add('earn-page-dialog');
+                
+                // For nested content, find the primary content container
+                const dialogContent = dialog.querySelector('.dialog-content') || 
+                                    dialog.querySelector('.DialogContent') || 
+                                    dialog;
+                                  
+                if (dialogContent && dialogContent !== dialog) {
+                  (dialogContent as HTMLElement).style.maxHeight = 'calc(900px - 2rem)';
+                  dialogContent.classList.add('earn-page-dialog-content');
+                }
+              });
+            }
+          }
+        });
+      }
+    });
+  });
+  
+  // Start observing the document body for dialog insertions
+  observer.observe(document.body, { childList: true, subtree: true });
+  
+  // Add global styles for these dialogs
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    .earn-page-dialog {
+      max-height: 900px !important;
+      overflow: hidden !important;
+    }
+    
+    .earn-page-dialog-content {
+      max-height: calc(900px - 2rem) !important;
+      overflow-y: auto !important;
+    }
+    
+    /* Target common dialog wrappers */
+    [role="dialog"].earn-page-dialog,
+    .dialog-content.earn-page-dialog,
+    .DialogContent.earn-page-dialog,
+    .DialogOverlay.earn-page-dialog {
+      max-height: 900px !important;
+      overflow: hidden !important;
+    }
+  `;
+  document.head.appendChild(styleEl);
+  
+  // Clean up when component is unmounted
+  return () => {
+    observer.disconnect();
+    if (document.head.contains(styleEl)) {
+      document.head.removeChild(styleEl);
+    }
+  };
+}
+
+// Run this function once when the module loads
+if (typeof window !== 'undefined') {
+  const cleanup = applyDialogHeightConstraints();
+  
+  // Clean up when page unloads
+  window.addEventListener('beforeunload', cleanup);
 } 
