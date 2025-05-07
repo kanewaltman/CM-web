@@ -40,6 +40,8 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from './ui/table';
+import { AssetButtonWithPrice } from './AssetPriceTooltip';
+import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -574,6 +576,52 @@ const detectAndHandleAssetUrl = () => {
       }, 250);
     }
   }
+};
+
+// Update the AssetIcon component to support size options and text hiding
+const AssetIcon: React.FC<{ 
+  asset: AssetTicker, 
+  iconPosition?: 'before' | 'after',
+  iconSize?: 'small' | 'medium' | 'large',
+  showText?: boolean,
+  className?: string
+}> = ({ 
+  asset, 
+  iconPosition = 'after',
+  iconSize = 'small',
+  showText = true,
+  className = '' 
+}) => {
+  const assetConfig = ASSETS[asset];
+  
+  // Determine size class based on iconSize prop
+  const sizeClass = iconSize === 'large' ? 'w-6 h-6' : 
+                   iconSize === 'medium' ? 'w-5 h-5' : 'w-4 h-4';
+  
+  const iconElement = assetConfig?.icon ? (
+    <img
+      src={assetConfig.icon}
+      alt={asset}
+      className={`${sizeClass} object-contain`}
+      onError={(e) => {
+        // Replace with letter placeholder on image load error
+        const target = e.target as HTMLImageElement;
+        target.outerHTML = `<span class="${sizeClass} rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">${asset.charAt(0)}</span>`;
+      }}
+    />
+  ) : (
+    <span className={`${sizeClass} rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold`}>
+      {asset.charAt(0)}
+    </span>
+  );
+  
+  return (
+    <span className={`inline-flex items-center gap-1 ${className}`}>
+      {iconPosition === 'before' && iconElement}
+      {showText && <span>{asset}</span>}
+      {iconPosition === 'after' && iconElement}
+    </span>
+  );
 };
 
 export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
@@ -1816,6 +1864,17 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     const currentApy = apyHistoryData[apyHistoryData.length - 1].apy;
     const annual = (stakeAmount * currentApy) / 100;
     
+    // Safety function to prevent extreme values
+    const safeEarnings = (value: number) => {
+      // Ensure returned value is a reasonable number for display
+      if (!isFinite(value) || isNaN(value)) return "0.00";
+      // Cap at 10,000 for display purposes
+      const cappedValue = Math.min(value, 10000);
+      if (cappedValue >= 100) return cappedValue.toFixed(2);
+      if (cappedValue >= 10) return cappedValue.toFixed(2);
+      return cappedValue.toFixed(2);
+    };
+    
     // Time frame modifiers (realistic multipliers that would apply for different durations)
     const modifiers = {
       "1m": { factor: 0.75, label: "-25%" },  // Lower APY for 1 month lockup
@@ -1828,23 +1887,23 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     // Calculate earnings for each time frame
     return {
       "1m": {
-        earnings: ((annual / 12) * modifiers["1m"].factor).toFixed(2),
+        earnings: safeEarnings((annual / 12) * modifiers["1m"].factor),
         modifier: modifiers["1m"].label
       },
       "3m": {
-        earnings: ((annual / 4) * modifiers["3m"].factor).toFixed(2),
+        earnings: safeEarnings((annual / 4) * modifiers["3m"].factor),
         modifier: modifiers["3m"].label
       },
       "6m": {
-        earnings: ((annual / 2) * modifiers["6m"].factor).toFixed(2),
+        earnings: safeEarnings((annual / 2) * modifiers["6m"].factor),
         modifier: modifiers["6m"].label
       },
       "1y": {
-        earnings: (annual * modifiers["1y"].factor).toFixed(2),
+        earnings: safeEarnings(annual * modifiers["1y"].factor),
         modifier: modifiers["1y"].label
       },
       "2y": {
-        earnings: (annual * 2 * modifiers["2y"].factor).toFixed(2), // 2 years
+        earnings: safeEarnings(annual * 2 * modifiers["2y"].factor), // 2 years
         modifier: modifiers["2y"].label
       }
     };
@@ -1873,11 +1932,301 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     setSelectedTimeFrame(value);
   };
 
+  // Create a function to calculate reasonable chart bounds based on earnings values
+  const getChartYDomain = () => {
+    // Get all the earnings values
+    const values = [
+      parseFloat(estimatedEarningsWithModifiers["1m"].earnings),
+      parseFloat(estimatedEarningsWithModifiers["3m"].earnings),
+      parseFloat(estimatedEarningsWithModifiers["6m"].earnings),
+      parseFloat(estimatedEarningsWithModifiers["1y"].earnings),
+      parseFloat(estimatedEarningsWithModifiers["2y"].earnings)
+    ].filter(val => !isNaN(val) && isFinite(val) && val >= 0);
+    
+    if (values.length === 0) return [0, 10];
+    
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    
+    // Add a bit of padding (10%) for visual appeal
+    const padding = (max - min) * 0.1;
+    
+    // Ensure minimum is never below zero for this chart
+    return [Math.max(0, min - padding), max + padding];
+  };
+
   return (
     <div className="w-full h-full flex flex-col overflow-auto p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow">
-        {/* Left column - Asset selection and amount (order-2 makes it appear second on mobile) */}
-        <div className="space-y-6 order-2 lg:order-1 flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow">
+        {/* Left column - Chart (order-2 makes it appear second on mobile) */}
+        <Card className={cn(
+          "flex flex-col order-2 lg:order-1 h-full lg:col-span-2",
+          "border-[hsl(var(--color-widget-inset-border))]"
+        )}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Estimated Earnings (<AssetButtonWithPrice asset={selectedAsset as AssetTicker} />)</CardTitle>
+            <div className="text-emerald-500 text-2xl font-semibold">
+              {estimatedEarningsWithModifiers[selectedTimeFrame as keyof typeof estimatedEarningsWithModifiers].earnings} <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="after" iconSize="large" />
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 h-full">
+            <style>{`
+              /* Chart theme compatibility styles */
+              .recharts-wrapper .recharts-cartesian-axis-tick text {
+                fill: hsl(var(--muted-foreground));
+              }
+              
+              .recharts-cartesian-grid-horizontal line,
+              .recharts-cartesian-grid-vertical line {
+                stroke: hsl(var(--border));
+              }
+              
+              .recharts-active-dot {
+                stroke: hsl(var(--background));
+              }
+              
+              /* Style for the highlight line */
+              .recharts-line-selected path {
+                stroke: hsl(142.1 76.2% 36.3%);
+                stroke-width: 3;
+              }
+            `}</style>
+            
+            <ChartContainer
+              config={{ earnings: { label: 'Earnings', color: 'hsl(var(--primary))' } }}
+              className="h-full w-full"
+            >
+              <LineChart
+                data={[
+                  {
+                    timeFrame: "1m",
+                    label: "1 Month",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["1m"].earnings),
+                    isSelected: selectedTimeFrame === "1m"
+                  },
+                  {
+                    timeFrame: "3m",
+                    label: "3 Months",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["3m"].earnings),
+                    isSelected: selectedTimeFrame === "3m"
+                  },
+                  {
+                    timeFrame: "6m",
+                    label: "6 Months",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["6m"].earnings),
+                    isSelected: selectedTimeFrame === "6m"
+                  },
+                  {
+                    timeFrame: "1y",
+                    label: "1 Year",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["1y"].earnings),
+                    isSelected: selectedTimeFrame === "1y"
+                  },
+                  {
+                    timeFrame: "2y",
+                    label: "2 Years",
+                    earnings: parseFloat(estimatedEarningsWithModifiers["2y"].earnings),
+                    isSelected: selectedTimeFrame === "2y"
+                  }
+                ]}
+                margin={{ left: 0, right: 20, top: 10, bottom: 0 }}
+                onClick={(data) => {
+                  if (data && data.activePayload && data.activePayload[0]) {
+                    const payload = data.activePayload[0].payload;
+                    if (payload && payload.timeFrame) {
+                      handleTimeFrameChange(payload.timeFrame);
+                    }
+                  }
+                }}
+              >
+                <CartesianGrid 
+                  strokeDasharray="3 3" 
+                  vertical={false}
+                  stroke="hsl(var(--color-border-muted))"
+                />
+                <XAxis 
+                  dataKey="label" 
+                  tickLine={false}
+                  stroke="hsl(var(--color-border-muted))"
+                  tick={(props) => {
+                    const { x, y, payload } = props;
+                    
+                    // Define the order of time frames for comparison
+                    const timeFrameOrder = ["1 Month", "3 Months", "6 Months", "1 Year", "2 Years"];
+                    const selectedTimeLabel = selectedTimeFrame === "1m" ? "1 Month" :
+                                              selectedTimeFrame === "3m" ? "3 Months" :
+                                              selectedTimeFrame === "6m" ? "6 Months" :
+                                              selectedTimeFrame === "1y" ? "1 Year" : "2 Years";
+                    
+                    // Check if this label is before or equal to the selected time frame
+                    const currentIndex = timeFrameOrder.indexOf(payload.value);
+                    const selectedIndex = timeFrameOrder.indexOf(selectedTimeLabel);
+                    const shouldHighlight = currentIndex <= selectedIndex;
+                    
+                    // Apply styles directly with !important to override global CSS
+                    const style = {
+                      fill: shouldHighlight ? "hsl(142.1 76.2% 36.3%)" : "hsl(var(--foreground))",
+                      fontWeight: shouldHighlight ? 600 : 400,
+                    };
+                    
+                    return (
+                      <g style={{ fontFamily: 'inherit' }}>
+                        <text 
+                          x={x} 
+                          y={y + 10} 
+                          textAnchor="middle" 
+                          fontSize="12px"
+                          style={style}
+                        >
+                          {payload.value}
+                        </text>
+                      </g>
+                    );
+                  }}
+                />
+                <YAxis 
+                  tickLine={false}
+                  axisLine={false}
+                  domain={[0, 'auto']}
+                  minTickGap={20}
+                  allowDecimals={true}
+                  tickCount={5}
+                  tickFormatter={(value) => {
+                    // Hide the bottom label (0)
+                    if (value === 0 || value < 0.01) return '';
+                    
+                    // Ensure value is a reasonable number to display
+                    if (!isFinite(value) || isNaN(value)) return '';
+                    if (value > 10000) return `${Math.round(value / 1000)}k ${selectedAsset}`;
+                    if (value >= 100) return `${value.toFixed(0)} ${selectedAsset}`;
+                    if (value >= 10) return `${value.toFixed(1)} ${selectedAsset}`;
+                    return `${value.toFixed(2)} ${selectedAsset}`;
+                  }}
+                />
+                
+                {/* Base line showing all data points */}
+                <Line
+                  type="monotone"
+                  dataKey="earnings"
+                  stroke="hsl(var(--color-widget-inset-border))"
+                  strokeWidth={2}
+                  className="recharts-line-earnings"
+                  connectNulls={false}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props;
+                    
+                    // Don't show dots for points that will be covered by the highlighted line
+                    const timeFrameOrder = ["1m", "3m", "6m", "1y", "2y"];
+                    const currentIndex = timeFrameOrder.indexOf(payload.timeFrame);
+                    const selectedIndex = timeFrameOrder.indexOf(selectedTimeFrame);
+                    
+                    if (currentIndex <= selectedIndex) {
+                      return <circle cx={cx} cy={cy} r={0} fill="transparent" />;
+                    }
+                    
+                    return (
+                      <circle cx={cx} cy={cy} r={4} fill="hsl(var(--primary))" />
+                    );
+                  }}
+                  activeDot={false}
+                />
+                
+                {/* Highlighted line for selected timeframe */}
+                <Line
+                  type="monotone"
+                  className="recharts-line-selected"
+                  dataKey="earnings"
+                  stroke="hsl(142.1 76.2% 36.3%)" // Emerald-500 color
+                  strokeWidth={3}
+                  isAnimationActive={false} // Avoid scale changes during animation
+                  connectNulls={true}
+                  dot={(props) => {
+                    if (!props.cx || !props.cy) return <circle cx={0} cy={0} r={0} fill="transparent" />;
+                    
+                    const { cx, cy, payload } = props;
+                    
+                    // Handle potentially undefined data
+                    if (!payload || !payload.timeFrame) {
+                      return <circle cx={cx} cy={cy} r={0} fill="transparent" />;
+                    }
+                    
+                    // Only show dots for points up to the selected timeframe
+                    const timeFrameOrder = ["1m", "3m", "6m", "1y", "2y"];
+                    const currentIndex = timeFrameOrder.indexOf(payload.timeFrame);
+                    const selectedIndex = timeFrameOrder.indexOf(selectedTimeFrame);
+                    
+                    if (currentIndex > selectedIndex) {
+                      return <circle cx={cx} cy={cy} r={0} fill="transparent" />;
+                    }
+                    
+                    // Selected dot is bigger
+                    if (payload.isSelected) {
+                      return (
+                        <circle cx={cx} cy={cy} r={6} fill="hsl(142.1 76.2% 36.3%)" />
+                      );
+                    }
+                    
+                    return (
+                      <circle cx={cx} cy={cy} r={4} fill="hsl(142.1 76.2% 36.3%)" />
+                    );
+                  }}
+                  activeDot={{
+                    r: 8,
+                    fill: "hsl(142.1 76.2% 36.3%)",
+                    stroke: "hsl(var(--background))",
+                    strokeWidth: 2
+                  }}
+                  // Use clipPath to limit the rendered line up to selected timeframe
+                  style={{
+                    clipPath: `polygon(
+                      -5% -5%, 
+                      ${selectedTimeFrame === "1m" ? 0 : 
+                         selectedTimeFrame === "3m" ? 25 :
+                         selectedTimeFrame === "6m" ? 50 :
+                         selectedTimeFrame === "1y" ? 75 : 100}% -5%,
+                      ${selectedTimeFrame === "1m" ? 0 : 
+                         selectedTimeFrame === "3m" ? 25 :
+                         selectedTimeFrame === "6m" ? 50 :
+                         selectedTimeFrame === "1y" ? 75 : 100}% 105%,
+                      -5% 105%
+                    )`
+                  }}
+                />
+                
+                <ChartTooltip 
+                  cursor={{
+                    stroke: 'hsl(142.1 76.2% 36.3%)',
+                    strokeWidth: 1,
+                    strokeDasharray: '3 3'
+                  }}
+                  content={(props) => {
+                    const { active, payload, label } = props || {};
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="p-2 rounded-md shadow-md border text-sm" 
+                          style={{
+                            backgroundColor: 'hsl(var(--background))', 
+                            borderColor: 'hsl(var(--border))',
+                            color: 'hsl(var(--foreground))'
+                          }}
+                        >
+                          <p className="font-medium mb-1">Time Frame: {label}</p>
+                          <p className="font-semibold" style={{ color: 'hsl(142.1 76.2% 36.3%)' }}>
+                            {payload[0].value} {selectedAsset}
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+              </LineChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+        
+        {/* Right column - Asset selection and amount (order-1 makes it appear first on mobile) */}
+        <div className="space-y-6 order-1 lg:order-2 flex flex-col">
           <div className="flex gap-4">
             <div className="w-1/3 flex flex-col gap-2">
               <label className="text-sm font-medium">Select Asset</label>
@@ -1968,11 +2317,17 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
           </div>
           
           <Button 
-            className={cn("w-full mb-4")}
+            className={cn("w-full mb-4 bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30")}
             variant="default"
             size="lg"
           >
-            Continue to Stake
+            <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="before" showText={false} /> Earn {estimatedEarningsWithModifiers[selectedTimeFrame as keyof typeof estimatedEarningsWithModifiers].earnings} {selectedAsset} over {
+              selectedTimeFrame === "1m" ? "1 Month" :
+              selectedTimeFrame === "3m" ? "3 Months" :
+              selectedTimeFrame === "6m" ? "6 Months" :
+              selectedTimeFrame === "1y" ? "1 Year" :
+              "2 Years"
+            }
           </Button>
 
           <Card className={cn(
@@ -1992,239 +2347,81 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow className={selectedTimeFrame === "1m" ? "bg-accent/40" : ""}>
+                  <TableRow 
+                    className={selectedTimeFrame === "1m" ? "bg-accent/40" : ""} 
+                    onClick={() => handleTimeFrameChange("1m")}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <TableCell className="font-medium">1 Month</TableCell>
                     <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["1m"].modifier}</TableCell>
-                    <TableCell className="text-right">{estimatedEarningsWithModifiers["1m"].earnings} {selectedAsset}</TableCell>
+                    <TableCell className={cn(
+                      "text-right",
+                      selectedTimeFrame === "1m" ? "text-emerald-500 font-medium" : ""
+                    )}>
+                      {estimatedEarningsWithModifiers["1m"].earnings} <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="after" />
+                    </TableCell>
                   </TableRow>
-                  <TableRow className={selectedTimeFrame === "3m" ? "bg-accent/40" : ""}>
+                  <TableRow 
+                    className={selectedTimeFrame === "3m" ? "bg-accent/40" : ""} 
+                    onClick={() => handleTimeFrameChange("3m")}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <TableCell className="font-medium">3 Months</TableCell>
                     <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["3m"].modifier}</TableCell>
-                    <TableCell className="text-right">{estimatedEarningsWithModifiers["3m"].earnings} {selectedAsset}</TableCell>
+                    <TableCell className={cn(
+                      "text-right",
+                      selectedTimeFrame === "3m" ? "text-emerald-500 font-medium" : ""
+                    )}>
+                      {estimatedEarningsWithModifiers["3m"].earnings} <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="after" />
+                    </TableCell>
                   </TableRow>
-                  <TableRow className={selectedTimeFrame === "6m" ? "bg-accent/40" : ""}>
+                  <TableRow 
+                    className={selectedTimeFrame === "6m" ? "bg-accent/40" : ""} 
+                    onClick={() => handleTimeFrameChange("6m")}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <TableCell className="font-medium">6 Months</TableCell>
                     <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["6m"].modifier}</TableCell>
-                    <TableCell className="text-right">{estimatedEarningsWithModifiers["6m"].earnings} {selectedAsset}</TableCell>
+                    <TableCell className={cn(
+                      "text-right",
+                      selectedTimeFrame === "6m" ? "text-emerald-500 font-medium" : ""
+                    )}>
+                      {estimatedEarningsWithModifiers["6m"].earnings} <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="after" />
+                    </TableCell>
                   </TableRow>
-                  <TableRow className={selectedTimeFrame === "1y" ? "bg-accent/40" : ""}>
+                  <TableRow 
+                    className={selectedTimeFrame === "1y" ? "bg-accent/40" : ""} 
+                    onClick={() => handleTimeFrameChange("1y")}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <TableCell className="font-medium">1 Year</TableCell>
                     <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["1y"].modifier}</TableCell>
-                    <TableCell className="text-right">{estimatedEarningsWithModifiers["1y"].earnings} {selectedAsset}</TableCell>
+                    <TableCell className={cn(
+                      "text-right",
+                      selectedTimeFrame === "1y" ? "text-emerald-500 font-medium" : ""
+                    )}>
+                      {estimatedEarningsWithModifiers["1y"].earnings} <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="after" />
+                    </TableCell>
                   </TableRow>
-                  <TableRow className={selectedTimeFrame === "2y" ? "bg-accent/40" : ""}>
+                  <TableRow 
+                    className={selectedTimeFrame === "2y" ? "bg-accent/40" : ""} 
+                    onClick={() => handleTimeFrameChange("2y")}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <TableCell className="font-medium">2 Years</TableCell>
                     <TableCell className="text-muted-foreground">{estimatedEarningsWithModifiers["2y"].modifier}</TableCell>
-                    <TableCell className="text-right">{estimatedEarningsWithModifiers["2y"].earnings} {selectedAsset}</TableCell>
+                    <TableCell className={cn(
+                      "text-right",
+                      selectedTimeFrame === "2y" ? "text-emerald-500 font-medium" : ""
+                    )}>
+                      {estimatedEarningsWithModifiers["2y"].earnings} <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="after" />
+                    </TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </div>
-        
-        {/* Right column - APY Chart (order-1 makes it appear first on mobile) */}
-        <Card className={cn(
-          "flex flex-col order-1 lg:order-2 h-full",
-          "border-[hsl(var(--color-widget-inset-border))]"
-        )}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Estimated Earnings ({selectedAsset})</CardTitle>
-            <div className="text-emerald-500 text-2xl font-semibold">
-              {estimatedEarningsWithModifiers[selectedTimeFrame as keyof typeof estimatedEarningsWithModifiers].earnings} {selectedAsset}
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 h-full">
-            <style>{`
-              /* Chart theme compatibility styles */
-              .recharts-wrapper .recharts-cartesian-axis-tick text {
-                fill: hsl(var(--muted-foreground));
-              }
-              
-              .recharts-cartesian-grid-horizontal line,
-              .recharts-cartesian-grid-vertical line {
-                stroke: hsl(var(--border));
-              }
-              
-              .recharts-active-dot {
-                stroke: hsl(var(--background));
-              }
-            `}</style>
-            
-            <ChartContainer
-              config={{ earnings: { label: 'Earnings', color: 'hsl(var(--primary))' } }}
-              className="h-full w-full"
-            >
-              <LineChart
-                data={[
-                  {
-                    timeFrame: "1m",
-                    label: "1 Month",
-                    earnings: parseFloat(estimatedEarningsWithModifiers["1m"].earnings),
-                    isSelected: selectedTimeFrame === "1m"
-                  },
-                  {
-                    timeFrame: "3m",
-                    label: "3 Months",
-                    earnings: parseFloat(estimatedEarningsWithModifiers["3m"].earnings),
-                    isSelected: selectedTimeFrame === "3m"
-                  },
-                  {
-                    timeFrame: "6m",
-                    label: "6 Months",
-                    earnings: parseFloat(estimatedEarningsWithModifiers["6m"].earnings),
-                    isSelected: selectedTimeFrame === "6m"
-                  },
-                  {
-                    timeFrame: "1y",
-                    label: "1 Year",
-                    earnings: parseFloat(estimatedEarningsWithModifiers["1y"].earnings),
-                    isSelected: selectedTimeFrame === "1y"
-                  },
-                  {
-                    timeFrame: "2y",
-                    label: "2 Years",
-                    earnings: parseFloat(estimatedEarningsWithModifiers["2y"].earnings),
-                    isSelected: selectedTimeFrame === "2y"
-                  }
-                ]}
-                margin={{ left: 0, right: 20, top: 10, bottom: 0 }}
-                onClick={(data) => {
-                  if (data && data.activePayload && data.activePayload[0]) {
-                    const payload = data.activePayload[0].payload;
-                    if (payload && payload.timeFrame) {
-                      handleTimeFrameChange(payload.timeFrame);
-                    }
-                  }
-                }}
-              >
-                <CartesianGrid 
-                  strokeDasharray="3 3" 
-                  vertical={false}
-                  stroke="hsl(var(--color-border-muted))"
-                />
-                <XAxis 
-                  dataKey="label" 
-                  tickLine={false}
-                  stroke="hsl(var(--color-border-muted))"
-                  tick={(props) => {
-                    const { x, y, payload } = props;
-                    
-                    // Define the order of time frames for comparison
-                    const timeFrameOrder = ["1 Month", "3 Months", "6 Months", "1 Year", "2 Years"];
-                    const selectedTimeLabel = selectedTimeFrame === "1m" ? "1 Month" :
-                                              selectedTimeFrame === "3m" ? "3 Months" :
-                                              selectedTimeFrame === "6m" ? "6 Months" :
-                                              selectedTimeFrame === "1y" ? "1 Year" : "2 Years";
-                    
-                    // Check if this label is before or equal to the selected time frame
-                    const currentIndex = timeFrameOrder.indexOf(payload.value);
-                    const selectedIndex = timeFrameOrder.indexOf(selectedTimeLabel);
-                    const shouldHighlight = currentIndex <= selectedIndex;
-                    
-                    // Apply styles directly with !important to override global CSS
-                    const style = {
-                      fill: shouldHighlight ? "hsl(var(--primary))" : "hsl(var(--foreground))",
-                      fontWeight: shouldHighlight ? 600 : 400,
-                    };
-                    
-                    return (
-                      <g style={{ fontFamily: 'inherit' }}>
-                        <text 
-                          x={x} 
-                          y={y + 10} 
-                          textAnchor="middle" 
-                          fontSize="12px"
-                          style={style}
-                        >
-                          {payload.value}
-                        </text>
-                      </g>
-                    );
-                  }}
-                />
-                <YAxis 
-                  tickLine={false}
-                  axisLine={false}
-                  domain={['dataMin - 1', 'dataMax + 1']}
-                  tickFormatter={(value) => `${value} ${selectedAsset}`}
-                  tick={(props) => {
-                    const { x, y, payload } = props;
-                    
-                    // Style to match overall theme
-                    const style = {
-                      fill: 'hsl(var(--muted-foreground))',
-                      fontSize: '11px'
-                    };
-                    
-                    return (
-                      <g transform={`translate(${x},${y})`}>
-                        <text 
-                          x={0} 
-                          y={0} 
-                          dy={3}
-                          textAnchor="end"
-                          style={style}
-                        >
-                          {`${payload.value} ${selectedAsset}`}
-                        </text>
-                      </g>
-                    );
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="earnings"
-                  stroke="hsl(var(--color-widget-inset-border))"
-                  strokeWidth={2}
-                  className="recharts-line-earnings"
-                  dot={(props) => {
-                    const { cx, cy, payload } = props;
-                    return payload.isSelected ? (
-                      <circle cx={cx} cy={cy} r={6} fill="hsl(var(--primary))" />
-                    ) : (
-                      <circle cx={cx} cy={cy} r={4} fill="hsl(var(--primary))" />
-                    );
-                  }}
-                  activeDot={{
-                    r: 8,
-                    fill: 'hsl(var(--primary))',
-                    stroke: 'hsl(var(--background))',
-                    strokeWidth: 2,
-                    className: 'earnings-active-dot'
-                  }}
-                />
-                <ChartTooltip 
-                  cursor={{
-                    stroke: 'hsl(var(--primary))',
-                    strokeWidth: 1,
-                    strokeDasharray: '3 3'
-                  }}
-                  content={(props) => {
-                    const { active, payload, label } = props || {};
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="p-2 rounded-md shadow-md border text-sm" 
-                          style={{
-                            backgroundColor: 'hsl(var(--background))', 
-                            borderColor: 'hsl(var(--border))',
-                            color: 'hsl(var(--foreground))'
-                          }}
-                        >
-                          <p className="font-medium mb-1">Time Frame: {label}</p>
-                          <p className="font-semibold" style={{ color: 'hsl(var(--primary))' }}>
-                            {payload[0].value} {selectedAsset}
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-              </LineChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
