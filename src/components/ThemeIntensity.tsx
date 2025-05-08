@@ -85,7 +85,29 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
         setBorderIntensity(intensity);
       }
       saveThemeIntensities(resolvedTheme, currentIntensities);
+      
+      // Apply immediate updates to background-dependent variables
+      applyBackgroundIntensity(intensity, currentIntensities);
     }
+  };
+
+  // Apply CSS variables that depend on background intensity
+  const applyBackgroundIntensity = (intensity: number, intensities: ThemeIntensities) => {
+    if (!resolvedTheme) return;
+    
+    const root = document.documentElement;
+    const colors = getThemeValues(
+      resolvedTheme,
+      intensity,
+      intensities.widget,
+      intensities.border,
+      intensities.foregroundOpacity
+    );
+    
+    // Update all CSS variables - this ensures primary-foreground is updated
+    Object.entries(colors.cssVariables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
   };
 
   const handleWidgetValueChange = (value: string) => {
@@ -102,7 +124,29 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
         setBorderIntensity(intensity);
       }
       saveThemeIntensities(resolvedTheme, currentIntensities);
+      
+      // Apply all theme variables to ensure consistency
+      applyAllThemeVariables(currentIntensities);
     }
+  };
+  
+  // Apply all theme variables to ensure consistency
+  const applyAllThemeVariables = (intensities: ThemeIntensities) => {
+    if (!resolvedTheme) return;
+    
+    const root = document.documentElement;
+    const colors = getThemeValues(
+      resolvedTheme,
+      intensities.background,
+      intensities.widget,
+      intensities.border,
+      intensities.foregroundOpacity
+    );
+    
+    // Update all CSS variables
+    Object.entries(colors.cssVariables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
   };
 
   const handleBorderValueChange = (value: string) => {
@@ -119,6 +163,9 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
         setWidgetIntensity(intensity);
       }
       saveThemeIntensities(resolvedTheme, currentIntensities);
+      
+      // Apply all theme variables to ensure consistency
+      applyAllThemeVariables(currentIntensities);
     }
   };
 
@@ -138,9 +185,9 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
       opacity
     );
 
-    // Update only foreground-related CSS variables
+    // Update foreground-related CSS variables and primary-foreground
     Object.entries(colors.cssVariables)
-      .filter(([key]) => key.includes('foreground'))
+      .filter(([key]) => key.includes('foreground') || key === '--primary-foreground')
       .forEach(([key, value]) => {
         root.style.setProperty(key, value);
       });
@@ -178,16 +225,16 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
     isDraggingRef.current = false;
     const opacity = value[0];
     
-    // Force immediate update of all variables
-    applyForegroundOpacity(opacity);
-    
-    // Ensure state is updated
-    setForegroundOpacity(opacity);
-    
     if (resolvedTheme) {
       const currentIntensities = getThemeIntensities(resolvedTheme);
       currentIntensities.foregroundOpacity = opacity;
+      
+      // Update state
+      setForegroundOpacity(opacity);
       saveThemeIntensities(resolvedTheme, currentIntensities);
+      
+      // Apply all theme variables to ensure complete update
+      applyAllThemeVariables(currentIntensities);
     }
   };
 
@@ -214,6 +261,19 @@ export function ThemeIntensity({ className }: ThemeIntensityProps) {
     // Apply opacity to both themes
     document.documentElement.style.setProperty('--current-foreground-opacity', String(foregroundOpacity));
   }, [resolvedTheme, foregroundOpacity]);
+  
+  // Apply all theme variables whenever any intensity changes
+  useEffect(() => {
+    if (resolvedTheme) {
+      const intensities = {
+        background: backgroundIntensity,
+        widget: widgetIntensity,
+        border: borderIntensity,
+        foregroundOpacity: foregroundOpacity
+      };
+      applyAllThemeVariables(intensities);
+    }
+  }, [resolvedTheme, backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity]);
 
   return (
     <div className={cn("w-full space-y-4", className)}>

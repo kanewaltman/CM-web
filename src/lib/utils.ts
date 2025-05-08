@@ -56,6 +56,7 @@ type ThemeColors = {
     '--input': string;
     '--ring': string;
     '--color-widget-hover': string;
+    '--color-widget-inset-border': string;
   };
 };
 
@@ -196,9 +197,21 @@ function getDarkThemeValues(
   const getWidgetInsetColor = (intensity: number): string => {
     return getInterpolatedValue(
       {
-        oled: '0 0% 4%',
+        oled: '0 0% 6%',
         default: '0 0% 10%',
         backlit: '220 3% 27%'
+      },
+      intensity
+    );
+  };
+
+  // Get widget inset border color based on intensity
+  const getWidgetInsetBorderColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '220 3% 8%',
+        default: '0 0% 14%',
+        backlit: '220 3% 32%'
       },
       intensity
     );
@@ -229,6 +242,18 @@ function getDarkThemeValues(
   // Get widget hover color
   const widgetHoverColor = getWidgetHoverColor(widgetIntensity);
 
+  // Get primary foreground color based on background intensity
+  const getPrimaryForegroundColor = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '0 0% 4%',      // Pure black for OLED
+        default: '0 0% 12%',   // Dark gray for default
+        backlit: '220 3% 22%' // Blueish dark gray for backlit
+      },
+      intensity
+    );
+  };
+
   // Apply foreground opacity to text styles
   const textColor = `text-white/${foregroundOpacity}`;
   const textMutedColor = `text-white/${foregroundOpacity * 0.5}`;
@@ -255,6 +280,7 @@ function getDarkThemeValues(
       '--color-widget-header': widgetBase,
       '--color-widget-content': widgetBase,
       '--color-widget-inset': getWidgetInsetColor(widgetIntensity),
+      '--color-widget-inset-border': getWidgetInsetBorderColor(backgroundIntensity),
       '--color-widget-hover': widgetHoverColor,
       '--color-foreground-default': `0 0% ${98 * foregroundOpacity}%`,
       '--color-foreground-muted': getInterpolatedValue(
@@ -280,7 +306,7 @@ function getDarkThemeValues(
       '--popover': widgetBase,
       '--popover-foreground': '0 0% 98%',
       '--primary': '0 0% 98%',
-      '--primary-foreground': bgBase,
+      '--primary-foreground': getPrimaryForegroundColor(backgroundIntensity),
       '--secondary': widgetBase,
       '--secondary-foreground': '0 0% 98%',
       '--muted': widgetBase,
@@ -438,6 +464,18 @@ function getLightThemeValues(
     );
   };
 
+  // Get widget inset border color based on intensity for light theme
+  const getWidgetInsetBorderColorLight = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 90%',
+        default: '0 0% 88%',
+        backlit: '45 30% 90%'
+      },
+      intensity
+    );
+  };
+
   // Get widget hover color based on widget intensity
   const getWidgetHoverColor = (intensity: number): string => {
     return getInterpolatedValue(
@@ -457,6 +495,18 @@ function getLightThemeValues(
   
   // Use consistent theme for hover effect
   const widgetHoverColor = getWidgetHoverColor(widgetIntensity);
+
+  // Get primary foreground color based on background intensity for light theme
+  const getPrimaryForegroundColorLight = (intensity: number): string => {
+    return getInterpolatedValue(
+      {
+        oled: '210 40% 98%',      // Coolest for OLED
+        default: '0 0% 100%',     // Pure white for default
+        backlit: '45 30% 98%'     // Warmest for backlit
+      },
+      intensity
+    );
+  };
 
   return {
     background: `bg-[${bgBase}]`,
@@ -479,6 +529,7 @@ function getLightThemeValues(
       '--color-widget-header': widgetBase,
       '--color-widget-content': widgetBase,
       '--color-widget-inset': getWidgetInsetColor(widgetIntensity),
+      '--color-widget-inset-border': getWidgetInsetBorderColorLight(backgroundIntensity),
       '--color-widget-hover': widgetHoverColor,
       '--color-foreground-default': foregroundColor,
       '--color-foreground-muted': mutedForegroundColor,
@@ -490,7 +541,7 @@ function getLightThemeValues(
       '--popover': widgetBase,
       '--popover-foreground': foregroundColor,
       '--primary': foregroundColor,
-      '--primary-foreground': '210 40% 98%',
+      '--primary-foreground': getPrimaryForegroundColorLight(backgroundIntensity),
       '--secondary': widgetBase,
       '--secondary-foreground': foregroundColor,
       '--muted': widgetBase,
