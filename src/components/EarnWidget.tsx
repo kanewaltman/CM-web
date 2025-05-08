@@ -1964,7 +1964,7 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
           "border-[hsl(var(--color-widget-inset-border))]"
         )}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Estimated Earnings (<AssetButtonWithPrice asset={selectedAsset as AssetTicker} />)</CardTitle>
+            <CardTitle className="text-sm font-medium">Estimated Earnings on <AssetButtonWithPrice asset={selectedAsset as AssetTicker} /></CardTitle>
             <div className="text-emerald-500 text-2xl font-semibold">
               {estimatedEarningsWithModifiers[selectedTimeFrame as keyof typeof estimatedEarningsWithModifiers].earnings} <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="after" iconSize="large" />
             </div>
