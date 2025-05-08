@@ -16,7 +16,8 @@ export const getEarnLayout = (WIDGET_REGISTRY: Record<string, any>): LayoutWidge
     minH: WIDGET_REGISTRY['earn'].minSize.h,
     viewState: {
       earnViewMode: 'ripple',
-      viewMode: 'split' // Use standard viewMode for compatibility
+      viewMode: 'split', // Use standard viewMode for compatibility
+      useContentOnly: true // Flag to use WidgetContentOnly
     }
   },
   // Second earn widget with cards view (showing all assets)
@@ -30,7 +31,8 @@ export const getEarnLayout = (WIDGET_REGISTRY: Record<string, any>): LayoutWidge
     minH: WIDGET_REGISTRY['earn'].minSize.h,
     viewState: {
       earnViewMode: 'cards',
-      viewMode: 'split' // Use standard viewMode for compatibility
+      viewMode: 'split', // Use standard viewMode for compatibility
+      useContentOnly: true // Flag to use WidgetContentOnly
     }
   },
   // Third earn widget with stake view (detailed staking interface)
@@ -44,7 +46,8 @@ export const getEarnLayout = (WIDGET_REGISTRY: Record<string, any>): LayoutWidge
 //    minH: WIDGET_REGISTRY['earn'].minSize.h,
 //    viewState: {
 //      earnViewMode: 'stake',
-//      viewMode: 'split' // Use standard viewMode for compatibility
+//      viewMode: 'split', // Use standard viewMode for compatibility
+//      useContentOnly: true // Flag to use WidgetContentOnly
 //    }
 //  },
 ]; 
