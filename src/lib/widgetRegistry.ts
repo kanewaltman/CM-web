@@ -7,11 +7,10 @@ import { RecentTrades } from '@/components/RecentTrades';
 import { BalancesWidget } from '@/components/BalancesWidget';
 import { PerformanceWidget } from '@/components/PerformanceWidget/PerformanceWidget';
 import { BreakdownWrapper } from '@/components/Breakdown';
-import MarketsWidget from '@/components/MarketsWidget';
+import MarketsWidget from '@/components/MarketWidget/MarketsWidget';
 import { TransactionsWidget } from '@/components/TransactionsWidget';
 import { InsightWidget } from '@/components/InsightWidget';
 import { ReferralsWrapper } from '@/components/ReferralsWidget';
-import { EarnWidgetWrapper } from '@/components/EarnWidget';
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
 
 // Widget Registry - Single source of truth for widget configuration
@@ -69,7 +68,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     title: 'Markets',
     component: MarketsWidget,
     defaultSize: { w: 8, h: 4 },
-    minSize: { w: 4, h: 3 },
+    minSize: { w: 3, h: 3 },
     maxSize: { w: 12, h: 9 }
   },
   'performance': {
@@ -109,14 +108,6 @@ export const WIDGET_REGISTRY: Record<string, WidgetConfig> = {
     title: 'Referrals',
     component: ReferralsWrapper,
     defaultSize: { w: 6, h: 6 },
-    minSize: { w: 4, h: 4 },
-    maxSize: { w: 12, h: 9 }
-  },
-  'earn': {
-    id: 'earn',
-    title: 'Earn',
-    component: EarnWidgetWrapper,
-    defaultSize: { w: 8, h: 6 },
     minSize: { w: 4, h: 4 },
     maxSize: { w: 12, h: 9 }
   }

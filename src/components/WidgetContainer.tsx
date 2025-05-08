@@ -1,4 +1,4 @@
-import { ChevronDown, Maximize2, MoreHorizontal, Trash2 } from '../components/ui-icons';
+import { ChevronDown, Maximize2, MoreHorizontal, Trash2, ListChecks, Plus, Edit, Globe, ListFilter } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 import { useRef, useCallback, memo, useState, useEffect } from 'react';
@@ -9,14 +9,24 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from './ui/dropdown-menu';
-import { Dialog, DialogContent } from './ui/dialog';
+import { 
+  Dialog, 
+  DialogContent
+} from './ui/dialog';
+import { 
+  useMarketsList, 
+  MarketsListMenu, 
+  RenameListDialog, 
+  DeleteListDialog 
+} from './MarketWidget';
 import { 
   getWidgetIdFromHash, 
   markHashHandled, 
   isHashHandled, 
   isSameBaseWidget, 
-  isProcessingEvent, 
   openWidgetDialog, 
   closeWidgetDialog,
   hasOpenDialogs
@@ -29,8 +39,9 @@ interface WidgetContainerProps {
   extraControls?: React.ReactNode;
   onRemove?: () => void;
   isMobile?: boolean;
+  widgetMenu?: React.ReactNode;
+  widgetId?: string;
   titleClickHandler?: (e: React.MouseEvent) => void;
-  widgetId?: string; // Optional for backward compatibility, but needed for dialog functionality
 }
 
 // Track which dialogs are currently open to prevent duplicates
@@ -46,11 +57,45 @@ export const WidgetContainer = memo(function WidgetContainer({
   extraControls,
   onRemove,
   isMobile = false,
-  titleClickHandler,
-  widgetId
+  widgetMenu,
+  widgetId: externalWidgetId,
+  titleClickHandler
 }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [titleMenuOpen, setTitleMenuOpen] = useState(false);
+  const isMarketsWidget = title === "Markets";
+  
+  // Get the widget ID for proper instance tracking - set default immediately
+  const widgetId = useRef<string>(externalWidgetId || `widget-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
+  // Track whether we've found the DOM ID
+  const [foundDomId, setFoundDomId] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Use the custom hook for Markets widget list functionality
+  const marketsList = isMarketsWidget ? useMarketsList(widgetId.current) : null;
+
+  // When the component mounts, try to get a better ID from the DOM
+  useEffect(() => {
+    if (!externalWidgetId && isMarketsWidget && containerRef.current) {
+      const findAndSetId = () => {
+        const gridItem = containerRef.current?.closest('.grid-stack-item');
+        const domId = gridItem?.getAttribute('gs-id') || gridItem?.id;
+        if (domId) {
+          widgetId.current = domId;
+          console.log(`[WidgetContainer] Widget ID updated to:`, widgetId.current);
+          setFoundDomId(true);
+        }
+      };
+      
+      // Try immediately
+      findAndSetId();
+      
+      // And also after a short delay to ensure the DOM is fully ready
+      const timerId = setTimeout(findAndSetId, 100);
+      
+      return () => clearTimeout(timerId);
+    }
+  }, [isMarketsWidget, externalWidgetId]);
 
   // Determine widgetId from DOM if not provided
   useEffect(() => {
@@ -68,14 +113,14 @@ export const WidgetContainer = memo(function WidgetContainer({
   // Set up dialog from URL when component mounts or hash changes
   useEffect(() => {
     // Use provided widgetId or try to get from DOM
-    const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+    const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
     if (!effectiveWidgetId) return; // Skip if no widgetId can be found
 
     // Keep track of dialog open state locally to prevent duplicate opens
     let isAlreadyOpened = false;
 
     const checkHash = () => {
-      const { widgetId: widgetIdFromHash } = getWidgetIdFromHash();
+      const widgetIdFromHash = getWidgetIdFromHash();
       
       // Only proceed if this widget matches the hash (using base ID comparison)
       if (widgetIdFromHash && isSameBaseWidget(widgetIdFromHash, effectiveWidgetId)) {
@@ -111,7 +156,7 @@ export const WidgetContainer = memo(function WidgetContainer({
       
       // If this appears to be a fresh navigation to the same URL (paste and enter),
       // reset the dialog state to allow it to open
-      if (e.oldURL === e.newURL && e.newURL.includes(`widget=${getWidgetIdFromHash().widgetId}`)) {
+      if (e.oldURL === e.newURL && e.newURL.includes(`widget=${getWidgetIdFromHash()}`)) {
         console.log('🔄 Detected navigation to same widget URL, attempting to reopen');
       }
       
@@ -124,66 +169,122 @@ export const WidgetContainer = memo(function WidgetContainer({
 
     // Handle custom dialog open event for widgets
     const handleOpenDialog = (e: CustomEvent) => {
-      // Skip if this container doesn't have a widget ID
-      const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
-      if (!effectiveWidgetId) return;
+      const requestedWidgetId = e.detail?.widgetId;
+      if (!requestedWidgetId) return;
       
-      // Get the event ID if available
+      // Get the unique event ID if provided in the event
       const eventId = typeof e.detail?.eventId === 'string' ? e.detail.eventId : null;
       
-      // Skip if this event has already been handled by this container
+      // Check if this event has already been handled by any container
       if (eventId && handledEvents.has(eventId)) {
-        console.log('⚠️ Event already handled by this container:', eventId);
+        console.log('⏭️ Event already handled by another widget container:', eventId);
+        return;
+      }
+
+      // Check for exact match only flag - require exact ID match, not just base ID match
+      const exactMatchOnly = e.detail?.exactMatchOnly === true;
+      
+      // For exactMatchOnly events, we need a perfect match on IDs
+      if (exactMatchOnly && requestedWidgetId !== effectiveWidgetId) {
+        console.log('⏭️ Skipping - exact match required but IDs differ:', { 
+          requested: requestedWidgetId, 
+          thisWidget: effectiveWidgetId 
+        });
         return;
       }
       
-      // Check if this event is for this widget (using exact or fuzzy matching)
-      const targetWidgetId = e.detail?.widgetId;
-      const isExactMatch = targetWidgetId === effectiveWidgetId;
-      const isFuzzyMatch = !isExactMatch && isSameBaseWidget(targetWidgetId, effectiveWidgetId);
-      
-      // If exactMatchOnly is true, only handle if this is an exact match
-      if (e.detail?.exactMatchOnly === true && !isExactMatch) {
-        console.log('⚠️ exactMatchOnly is true but this is not an exact match:', 
-          { target: targetWidgetId, container: effectiveWidgetId });
-        return;
-      }
-      
-      // Open dialog if this is the target widget
-      if (isExactMatch || isFuzzyMatch) {
-        console.log('📍 Opening widget dialog from event:', e.detail);
-        
-        // If this event has an ID, mark it as handled
-        if (eventId) {
-          handledEvents.add(eventId);
+      // For direct load events with exactMatchOnly false, check if the base IDs match
+      if (!exactMatchOnly && e.detail?.directLoad && requestedWidgetId !== effectiveWidgetId) {
+        if (isSameBaseWidget(requestedWidgetId, effectiveWidgetId)) {
+          // These are different instances of the same widget type
+          // For direct loads, still require exact match to prevent multi-dialog issues
+          console.log('⏭️ Skipping - different instance of same widget type:', { 
+            requested: requestedWidgetId, 
+            thisWidget: effectiveWidgetId 
+          });
+          return;
+        } else if (!isSameBaseWidget(requestedWidgetId, effectiveWidgetId)) {
+          // Base IDs don't match at all
+          return;
         }
+      }
+      
+      // For non-direct-load and non-exactMatchOnly events, check if base widget IDs match
+      if (!exactMatchOnly && !e.detail?.directLoad && !isSameBaseWidget(requestedWidgetId, effectiveWidgetId)) {
+        return; // Base IDs don't match, so skip
+      }
+      
+      // From this point on, all checks have passed, so this widget should handle the event
+      const isManualNavigation = !!e.detail?.isManualNavigation;
         
-        // First check if dialog is already open to prevent duplicate renders
-        if (isDialogOpen) {
+      console.log('📍 Opening widget dialog from event:', { 
+        widgetId: effectiveWidgetId, 
+        requestedId: requestedWidgetId,
+        isDirectLoad: e.detail?.directLoad === true,
+        isManualNavigation,
+        alreadyOpen: isDialogOpen,
+        eventId: eventId || 'none',
+        exactMatchOnly
+      });
+      
+      // Mark this event as handled if it has an ID
+      if (eventId) {
+        handledEvents.add(eventId);
+        
+        // Cleanup - limit set size to prevent memory issues
+        if (handledEvents.size > 20) {
+          const oldestEvent = handledEvents.values().next().value;
+          if (oldestEvent) handledEvents.delete(oldestEvent);
+        }
+      }
+      
+      // If this is a title click event for a specific widget ID, only open it if it exactly matches this widget
+      if (eventId && eventId.startsWith('title-click-') && requestedWidgetId !== effectiveWidgetId) {
+        console.log('⏭️ Skipping event for another specific widget:', { requestedId: requestedWidgetId, thisId: effectiveWidgetId });
+        return;
+      }
+      
+      // Skip if already open, unless this is a manual navigation
+      if (isDialogOpen && !isManualNavigation) {
+        console.log('📍 Dialog already open, skipping redundant open');
+        return;
+      }
+      
+      // For manual navigation, force refresh the dialog state
+      if (isManualNavigation && isDialogOpen) {
+        console.log('🔄 Forcing dialog refresh for manual navigation');
+        // Remove from tracking first
+        openDialogs.delete(effectiveWidgetId);
+        // Then add back
+        openDialogs.add(effectiveWidgetId);
+      } else {
+        // Check if another dialog with the same ID is already open
+        if (openDialogs.has(effectiveWidgetId)) {
           console.log('⚠️ Dialog already open for this widget ID:', effectiveWidgetId);
           return;
         }
         
-        // Update local state
-        setIsDialogOpen(true);
+        isAlreadyOpened = true;
+        
+        // Track this dialog as open
         openDialogs.add(effectiveWidgetId);
-        
-        // Update classes
-        if (containerRef.current) {
-          containerRef.current.classList.add('widget-dialog-open');
-        }
-        document.body.classList.add('widget-dialog-open');
-        
-        // Don't dispatch a new custom event as that would cause an infinite loop
-        // Just mark hash as handled if needed
-        if (e.detail?.source === 'hash') {
-          markHashHandled(effectiveWidgetId);
-        }
       }
+      
+      // Update local state
+      setIsDialogOpen(true);
+      
+      // Mark the container that has the dialog open with a specific class
+      if (containerRef.current) {
+        containerRef.current.classList.add('widget-dialog-open');
+      }
+      
+      // Add a class to the body as well
+      document.body.classList.add('widget-dialog-open');
     };
 
     const handleCloseDialogs = () => {
-      if (isDialogOpen) {
+      const effectiveWidgetId = widgetId.current || ((containerRef as any).current?.widgetId as string);
+      if (isDialogOpen && effectiveWidgetId) {
         isAlreadyOpened = false;
         openDialogs.delete(effectiveWidgetId);
         setIsDialogOpen(false);
@@ -214,12 +315,12 @@ export const WidgetContainer = memo(function WidgetContainer({
         openDialogs.delete(effectiveWidgetId);
       }
     };
-  }, [widgetId, isDialogOpen]);
+  }, [externalWidgetId, isDialogOpen]);
 
   // Handle dialog opening/closing via Dialog component's onOpenChange
   const handleDialogOpenChange = (open: boolean) => {
     // Use provided widgetId or try to get from DOM
-    const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+    const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
     
     if (open && !isDialogOpen) {
       // Generate a unique event ID to prevent duplicate handling
@@ -281,7 +382,7 @@ export const WidgetContainer = memo(function WidgetContainer({
     e.preventDefault();
     
     // Try to get widgetId from DOM if not provided in props
-    const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+    const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
     const gridItem = containerRef.current?.closest('.grid-stack-item');
     const domWidgetId = gridItem?.getAttribute('gs-id') || gridItem?.id;
     
@@ -360,31 +461,10 @@ export const WidgetContainer = memo(function WidgetContainer({
           <head>
             <title>${title}</title>
             <style>
-              :root {
-                color-scheme: light dark;
-              }
-              body {
-                margin: 0;
-                padding: 16px;
-                background: var(--background, white);
-                color: var(--foreground, black);
-                font-family: system-ui, -apple-system, sans-serif;
-              }
-              .widget-content {
-                height: 100%;
-                overflow: auto;
-                background: var(--background);
-                color: var(--foreground);
-                border-radius: 8px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                padding: 1rem;
-              }
-              @media (prefers-color-scheme: dark) {
-                body {
-                  background: rgb(9, 9, 11);
-                  color: rgb(250, 250, 250);
-                }
-              }
+              :root { color-scheme: light dark; }
+              body { margin: 0; padding: 16px; background: var(--background, white); color: var(--foreground, black); font-family: system-ui, -apple-system, sans-serif; }
+              .widget-content { height: 100%; overflow: auto; background: var(--background); color: var(--foreground); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1rem; }
+              @media (prefers-color-scheme: dark) { body { background: rgb(9, 9, 11); color: rgb(250, 250, 250); } }
             </style>
           </head>
           <body>
@@ -444,8 +524,43 @@ export const WidgetContainer = memo(function WidgetContainer({
     }
   };
 
+  // Render dropdown content based on widget type
+  const renderTitleDropdownContent = () => {
+    if (isMarketsWidget && marketsList) {
+      return (
+        <MarketsListMenu
+          customLists={marketsList.customLists}
+          activeList={marketsList.activeList}
+          newListName={marketsList.newListName}
+          onSaveActiveList={marketsList.saveActiveList}
+          onRenameList={marketsList.handleRenameList}
+          onDeleteList={marketsList.handleDeleteList}
+          onNewListNameChange={marketsList.setNewListName}
+          onSaveNewList={marketsList.handleSaveNewList}
+          onCloseMenu={() => setTitleMenuOpen(false)}
+        />
+      );
+    } else {
+      // Default dropdown content for non-Markets widgets
+      return (
+        <>
+          <DropdownMenuLabel>{title} Options</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleExpand}>
+            <Maximize2 className="h-4 w-4 mr-2 opacity-70" />
+            Expand Widget
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleRemove} className="text-destructive">
+            <Trash2 className="h-4 w-4 mr-2 opacity-70" />
+            Remove Widget
+          </DropdownMenuItem>
+        </>
+      );
+    }
+  };
+
   // Determine effective widget ID for dialog rendering
-  const effectiveWidgetId = widgetId || ((containerRef as any).current?.widgetId as string);
+  const effectiveWidgetId = externalWidgetId || ((containerRef as any).current?.widgetId as string);
 
   return (
     <>
@@ -457,25 +572,57 @@ export const WidgetContainer = memo(function WidgetContainer({
             !isMobile && "cursor-move" // Only show move cursor on desktop
           )}>
             <div className="flex items-center space-x-2">
-              {/* Custom clickable button-like title that prevents drag */}
-              <button
-                type="button"
-                className="text-sm font-semibold bg-transparent border-0 p-0 m-0 cursor-pointer hover:text-primary transition-colors text-left"
-                onClick={handleTitleClick}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault(); // Always prevent default to avoid drag issues
-                }}
-                style={{
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  touchAction: 'none',
-                  outline: 'none'
-                }}
-              >
-                {title}
-              </button>
-              <ChevronDown className="h-4 w-4 opacity-50" />
+              {isMarketsWidget ? (
+                <div className="flex items-center group">
+                  <h2 
+                    key={title} 
+                    className="text-sm font-semibold group-hover:text-primary cursor-pointer"
+                    onClick={handleTitleClick}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                  >
+                    {isMarketsWidget && marketsList?.activeList && marketsList?.activeListName 
+                      ? marketsList.activeListName
+                      : title}
+                  </h2>
+                  
+                  <DropdownMenu open={titleMenuOpen} onOpenChange={setTitleMenuOpen}>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 ml-2 px-2 py-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center"
+                      >
+                        <Edit className="h-3.5 w-3.5 opacity-70" />
+                        <span className="text-xs">Edit</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      {renderTitleDropdownContent()}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ) : (
+                <button 
+                  type="button" 
+                  className="text-sm font-semibold bg-transparent border-0 p-0 m-0 cursor-pointer hover:text-primary transition-colors text-left"
+                  onClick={handleTitleClick}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  style={{
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    touchAction: 'none',
+                    outline: 'none'
+                  }}
+                >
+                  {title}
+                </button>
+              )}
             </div>
             
             <div className="flex items-center space-x-1">
@@ -508,6 +655,27 @@ export const WidgetContainer = memo(function WidgetContainer({
             {children}
           </div>
         </div>
+        
+        {/* Markets widget dialogs */}
+        {isMarketsWidget && marketsList && (
+          <>
+            {/* Rename List Dialog */}
+            <RenameListDialog
+              open={marketsList.renameListDialogOpen}
+              onOpenChange={marketsList.setRenameListDialogOpen}
+              listName={marketsList.renameListName}
+              onListNameChange={marketsList.setRenameListName}
+              onSave={marketsList.handleSaveRenamedList}
+            />
+            
+            {/* Delete List Dialog */}
+            <DeleteListDialog
+              open={marketsList.deleteListDialogOpen}
+              onOpenChange={marketsList.setDeleteListDialogOpen}
+              onConfirm={marketsList.confirmDeleteList}
+            />
+          </>
+        )}
       </div>
 
       {/* Widget Dialog - render only if we have an effective widget ID */}
@@ -518,7 +686,11 @@ export const WidgetContainer = memo(function WidgetContainer({
               {/* Dialog Header */}
               <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
                 <div className="flex items-center space-x-2">
-                  <h2 key={title} className="text-sm font-semibold">{title}</h2>
+                  <h2 key={title} className="text-sm font-semibold">
+                    {isMarketsWidget && marketsList?.activeList && marketsList?.activeListName 
+                      ? marketsList.activeListName
+                      : title}
+                  </h2>
                   <ChevronDown className="h-4 w-4 opacity-50" />
                 </div>
                 

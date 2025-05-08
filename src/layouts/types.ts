@@ -1,6 +1,4 @@
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
-import { ReferralsViewMode } from '@/components/ReferralsWidget';
-import { EarnViewMode } from '@/components/EarnWidget';
 
 // Layout widget type definitions
 export interface LayoutWidget {
@@ -12,11 +10,8 @@ export interface LayoutWidget {
   minW?: number;
   minH?: number;
   viewState?: {
-    chartVariant?: ChartVariant;
-    viewMode?: 'split' | 'cumulative' | 'combined';
-    referralViewMode?: ReferralsViewMode;
-    earnViewMode?: EarnViewMode;
-    useContentOnly?: boolean;
+    chartVariant: ChartVariant;
+    viewMode?: 'split' | 'cumulative';
   };
 }
 
@@ -24,4 +19,4 @@ export interface SerializedLayoutWidget extends LayoutWidget {
   baseId?: string;
 }
 
-export type PageType = 'dashboard' | 'spot' | 'margin' | 'earn'; 
+export type PageType = 'dashboard' | 'spot' | 'margin' | 'stake'; 

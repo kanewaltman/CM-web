@@ -139,7 +139,7 @@ const meta = {
   argTypes: {
     currentPage: {
       control: 'select',
-      options: ['dashboard', 'spot', 'margin', 'earn'],
+      options: ['dashboard', 'spot', 'margin', 'stake'],
     },
     onPageChange: { action: 'page changed' },
   },
@@ -187,14 +187,14 @@ export const MarginPage: Story = {
   },
 };
 
-export const EarnPage: Story = {
+export const StakePage: Story = {
   args: {
-    currentPage: 'earn',
+    currentPage: 'stake',
   },
   parameters: {
     docs: {
       description: {
-        story: 'TopBar with the Earning page selected.',
+        story: 'TopBar with the Staking page selected.',
       },
     },
   },

@@ -16,8 +16,8 @@ import {
 } from './ui/tooltip';
 
 interface TopBarProps {
-  currentPage: 'dashboard' | 'spot' | 'margin' | 'earn';
-  onPageChange: (page: 'dashboard' | 'spot' | 'margin' | 'earn') => void;
+  currentPage: 'dashboard' | 'spot' | 'margin' | 'stake';
+  onPageChange: (page: 'dashboard' | 'spot' | 'margin' | 'stake') => void;
 }
 
 export function TopBar({ currentPage, onPageChange }: TopBarProps) {
@@ -40,7 +40,7 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
     };
   }, [theme, backgroundIntensity, widgetIntensity, borderIntensity, foregroundOpacity]);
 
-  const handlePageClick = (page: 'dashboard' | 'spot' | 'margin' | 'earn') => (e: React.MouseEvent) => {
+  const handlePageClick = (page: 'dashboard' | 'spot' | 'margin' | 'stake') => (e: React.MouseEvent) => {
     e.preventDefault();
     
     if (page === currentPage) {
@@ -119,14 +119,14 @@ export function TopBar({ currentPage, onPageChange }: TopBarProps) {
             <a 
               className={cn(
                 "px-3 py-2 text-sm font-bold transition-colors rounded-lg",
-                currentPage === 'earn'
+                currentPage === 'stake'
                   ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-[#FFFFFF]"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )} 
               href="#"
-              onClick={handlePageClick('earn')}
+              onClick={handlePageClick('stake')}
             >
-              Earn
+              Stake
             </a>
             <button 
               className={cn(

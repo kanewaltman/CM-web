@@ -159,6 +159,9 @@ const ASSET_TICKER_TO_COINGECKO_ID: Record<string, string> = {
   // Add any missing assets with corresponding CoinGecko IDs
 };
 
+// Export the mapping for use in other components
+export { ASSET_TICKER_TO_COINGECKO_ID };
+
 /**
  * Debug function to log assets without mappings
  */
@@ -337,11 +340,102 @@ export const fetchCoinPrice = async (coinId: string, currencies: string[] = FIAT
 };
 
 /**
+ * Fetch market data for a coin including price, market cap and volume
+ */
+export const fetchCoinMarketData = async (coinId: string, vsCurrencies: string[] = FIAT_CURRENCIES): Promise<{
+  prices: Record<string, number>;
+  marketCaps: Record<string, number>;
+  volumes: Record<string, number>;
+}> => {
+  try {
+    // Include market cap and 24h volume data in the request
+    const url = `${COINGECKO_API_URL}/simple/price?ids=${coinId}&vs_currencies=${vsCurrencies.join(',')}&include_market_cap=true&include_24hr_vol=true&x_cg_api_key=${API_KEY}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      // Check if we're getting HTML instead of JSON (error page)
+      if (contentType.includes('text/html')) {
+        throw new Error(`CoinGecko API returned HTML instead of JSON. Rate limit may have been reached or API key may be invalid.`);
+      }
+      
+      // Try to parse error as JSON, fallback to statusText if that fails
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(`CoinGecko API error: ${errorData.error || response.statusText}`);
+    }
+    
+    // Check content type before parsing to avoid JSON parse errors
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error(`CoinGecko API returned non-JSON response: ${contentType}`);
+    }
+    
+    const responseText = await response.text();
+    let data: any;
+    
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse CoinGecko response as JSON:', responseText.substring(0, 100));
+      throw new Error(`Invalid JSON response from CoinGecko API`);
+    }
+    
+    if (!data[coinId]) {
+      throw new Error(`No data returned for coin ID: ${coinId}`);
+    }
+    
+    // Extract prices, market caps and volumes
+    const result = {
+      prices: {},
+      marketCaps: {},
+      volumes: {}
+    };
+    
+    for (const currency of vsCurrencies) {
+      // Format: data[coinId][usd] = price, data[coinId][usd_market_cap] = market cap, etc.
+      result.prices[currency] = data[coinId][currency] || 0;
+      result.marketCaps[currency] = data[coinId][`${currency}_market_cap`] || 0;
+      result.volumes[currency] = data[coinId][`${currency}_24h_vol`] || 0;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`Error fetching market data for ${coinId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch market data for multiple coins at once
+ */
+export const fetchMultipleCoinsMarketData = async (coinIds: string[], vsCurrencies: string[] = FIAT_CURRENCIES) => {
+  try {
+    // Include market cap and 24h volume data in the request
+    const url = `${COINGECKO_API_URL}/simple/price?ids=${coinIds.join(',')}&vs_currencies=${vsCurrencies.join(',')}&include_market_cap=true&include_24h_vol=true&x_cg_api_key=${API_KEY}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Error fetching market data for multiple coins:`, error);
+    throw error;
+  }
+};
+
+/**
  * Service for interacting with the CoinGecko API
  */
 export const coinGeckoService = {
   fetchExchangeRates,
   fetchCoinPrice,
+  fetchCoinMarketData,
+  fetchMultipleCoinsMarketData,
   FIAT_CURRENCIES,
   getMappedCryptoAssets,
   getAllCryptoAssets,

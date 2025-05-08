@@ -1,6 +1,5 @@
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
 import { ReferralsViewMode } from '@/components/ReferralsWidget';
-import { EarnViewMode } from '@/components/EarnWidget';
 
 // Widget State Management
 export class WidgetState {
@@ -176,45 +175,8 @@ export class ReferralsWidgetState {
   }
 }
 
-// Add EarnViewMode type and EarnWidgetState class
-export class EarnWidgetState {
-  private listeners: Set<() => void> = new Set();
-  private _viewMode: EarnViewMode;
-  public widgetId: string;
-
-  constructor(initialViewMode: EarnViewMode = 'ripple', widgetId: string) {
-    this._viewMode = initialViewMode;
-    this.widgetId = widgetId;
-  }
-
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
-
-  private notifyListeners(): void {
-    this.listeners.forEach(listener => listener());
-  }
-
-  get viewMode(): EarnViewMode {
-    return this._viewMode;
-  }
-
-  setViewMode(newViewMode: EarnViewMode): void {
-    if (!newViewMode) return;
-    this._viewMode = newViewMode;
-    this.notifyListeners();
-  }
-}
-
-export function createDefaultEarnWidgetState(initialViewMode: EarnViewMode = 'ripple', widgetId: string): EarnWidgetState {
-  return new EarnWidgetState(initialViewMode, widgetId);
-}
-
 // Global widget state registry
-export const widgetStateRegistry = new Map<string, WidgetState | ReferralsWidgetState | EarnWidgetState>();
+export const widgetStateRegistry = new Map<string, WidgetState | ReferralsWidgetState>();
 
 // Create a default state for a widget
 export const createDefaultWidgetState = (

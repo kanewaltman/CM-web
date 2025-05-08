@@ -8,7 +8,7 @@ import { getWidgetIdFromHash } from '@/lib/widgetDialogService';
 export function useWidgetDialogRouter() {
   useEffect(() => {
     // Check URL hash on mount
-    const { widgetId: widgetIdFromHash, asset: assetFromHash } = getWidgetIdFromHash();
+    const widgetIdFromHash = getWidgetIdFromHash();
     
     if (widgetIdFromHash) {
       console.log('📍 Initial widget dialog from URL:', widgetIdFromHash);
@@ -17,10 +17,7 @@ export function useWidgetDialogRouter() {
       setTimeout(() => {
         // Find and dispatch a custom event to open the dialog
         const event = new CustomEvent('open-widget-dialog', {
-          detail: { 
-            widgetId: widgetIdFromHash,
-            asset: assetFromHash 
-          },
+          detail: { widgetId: widgetIdFromHash },
           bubbles: true
         });
         document.dispatchEvent(event);
@@ -29,16 +26,13 @@ export function useWidgetDialogRouter() {
 
     // Handle browser back/forward navigation for dialogs
     const handleHashChange = () => {
-      const { widgetId, asset } = getWidgetIdFromHash();
+      const widgetId = getWidgetIdFromHash();
       
       if (widgetId) {
         console.log('🔄 Opening widget dialog from hashchange:', widgetId);
         // Dispatch event to open the dialog
         const event = new CustomEvent('open-widget-dialog', {
-          detail: { 
-            widgetId,
-            asset
-          },
+          detail: { widgetId },
           bubbles: true
         });
         document.dispatchEvent(event);
