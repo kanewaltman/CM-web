@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StandaloneWidgetDialog } from './StandaloneWidgetDialog';
 import { findWidgetById } from '@/lib/widgetRegistry';
 import { resetDialogOpenedState } from '@/lib/widgetDialogService';
+import { useDialogContentStore, clearDialogContentHistory } from '@/lib/dialogContentService';
 
 // Track which events have been handled globally
 const handledGlobalEvents = new Set<string>();
@@ -37,6 +38,9 @@ function wasDialogRecentlyClosed(): boolean {
  */
 export function GlobalWidgetDialogRenderer() {
   const [openWidgets, setOpenWidgets] = useState<Record<string, boolean>>({});
+  
+  // Access content store to clear history when all dialogs are closed
+  const { clearHistory } = useDialogContentStore();
   
   // Handle URL hash changes for direct navigation
   useEffect(() => {
@@ -151,6 +155,23 @@ export function GlobalWidgetDialogRenderer() {
           ...prev,
           [widgetId]: true
         }));
+        
+        // Check if there's custom content to display immediately
+        if (e.detail?.initialContent) {
+          // Dispatch event to push content after dialog opens
+          setTimeout(() => {
+            const contentEvent = new CustomEvent('dialog-content-change', {
+              detail: {
+                type: 'push',
+                widgetId: widgetId,
+                contentId: e.detail.initialContent,
+                data: e.detail.contentData || {}
+              }
+            });
+            document.dispatchEvent(contentEvent);
+          }, 300);
+        }
+        
         return;
       }
       
@@ -260,6 +281,22 @@ export function GlobalWidgetDialogRenderer() {
               ...prev,
               [widgetId]: true
             }));
+            
+            // Check if there's custom content to display immediately
+            if (e.detail?.initialContent) {
+              // Dispatch event to push content after dialog opens
+              setTimeout(() => {
+                const contentEvent = new CustomEvent('dialog-content-change', {
+                  detail: {
+                    type: 'push',
+                    widgetId: widgetId,
+                    contentId: e.detail.initialContent,
+                    data: e.detail.contentData || {}
+                  }
+                });
+                document.dispatchEvent(contentEvent);
+              }, 300);
+            }
           } else {
             console.log('🌐 Dialog already handled by a widget container, skipping global renderer');
           }
@@ -279,6 +316,9 @@ export function GlobalWidgetDialogRenderer() {
         
         // Clear any specific asset storage
         sessionStorage.removeItem('selected_stake_asset');
+        
+        // Clear dialog content history
+        clearHistory();
       }
     };
     
@@ -304,6 +344,9 @@ export function GlobalWidgetDialogRenderer() {
       // Clear any specific asset storage 
       sessionStorage.removeItem('selected_stake_asset');
       
+      // Clear dialog content history
+      clearHistory();
+      
       console.log('🌐 All dialogs have been forcibly closed and state reset');
     };
     
@@ -317,7 +360,7 @@ export function GlobalWidgetDialogRenderer() {
       document.removeEventListener('close-widget-dialogs', handleCloseDialogs);
       document.removeEventListener('close-all-widget-dialogs', handleGlobalCloseAllDialogs as EventListener);
     };
-  }, [openWidgets]);
+  }, [openWidgets, clearHistory]);
   
   // Handler for individual dialog open state changes
   const handleDialogOpenChange = (widgetId: string, open: boolean) => {
@@ -340,6 +383,8 @@ export function GlobalWidgetDialogRenderer() {
       
       if (!otherDialogsOpen) {
         resetDialogOpenedState();
+        // Clear content history for this widget
+        clearDialogContentHistory(widgetId);
       }
     } else {
       setOpenWidgets(prev => ({

@@ -1,9 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense, lazy } from 'react';
 import { Dialog, DialogContent } from './ui/dialog';
 import { ChevronDown } from './ui-icons';
 import { WIDGET_REGISTRY, widgetTitles, findWidgetById } from '@/lib/widgetRegistry';
 import { useDataSource } from '@/lib/DataSourceContext';
 import { openWidgetDialog, closeWidgetDialog } from '@/lib/widgetDialogService';
+import { useDialogContentStore } from '@/lib/dialogContentService';
+
+// Lazy load the EarnConfirmationContent component
+const EarnConfirmationContent = lazy(() => import('./EarnConfirmationContent'));
 
 // Import isClosingDialog flag from WidgetDialog
 // @ts-ignore - Accessing from WidgetDialog which is not explicitly exported
@@ -61,6 +65,9 @@ export function StandaloneWidgetDialog({
   const [isLoading, setIsLoading] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
   
+  // Subscribe to dialog content store
+  const { currentContentId, contentHistory, pushContent, popContent, clearHistory } = useDialogContentStore();
+  
   // Find widget in registry using the helper function (which handles compound IDs)
   const widgetInfo = findWidgetById(widgetId);
   const widgetType = widgetInfo?.type;
@@ -86,8 +93,38 @@ export function StandaloneWidgetDialog({
     } else {
       // Remove CSS class from body
       document.body.classList.remove('widget-dialog-open');
+      
+      // Clear content history when dialog is closed
+      clearHistory(widgetId);
     }
-  }, [open, widgetId]);
+  }, [open, widgetId, clearHistory]);
+
+  // Listen for dialog content change events
+  useEffect(() => {
+    const handleContentChange = (e: CustomEvent) => {
+      const { type, widgetId: targetWidgetId, contentId, data } = e.detail;
+      
+      // Only process events for this widget
+      if (targetWidgetId && targetWidgetId !== widgetId) {
+        return;
+      }
+      
+      if (type === 'push') {
+        pushContent(widgetId, contentId, data);
+      } else if (type === 'pop') {
+        popContent();
+      } else if (type === 'clear') {
+        clearHistory(targetWidgetId);
+      }
+    };
+    
+    // Listen for content change events
+    document.addEventListener('dialog-content-change', handleContentChange as EventListener);
+    
+    return () => {
+      document.removeEventListener('dialog-content-change', handleContentChange as EventListener);
+    };
+  }, [widgetId, pushContent, popContent, clearHistory]);
 
   // Handle focus prevention for direct URL navigation
   useEffect(() => {
@@ -108,6 +145,9 @@ export function StandaloneWidgetDialog({
     if (!newOpenState && open) {
       // Dialog is being closed
       closeWidgetDialog(widgetId);
+      
+      // Clear content history
+      clearHistory(widgetId);
     }
     // Forward the change to the parent
     onOpenChange(newOpenState);
@@ -132,6 +172,23 @@ export function StandaloneWidgetDialog({
 
   // Render the widget component from the registry
   const WidgetComponent = widgetConfig.component;
+  
+  // Find a custom content component if specified
+  let CustomContent = null;
+  let contentType = null;
+  if (currentContentId) {
+    try {
+      // Extract the content type from the ID
+      contentType = currentContentId.split(':')[0];
+      
+      if (contentType === 'earn-confirmation') {
+        CustomContent = EarnConfirmationContent;
+      }
+      // Add other content types as needed
+    } catch (error) {
+      console.error('Error loading custom content:', error);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -144,34 +201,66 @@ export function StandaloneWidgetDialog({
         }}
       >
         <div className="flex flex-col h-full overflow-hidden">
-          {/* Header */}
-          <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
-            <div className="flex items-center space-x-2">
-              <h2 key={title} className="text-sm font-semibold">{title}</h2>
-              <ChevronDown className="h-4 w-4 opacity-50" />
+          {/* Header - hide when showing custom content with its own header */}
+          {!CustomContent && (
+            <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
+              <div className="flex items-center space-x-2">
+                <h2 key={title} className="text-sm font-semibold">{title}</h2>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Content wrapper */}
           <div className="widget-content flex-1 min-h-0 overflow-hidden pt-0 px-1 pb-1 select-text">
-            <div className="p-4 h-full overflow-auto">
-              {isLoading ? (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="animate-pulse flex flex-col items-center">
-                    <div className="h-8 w-32 bg-gray-300 rounded-md mb-4"></div>
-                    <div className="h-4 w-64 bg-gray-200 rounded-md mb-2"></div>
-                    <div className="h-4 w-48 bg-gray-200 rounded-md"></div>
-                  </div>
+            {isLoading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="animate-pulse flex flex-col items-center">
+                  <div className="h-8 w-32 bg-gray-300 rounded-md mb-4"></div>
+                  <div className="h-4 w-64 bg-gray-200 rounded-md mb-2"></div>
+                  <div className="h-4 w-48 bg-gray-200 rounded-md"></div>
                 </div>
-              ) : (
+              </div>
+            ) : CustomContent ? (
+              <div className="h-full">
+                <Suspense fallback={
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="animate-pulse flex flex-col items-center">
+                      <div className="h-8 w-32 bg-gray-300 rounded-md mb-4"></div>
+                      <div className="h-4 w-64 bg-gray-200 rounded-md mb-2"></div>
+                      <div className="h-4 w-48 bg-gray-200 rounded-md"></div>
+                    </div>
+                  </div>
+                }>
+                  <CustomContent 
+                    {...useDialogContentStore.getState().contentData}
+                    onConfirm={() => {
+                      // Handle confirmation action
+                      console.log('Confirmation action triggered');
+                      handleOpenChange(false);
+                    }}
+                    onCancel={() => {
+                      // Handle cancel action
+                      console.log('Cancel action triggered');
+                      handleOpenChange(false);
+                    }}
+                    onBack={() => {
+                      // Handle back action
+                      popContent();
+                    }}
+                  />
+                </Suspense>
+              </div>
+            ) : (
+              <div className="p-4 h-full overflow-auto">
                 <WidgetErrorBoundary widgetId={originalWidgetId}>
                   <WidgetComponent 
                     widgetId={originalWidgetId}
                     inDialog={true}
                   />
                 </WidgetErrorBoundary>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>

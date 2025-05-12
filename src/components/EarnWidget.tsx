@@ -1955,6 +1955,52 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     return [Math.max(0, min - padding), max + padding];
   };
 
+  // Add this function to the StakeView component (around line 1590)
+  // Add this near the other event handlers in StakeView
+  const handleEarnButtonClick = (asset: string, earnings: string, timeFrame: string) => {
+    console.log('📊 Earn button clicked:', asset, earnings, timeFrame);
+    
+    // Check if we're already in a dialog
+    if (document.body.classList.contains('widget-dialog-open')) {
+      // We're already in a dialog, so we should push confirmation content
+      console.log('📊 Already in dialog, pushing confirmation content');
+      
+      // Import the dialog content service
+      import('@/lib/dialogContentService').then(({ pushDialogContent }) => {
+        // Push the confirmation content
+        pushDialogContent('earn-stake', 'earn-confirmation', {
+          asset,
+          amount: stakeAmount,
+          timeFrame,
+          estimatedEarnings: earnings
+        });
+      });
+    } else {
+      // We're not in a dialog, so we need to open one with the confirmation content
+      console.log('📊 Not in dialog, opening dialog with confirmation content');
+      
+      // Create custom event to open dialog with initial confirmation content
+      const event = new CustomEvent('open-widget-dialog', {
+        detail: {
+          widgetId: 'earn-stake',
+          asset,
+          forceOpen: true,
+          eventId: `earn-stake-${Date.now()}`,
+          initialContent: 'earn-confirmation',
+          contentData: {
+            asset,
+            amount: stakeAmount,
+            timeFrame,
+            estimatedEarnings: earnings
+          }
+        }
+      });
+      
+      // Dispatch the event to open the dialog
+      document.dispatchEvent(event);
+    }
+  };
+
   return (
     <div className="w-full h-full flex flex-col overflow-auto p-4">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow">
@@ -2320,6 +2366,7 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
             className={cn("w-full mb-4 bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30")}
             variant="default"
             size="lg"
+            onClick={() => handleEarnButtonClick(selectedAsset, estimatedEarningsWithModifiers[selectedTimeFrame as keyof typeof estimatedEarningsWithModifiers].earnings, selectedTimeFrame)}
           >
             <AssetIcon asset={selectedAsset as AssetTicker} iconPosition="before" showText={false} /> Earn {estimatedEarningsWithModifiers[selectedTimeFrame as keyof typeof estimatedEarningsWithModifiers].earnings} {selectedAsset} over {
               selectedTimeFrame === "1m" ? "1 Month" :
