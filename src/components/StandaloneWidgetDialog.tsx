@@ -5,6 +5,7 @@ import { WIDGET_REGISTRY, widgetTitles, findWidgetById } from '@/lib/widgetRegis
 import { useDataSource } from '@/lib/DataSourceContext';
 import { openWidgetDialog, closeWidgetDialog } from '@/lib/widgetDialogService';
 import { useDialogContentStore } from '@/lib/dialogContentService';
+import { cn } from '@/lib/utils';
 
 // Lazy load the EarnConfirmationContent component
 const EarnConfirmationContent = lazy(() => import('./EarnConfirmationContent'));
@@ -190,11 +191,99 @@ export function StandaloneWidgetDialog({
     }
   }
 
+  // Add an effect to handle animation when content changes
+  useEffect(() => {
+    if (contentType === 'earn-confirmation') {
+      console.log('📏 Setting dialog width for confirmation content');
+      document.documentElement.style.setProperty('--dialog-width', '600px');
+    } else {
+      console.log('📏 Restoring original dialog width');
+      document.documentElement.style.setProperty('--dialog-width', 'var(--max-widget-width, 1200px)');
+    }
+  }, [contentType]);
+
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog 
+      open={open} 
+      onOpenChange={handleOpenChange}
+      // Apply custom class to the dialog when showing confirmation content
+      data-confirmation={contentType === 'earn-confirmation' ? 'true' : 'false'}
+      className={contentType === 'earn-confirmation' ? 'confirmation-dialog' : ''}
+    >
+      <style jsx global>{`
+        /* Styling for dialog transitions */
+        .DialogContent {
+          transition: width 0.3s ease-out, max-width 0.3s ease-out;
+        }
+        
+        .DialogOverlay {
+          transition: background-color 0.3s ease-out;
+        }
+        
+        /* Custom background for confirmation dialogs */
+        .confirmation-dialog ~ .DialogOverlay,
+        .confirmation-dialog + .DialogOverlay,
+        [data-confirmation="true"] ~ .DialogOverlay {
+          background-color: rgba(0, 0, 0, 0.75) !important;
+        }
+        
+        /* Add shadow and border effects for confirmation dialogs */
+        .confirmation-dialog .DialogContent,
+        [data-confirmation="true"] .DialogContent {
+          box-shadow: 0 0 25px rgba(0, 0, 0, 0.3) !important;
+          border-width: 1px !important;
+        }
+        
+        /* Content animation */
+        @keyframes content-slide-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-content-slide-in {
+          animation: content-slide-in 0.3s ease-out forwards;
+        }
+        
+        /* Special styling for confirmation content */
+        .confirmation-content {
+          padding: 0 !important;
+        }
+        
+        /* Animation for content switching */
+        .content-enter {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        
+        .content-enter-active {
+          opacity: 1;
+          transform: translateY(0);
+          transition: opacity 0.3s, transform 0.3s;
+        }
+        
+        .content-exit {
+          opacity: 1;
+        }
+        
+        .content-exit-active {
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+      `}</style>
       <DialogContent 
         ref={contentRef}
-        className="DialogContent w-[var(--max-widget-width,1200px)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0 overflow-hidden"
+        className={cn(
+          "DialogContent",
+          "max-w-[95vw] h-[90vh] max-h-[90vh] p-0 overflow-hidden",
+          "transition-all duration-300 ease-in-out", // Add transition for smooth width change
+          "w-[var(--dialog-width)]" // Use CSS variable for dynamic width
+        )}
         onOpenAutoFocus={(e) => {
           // Prevent default focus behavior
           e.preventDefault();
@@ -222,7 +311,11 @@ export function StandaloneWidgetDialog({
                 </div>
               </div>
             ) : CustomContent ? (
-              <div className="h-full">
+              <div className={cn(
+                "h-full",
+                "animate-content-slide-in", // Add animation class
+                contentType === 'earn-confirmation' ? "confirmation-content" : "" // Add specific class for styling
+              )}>
                 <Suspense fallback={
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="animate-pulse flex flex-col items-center">
