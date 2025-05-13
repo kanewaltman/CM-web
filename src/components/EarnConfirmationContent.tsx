@@ -17,6 +17,12 @@ export interface StakingPlan {
   actualEarnings?: number;
   terminationFee?: number;
   terminationDate?: string;
+  // New properties for claiming functionality
+  lastClaimedDate?: string;
+  lastClaimedAmount?: number;
+  totalClaimed?: number;
+  // Property for claim button cooldown
+  claimCooldownUntil?: string; 
 }
 
 interface EarnConfirmationContentProps {
@@ -143,7 +149,9 @@ function EarnConfirmationContent({
     const startDate = new Date();
     const endDate = new Date(startDate.getTime() + getTimeframeMs(timeFrame));
     
-    // Create a new staking plan
+    // Create a new staking plan with initial 10-second cooldown
+    const initialCooldownEnd = new Date(startDate.getTime() + 10000); // 10 seconds from now
+    
     const newPlan: StakingPlan = {
       id: `plan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       asset,
@@ -152,7 +160,8 @@ function EarnConfirmationContent({
       estimatedEarnings: earningsValue,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      isActive: true
+      isActive: true,
+      claimCooldownUntil: initialCooldownEnd.toISOString() // Initial 10-second cooldown
     };
     
     // Save the plan to localStorage
