@@ -42,6 +42,9 @@ import {
 import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from './ui/table';
 import { AssetButtonWithPrice } from './AssetPriceTooltip';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
+import { stakingPlansManager, StakingPlan } from './EarnConfirmationContent';
+import NumberFlow, { continuous } from '@number-flow/react';
+import { AssetPriceTooltip } from './AssetPriceTooltip';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -1113,7 +1116,11 @@ const RippleView: React.FC = () => {
   const [featuredToken, setFeaturedToken] = useState<string>(
     stakingTokens[Math.floor(Math.random() * stakingTokens.length)]
   );
+  const [showPlans, setShowPlans] = useState<boolean>(false);
+  const [userPlans, setUserPlans] = useState<StakingPlan[]>([]);
   const ignoreNextHashChange = useRef(false);
+  // Add refresh interval ref
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Force update of the gradient when theme changes
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
@@ -1131,6 +1138,59 @@ const RippleView: React.FC = () => {
     // Update gradient key whenever theme changes to force a re-render
     setGradientKey(Date.now());
   }, [resolvedTheme]);
+  
+  // Function to load plans from localStorage
+  const loadPlans = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Get plans from localStorage
+    const plans = stakingPlansManager.getPlans();
+    setUserPlans(plans);
+    setShowPlans(plans.length > 0);
+  }, []);
+  
+  // Check for user plans and set up refresh interval
+  useEffect(() => {
+    // Initial load
+    loadPlans();
+    
+    // Set up refresh interval (every 15 seconds)
+    refreshIntervalRef.current = setInterval(() => {
+      loadPlans();
+    }, 15000);
+    
+    // Listen for staking plan creation events
+    const handlePlanCreated = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      console.log('📊 Staking plan created:', customEvent.detail);
+      
+      // Refresh plans
+      loadPlans();
+    };
+    
+    // Listen for staking plan termination events
+    const handlePlanTerminated = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      console.log('📊 Staking plan terminated:', customEvent.detail);
+      
+      // Refresh plans
+      loadPlans();
+    };
+    
+    // Add event listeners
+    document.addEventListener('staking-plan-created', handlePlanCreated);
+    document.addEventListener('staking-plan-terminated', handlePlanTerminated);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('staking-plan-created', handlePlanCreated);
+      document.removeEventListener('staking-plan-terminated', handlePlanTerminated);
+      
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [loadPlans]);
   
   const handleMatterError = (error: any) => {
     console.error('Error in Matter.js component:', error);
@@ -1260,6 +1320,12 @@ const RippleView: React.FC = () => {
     }
   };
 
+  // If user has staking plans, show them
+  if (showPlans && userPlans.length > 0) {
+    return <ActivePlansView plans={userPlans} onNewPlan={handleRippleGetStartedClick} />;
+  }
+
+  // Otherwise show the default ripple view
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center p-4 overflow-hidden">
       {!hasError ? (
@@ -1271,8 +1337,7 @@ const RippleView: React.FC = () => {
           hardLimit={40}
           density={0.0008}
           restitution={0.4}
-          /// this is the token click handler for the ripple view
-          /// onTokenClick={handleTokenClick}
+          onTokenClick={handleTokenClick}
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
@@ -1389,7 +1454,6 @@ const RippleView: React.FC = () => {
                 {tokenData.find(t => t.symbol === featuredToken)?.apy} APY
               </div>
             </div>
-            
           </div>
         </div>
       </div>
@@ -2000,6 +2064,38 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
       document.dispatchEvent(event);
     }
   };
+
+  // Add a development test helper
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      import('./TestStakingInit').then(({ TestStakingInit }) => {
+        // Add the test component to the DOM for development
+        const testContainer = document.createElement('div');
+        testContainer.style.position = 'fixed';
+        testContainer.style.bottom = '20px';
+        testContainer.style.right = '20px';
+        testContainer.style.zIndex = '9999';
+        document.body.appendChild(testContainer);
+        
+        // Render the test component
+        import('react-dom').then(({ createRoot }) => {
+          const root = createRoot(testContainer);
+          root.render(<TestStakingInit />);
+        });
+      }).catch(error => {
+        console.error('Failed to load test helper:', error);
+      });
+    }
+    
+    // Cleanup function for development only
+    return () => {
+      if (process.env.NODE_ENV === 'development') {
+        // Find and remove the test container
+        const testContainer = document.querySelector('#staking-test-helper');
+        if (testContainer) testContainer.remove();
+      }
+    };
+  }, []);
 
   return (
     <div className="w-full h-full flex flex-col overflow-auto p-4">
@@ -2643,3 +2739,363 @@ if (typeof window !== 'undefined') {
   // Clean up when page unloads
   window.addEventListener('beforeunload', cleanup);
 } 
+
+// Add new ActivePlansView component
+const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }> = ({ plans, onNewPlan }) => {
+  const { resolvedTheme } = useTheme();
+  const [selectedPlan, setSelectedPlan] = useState<StakingPlan | null>(plans[0] || null);
+  const [gradientKey, setGradientKey] = useState<number>(Date.now());
+  const [showHistoric, setShowHistoric] = useState<boolean>(false);
+  // Add state to track current time for real-time updates
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  
+  // Calculate active and historic plans
+  const activePlans = plans.filter(plan => plan.isActive);
+  const historicPlans = plans.filter(plan => !plan.isActive);
+  
+  // Force update of the gradient when theme changes
+  useEffect(() => {
+    setGradientKey(Date.now());
+  }, [resolvedTheme]);
+  
+  // Add effect for real-time updates of earnings using requestAnimationFrame
+  useEffect(() => {
+    let frameId: number;
+    
+    // Use requestAnimationFrame for smoother updates
+    const updateTime = () => {
+      setCurrentTime(Date.now());
+      frameId = requestAnimationFrame(updateTime);
+    };
+    
+    // Start the animation frame loop
+    frameId = requestAnimationFrame(updateTime);
+    
+    // Clean up
+    return () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+    };
+  }, []);
+  
+  // Calculate current earnings for a plan with a continuous growth model
+  const calculateCurrentEarnings = (plan: StakingPlan): number => {
+    if (!plan.isActive) {
+      // For terminated plans, return the actual earnings or a calculated amount
+      return plan.actualEarnings || 0;
+    }
+    
+    const startDate = new Date(plan.startDate).getTime();
+    const endDate = new Date(plan.endDate).getTime();
+    const now = currentTime; // Use the state time for consistent updates
+    
+    // Calculate progress as a percentage (capped at 100%)
+    const progress = Math.min(1, (now - startDate) / (endDate - startDate));
+    
+    // Calculate the total duration in milliseconds
+    const totalDuration = endDate - startDate;
+    
+    // Calculate milliseconds elapsed
+    const elapsedMs = now - startDate;
+    
+    // Calculate earnings per millisecond
+    const msEarningRate = plan.estimatedEarnings / totalDuration;
+    
+    // Calculate current earnings precisely based on exact time elapsed
+    return msEarningRate * elapsedMs;
+  };
+  
+  // Calculate remaining time for a plan
+  const formatRemainingTime = (plan: StakingPlan): string => {
+    if (!plan.isActive) {
+      return "Completed";
+    }
+    
+    const endDate = new Date(plan.endDate).getTime();
+    const now = currentTime; // Use the state time for consistent updates
+    
+    // If plan has ended
+    if (now >= endDate) {
+      return "Ready to claim";
+    }
+    
+    const remainingMs = endDate - now;
+    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (days > 0) {
+      return `${days}d ${hours}h remaining`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m remaining`;
+    } else {
+      return `${minutes}m remaining`;
+    }
+  };
+  
+  // Calculate termination fee for a plan
+  const calculateTerminationFee = (plan: StakingPlan): number => {
+    const startDate = new Date(plan.startDate).getTime();
+    const endDate = new Date(plan.endDate).getTime();
+    const now = Date.now();
+    
+    // Calculate progress as a percentage
+    const progress = (now - startDate) / (endDate - startDate);
+    
+    // The earlier the termination, the higher the fee
+    // Fee ranges from 50% (at the beginning) to 5% (near the end)
+    const feePercentage = Math.max(5, 50 - (progress * 45));
+    
+    // Calculate fee
+    return (plan.amount * feePercentage) / 100;
+  };
+  
+  // Handle plan termination
+  const handleTerminatePlan = (plan: StakingPlan) => {
+    if (!plan.isActive) return;
+    
+    // Calculate the fee
+    const fee = calculateTerminationFee(plan);
+    
+    // Calculate actual earnings at termination time
+    const actualEarnings = calculateCurrentEarnings(plan);
+    
+    // Confirm with user
+    const earningsDisplay = actualEarnings < 1 ? actualEarnings.toFixed(8) : actualEarnings.toFixed(6);
+    if (confirm(`Are you sure you want to terminate this staking plan?\n\nTermination fee: ${fee.toFixed(4)} ${plan.asset}\nCurrent earnings: ${earningsDisplay} ${plan.asset}`)) {
+      // Update the plan with termination details
+      const updatedPlan = {
+        ...plan,
+        isActive: false,
+        terminationDate: new Date().toISOString(),
+        terminationFee: fee,
+        actualEarnings: actualEarnings
+      };
+      
+      // Save the updated plan
+      stakingPlansManager.updatePlan(updatedPlan);
+      
+      // Notify about plan termination
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('staking-plan-terminated', { 
+          detail: { plan: updatedPlan }
+        });
+        document.dispatchEvent(event);
+      }
+      
+      // Refresh the view
+      window.location.reload();
+    }
+  };
+  
+  // Format date string
+  const formatDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+  
+  return (
+    <div className="relative w-full h-full flex flex-col items-center justify-center p-4 overflow-hidden">
+      <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
+      <div className="z-10 text-center max-w-lg mx-auto relative w-full">
+        <div className="mb-4 flex items-center justify-between w-full">
+          <div className="text-lg font-semibold">
+            {showHistoric ? 'Historic Plans' : 'Your Active Staking Plans'}
+          </div>
+          {historicPlans.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowHistoric(!showHistoric)}
+              className="h-7 px-2.5 text-xs"
+            >
+              {showHistoric ? 'Show Active' : 'Show Historic'}
+            </Button>
+          )}
+        </div>
+        
+        {/* Show active or historic plans */}
+        <div className="space-y-4 w-full">
+          {showHistoric ? (
+            // Historic plans
+            historicPlans.length > 0 ? (
+              historicPlans.map(plan => (
+                <Card 
+                  key={plan.id} 
+                  className={cn(
+                    "overflow-hidden bg-[hsl(var(--primary-foreground))] text-left",
+                    "border-[hsl(var(--color-widget-inset-border))]"
+                  )}
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 mr-3 flex items-center justify-center overflow-hidden">
+                          <img 
+                            src={`/assets/symbols/${plan.asset}.svg`} 
+                            alt={plan.asset}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.outerHTML = `<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">${plan.asset.charAt(0)}</div>`;
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">{plan.amount} {plan.asset}</CardTitle>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(plan.startDate)} - {plan.terminationDate ? formatDate(plan.terminationDate) : formatDate(plan.endDate)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-muted-foreground">
+                          {plan.terminationDate ? 'Terminated early' : 'Completed'}
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2 pb-4">
+                    <div className="grid grid-cols-2 gap-4">
+                                              <div>
+                          <p className="text-xs text-muted-foreground">Earned</p>
+                          <p className="font-medium text-emerald-500 flex justify-end tabular-nums w-full">
+                            <span className="flex items-center">
+                              {plan.actualEarnings ? (plan.actualEarnings < 1 ? plan.actualEarnings.toFixed(8) : plan.actualEarnings.toFixed(6)) : '0.00'} 
+                              <AssetPriceTooltip asset={plan.asset as AssetTicker}>
+                                <span className="ml-1">{plan.asset}</span>
+                              </AssetPriceTooltip>
+                            </span>
+                          </p>
+                        </div>
+                      {plan.terminationFee !== undefined && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Termination Fee</p>
+                          <p className="font-medium text-amber-500 flex justify-end tabular-nums w-full">
+                            <span className="flex items-center">
+                              {plan.terminationFee.toFixed(2)} 
+                              <AssetPriceTooltip asset={plan.asset as AssetTicker}>
+                                <span className="ml-1">{plan.asset}</span>
+                              </AssetPriceTooltip>
+                            </span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                No historic plans found
+              </div>
+            )
+          ) : (
+            // Active plans
+            activePlans.length > 0 ? (
+              activePlans.map(plan => (
+                <Card 
+                  key={plan.id} 
+                  className={cn(
+                    "overflow-hidden bg-[hsl(var(--primary-foreground))] text-left cursor-pointer",
+                    "border-[hsl(var(--color-widget-inset-border))]",
+                    selectedPlan?.id === plan.id ? "border-primary/50" : ""
+                  )}
+                  onClick={() => setSelectedPlan(plan)}
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 mr-3 flex items-center justify-center overflow-hidden">
+                          <img 
+                            src={`/assets/symbols/${plan.asset}.svg`} 
+                            alt={plan.asset}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.outerHTML = `<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">${plan.asset.charAt(0)}</div>`;
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">{plan.amount} {plan.asset}</CardTitle>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(plan.startDate)} - {formatDate(plan.endDate)}
+                          </p>
+                        </div>
+                      </div>
+                                              <div className="text-right">
+                        <div className="text-sm font-semibold text-emerald-500 flex justify-end items-center">
+                          <div className="flex items-center tabular-nums">
+                            <NumberFlow
+                              value={calculateCurrentEarnings(plan)}
+                              format={{
+                                minimumFractionDigits: plan.estimatedEarnings < 1 ? 8 : 6,
+                                maximumFractionDigits: plan.estimatedEarnings < 1 ? 8 : 6
+                              }}
+                              plugins={[continuous]}
+                              animated={true}
+                            />
+                            <AssetPriceTooltip asset={plan.asset as AssetTicker}>
+                              <span className="ml-1">{plan.asset}</span>
+                            </AssetPriceTooltip>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground text-right">
+                          {formatRemainingTime(plan)}
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {selectedPlan?.id === plan.id && (
+                    <CardContent className="p-4 pt-2 pb-4 border-t">
+                      <div className="flex items-center justify-between">
+                                                  <div>
+                            <p className="text-xs text-muted-foreground">Estimated Total</p>
+                            <p className="font-medium flex justify-end tabular-nums w-full">
+                              <span className="flex items-center">
+                                {plan.estimatedEarnings < 1 ? plan.estimatedEarnings.toFixed(8) : plan.estimatedEarnings.toFixed(6)} 
+                                <AssetPriceTooltip asset={plan.asset as AssetTicker}>
+                                  <span className="ml-1">{plan.asset}</span>
+                                </AssetPriceTooltip>
+                              </span>
+                            </p>
+                          </div>
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTerminatePlan(plan);
+                          }}
+                        >
+                          Terminate Early
+                        </Button>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                No active staking plans found
+              </div>
+            )
+          )}
+        </div>
+        
+        {/* Add a new plan button */}
+        {!showHistoric && (
+          <Button 
+            className="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white"
+            onClick={onNewPlan}
+          >
+            Start new staking plan
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}; 
