@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { format, parseISO, isToday, startOfDay, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon, Type } from 'lucide-react';
-import { animate, createScope, waapi, stagger } from 'animejs';
+import { waapi, createScope, stagger } from 'animejs';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { RemovableWidgetProps } from '@/types/widgets';
@@ -489,13 +489,13 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                 (el as HTMLElement).style.filter = 'blur(4px)';
               });
               
-              animate(contentItems, {
+              waapi.animate(contentItems, {
                 opacity: [0, 1],
                 translateY: [3, 0],
                 filter: ['blur(4px)', 'blur(0px)'],
                 duration: 300,
-                delay: ((el: any, i: number) => i * 40),
-                easing: 'easeOutQuad'
+                delay: stagger(40),
+                ease: 'outQuad'
               });
             }
             
@@ -506,13 +506,13 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                 (el as HTMLElement).style.filter = 'blur(4px)';
               });
               
-              animate(citationItems, {
+              waapi.animate(citationItems, {
                 opacity: [0, 1],
                 translateY: [3, 0],
                 filter: ['blur(4px)', 'blur(0px)'],
                 duration: 300,
-                delay: ((el: any, i: number) => 400 + (i * 40)),
-                easing: 'easeOutQuad'
+                delay: stagger(40, {start: 400}),
+                ease: 'outQuad'
               });
             }
           }
@@ -549,10 +549,10 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     ) * -1;
     
     // Animate the sidebar to scroll to the selected date
-    animate(sidebarAnimeRef.current, {
+    waapi.animate(sidebarAnimeRef.current, {
       translateY: yOffset,
       duration: 300,
-      easing: 'easeOutQuart'
+      ease: 'outQuart'
     });
   }, [selectedIndex, allDigests.length, itemHeight]);
 
@@ -566,10 +566,10 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     
     if (activeItem) {
       // Add a subtle pulse animation to the active date item
-      animate(activeItem as HTMLElement, {
+      waapi.animate(activeItem as HTMLElement, {
         scale: [1, 1.05, 1],
         duration: 400,
-        easing: 'easeOutQuad'
+        ease: 'outQuad'
       });
     }
   }, [selectedIndex]);
@@ -597,12 +597,12 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
           animeScope.current.remove('.citation-item');
         }
         
-        animate(contentAnimeRef.current, {
+        waapi.animate(contentAnimeRef.current, {
           opacity: [1, 0],
           translateY: [0, -5],
           filter: ['blur(0px)', 'blur(8px)'],
           duration: 150,
-          easing: 'easeInQuad',
+          ease: 'inQuad',
           complete: () => {
             // After animation completes, ensure content is hidden before state update
             if (contentAnimeRef.current) {
@@ -623,12 +623,12 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                 contentAnimeRef.current.style.height = 'auto';
                 
                 // Explicitly animate the new content back in with a more pronounced animation
-                animate(contentAnimeRef.current, {
+                waapi.animate(contentAnimeRef.current, {
                   opacity: [0, 1],
                   translateY: [5, 0],
                   filter: ['blur(8px)', 'blur(0px)'],
                   duration: 300,
-                  easing: 'easeOutCubic',
+                  ease: 'outCubic',
                   complete: () => {
                     // Once the main container is visible, animate content items individually
                     if (contentAnimeRef.current) {
@@ -642,13 +642,13 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                           (el as HTMLElement).style.filter = 'blur(4px)';
                         });
                         
-                        animate(contentItems, {
+                        waapi.animate(contentItems, {
                           opacity: [0, 1],
                           translateY: [3, 0],
                           filter: ['blur(4px)', 'blur(0px)'],
                           duration: 300,
-                          delay: ((el: any, i: number) => i * 40),
-                          easing: 'easeOutQuad'
+                          delay: stagger(40),
+                          ease: 'outQuad'
                         });
                       }
                       
@@ -659,13 +659,13 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                           (el as HTMLElement).style.filter = 'blur(4px)';
                         });
                         
-                        animate(citationItems, {
+                        waapi.animate(citationItems, {
                           opacity: [0, 1],
                           translateY: [3, 0],
                           filter: ['blur(4px)', 'blur(0px)'],
                           duration: 300,
-                          delay: ((el: any, i: number) => 400 + (i * 40)),
-                          easing: 'easeOutQuad'
+                          delay: stagger(40, {start: 400}),
+                          ease: 'outQuad'
                         });
                       }
                     }
