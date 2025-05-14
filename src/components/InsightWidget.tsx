@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { format, parseISO, isToday, startOfDay, isSameDay, Match } from 'date-fns';
+import { format, parseISO, isToday, startOfDay, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon, Type } from 'lucide-react';
+import { motion, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
 import { supabase } from '@/lib/supabase';
 import { 
   Pagination, 
@@ -98,6 +99,19 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [contentParts, setContentParts] = useState<React.ReactNode[]>([]);
   
+  // Refs for scrolling
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Motion values for smooth scrolling
+  const y = useMotionValue(0);
+  const springY = useSpring(y, {
+    stiffness: 50,
+    damping: 20,
+    mass: 1.5,
+  });
+  
   // Load font size from localStorage with a default of 14px
   const [fontSize, setFontSize] = useState<number>(() => {
     try {
@@ -117,7 +131,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       return 1.5;
     }
   });
-
+  
   // Fetch all available market digests
   const fetchDigests = useCallback(async () => {
     setLoading(true);
@@ -277,8 +291,6 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
 
   // Helper function to process text for assets and citations
   const processText = (text: string): React.ReactNode[] => {
-    console.log('Processing text:', text); // Debugging log
-
     // Split text into paragraphs and headers
     const sections = text.split(/\n\n|###/);
     const parts: React.ReactNode[] = [];
@@ -434,23 +446,47 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   }, [currentDigest, formatContentWithAssets]);
 
   // Handle pagination navigation
-  const goToNext = () => {
-    if (selectedIndex < allDigests.length - 1) {
-      const newIndex = selectedIndex + 1;
+  const navigateTo = (index: number) => {
+    const newIndex = Math.min(allDigests.length - 1, Math.max(0, index));
+    if (newIndex !== selectedIndex) {
       setSelectedIndex(newIndex);
       setCurrentDigest(allDigests[newIndex]);
       setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
+       
+      // Scroll content back to top when changing days
+      if (contentRef.current) {
+        contentRef.current.scrollTop = 0;
+      }
     }
   };
+  
+  // Handle wheel scrolling - Only for the sidebar navigation
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (!sidebarRef.current || e.target === contentRef.current || contentRef.current?.contains(e.target as Node)) {
+        return;
+      }
+      e.preventDefault();
 
-  const goToPrevious = () => {
-    if (selectedIndex > 0) {
-      const newIndex = selectedIndex - 1;
-      setSelectedIndex(newIndex);
-      setCurrentDigest(allDigests[newIndex]);
-      setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
+      // Slower scrolling speed
+      if (e.deltaY > 0) {
+        navigateTo(selectedIndex + 1);
+      } else {
+        navigateTo(selectedIndex - 1);
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("wheel", handleWheel, { passive: false });
     }
-  };
+
+    return () => {
+      if (container) {
+        container.removeEventListener("wheel", handleWheel);
+      }
+    };
+  }, [selectedIndex]);
 
   // Refresh data
   const handleRefresh = () => {
@@ -471,7 +507,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         return 'Today';
       }
       
-      return format(date, 'MMM d, yyyy');
+      return format(date, 'MMM d');
     } catch {
       return 'Unknown date';
     }
@@ -571,107 +607,167 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     };
   }, [widgetId]);
 
+  const itemHeight = 24; // Height of each date item
+
   return (
-    <div className={`flex flex-col h-full ${className}`}>
-      {/* Main content */}
-      <div className="flex-1 overflow-auto scrollbar-thin p-4">
-        {loading ? (
-          <div className="flex flex-col space-y-2 animate-pulse">
-            <div className="h-4 bg-muted rounded w-3/4"></div>
-            <div className="h-4 bg-muted rounded w-full"></div>
-            <div className="h-4 bg-muted rounded w-5/6"></div>
-            <div className="h-4 bg-muted rounded w-full"></div>
-            <div className="h-4 bg-muted rounded w-4/5"></div>
-          </div>
-        ) : error ? (
-          <div className="text-red-500 text-sm">
-            {error}
-          </div>
-        ) : currentDigest ? (
-          <div className="space-y-4">
-            {/* Date and sentiment indicator */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium">
+    <div 
+      ref={containerRef}
+      className={`flex flex-col relative h-full border bg-card rounded-xl overflow-hidden ${className}`}
+    >
+      {/* Date sidebar */}
+      <div 
+        ref={sidebarRef}
+        className="absolute left-0 top-0 bottom-0 w-12 border-r border-border overflow-hidden"
+      >
+        <motion.div 
+          className="h-full flex flex-col items-center py-2"
+          animate={{ y: Math.max(0, Math.min(allDigests.length * itemHeight - (containerRef.current?.clientHeight || 300), selectedIndex * itemHeight - (containerRef.current?.clientHeight || 300) / 2)) * -1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30, mass: 1 }}
+        >
+          {allDigests.map((digest, index) => {
+            const isActive = index === selectedIndex;
+            const date = parseISO(digest.timestamp);
+            return (
+              <motion.div
+                key={index}
+                className={`h-${itemHeight/4} w-full flex items-center justify-center text-xs cursor-pointer ${
+                  isActive ? "text-foreground font-bold" : "text-muted-foreground"
+                }`}
+                animate={{
+                  scale: isActive ? 1.1 : 1,
+                  backgroundColor: isActive ? "rgba(var(--color-primary-rgb), 0.1)" : "transparent"
+                }}
+                transition={{ duration: 0.15 }}
+                onClick={() => navigateTo(index)}
+              >
+                {format(date, 'd')}
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      </div>
+
+      {/* Content area with header */}
+      <div className="ml-12 h-full flex flex-col">
+        {/* Date header now above content */}
+        {currentDigest && (
+          <div className="border-b border-border p-3 flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <div className="font-medium">
                 {renderDate(currentDigest.timestamp)}
               </div>
               {renderSentimentIndicator()}
               {usingFallback && (
-                <span className="text-xs text-muted-foreground">Using cached data</span>
+                <span className="text-xs text-muted-foreground">Cached data</span>
               )}
             </div>
-            
-            {/* Content with enhanced asset formatting and dynamic font size */}
-            <div 
-              className="text-sm leading-relaxed select-text"
-              style={{ 
-                fontSize: `${fontSize}px`,
-                lineHeight: lineHeight
-              }}
-            >
-              {contentParts}
-            </div>
-            
-            {/* Citations */}
-            {currentDigest.citations && currentDigest.citations.length > 0 && (
-              <div className="mt-4 pt-2 border-t border-border select-text">
-                <h4 className="text-xs font-medium mb-2">Sources:</h4>
-                <ul className="space-y-1">
-                  {currentDigest.citations.map((citation) => (
-                    <li key={citation.number} className="text-xs flex items-center">
-                      <span className="mr-1">[{citation.number}]</span>
-                      <a 
-                        href={citation.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline flex items-center"
-                      >
-                        {citation.title}
-                        <Link className="h-3 w-3 ml-1 inline" />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center text-muted-foreground">
-            No insight available
-          </div>
-        )}
-      </div>
-
-      {/* Pagination controls */}
-      <div className="border-t border-border p-2">
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
+            <div className="flex space-x-2">
               <Button
+                variant="ghost"
                 size="icon"
-                variant="outline"
-                onClick={goToPrevious}
+                onClick={() => navigateTo(selectedIndex - 1)}
                 disabled={selectedIndex === 0 || loading}
-                className="h-8 w-8"
+                className="h-7 w-7 rounded-full"
+                aria-label="Previous day"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-            </PaginationItem>
-            <div className="flex items-center px-2 text-xs text-muted-foreground">
-              {selectedIndex + 1} / {allDigests.length}
-            </div>
-            <PaginationItem>
               <Button
+                variant="ghost"
                 size="icon"
-                variant="outline"
-                onClick={goToNext}
+                onClick={() => navigateTo(selectedIndex + 1)}
                 disabled={selectedIndex === allDigests.length - 1 || loading}
-                className="h-8 w-8"
+                className="h-7 w-7 rounded-full"
+                aria-label="Next day"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+            </div>
+          </div>
+        )}
+
+        {/* Main content - independently scrollable */}
+        <div 
+          ref={contentRef}
+          className="flex-1 overflow-y-auto scrollbar-thin"
+        >
+          {loading ? (
+            <div className="flex flex-col space-y-2 animate-pulse p-4">
+              <div className="h-4 bg-muted rounded w-3/4"></div>
+              <div className="h-4 bg-muted rounded w-full"></div>
+              <div className="h-4 bg-muted rounded w-5/6"></div>
+              <div className="h-4 bg-muted rounded w-full"></div>
+              <div className="h-4 bg-muted rounded w-4/5"></div>
+            </div>
+          ) : error ? (
+            <div className="text-red-500 text-sm p-4">
+              {error}
+            </div>
+          ) : currentDigest ? (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedIndex}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="p-4 space-y-4"
+              >
+                {/* Content with enhanced asset formatting and dynamic font size */}
+                <div 
+                  className="text-foreground select-text space-y-2"
+                  style={{ 
+                    fontSize: `${fontSize}px`,
+                    lineHeight: lineHeight
+                  }}
+                >
+                  {contentParts.map((part, index) => (
+                    <motion.div 
+                      key={`content-part-${index}`}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15, delay: index * 0.02 }}
+                    >
+                      {part}
+                    </motion.div>
+                  ))}
+                </div>
+                
+                {/* Citations */}
+                {currentDigest.citations && currentDigest.citations.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.15, delay: 0.1 }}
+                    className="mt-4 pt-2 border-t border-border select-text"
+                  >
+                    <h4 className="text-xs font-medium mb-2">Sources:</h4>
+                    <ul className="space-y-1">
+                      {currentDigest.citations.map((citation) => (
+                        <li key={citation.number} className="text-xs flex items-center">
+                          <span className="mr-1">[{citation.number}]</span>
+                          <a 
+                            href={citation.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline flex items-center"
+                          >
+                            {citation.title}
+                            <Link className="h-3 w-3 ml-1 inline" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          ) : (
+            <div className="text-center text-muted-foreground p-4">
+              No insight available
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
