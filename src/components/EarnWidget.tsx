@@ -3056,7 +3056,7 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
       return (
         <div className="flex-shrink-0 mr-6">
           <div className="flex flex-col">
-            <div className="text-sm text-muted-foreground">Total Claimed</div>
+            <div className="text-sm text-muted-foreground text-right">Claimed</div>
             <div className="font-medium tabular-nums">
               {plan.totalClaimed.toFixed(4)} {plan.asset}
             </div>
@@ -3072,7 +3072,7 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
     if (plan.totalClaimed && plan.totalClaimed > 0) {
       return (
         <div>
-          <div className="text-xs text-muted-foreground">Total Claimed</div>
+          <div className="text-xs text-muted-foreground text-right">Total Claimed</div>
           <div className="text-sm font-medium tabular-nums">
             {plan.totalClaimed.toFixed(4)} {plan.asset}
           </div>
@@ -3408,7 +3408,7 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                     {/* Earnings */}
                     <div className="flex-shrink-0 mr-6">
                       <div className="flex flex-col">
-                        <div className="text-sm text-muted-foreground">Earnings</div>
+                        <div className="text-sm text-muted-foreground text-right">Earnings</div>
                         {renderCurrentEarnings(plan)}
                       </div>
                     </div>
