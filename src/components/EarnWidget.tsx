@@ -3353,7 +3353,32 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                       </div>
                       <div className="flex flex-col">
                         <div className="text-sm text-muted-foreground">Staked</div>
-                        <div className="font-medium">{plan.amount} {plan.asset}</div>
+                        <div className="font-medium flex items-center gap-1">
+                          <span>{plan.amount}</span>
+                          <AssetPriceTooltip asset={plan.asset as AssetTicker}>
+                            <button 
+                              type="button"
+                              className="font-jakarta font-bold text-sm rounded-md px-1"
+                              style={{ 
+                                color: ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'],
+                                backgroundColor: `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`,
+                                cursor: 'pointer'
+                              }}
+                              onMouseEnter={(e) => {
+                                const target = e.currentTarget;
+                                target.style.backgroundColor = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
+                                target.style.color = 'hsl(var(--color-widget-bg))';
+                              }}
+                              onMouseLeave={(e) => {
+                                const target = e.currentTarget;
+                                target.style.backgroundColor = `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`;
+                                target.style.color = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
+                              }}
+                            >
+                              {plan.asset}
+                            </button>
+                          </AssetPriceTooltip>
+                        </div>
                       </div>
                     </div>
 
@@ -3498,9 +3523,32 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                     <div className="grid grid-cols-2 gap-4 mt-2 pt-2 border-t p-4">
                       <div>
                         <p className="text-xs text-muted-foreground">Termination Fee</p>
-                        <p className="font-medium text-amber-500 tabular-nums">
-                          {plan.terminationFee.toFixed(4)} {plan.asset}
-                        </p>
+                        <div className="font-medium text-amber-500 tabular-nums flex items-center gap-1">
+                          <span>{plan.terminationFee.toFixed(4)}</span>
+                          <AssetPriceTooltip asset={plan.asset as AssetTicker}>
+                            <button 
+                              type="button"
+                              className="font-jakarta font-bold text-sm rounded-md px-1"
+                              style={{ 
+                                color: ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'],
+                                backgroundColor: `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`,
+                                cursor: 'pointer'
+                              }}
+                              onMouseEnter={(e) => {
+                                const target = e.currentTarget;
+                                target.style.backgroundColor = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
+                                target.style.color = 'hsl(var(--color-widget-bg))';
+                              }}
+                              onMouseLeave={(e) => {
+                                const target = e.currentTarget;
+                                target.style.backgroundColor = `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`;
+                                target.style.color = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
+                              }}
+                            >
+                              {plan.asset}
+                            </button>
+                          </AssetPriceTooltip>
+                        </div>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">Terminated On</p>
