@@ -515,6 +515,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     if (!allDigests[newIndex]) return;
     
     if (newIndex !== selectedIndex) {
+      // Update both states in a more synchronized way
       setSelectedIndex(newIndex);
       setCurrentDigest(allDigests[newIndex]);
       setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
@@ -523,12 +524,16 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       if (contentRef.current) {
         contentRef.current.scrollTop = 0;
       }
+      
+      // Ensure content parts are immediately cleared so we don't show stale content
+      setContentParts([]);
     }
   }, [allDigests, selectedIndex, analyzeMarketSentiment]);
   
   // Handle wheel scrolling with debounce to prevent rapid scrolling
   useEffect(() => {
     let isScrolling = false;
+    let scrollTimeout: NodeJS.Timeout;
     
     const handleWheel = (e: WheelEvent) => {
       // Ignore scrolling on content area
@@ -542,6 +547,9 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       if (isScrolling || loading || allDigests.length <= 1) return;
       
       isScrolling = true;
+      
+      // Clear any existing timeout
+      if (scrollTimeout) clearTimeout(scrollTimeout);
       
       // Determine scroll direction
       if (e.deltaY > 0) {
@@ -557,7 +565,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       }
       
       // Reset scrolling flag after a short delay
-      setTimeout(() => {
+      scrollTimeout = setTimeout(() => {
         isScrolling = false;
       }, 200);
     };
@@ -571,6 +579,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       if (container) {
         container.removeEventListener("wheel", handleWheel);
       }
+      if (scrollTimeout) clearTimeout(scrollTimeout);
     };
   }, [selectedIndex, navigateTo, allDigests.length, loading]);
 
@@ -888,7 +897,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
           ) : currentDigest ? (
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
-                key={selectedIndex}
+                key={`digest-${selectedIndex}-${currentDigest.timestamp}`}
                 initial="hidden"
                 animate="visible"
                 exit="exit"
