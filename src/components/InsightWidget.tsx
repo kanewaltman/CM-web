@@ -768,40 +768,55 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
             const date = parseISO(digest.timestamp);
             const sentiment = digestSentiments[index];
             
+            // Check if this is the first day of a new month in the list
+            const isNewMonth = index === 0 || 
+              format(parseISO(allDigests[index].timestamp), 'MMM') !== 
+              format(parseISO(allDigests[index-1].timestamp), 'MMM');
+            
             return (
-              <motion.div
-                key={index}
-                className={`w-full flex items-center justify-between py-1 px-2 rounded-md cursor-pointer 
-                  ${isActive 
-                    ? "bg-primary/15 text-primary" 
-                    : "text-muted-foreground hover:bg-muted/15 hover:text-foreground focus:bg-muted/20 focus-visible:ring-1 focus-visible:ring-primary"
-                  }`}
-                layout
-                animate={{
-                  backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "transparent",
-                  color: isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
-                  transition: { duration: 0.2 }
-                }}
-                whileHover={{ 
-                  backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "hsla(var(--muted) / 0.15)",
-                  color: isActive ? "hsl(var(--primary))" : "hsl(var(--foreground))"
-                }}
-                tabIndex={0}
-                onClick={() => navigateTo(index)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    navigateTo(index);
-                  }
-                }}
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-sm font-bold text-right min-w-[14px]">{format(date, 'd')}</span>
-                  <div className="ml-1">
-                    {renderSentimentIcon(sentiment, true)}
+              <React.Fragment key={`date-item-${index}`}>
+                {isNewMonth && (
+                  <div className="w-full flex items-center justify-center my-1 py-1">
+                    <div className="h-px w-4 bg-muted-foreground/40 flex-grow max-w-[10px]"></div>
+                    <span className="text-xs font-bold text-muted-foreground px-1">
+                      {format(date, 'MMM').toUpperCase()}
+                    </span>
+                    <div className="h-px w-4 bg-muted-foreground/40 flex-grow max-w-[10px]"></div>
                   </div>
-                </div>
-              </motion.div>
+                )}
+                <motion.div
+                  className={`w-full flex items-center justify-between py-1 px-2 rounded-md cursor-pointer 
+                    ${isActive 
+                      ? "bg-primary/15 text-primary" 
+                      : "text-muted-foreground hover:bg-muted/15 hover:text-foreground focus:bg-muted/20 focus-visible:ring-1 focus-visible:ring-primary"
+                    }`}
+                  layout
+                  animate={{
+                    backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "transparent",
+                    color: isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
+                    transition: { duration: 0.2 }
+                  }}
+                  whileHover={{ 
+                    backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "hsla(var(--muted) / 0.15)",
+                    color: isActive ? "hsl(var(--primary))" : "hsl(var(--foreground))"
+                  }}
+                  tabIndex={0}
+                  onClick={() => navigateTo(index)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigateTo(index);
+                    }
+                  }}
+                >
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-sm font-bold text-right min-w-[14px]">{format(date, 'd')}</span>
+                    <div className="ml-1">
+                      {renderSentimentIcon(sentiment, true)}
+                    </div>
+                  </div>
+                </motion.div>
+              </React.Fragment>
             );
           })}
         </motion.div>
