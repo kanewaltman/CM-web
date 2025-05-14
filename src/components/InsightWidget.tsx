@@ -1,13 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { format, parseISO, isToday, startOfDay, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon, Type } from 'lucide-react';
-import { motion, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
+import { animate, createScope } from 'animejs';
 import { supabase } from '@/lib/supabase';
-import { 
-  Pagination, 
-  PaginationContent, 
-  PaginationItem 
-} from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
 import { RemovableWidgetProps } from '@/types/widgets';
 import { ASSETS, AssetTicker } from '@/assets/AssetTicker';
@@ -89,59 +84,32 @@ interface TextMatch {
   type: 'asset' | 'citation';
 }
 
-// Animation variants for blur wipe effect
-const blurVariants = {
+// Define animation configurations
+const blurAnimation = {
   hidden: {
     filter: "blur(8px)",
     opacity: 0,
-    y: 5,
+    translateY: 5,
   },
   visible: {
     filter: "blur(0px)",
     opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.2,
-    }
+    translateY: 0,
   },
   exit: {
     filter: "blur(8px)",
     opacity: 0,
-    y: -5,
-    transition: {
-      duration: 0.1,
-    }
+    translateY: -5,
   }
 };
 
-// Variant for text content with cascading blur effect
-const textVariants = {
-  hidden: (i: number) => ({
-    filter: "blur(4px)",
-    opacity: 0,
-    y: 3,
-    transition: {
-      duration: 0.1,
-    }
-  }),
-  visible: (i: number) => ({
-    filter: "blur(0px)",
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.2,
-      delay: i * 0.03,
-    }
-  }),
-  exit: (i: number) => ({
-    filter: "blur(4px)",
-    opacity: 0,
-    y: -3,
-    transition: {
-      duration: 0.1,
-    }
-  }),
+const textAnimation = {
+  duration: 200,
+  easing: 'easeOutQuad'
 };
+
+// Type for anime.js delay function
+type AnimeDelayFunction = (el: any, i: number, total: number) => number;
 
 export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemove, widgetId }) => {
   const [loading, setLoading] = useState(false);
@@ -155,18 +123,18 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [contentParts, setContentParts] = useState<React.ReactNode[]>([]);
   
+  // Height of each date item in the sidebar
+  const itemHeight = 32;
+  
+  // Animation refs
+  const animeScope = useRef<any>(null);
+  const contentAnimeRef = useRef<HTMLDivElement>(null);
+  const sidebarAnimeRef = useRef<HTMLDivElement>(null);
+  
   // Refs for scrolling
   const containerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  
-  // Motion values for smooth scrolling
-  const y = useMotionValue(0);
-  const springY = useSpring(y, {
-    stiffness: 50,
-    damping: 20,
-    mass: 1.5,
-  });
   
   // Load font size from localStorage with a default of 14px
   const [fontSize, setFontSize] = useState<number>(() => {
@@ -434,7 +402,6 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                     padding: '0 0.15em',
                     color: assetColor,
                     backgroundColor: `${assetColor}14`,
-                    transition: 'all 0.15s ease-in-out',
                     cursor: 'pointer',
                     WebkitTouchCallout: 'none',
                     WebkitUserSelect: 'text',
@@ -501,8 +468,128 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       setContentParts([]);
       const parts = formatContentWithAssets(currentDigest.content);
       setContentParts(parts);
+      
+      // Only manually handle opacity for direct component loads, not navigation
+      // Navigation will be handled by the navigateTo function
+      if (contentAnimeRef.current && !contentRef.current?.scrollTop) {
+        // Using setTimeout to ensure this runs after React has updated the DOM
+        setTimeout(() => {
+          if (contentAnimeRef.current) {
+            contentAnimeRef.current.style.opacity = '1';
+            contentAnimeRef.current.style.transform = 'translateY(0)';
+            contentAnimeRef.current.style.filter = 'blur(0px)';
+          }
+        }, 0);
+      }
     }
   }, [currentDigest, formatContentWithAssets]);
+
+  // Set up anime.js animations
+  useEffect(() => {
+    // Create a new scope for animations
+    if (containerRef.current) {
+      animeScope.current = createScope({ root: containerRef.current });
+    }
+    
+    // Set up cleanup
+    return () => {
+      if (animeScope.current && animeScope.current.revert) {
+        animeScope.current.revert();
+      }
+    };
+  }, []);
+  
+  // Animate content when it changes
+  useEffect(() => {
+    if (!contentAnimeRef.current) return;
+    
+    // Ensure content is visible (might have been hidden by previous animations)
+    if (contentAnimeRef.current) {
+      contentAnimeRef.current.style.opacity = '1';
+      contentAnimeRef.current.style.transform = 'translateY(0)';
+      contentAnimeRef.current.style.filter = 'blur(0px)';
+    }
+    
+    // Select all content elements and citation elements
+    const contentItems = contentAnimeRef.current.querySelectorAll('.content-item');
+    const citationItems = contentAnimeRef.current.querySelectorAll('.citation-item');
+    
+    if (contentItems.length > 0) {
+      // Reset initial styles before animating
+      contentItems.forEach((el) => {
+        (el as HTMLElement).style.opacity = '0';
+        (el as HTMLElement).style.transform = 'translateY(3px)';
+        (el as HTMLElement).style.filter = 'blur(4px)';
+      });
+      
+      // Animate content appearance with a cascading effect
+      animate(contentItems, {
+        opacity: [0, 1],
+        translateY: [3, 0],
+        filter: ['blur(4px)', 'blur(0px)'],
+        duration: textAnimation.duration,
+        delay: ((el: any, i: number) => i * 30) as AnimeDelayFunction,
+        easing: textAnimation.easing
+      });
+    }
+    
+    if (citationItems.length > 0) {
+      // Reset initial styles before animating
+      citationItems.forEach((el) => {
+        (el as HTMLElement).style.opacity = '0';
+        (el as HTMLElement).style.transform = 'translateY(3px)';
+        (el as HTMLElement).style.filter = 'blur(4px)';
+      });
+      
+      // Animate citations with a delay after content
+      animate(citationItems, {
+        opacity: [0, 1],
+        translateY: [3, 0],
+        filter: ['blur(4px)', 'blur(0px)'],
+        duration: textAnimation.duration,
+        delay: ((el: any, i: number) => 300 + (i * 30)) as AnimeDelayFunction,
+        easing: textAnimation.easing
+      });
+    }
+  }, [contentParts, selectedIndex]);
+
+  // Animate sidebar scroll when selectedIndex changes
+  useEffect(() => {
+    if (!sidebarAnimeRef.current) return;
+    
+    const yOffset = Math.max(
+      0, 
+      Math.min(
+        allDigests.length * itemHeight - (containerRef.current?.clientHeight || 300), 
+        selectedIndex * itemHeight - (containerRef.current?.clientHeight || 300) / 2
+      )
+    ) * -1;
+    
+    // Animate the sidebar to scroll to the selected date
+    animate(sidebarAnimeRef.current, {
+      translateY: yOffset,
+      duration: 300,
+      easing: 'easeOutQuart'
+    });
+  }, [selectedIndex, allDigests.length, itemHeight]);
+
+  // Add an additional animation for date items when selected index changes
+  useEffect(() => {
+    if (!sidebarAnimeRef.current) return;
+    
+    // Get all date items and the active one
+    const dateItems = sidebarAnimeRef.current.querySelectorAll('.date-item');
+    const activeItem = sidebarAnimeRef.current.querySelector('.date-item-active');
+    
+    if (activeItem) {
+      // Add a subtle pulse animation to the active date item
+      animate(activeItem, {
+        scale: [1, 1.05, 1],
+        duration: 400,
+        easing: 'easeOutQuad'
+      });
+    }
+  }, [selectedIndex]);
 
   // Handle pagination navigation with more defensive checks
   const navigateTo = useCallback((index: number) => {
@@ -515,16 +602,107 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     if (!allDigests[newIndex]) return;
     
     if (newIndex !== selectedIndex) {
-      setSelectedIndex(newIndex);
-      setCurrentDigest(allDigests[newIndex]);
-      setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
-       
-      // Scroll content back to top when changing days
-      if (contentRef.current) {
-        contentRef.current.scrollTop = 0;
+      // First, animate the current content out if ref exists
+      if (contentAnimeRef.current) {
+        // Store the current content height to prevent layout jumps
+        const currentHeight = contentAnimeRef.current.clientHeight;
+        contentAnimeRef.current.style.height = `${currentHeight}px`;
+        
+        // Stop any ongoing animations
+        if (animeScope.current && animeScope.current.remove) {
+          animeScope.current.remove('.content-item');
+          animeScope.current.remove('.citation-item');
+        }
+        
+        animate(contentAnimeRef.current, {
+          opacity: [1, 0],
+          translateY: [0, -5],
+          filter: ['blur(0px)', 'blur(8px)'],
+          duration: 150,
+          easing: 'easeInQuad',
+          complete: () => {
+            // After animation completes, ensure content is hidden before state update
+            if (contentAnimeRef.current) {
+              contentAnimeRef.current.style.opacity = '0';
+            }
+            
+            // Update the state with new content
+            setSelectedIndex(newIndex);
+            setCurrentDigest(allDigests[newIndex]);
+            setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
+            
+            // Use setTimeout to ensure state updates are processed before animation
+            setTimeout(() => {
+              // Reset the height constraint after state update
+              if (contentAnimeRef.current) {
+                contentAnimeRef.current.style.height = 'auto';
+                contentAnimeRef.current.style.opacity = '1';
+                contentAnimeRef.current.style.transform = 'translateY(0)';
+                contentAnimeRef.current.style.filter = 'blur(0px)';
+                
+                // Animate in the new content
+                const newContentItems = contentAnimeRef.current.querySelectorAll('.content-item');
+                const newCitationItems = contentAnimeRef.current.querySelectorAll('.citation-item');
+                
+                if (newContentItems.length > 0) {
+                  // Reset initial styles before animating
+                  newContentItems.forEach((el) => {
+                    (el as HTMLElement).style.opacity = '0';
+                    (el as HTMLElement).style.transform = 'translateY(3px)';
+                    (el as HTMLElement).style.filter = 'blur(4px)';
+                  });
+                  
+                  // Animate content appearance with a cascading effect
+                  animate(newContentItems, {
+                    opacity: [0, 1],
+                    translateY: [3, 0],
+                    filter: ['blur(4px)', 'blur(0px)'],
+                    duration: textAnimation.duration,
+                    delay: ((el: any, i: number) => i * 30) as AnimeDelayFunction,
+                    easing: textAnimation.easing
+                  });
+                }
+                
+                if (newCitationItems.length > 0) {
+                  // Reset initial styles before animating
+                  newCitationItems.forEach((el) => {
+                    (el as HTMLElement).style.opacity = '0';
+                    (el as HTMLElement).style.transform = 'translateY(3px)';
+                    (el as HTMLElement).style.filter = 'blur(4px)';
+                  });
+                  
+                  // Animate citations with a delay after content
+                  animate(newCitationItems, {
+                    opacity: [0, 1],
+                    translateY: [3, 0],
+                    filter: ['blur(4px)', 'blur(0px)'],
+                    duration: textAnimation.duration,
+                    delay: ((el: any, i: number) => 300 + (i * 30)) as AnimeDelayFunction,
+                    easing: textAnimation.easing
+                  });
+                }
+              }
+              
+              // Scroll content back to top when changing days
+              if (contentRef.current) {
+                contentRef.current.scrollTop = 0;
+              }
+            }, 50); // Slightly longer timeout to ensure DOM has updated
+          }
+        });
+      } else {
+        // Fallback if no animation ref
+        setSelectedIndex(newIndex);
+        setCurrentDigest(allDigests[newIndex]);
+        setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
+        
+        // Scroll content back to top when changing days
+        if (contentRef.current) {
+          contentRef.current.scrollTop = 0;
+        }
       }
     }
-  }, [allDigests, selectedIndex, analyzeMarketSentiment]);
+  }, [allDigests, selectedIndex, analyzeMarketSentiment, animeScope]);
   
   // Handle wheel scrolling with debounce to prevent rapid scrolling
   useEffect(() => {
@@ -739,8 +917,6 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     return allDigests.map(digest => getDigestSentiment(digest.content));
   }, [allDigests, getDigestSentiment]);
 
-  const itemHeight = 32; // Height of each date item
-
   // Controls to be passed to WidgetContainer
   const widgetControls = (
     <InsightWidgetControls widgetId={widgetId} />
@@ -753,15 +929,9 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         ref={sidebarRef}
         className="absolute left-0 top-0 bottom-0 w-16 border-r border-border overflow-hidden z-10"
       >
-        <motion.div 
+        <div 
+          ref={sidebarAnimeRef}
           className="h-full flex flex-col items-center py-2 px-2"
-          animate={{ 
-            y: Math.max(0, Math.min(
-              allDigests.length * itemHeight - (containerRef.current?.clientHeight || 300), 
-              selectedIndex * itemHeight - (containerRef.current?.clientHeight || 300) / 2
-            )) * -1 
-          }}
-          transition={{ type: "spring", stiffness: 300, damping: 30, mass: 1 }}
         >
           {allDigests.map((digest, index) => {
             const isActive = index === selectedIndex;
@@ -784,21 +954,15 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                     <div className="h-px w-4 bg-muted-foreground/40 flex-grow max-w-[10px]"></div>
                   </div>
                 )}
-                <motion.div
-                  className={`w-full flex items-center justify-between py-1 px-2 rounded-md cursor-pointer 
+                <div
+                  className={`w-full flex items-center justify-between py-1 px-2 rounded-md cursor-pointer date-item ${isActive ? 'date-item-active' : ''}
                     ${isActive 
                       ? "bg-primary/15 text-primary" 
                       : "text-muted-foreground hover:bg-muted/15 hover:text-foreground focus:bg-muted/20 focus-visible:ring-1 focus-visible:ring-primary"
                     }`}
-                  layout
-                  animate={{
+                  style={{
                     backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "transparent",
-                    color: isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
-                    transition: { duration: 0.2 }
-                  }}
-                  whileHover={{ 
-                    backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "hsla(var(--muted) / 0.15)",
-                    color: isActive ? "hsl(var(--primary))" : "hsl(var(--foreground))"
+                    color: isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"
                   }}
                   tabIndex={0}
                   onClick={() => navigateTo(index)}
@@ -815,11 +979,11 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                       {renderSentimentIcon(sentiment, true)}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               </React.Fragment>
             );
           })}
-        </motion.div>
+        </div>
       </div>
 
       {/* Content area with header */}
@@ -874,7 +1038,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
           className="flex-1 overflow-y-auto scrollbar-thin p-0"
         >
           {loading ? (
-            <div className="flex flex-col space-y-2 animate-pulse p-4">
+            <div className="flex flex-col space-y-2 p-4">
               <div className="h-4 bg-muted rounded w-3/4"></div>
               <div className="h-4 bg-muted rounded w-full"></div>
               <div className="h-4 bg-muted rounded w-5/6"></div>
@@ -886,75 +1050,54 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
               {error}
             </div>
           ) : currentDigest ? (
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={selectedIndex}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                variants={blurVariants}
-                transition={{ duration: 0.25 }}
-                className="p-4 space-y-4"
+            <div 
+              ref={contentAnimeRef}
+              className="p-4 space-y-4"
+            >
+              {/* Content with enhanced asset formatting and dynamic font size */}
+              <div 
+                className="text-foreground select-text space-y-2"
+                style={{ 
+                  fontSize: `${fontSize}px`,
+                  lineHeight: lineHeight
+                }}
               >
-                {/* Content with enhanced asset formatting and dynamic font size */}
-                <div 
-                  className="text-foreground select-text space-y-2"
-                  style={{ 
-                    fontSize: `${fontSize}px`,
-                    lineHeight: lineHeight
-                  }}
-                >
-                  {contentParts.map((part, index) => (
-                    <motion.div 
-                      key={`content-part-${selectedIndex}-${index}`}
-                      custom={index}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      variants={textVariants}
-                    >
-                      {part}
-                    </motion.div>
-                  ))}
-                </div>
-                
-                {/* Citations */}
-                {currentDigest.citations && currentDigest.citations.length > 0 && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1, transition: { delay: 0.3 } }}
-                    exit={{ opacity: 0, transition: { duration: 0.15 } }}
-                    className="mt-4 pt-2 border-t border-border select-text"
+                {contentParts.map((part, index) => (
+                  <div 
+                    key={`content-part-${selectedIndex}-${index}`}
+                    className="content-item"
                   >
-                    <h4 className="text-xs font-medium mb-2">Sources:</h4>
-                    <ul className="space-y-1">
-                      {currentDigest.citations.map((citation, idx) => (
-                        <motion.li 
-                          key={`citation-${selectedIndex}-${citation.number}`}
-                          custom={idx + contentParts.length}
-                          initial="hidden"
-                          animate="visible"
-                          exit="exit"
-                          variants={textVariants}
-                          className="text-xs flex items-center"
+                    {part}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Citations */}
+              {currentDigest.citations && currentDigest.citations.length > 0 && (
+                <div className="mt-4 pt-2 border-t border-border select-text">
+                  <h4 className="text-xs font-medium mb-2">Sources:</h4>
+                  <ul className="space-y-1">
+                    {currentDigest.citations.map((citation, idx) => (
+                      <li 
+                        key={`citation-${selectedIndex}-${citation.number}`}
+                        className="text-xs flex items-center citation-item"
+                      >
+                        <span className="mr-1">[{citation.number}]</span>
+                        <a 
+                          href={citation.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline flex items-center"
                         >
-                          <span className="mr-1">[{citation.number}]</span>
-                          <a 
-                            href={citation.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline flex items-center"
-                          >
-                            {citation.title}
-                            <Link className="h-3 w-3 ml-1 inline" />
-                          </a>
-                        </motion.li>
-                      ))}
-                    </ul>
-                  </motion.div>
-                )}
-              </motion.div>
-            </AnimatePresence>
+                          {citation.title}
+                          <Link className="h-3 w-3 ml-1 inline" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="text-center text-muted-foreground p-4">
               No insight available
