@@ -3301,7 +3301,7 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center p-4 overflow-hidden">
       <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
-      <div id="earn-plans-container" className="z-10 text-center w-full max-w-5xl mx-auto relative h-full flex flex-col">
+      <div id="earn-plans-container" className="z-10 text-center w-full max-w mx-auto relative h-full flex flex-col">
         <div className="mb-4 flex items-center justify-between w-full">
           <div className="text-lg font-semibold">
             {showHistoric ? 'Historic Plans' : 'Your Active Staking Plans'}
