@@ -1337,7 +1337,7 @@ const RippleView: React.FC = () => {
           hardLimit={40}
           density={0.0008}
           restitution={0.4}
-          onTokenClick={handleTokenClick}
+          // onTokenClick={handleTokenClick}
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
@@ -2761,6 +2761,8 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
   const isVisible = useRef(true);
   // Track interval ID for cleanup
   const timeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Add this state at the beginning of the ActivePlansView component (around line ~2746)
+  const [hoveredPlanId, setHoveredPlanId] = useState<string | null>(null);
   
   // Memoize active and historic plans to prevent recalculation on each render
   const { activePlans, historicPlans } = useMemo(() => {
@@ -3299,9 +3301,9 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
   }, [calculateCurrentEarnings, isVisible, currentTime]);
   
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center p-4 overflow-hidden">
+    <div className="relative w-full h-full flex flex-col items-center justify-centeroverflow-hidden">
       <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
-      <div id="earn-plans-container" className="z-10 text-center w-full max-w mx-auto relative h-full flex flex-col">
+      <div id="earn-plans-container" className="z-10 text-center w-full max-w mx-auto p-4 relative h-full flex flex-col">
         <div className="mb-4 flex items-center justify-between w-full">
           <div className="text-lg font-semibold">
             {showHistoric ? 'Historic Plans' : 'Your Active Staking Plans'}
@@ -3328,8 +3330,12 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                   key={plan.id} 
                   className={cn(
                     "overflow-hidden bg-[hsl(var(--primary-foreground))] text-left",
-                    "border-[hsl(var(--color-widget-inset-border))]"
+                    "border-[hsl(var(--color-widget-inset-border))]",
+                    "transition-opacity duration-200",
+                    hoveredPlanId && hoveredPlanId !== plan.id ? "opacity-60" : "opacity-100"
                   )}
+                  onMouseEnter={() => setHoveredPlanId(plan.id)}
+                  onMouseLeave={() => setHoveredPlanId(null)}
                 >
                   <div className="p-4 flex items-center">
                     {/* Token Icon and Amount */}

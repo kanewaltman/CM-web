@@ -81,7 +81,7 @@ export const EarnPage: React.FC = () => {
           
           {/* Promotional ripple section - matches earn-promo in earnLayout.ts */}
           <section className="mb-12">
-            <div className="bg-card rounded-[2rem] shadow-sm overflow-hidden" style={{ height: '520px', position: 'relative' }}>
+            <div className="rounded-[2rem] shadow-sm overflow-hidden" style={{ height: '520px', position: 'relative' }}>
               <WidgetContentOnly 
                 key="earn-promo-widget"
                 widgetType="earn" 
