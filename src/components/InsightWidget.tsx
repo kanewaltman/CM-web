@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { format, parseISO, isToday, startOfDay, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon, Type } from 'lucide-react';
-import { animate, createScope } from 'animejs';
+import { animate, createScope, waapi, stagger } from 'animejs';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { RemovableWidgetProps } from '@/types/widgets';
@@ -469,17 +469,54 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       const parts = formatContentWithAssets(currentDigest.content);
       setContentParts(parts);
       
-      // Only manually handle opacity for direct component loads, not navigation
-      // Navigation will be handled by the navigateTo function
-      if (contentAnimeRef.current && !contentRef.current?.scrollTop) {
+      // Ensure the content container is visible after content parts update
+      if (contentAnimeRef.current) {
         // Using setTimeout to ensure this runs after React has updated the DOM
         setTimeout(() => {
           if (contentAnimeRef.current) {
             contentAnimeRef.current.style.opacity = '1';
             contentAnimeRef.current.style.transform = 'translateY(0)';
             contentAnimeRef.current.style.filter = 'blur(0px)';
+
+            // Get the content items after parts are updated and force animation
+            const contentItems = contentAnimeRef.current.querySelectorAll('.content-item');
+            const citationItems = contentAnimeRef.current.querySelectorAll('.citation-item');
+            
+            if (contentItems.length > 0) {
+              contentItems.forEach((el) => {
+                (el as HTMLElement).style.opacity = '0';
+                (el as HTMLElement).style.transform = 'translateY(3px)';
+                (el as HTMLElement).style.filter = 'blur(4px)';
+              });
+              
+              animate(contentItems, {
+                opacity: [0, 1],
+                translateY: [3, 0],
+                filter: ['blur(4px)', 'blur(0px)'],
+                duration: 300,
+                delay: ((el: any, i: number) => i * 40),
+                easing: 'easeOutQuad'
+              });
+            }
+            
+            if (citationItems.length > 0) {
+              citationItems.forEach((el) => {
+                (el as HTMLElement).style.opacity = '0';
+                (el as HTMLElement).style.transform = 'translateY(3px)';
+                (el as HTMLElement).style.filter = 'blur(4px)';
+              });
+              
+              animate(citationItems, {
+                opacity: [0, 1],
+                translateY: [3, 0],
+                filter: ['blur(4px)', 'blur(0px)'],
+                duration: 300,
+                delay: ((el: any, i: number) => 400 + (i * 40)),
+                easing: 'easeOutQuad'
+              });
+            }
           }
-        }, 0);
+        }, 20);
       }
     }
   }, [currentDigest, formatContentWithAssets]);
@@ -499,60 +536,6 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     };
   }, []);
   
-  // Animate content when it changes
-  useEffect(() => {
-    if (!contentAnimeRef.current) return;
-    
-    // Ensure content is visible (might have been hidden by previous animations)
-    if (contentAnimeRef.current) {
-      contentAnimeRef.current.style.opacity = '1';
-      contentAnimeRef.current.style.transform = 'translateY(0)';
-      contentAnimeRef.current.style.filter = 'blur(0px)';
-    }
-    
-    // Select all content elements and citation elements
-    const contentItems = contentAnimeRef.current.querySelectorAll('.content-item');
-    const citationItems = contentAnimeRef.current.querySelectorAll('.citation-item');
-    
-    if (contentItems.length > 0) {
-      // Reset initial styles before animating
-      contentItems.forEach((el) => {
-        (el as HTMLElement).style.opacity = '0';
-        (el as HTMLElement).style.transform = 'translateY(3px)';
-        (el as HTMLElement).style.filter = 'blur(4px)';
-      });
-      
-      // Animate content appearance with a cascading effect
-      animate(contentItems, {
-        opacity: [0, 1],
-        translateY: [3, 0],
-        filter: ['blur(4px)', 'blur(0px)'],
-        duration: textAnimation.duration,
-        delay: ((el: any, i: number) => i * 30) as AnimeDelayFunction,
-        easing: textAnimation.easing
-      });
-    }
-    
-    if (citationItems.length > 0) {
-      // Reset initial styles before animating
-      citationItems.forEach((el) => {
-        (el as HTMLElement).style.opacity = '0';
-        (el as HTMLElement).style.transform = 'translateY(3px)';
-        (el as HTMLElement).style.filter = 'blur(4px)';
-      });
-      
-      // Animate citations with a delay after content
-      animate(citationItems, {
-        opacity: [0, 1],
-        translateY: [3, 0],
-        filter: ['blur(4px)', 'blur(0px)'],
-        duration: textAnimation.duration,
-        delay: ((el: any, i: number) => 300 + (i * 30)) as AnimeDelayFunction,
-        easing: textAnimation.easing
-      });
-    }
-  }, [contentParts, selectedIndex]);
-
   // Animate sidebar scroll when selectedIndex changes
   useEffect(() => {
     if (!sidebarAnimeRef.current) return;
@@ -583,7 +566,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     
     if (activeItem) {
       // Add a subtle pulse animation to the active date item
-      animate(activeItem, {
+      animate(activeItem as HTMLElement, {
         scale: [1, 1.05, 1],
         duration: 400,
         easing: 'easeOutQuad'
@@ -624,6 +607,8 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
             // After animation completes, ensure content is hidden before state update
             if (contentAnimeRef.current) {
               contentAnimeRef.current.style.opacity = '0';
+              contentAnimeRef.current.style.transform = 'translateY(5px)';
+              contentAnimeRef.current.style.filter = 'blur(8px)';
             }
             
             // Update the state with new content
@@ -636,58 +621,63 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
               // Reset the height constraint after state update
               if (contentAnimeRef.current) {
                 contentAnimeRef.current.style.height = 'auto';
-                contentAnimeRef.current.style.opacity = '1';
-                contentAnimeRef.current.style.transform = 'translateY(0)';
-                contentAnimeRef.current.style.filter = 'blur(0px)';
                 
-                // Animate in the new content
-                const newContentItems = contentAnimeRef.current.querySelectorAll('.content-item');
-                const newCitationItems = contentAnimeRef.current.querySelectorAll('.citation-item');
-                
-                if (newContentItems.length > 0) {
-                  // Reset initial styles before animating
-                  newContentItems.forEach((el) => {
-                    (el as HTMLElement).style.opacity = '0';
-                    (el as HTMLElement).style.transform = 'translateY(3px)';
-                    (el as HTMLElement).style.filter = 'blur(4px)';
-                  });
-                  
-                  // Animate content appearance with a cascading effect
-                  animate(newContentItems, {
-                    opacity: [0, 1],
-                    translateY: [3, 0],
-                    filter: ['blur(4px)', 'blur(0px)'],
-                    duration: textAnimation.duration,
-                    delay: ((el: any, i: number) => i * 30) as AnimeDelayFunction,
-                    easing: textAnimation.easing
-                  });
-                }
-                
-                if (newCitationItems.length > 0) {
-                  // Reset initial styles before animating
-                  newCitationItems.forEach((el) => {
-                    (el as HTMLElement).style.opacity = '0';
-                    (el as HTMLElement).style.transform = 'translateY(3px)';
-                    (el as HTMLElement).style.filter = 'blur(4px)';
-                  });
-                  
-                  // Animate citations with a delay after content
-                  animate(newCitationItems, {
-                    opacity: [0, 1],
-                    translateY: [3, 0],
-                    filter: ['blur(4px)', 'blur(0px)'],
-                    duration: textAnimation.duration,
-                    delay: ((el: any, i: number) => 300 + (i * 30)) as AnimeDelayFunction,
-                    easing: textAnimation.easing
-                  });
-                }
+                // Explicitly animate the new content back in with a more pronounced animation
+                animate(contentAnimeRef.current, {
+                  opacity: [0, 1],
+                  translateY: [5, 0],
+                  filter: ['blur(8px)', 'blur(0px)'],
+                  duration: 300,
+                  easing: 'easeOutCubic',
+                  complete: () => {
+                    // Once the main container is visible, animate content items individually
+                    if (contentAnimeRef.current) {
+                      const contentItems = contentAnimeRef.current.querySelectorAll('.content-item');
+                      const citationItems = contentAnimeRef.current.querySelectorAll('.citation-item');
+                      
+                      if (contentItems.length > 0) {
+                        contentItems.forEach((el) => {
+                          (el as HTMLElement).style.opacity = '0';
+                          (el as HTMLElement).style.transform = 'translateY(3px)';
+                          (el as HTMLElement).style.filter = 'blur(4px)';
+                        });
+                        
+                        animate(contentItems, {
+                          opacity: [0, 1],
+                          translateY: [3, 0],
+                          filter: ['blur(4px)', 'blur(0px)'],
+                          duration: 300,
+                          delay: ((el: any, i: number) => i * 40),
+                          easing: 'easeOutQuad'
+                        });
+                      }
+                      
+                      if (citationItems.length > 0) {
+                        citationItems.forEach((el) => {
+                          (el as HTMLElement).style.opacity = '0';
+                          (el as HTMLElement).style.transform = 'translateY(3px)';
+                          (el as HTMLElement).style.filter = 'blur(4px)';
+                        });
+                        
+                        animate(citationItems, {
+                          opacity: [0, 1],
+                          translateY: [3, 0],
+                          filter: ['blur(4px)', 'blur(0px)'],
+                          duration: 300,
+                          delay: ((el: any, i: number) => 400 + (i * 40)),
+                          easing: 'easeOutQuad'
+                        });
+                      }
+                    }
+                  }
+                });
               }
               
               // Scroll content back to top when changing days
               if (contentRef.current) {
                 contentRef.current.scrollTop = 0;
               }
-            }, 50); // Slightly longer timeout to ensure DOM has updated
+            }, 50); // Increased delay to ensure state update is processed
           }
         });
       } else {
