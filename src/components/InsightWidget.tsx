@@ -747,7 +747,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   );
 
   return (
-    <Card className={`h-full flex flex-col relative container ${className}`} ref={containerRef}>
+    <Card className={`h-full flex flex-col relative ${className}`} ref={containerRef}>
       {/* Date sidebar */}
       <div 
         ref={sidebarRef}
