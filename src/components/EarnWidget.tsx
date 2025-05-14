@@ -3206,14 +3206,26 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
           }
         );
         
-        // Points toast, exactly like when creating a plan
+        // Points toast, styled and delayed like ConfirmationDialogContent
         setTimeout(() => {
-          toast.success(
-            '+50 POINTS', 
+          toast(
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+              </div>
+              <div>
+                <p className="font-medium text-base">Points Earned!</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-sm font-medium text-orange-500">+50</p>
+                  <p className="text-sm text-muted-foreground">for claiming rewards</p>
+                </div>
+              </div>
+            </div>,
             {
-              description: "You earned points for claiming rewards!",
-              duration: 3500,
-              className: "points-toast"
+              className: "bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/30",
+              duration: 3500
             }
           );
         }, 1200);
@@ -3440,11 +3452,20 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                                 <Button 
                                   variant="ghost" 
                                   size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  className="h-8 w-8 text-muted-foreground group hover:bg-red-500/15"
                                   onClick={(e) => handleTerminatePlan(plan, e)}
                                 >
                                   <span className="sr-only">Terminate plan</span>
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="w-4 h-4 group-hover:stroke-red-600"
+                                  >
                                     <path d="M18 6 6 18" />
                                     <path d="m6 6 12 12" />
                                   </svg>
@@ -3561,8 +3582,24 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                 </Card>
               ))
             ) : (
-              <div className="text-center text-muted-foreground py-8">
-                {showHistoric ? 'No historic plans found' : 'No active staking plans found'}
+              <div className="flex flex-col justify-center items-center h-full min-h-[150px] text-center text-muted-foreground py-8">
+                <span>
+                  {showHistoric ? 'No historic plans found' : 'No active staking plans found'}
+                </span>
+                <ShimmerButton
+                  className="mt-4 px-4 py-2 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 font-semibold w-fit min-w-0"
+                  shimmerColor="rgba(16, 185, 129, 0.5)"
+                  shimmerDuration="4s"
+                  borderRadius="8px"
+                  background="rgba(16,185,129,0.08)"
+                  onClick={() => {
+                    if (typeof handleRippleGetStartedClick === "function") {
+                      handleRippleGetStartedClick();
+                    }
+                  }}
+                >
+                  Start Earning
+                </ShimmerButton>
               </div>
             )}
           </div>
@@ -3611,12 +3648,18 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
         
         {/* Add a new plan button */}
         {!showHistoric && (
-          <Button 
-            className="mt-4 bg-emerald-500 hover:bg-emerald-600 text-white"
-            onClick={onNewPlan}
-          >
-            Start new staking plan
-          </Button>
+          <div className="flex flex-col items-center justify-center h-full">
+            <Button
+              className="mt-4 px-4 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 font-semibold w-fit min-w-0"
+              onClick={onNewPlan}
+              style={{ width: 'fit-content' }}
+            >
+              Start new staking plan
+            </Button>
+            <span className="text-xs text-muted-foreground mt-1">
+              explore all options below
+            </span>
+          </div>
         )}
       </div>
     </div>
