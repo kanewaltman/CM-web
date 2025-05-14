@@ -3593,8 +3593,8 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                   borderRadius="8px"
                   background="rgba(16,185,129,0.08)"
                   onClick={() => {
-                    if (typeof handleRippleGetStartedClick === "function") {
-                      handleRippleGetStartedClick();
+                    if (typeof handleGetStartedClick === "function") {
+                      handleGetStartedClick();
                     }
                   }}
                 >
