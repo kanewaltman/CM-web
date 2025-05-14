@@ -19,7 +19,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { v4 as uuidv4 } from 'uuid';
+import { WidgetContainer } from './WidgetContainer';
 
 // Types from CM-Intel
 interface Citation {
@@ -86,6 +88,60 @@ interface TextMatch {
   text: string;
   type: 'asset' | 'citation';
 }
+
+// Animation variants for blur wipe effect
+const blurVariants = {
+  hidden: {
+    filter: "blur(8px)",
+    opacity: 0,
+    y: 5,
+  },
+  visible: {
+    filter: "blur(0px)",
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.2,
+    }
+  },
+  exit: {
+    filter: "blur(8px)",
+    opacity: 0,
+    y: -5,
+    transition: {
+      duration: 0.1,
+    }
+  }
+};
+
+// Variant for text content with cascading blur effect
+const textVariants = {
+  hidden: (i: number) => ({
+    filter: "blur(4px)",
+    opacity: 0,
+    y: 3,
+    transition: {
+      duration: 0.1,
+    }
+  }),
+  visible: (i: number) => ({
+    filter: "blur(0px)",
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.2,
+      delay: i * 0.03,
+    }
+  }),
+  exit: (i: number) => ({
+    filter: "blur(4px)",
+    opacity: 0,
+    y: -3,
+    transition: {
+      duration: 0.1,
+    }
+  }),
+};
 
 export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemove, widgetId }) => {
   const [loading, setLoading] = useState(false);
@@ -171,11 +227,13 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         setAllDigests(processedDigests);
         setCurrentDigest(processedDigests[0]);
         setMarketSentiment(analyzeMarketSentiment(processedDigests[0].content));
+        setSelectedIndex(0);
         setUsingFallback(false);
       } else {
         // If no data, use fallback
         setAllDigests([FALLBACK_DATA]);
         setCurrentDigest(FALLBACK_DATA);
+        setSelectedIndex(0);
         setUsingFallback(true);
       }
     } catch (err) {
@@ -185,6 +243,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       // Use fallback data
       setAllDigests([FALLBACK_DATA]);
       setCurrentDigest(FALLBACK_DATA);
+      setSelectedIndex(0);
       setUsingFallback(true);
     } finally {
       setLoading(false);
@@ -445,9 +504,16 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     }
   }, [currentDigest, formatContentWithAssets]);
 
-  // Handle pagination navigation
-  const navigateTo = (index: number) => {
+  // Handle pagination navigation with more defensive checks
+  const navigateTo = useCallback((index: number) => {
+    // Only proceed if we have digests available
+    if (allDigests.length === 0) return;
+    
     const newIndex = Math.min(allDigests.length - 1, Math.max(0, index));
+    
+    // Make sure the digest at this index exists
+    if (!allDigests[newIndex]) return;
+    
     if (newIndex !== selectedIndex) {
       setSelectedIndex(newIndex);
       setCurrentDigest(allDigests[newIndex]);
@@ -458,22 +524,42 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         contentRef.current.scrollTop = 0;
       }
     }
-  };
+  }, [allDigests, selectedIndex, analyzeMarketSentiment]);
   
-  // Handle wheel scrolling - Only for the sidebar navigation
+  // Handle wheel scrolling with debounce to prevent rapid scrolling
   useEffect(() => {
+    let isScrolling = false;
+    
     const handleWheel = (e: WheelEvent) => {
+      // Ignore scrolling on content area
       if (!sidebarRef.current || e.target === contentRef.current || contentRef.current?.contains(e.target as Node)) {
         return;
       }
+      
       e.preventDefault();
-
-      // Slower scrolling speed
+      
+      // Prevent rapid scrolling
+      if (isScrolling || loading || allDigests.length <= 1) return;
+      
+      isScrolling = true;
+      
+      // Determine scroll direction
       if (e.deltaY > 0) {
-        navigateTo(selectedIndex + 1);
+        // Make sure we don't go past the end of the array
+        if (selectedIndex < allDigests.length - 1) {
+          navigateTo(selectedIndex + 1);
+        }
       } else {
-        navigateTo(selectedIndex - 1);
+        // Make sure we don't go before the beginning of the array
+        if (selectedIndex > 0) {
+          navigateTo(selectedIndex - 1);
+        }
       }
+      
+      // Reset scrolling flag after a short delay
+      setTimeout(() => {
+        isScrolling = false;
+      }, 200);
     };
 
     const container = containerRef.current;
@@ -486,7 +572,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         container.removeEventListener("wheel", handleWheel);
       }
     };
-  }, [selectedIndex]);
+  }, [selectedIndex, navigateTo, allDigests.length, loading]);
 
   // Refresh data
   const handleRefresh = () => {
@@ -607,40 +693,114 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     };
   }, [widgetId]);
 
-  const itemHeight = 24; // Height of each date item
+  // Helper function to analyze market sentiment for a specific digest
+  const getDigestSentiment = useCallback((content: string): MarketSentiment => {
+    if (!content) return 'neutral';
+    const positiveTerms = ['bullish', 'surge', 'soar', 'gain', 'rally', 'rise', 'up', 'growth', 'positive', 'optimistic', 'outperform'];
+    const negativeTerms = ['bearish', 'plunge', 'plummet', 'drop', 'fall', 'decline', 'down', 'negative', 'pessimistic', 'underperform'];
+    
+    let positiveCount = 0;
+    let negativeCount = 0;
+    
+    // Count occurrences of sentiment terms
+    positiveTerms.forEach(term => {
+      const regex = new RegExp(`\\b${term}\\w*\\b`, 'gi');
+      const matches = content.match(regex);
+      if (matches) positiveCount += matches.length;
+    });
+    
+    negativeTerms.forEach(term => {
+      const regex = new RegExp(`\\b${term}\\w*\\b`, 'gi');
+      const matches = content.match(regex);
+      if (matches) negativeCount += matches.length;
+    });
+    
+    // Determine sentiment based on counts
+    if (positiveCount > negativeCount + 2) return 'up';
+    if (negativeCount > positiveCount + 2) return 'down';
+    return 'neutral';
+  }, []);
+
+  // Render the sentiment icon for date list
+  const renderSentimentIcon = (sentiment: MarketSentiment, small: boolean = false) => {
+    const size = small ? 'h-3 w-3' : 'h-4 w-4';
+    switch (sentiment) {
+      case 'up':
+        return <ArrowUpIcon className={`${size} text-green-500`} />;
+      case 'down':
+        return <ArrowDownIcon className={`${size} text-red-500`} />;
+      default:
+        return <MinusIcon className={`${size} text-gray-400`} />;
+    }
+  };
+
+  // Calculate sentiment for all digests
+  const digestSentiments = useMemo(() => {
+    return allDigests.map(digest => getDigestSentiment(digest.content));
+  }, [allDigests, getDigestSentiment]);
+
+  const itemHeight = 32; // Height of each date item
+
+  // Controls to be passed to WidgetContainer
+  const widgetControls = (
+    <InsightWidgetControls widgetId={widgetId} />
+  );
 
   return (
-    <div 
-      ref={containerRef}
-      className={`flex flex-col relative h-full border bg-card rounded-xl overflow-hidden ${className}`}
-    >
+    <Card className={`h-full flex flex-col relative container ${className}`} ref={containerRef}>
       {/* Date sidebar */}
       <div 
         ref={sidebarRef}
-        className="absolute left-0 top-0 bottom-0 w-12 border-r border-border overflow-hidden"
+        className="absolute left-0 top-0 bottom-0 w-16 border-r border-border overflow-hidden z-10"
       >
         <motion.div 
-          className="h-full flex flex-col items-center py-2"
-          animate={{ y: Math.max(0, Math.min(allDigests.length * itemHeight - (containerRef.current?.clientHeight || 300), selectedIndex * itemHeight - (containerRef.current?.clientHeight || 300) / 2)) * -1 }}
+          className="h-full flex flex-col items-center py-2 px-2"
+          animate={{ 
+            y: Math.max(0, Math.min(
+              allDigests.length * itemHeight - (containerRef.current?.clientHeight || 300), 
+              selectedIndex * itemHeight - (containerRef.current?.clientHeight || 300) / 2
+            )) * -1 
+          }}
           transition={{ type: "spring", stiffness: 300, damping: 30, mass: 1 }}
         >
           {allDigests.map((digest, index) => {
             const isActive = index === selectedIndex;
             const date = parseISO(digest.timestamp);
+            const sentiment = digestSentiments[index];
+            
             return (
               <motion.div
                 key={index}
-                className={`h-${itemHeight/4} w-full flex items-center justify-center text-xs cursor-pointer ${
-                  isActive ? "text-foreground font-bold" : "text-muted-foreground"
-                }`}
+                className={`w-full flex items-center justify-between py-1 px-2 rounded-md cursor-pointer 
+                  ${isActive 
+                    ? "bg-primary/15 text-primary" 
+                    : "text-muted-foreground hover:bg-muted/15 hover:text-foreground focus:bg-muted/20 focus-visible:ring-1 focus-visible:ring-primary"
+                  }`}
+                layout
                 animate={{
-                  scale: isActive ? 1.1 : 1,
-                  backgroundColor: isActive ? "rgba(var(--color-primary-rgb), 0.1)" : "transparent"
+                  backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "transparent",
+                  color: isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
+                  transition: { duration: 0.2 }
                 }}
-                transition={{ duration: 0.15 }}
+                whileHover={{ 
+                  backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "hsla(var(--muted) / 0.15)",
+                  color: isActive ? "hsl(var(--primary))" : "hsl(var(--foreground))"
+                }}
+                tabIndex={0}
                 onClick={() => navigateTo(index)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigateTo(index);
+                  }
+                }}
               >
-                {format(date, 'd')}
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-sm font-bold text-right min-w-[14px]">{format(date, 'd')}</span>
+                  <div className="ml-1">
+                    {renderSentimentIcon(sentiment, true)}
+                  </div>
+                </div>
               </motion.div>
             );
           })}
@@ -648,40 +808,47 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       </div>
 
       {/* Content area with header */}
-      <div className="ml-12 h-full flex flex-col">
+      <div className="ml-16 h-full flex flex-col">
         {/* Date header now above content */}
         {currentDigest && (
-          <div className="border-b border-border p-3 flex justify-between items-center">
-            <div className="flex items-center space-x-3">
-              <div className="font-medium">
-                {renderDate(currentDigest.timestamp)}
+          <div className="p-3 border-b border-border">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="font-medium">
+                  {renderDate(currentDigest.timestamp)}
+                </div>
+                <div className="flex items-center">
+                  {renderSentimentIcon(marketSentiment)}
+                  <span className="text-xs font-medium ml-1">
+                    {marketSentiment === 'up' ? 'Bullish' : marketSentiment === 'down' ? 'Bearish' : 'Neutral'}
+                  </span>
+                </div>
+                {usingFallback && (
+                  <span className="text-xs text-muted-foreground">Cached data</span>
+                )}
               </div>
-              {renderSentimentIndicator()}
-              {usingFallback && (
-                <span className="text-xs text-muted-foreground">Cached data</span>
-              )}
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigateTo(selectedIndex - 1)}
-                disabled={selectedIndex === 0 || loading}
-                className="h-7 w-7 rounded-full"
-                aria-label="Previous day"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigateTo(selectedIndex + 1)}
-                disabled={selectedIndex === allDigests.length - 1 || loading}
-                className="h-7 w-7 rounded-full"
-                aria-label="Next day"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              <div className="flex space-x-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigateTo(selectedIndex - 1)}
+                  disabled={selectedIndex === 0 || loading}
+                  className="h-7 w-7 rounded-full"
+                  aria-label="Previous day"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigateTo(selectedIndex + 1)}
+                  disabled={selectedIndex === allDigests.length - 1 || loading}
+                  className="h-7 w-7 rounded-full"
+                  aria-label="Next day"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -689,7 +856,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         {/* Main content - independently scrollable */}
         <div 
           ref={contentRef}
-          className="flex-1 overflow-y-auto scrollbar-thin"
+          className="flex-1 overflow-y-auto scrollbar-thin p-0"
         >
           {loading ? (
             <div className="flex flex-col space-y-2 animate-pulse p-4">
@@ -704,13 +871,14 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
               {error}
             </div>
           ) : currentDigest ? (
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={selectedIndex}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                variants={blurVariants}
+                transition={{ duration: 0.25 }}
                 className="p-4 space-y-4"
               >
                 {/* Content with enhanced asset formatting and dynamic font size */}
@@ -723,10 +891,12 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                 >
                   {contentParts.map((part, index) => (
                     <motion.div 
-                      key={`content-part-${index}`}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.15, delay: index * 0.02 }}
+                      key={`content-part-${selectedIndex}-${index}`}
+                      custom={index}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      variants={textVariants}
                     >
                       {part}
                     </motion.div>
@@ -737,14 +907,22 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                 {currentDigest.citations && currentDigest.citations.length > 0 && (
                   <motion.div 
                     initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.15, delay: 0.1 }}
+                    animate={{ opacity: 1, transition: { delay: 0.3 } }}
+                    exit={{ opacity: 0, transition: { duration: 0.15 } }}
                     className="mt-4 pt-2 border-t border-border select-text"
                   >
                     <h4 className="text-xs font-medium mb-2">Sources:</h4>
                     <ul className="space-y-1">
-                      {currentDigest.citations.map((citation) => (
-                        <li key={citation.number} className="text-xs flex items-center">
+                      {currentDigest.citations.map((citation, idx) => (
+                        <motion.li 
+                          key={`citation-${selectedIndex}-${citation.number}`}
+                          custom={idx + contentParts.length}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          variants={textVariants}
+                          className="text-xs flex items-center"
+                        >
                           <span className="mr-1">[{citation.number}]</span>
                           <a 
                             href={citation.url} 
@@ -755,7 +933,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
                             {citation.title}
                             <Link className="h-3 w-3 ml-1 inline" />
                           </a>
-                        </li>
+                        </motion.li>
                       ))}
                     </ul>
                   </motion.div>
@@ -769,7 +947,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
