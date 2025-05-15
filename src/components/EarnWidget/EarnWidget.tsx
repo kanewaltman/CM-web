@@ -46,7 +46,7 @@ import { stakingPlansManager, StakingPlan } from '../EarnConfirmationContent';
 import NumberFlow, { continuous } from '@number-flow/react';
 import { AssetPriceTooltip } from '../AssetPriceTooltip';
 // Import the staking options component
-import { EarnWidgetStakingOptions, isStaticWidget } from './EarnWidgetStakingOptions';
+import { EarnWidgetStakingOptions, isStaticWidget } from './StakingOptions';
 // Import the extracted StakeView component
 import StakeView from './StakeView';
 import { ActivePlansView } from './ActivePlansView';

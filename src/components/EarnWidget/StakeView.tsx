@@ -40,7 +40,7 @@ import NumberFlow, { continuous } from '@number-flow/react';
 import { AssetPriceTooltip } from '../AssetPriceTooltip';
 import { openWidgetDialog, resetDialogOpenedState, forceOpenDialog } from '@/lib/widgetDialogService';
 import { AssetIcon } from '@/components/common/AssetIcon';
-import { EarnWidgetStakingOptions, isStaticWidget } from './EarnWidgetStakingOptions';
+import { EarnWidgetStakingOptions, isStaticWidget } from './StakingOptions.tsx';
 
 // Import staking tokens and functions from EarnWidget.tsx
 // These would need to be exported from EarnWidget or moved to a shared utils file
@@ -427,7 +427,7 @@ const StakeView: React.FC<StakeViewProps> = ({ forcedTheme, initialAsset }) => {
   // Add a development test helper
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      import('./TestStakingInit').then(({ TestStakingInit }) => {
+      import('./TestEarningInit.tsx').then(({ TestStakingInit }) => {
         // Add the test component to the DOM for development
         const testContainer = document.createElement('div');
         testContainer.style.position = 'fixed';
