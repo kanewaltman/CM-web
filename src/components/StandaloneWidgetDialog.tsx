@@ -345,7 +345,7 @@ export function StandaloneWidgetDialog({
                 </Suspense>
               </div>
             ) : (
-              <div className="p-4 h-full overflow-auto">
+              <div className="h-full overflow-auto">
                 <WidgetErrorBoundary widgetId={originalWidgetId}>
                   <WidgetComponent 
                     widgetId={originalWidgetId}
