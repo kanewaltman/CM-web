@@ -1,6 +1,6 @@
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
 import { ReferralsViewMode } from '@/components/ReferralsWidget';
-import { EarnViewMode } from '@/components/EarnWidget';
+import { EarnViewMode } from '@/components/EarnWidget/EarnWidget';
 
 // Widget State Management
 export class WidgetState {

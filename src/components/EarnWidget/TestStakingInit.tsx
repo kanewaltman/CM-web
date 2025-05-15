@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button } from './ui/button';
-import { stakingPlansManager, StakingPlan } from './EarnConfirmationContent';
+import { Button } from '../ui/button';
+import { stakingPlansManager, StakingPlan } from '../EarnConfirmationContent';
 
 // Create sample test data
 const generateTestData = () => {

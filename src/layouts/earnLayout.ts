@@ -1,5 +1,5 @@
 import { LayoutWidget } from './types';
-import { EarnViewMode } from '@/components/EarnWidget';
+import { EarnViewMode } from '@/components/EarnWidget/EarnWidget';
 
 /**
  * Default layout configuration for the earning page

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { WidgetContainer } from './WidgetContainer';
+import { WidgetContainer } from '../WidgetContainer';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import {
@@ -7,31 +7,31 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import { Button } from './ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { MatterStacking } from './magicui/MatterStacking';
+} from '../ui/dropdown-menu';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card';
+import { MatterStacking } from '../magicui/MatterStacking';
 import { EarnWidgetState, widgetStateRegistry, createDefaultEarnWidgetState } from '@/lib/widgetState';
 import { DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
-import { Slider } from './ui/slider';
+import { Slider } from '../ui/slider';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as ChartTooltip } from 'recharts';
-import { ChartContainer, ChartConfig } from './ui/chart';
+import { ChartContainer, ChartConfig } from '../ui/chart';
 import { openWidgetDialog, resetDialogOpenedState, forceOpenDialog } from '@/lib/widgetDialogService';
-import { ShimmerButton } from './magicui/shimmer-button';
-import { Input } from './ui/input';
+import { ShimmerButton } from '../magicui/shimmer-button';
+import { Input } from '../ui/input';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from './ui/tooltip';
+} from '../ui/tooltip';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './ui/select';
+} from '../ui/select';
 
 import {
   Tabs,
@@ -39,12 +39,12 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from './ui/table';
-import { AssetButtonWithPrice } from './AssetPriceTooltip';
+import { Table, TableHeader, TableRow, TableHead, TableCell, TableBody } from '../ui/table';
+import { AssetButtonWithPrice } from '../AssetPriceTooltip';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
-import { stakingPlansManager, StakingPlan } from './EarnConfirmationContent';
+import { stakingPlansManager, StakingPlan } from '../EarnConfirmationContent';
 import NumberFlow, { continuous } from '@number-flow/react';
-import { AssetPriceTooltip } from './AssetPriceTooltip';
+import { AssetPriceTooltip } from '../AssetPriceTooltip';
 
 // Define the view modes for the Earn widget
 export type EarnViewMode = 'ripple' | 'cards' | 'stake';
@@ -1090,7 +1090,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   const contentComponent = effectiveViewMode === 'ripple' ? (
     <RippleView />
   ) : effectiveViewMode === 'cards' ? (
-    <CardGridView forcedTheme={forcedTheme} widgetId={props.widgetId} />
+    <EarnWidgetStakingOptions forcedTheme={forcedTheme} widgetId={props.widgetId} />
   ) : (
     <StakeView forcedTheme={forcedTheme} initialAsset={initialAsset} />
   );
@@ -1461,194 +1461,8 @@ const RippleView: React.FC = () => {
   );
 };
 
-// For special handling in CardGridView
-const isStaticWidget = (widgetId: string): boolean => {
-  return widgetId.includes('-static');
-};
-
-// Card Grid View component for token browsing
-const CardGridView: React.FC<{ forcedTheme?: 'light' | 'dark', widgetId?: string }> = ({ forcedTheme, widgetId }) => {
-  // Function to open stake view with a specific asset
-  const handleStakeClick = (token: string) => {
-    // Clear any recent closure protection
-    sessionStorage.removeItem('dialog_last_closed');
-    
-    // Always force reset dialog state first
-    forceResetDialogState();
-    
-    // Create a cleanup event
-    const closeEvent = new CustomEvent('close-widget-dialogs', {
-      bubbles: true
-    });
-    
-    // Dispatch the close event
-    document.dispatchEvent(closeEvent);
-    
-    // Set a flag in sessionStorage to indicate the exact asset we want to maintain
-    sessionStorage.setItem('selected_stake_asset', token);
-    
-    // When on earn page, update URL properly
-    if (window.location.pathname === '/earn') {
-      // Use proper format with widget parameter
-      window.history.replaceState(
-        null, 
-        '', 
-        `${window.location.pathname}#widget=earn-stake&asset=${token}`
-      );
-    } else {
-      // Not on earn page, use updateUrlWithAsset
-      updateUrlWithAsset(token);
-    }
-    
-    // Put a small delay to ensure everything is cleared
-    setTimeout(() => {
-      // Force open the dialog
-      forceOpenDialog('earn-stake', token);
-    }, 250);
-  };
-  
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const target = e.target as HTMLImageElement;
-    const token = target.alt;
-    // Replace with letter placeholder on image load error
-    target.outerHTML = `<div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">${token.charAt(0)}</div>`;
-  };
-  
-  // Check if this is a static widget (on EarnPage)
-  const isOnStaticPage = widgetId ? isStaticWidget(widgetId) : false;
-  
-  // Log rendering mode
-  useEffect(() => {
-    console.log(`CardGridView rendering with widgetId: ${widgetId}, isStatic: ${isOnStaticPage}`);
-  }, [widgetId, isOnStaticPage]);
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {tokenData.map((token) => (
-        <Card 
-          key={token.symbol} 
-          className={cn(
-            "overflow-hidden hover:shadow-md transition-shadow bg-[hsl(var(--primary-foreground))]",
-            forcedTheme === 'dark' ? "border-border" : "border-border"
-          )}
-        >
-          <CardHeader className="p-6 pb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="w-10 h-10 mr-4 flex items-center justify-center overflow-hidden">
-                  <img 
-                    src={`/assets/symbols/${token.symbol}.svg`} 
-                    alt={token.symbol}
-                    className="w-full h-full object-contain"
-                    onError={handleImageError}
-                  />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">{token.symbol}</CardTitle>
-                  <p className="text-xs text-muted-foreground">on {token.network}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-bold">${(token.minStake * 23.5).toFixed(2)}M</div>
-                <div className="text-xs text-muted-foreground">TVL</div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 pb-2">
-            <div className="space-y-1 ">
-              <div className="flex justify-between bg-[hsl(var(--color-widget-inset))] border border-[hsl(var(--color-widget-inset-border))] rounded-lg p-6">
-                <span className="text-md text-muted-foreground">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="border-b border-dotted border-muted-foreground">APY</span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Annual Percentage Yield - the yearly return on your staked assets.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </span>
-                <span className="text-md text-emerald-500 font-medium">{token.apy}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                <div className="bg-[hsl(var(--color-widget-inset))] border border-[hsl(var(--color-widget-inset-border))] rounded-lg p-6 pt-4 pb-4 flex flex-col items-left">
-                  <span className="text-sm text-muted-foreground pb-1">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="border-b border-dotted border-muted-foreground">30d Avg APY</span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Average Annual Percentage Yield over the last 30 days.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </span>
-                  <span className="text-md font-medium">8.97%</span>
-                </div>
-                <div className="bg-[hsl(var(--color-widget-inset))] border border-[hsl(var(--color-widget-inset-border))] rounded-lg p-6 pt-4 pb-4 flex flex-col items-left">
-                  <span className="text-sm text-muted-foreground pb-1">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="border-b border-dotted border-muted-foreground">30d Prediction</span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Estimated APY for the next 30 days based on recent trends.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </span>
-                  <div className="flex flex-col items-left">
-                    <span className="text-md font-medium text-emerald-500">&gt;7.45%</span>
-                  </div>
-                </div>
-              </div>
-              <div className="pt-2 pb-3 bg-[hsl(var(--color-widget-inset))] border border-[hsl(var(--color-widget-inset-border))] rounded-lg p-6">
-                <div className="text-sm text-muted-foreground mt-2 pb-2">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="border-b border-dotted border-muted-foreground">Historical APY</span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Past APY performance over different time periods.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <div className="flex justify-between">
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-muted-foreground">24h</span>
-                    <span className="text-sm">-</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-muted-foreground">7d</span>
-                    <span className="text-sm text-emerald-500">9.53%</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs text-muted-foreground">30d</span>
-                    <span className="text-sm text-emerald-500">9.57%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="p-4 pt-2">
-            <Button 
-              className="w-full bg-primary/10 text-primary hover:bg-primary/20 font-medium text-base py-6" 
-              size="lg"
-              onClick={() => handleStakeClick(token.symbol)}
-            >
-              Earn {token.symbol}
-            </Button>
-          </CardFooter>
-        </Card>
-      ))}
-    </div>
-  );
-};
+// Import the staking options component
+import { EarnWidgetStakingOptions, isStaticWidget } from './EarnWidgetStakingOptions';
 
 // Stake View component for detailed staking options
 const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: string }> = ({ forcedTheme, initialAsset }) => {
@@ -2019,8 +1833,6 @@ const StakeView: React.FC<{ forcedTheme?: 'light' | 'dark'; initialAsset?: strin
     return [Math.max(0, min - padding), max + padding];
   };
 
-  // Add this function to the StakeView component (around line 1590)
-  // Add this near the other event handlers in StakeView
   const handleEarnButtonClick = (asset: string, earnings: string, timeFrame: string) => {
     console.log('📊 Earn button clicked:', asset, earnings, timeFrame);
     
@@ -2742,7 +2554,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', cleanup);
 } 
 
-// Add new ActivePlansView component
+// ActivePlansView component
 const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }> = ({ plans, onNewPlan }) => {
   const { resolvedTheme } = useTheme();
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
