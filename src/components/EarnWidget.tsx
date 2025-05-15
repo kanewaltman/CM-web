@@ -3318,7 +3318,7 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
       <div id="earn-plans-container" className="z-10 text-center w-full max-w mx-auto p-4 relative h-full flex flex-col">
         <div className="mb-4 flex items-center justify-between w-full">
           <div className="text-lg font-semibold">
-            {showHistoric ? 'Historic Plans' : 'Your Active Staking Plans'}
+            {showHistoric ? 'Historic Plans' : 'Your Active Plans'}
           </div>
           {historicPlans.length > 0 && (
             <Button 
@@ -3446,36 +3446,51 @@ const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }>
                               ? formatCooldownTime(plan.claimCooldownUntil)
                               : "Claim"}
                           </Button>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground group hover:bg-red-500/15"
-                                  onClick={(e) => handleTerminatePlan(plan, e)}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                              >
+                                <span className="sr-only">Open menu</span>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="w-4 h-4"
                                 >
-                                  <span className="sr-only">Terminate plan</span>
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className="w-4 h-4 group-hover:stroke-red-600"
-                                  >
-                                    <path d="M18 6 6 18" />
-                                    <path d="m6 6 12 12" />
-                                  </svg>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Terminate plan early</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                                  <circle cx="12" cy="12" r="1" />
+                                  <circle cx="12" cy="5" r="1" />
+                                  <circle cx="12" cy="19" r="1" />
+                                </svg>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-fit">
+                              <DropdownMenuItem
+                                className={cn(
+                                  "cursor-pointer transition-colors whitespace-nowrap",
+                                  isPlanReadyToClaim(plan)
+                                    ? "hover:bg-[#FF4D15] hover:text-white focus:bg-[#FF4D15] focus:text-white"
+                                    : "text-muted-foreground cursor-not-allowed hover:bg-muted/30 focus:bg-muted/30"
+                                )}
+                                onClick={(e) => handleClaimRewards(plan, e as unknown as React.MouseEvent<HTMLButtonElement>)}
+                                disabled={!isPlanReadyToClaim(plan)}
+                              >
+                                Claim rewards
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer transition-colors hover:bg-destructive hover:text-white focus:bg-destructive focus:text-white whitespace-nowrap"
+                                onClick={(e) => handleTerminatePlan(plan, e as unknown as React.MouseEvent<HTMLButtonElement>)}
+                              >
+                                Terminate early
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       ) : (
                         <div className="text-sm text-muted-foreground">
