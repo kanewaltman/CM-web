@@ -1,7 +1,7 @@
 import { ChevronDown, Maximize2, MoreHorizontal, Trash2, ListChecks, Plus, Edit, Globe, ListFilter } from '../components/ui-icons';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { useRef, useCallback, memo, useState, useEffect } from 'react';
+import React, { useRef, useCallback, memo, useState, useEffect } from 'react';
 import { createPopoutWindow } from '../utils/windowManager';
 import { isTauri } from '../utils/platform';
 import {
@@ -595,8 +595,8 @@ export const WidgetContainer = memo(function WidgetContainer({
                         size="sm" 
                         className="h-6 ml-2 px-2 py-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center"
                       >
-                        <Edit className="h-3.5 w-3.5 opacity-70" />
-                        <span className="text-xs">Edit</span>
+                        <ListChecks className="h-3.5 w-3.5 opacity-70" />
+                        <span className="text-xs">Lists</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-56">
@@ -701,7 +701,12 @@ export const WidgetContainer = memo(function WidgetContainer({
 
               {/* Dialog Content wrapper */}
               <div className="widget-content flex-1 min-h-0 overflow-auto pt-0 px-1 pb-1 select-text">
-                {children}
+                {/* Clone children with additional dialog flag prop to ensure proper table ref passing */}
+                {React.Children.map(children, child => 
+                  React.isValidElement(child) 
+                    ? React.cloneElement(child, { isInDialog: true } as React.ComponentProps<any>)
+                    : child
+                )}
               </div>
             </div>
           </DialogContent>

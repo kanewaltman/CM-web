@@ -1,8 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
+import { useReactTable } from '@tanstack/react-table';
+import { MarketData } from './MarketsWidget'; // Import MarketData type
+
+// Add window extension declaration
+declare global {
+  interface Window {
+    __marketsWidgetDialogTable?: ReturnType<typeof useReactTable<MarketData>>;
+  }
+}
+
 import { 
   Filter as FilterIcon,
   Search, 
@@ -38,7 +48,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel,
 } from '../ui/dropdown-menu';
-import { useReactTable } from '@tanstack/react-table';
 import { ListManager } from './MarketLists';
 import { MarketsWidgetColumnVisibility } from './MarketsWidget';
 import { QuoteAssetsWithCounts } from './MarketsWidget';
@@ -81,8 +90,8 @@ interface MarketsWidgetHeaderProps {
   onSecondaryCurrencyChange: (value: AssetTicker | null) => void;
   quoteAssets: QuoteAssetsWithCounts;
   widgetId?: string;
-  table?: ReturnType<typeof useReactTable<any>> | null;
-  tableRef?: React.RefObject<{ getTable: () => ReturnType<typeof useReactTable<any>> | null }>;
+  table?: ReturnType<typeof useReactTable<MarketData>> | null;
+  tableRef?: React.RefObject<{ getTable: () => ReturnType<typeof useReactTable<MarketData>> | null }>;
 }
 
 export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
@@ -99,8 +108,32 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [activeListName, setActiveListName] = useState<string>('');
   
-  // Get actual table instance - simplified access pattern
-  const actualTable = table || tableRef?.current?.getTable() || null;
+  // Get actual table instance - enhanced access pattern with dialog support
+  const actualTable = useMemo(() => {
+    // First try direct table prop
+    if (table) {
+      console.log('[MarketsWidgetHeader] Using direct table prop');
+      return table;
+    }
+    
+    // Then try tableRef
+    if (tableRef?.current?.getTable) {
+      const tableFromRef = tableRef.current.getTable();
+      if (tableFromRef) {
+        console.log('[MarketsWidgetHeader] Using table from ref');
+        return tableFromRef;
+      }
+    }
+    
+    // Lastly, check for dialog mode table reference
+    if (typeof window !== 'undefined' && window.__marketsWidgetDialogTable) {
+      console.log('[MarketsWidgetHeader] Using global table reference (dialog mode)');
+      return window.__marketsWidgetDialogTable;
+    }
+    
+    console.log('[MarketsWidgetHeader] No table reference found');
+    return null;
+  }, [table, tableRef]);
 
   // Storage keys for local storage
   const storageKeys = {

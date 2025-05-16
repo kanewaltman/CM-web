@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSProperties, forwardRef, useImperativeHandle } from 'react';
 
+// Add a declaration for the global window extension
+declare global {
+  interface Window {
+    __marketsWidgetDialogTable?: ReturnType<typeof useReactTable<MarketData>>;
+  }
+}
+
 import { useTheme } from 'next-themes';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { SAMPLE_MARKET_DATA, SampleMarketDataItem } from '@/services/marketsSampleData';
@@ -240,6 +247,9 @@ interface MarketsWidgetProps {
   
   // Persistence options
   persistState?: boolean;
+  
+  // Dialog mode
+  isInDialog?: boolean;
   
   onRemove?: () => void;
 }
@@ -623,6 +633,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     activeListId: externalActiveListId,
     onActiveListChange,
     persistState = false,
+    isInDialog = false,
     onRemove,
   } = props;
   
@@ -1534,6 +1545,22 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   useImperativeHandle(ref, () => ({
     getTable: () => table
   }), [table]);
+  
+  // When in dialog mode, we need to ensure the table reference is globally available
+  useEffect(() => {
+    if (isInDialog && table) {
+      console.log('[MarketsWidget] In dialog mode, setting global table reference');
+      window.__marketsWidgetDialogTable = table;
+    }
+    
+    return () => {
+      // Clean up when component unmounts
+      if (isInDialog) {
+        console.log('[MarketsWidget] Cleaning up global table reference');
+        delete window.__marketsWidgetDialogTable;
+      }
+    };
+  }, [isInDialog, table]);
   
   // For visual debugging
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
