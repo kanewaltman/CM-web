@@ -11,7 +11,7 @@ import {
 } from '../ui/dropdown-menu';
 import { ShimmerButton } from '../magicui/shimmer-button';
 import NumberFlow, { continuous } from '@number-flow/react';
-import { AssetPriceTooltip } from '../AssetPriceTooltip';
+import { AssetPriceTooltip, AssetButtonWithPrice } from '../AssetPriceTooltip';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { StakingPlan, stakingPlansManager } from '../EarnConfirmationContent'; // Assuming StakingPlan and stakingPlansManager are here or in a shared types/utils file
 
@@ -516,9 +516,7 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
         <div className="font-medium text-emerald-500 flex justify-end tabular-nums">
           <span className="flex items-center">
             {plan.actualEarnings ? (plan.actualEarnings < 1 ? plan.actualEarnings.toFixed(8) : plan.actualEarnings.toFixed(6)) : '0.00'} 
-            <AssetPriceTooltip asset={plan.asset as AssetTicker}>
-              <span className="ml-1">{plan.asset}</span>
-            </AssetPriceTooltip>
+            <span className="ml-1">{plan.asset}</span>
           </span>
         </div>
       );
@@ -567,9 +565,7 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
               plugins={[continuous]}
               animated={true}
             />
-            <AssetPriceTooltip asset={plan.asset as AssetTicker}>
-              <span className="ml-1">{plan.asset}</span>
-            </AssetPriceTooltip>
+            <span className="ml-1">{plan.asset}</span>
           </div>
         </div>
       );
@@ -579,9 +575,7 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
         <div className="font-semibold text-emerald-500 flex justify-end items-center">
           <div className="flex items-center tabular-nums">
             {effectiveEarnings < 1 ? effectiveEarnings.toFixed(8) : effectiveEarnings.toFixed(6)}
-            <AssetPriceTooltip asset={plan.asset as AssetTicker}>
-              <span className="ml-1">{plan.asset}</span>
-            </AssetPriceTooltip>
+            <span className="ml-1">{plan.asset}</span>
           </div>
         </div>
       );
@@ -643,29 +637,7 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                         <div className="text-sm text-muted-foreground">Staked</div>
                         <div className="font-medium flex items-center gap-1">
                           <span>{plan.amount}</span>
-                          <AssetPriceTooltip asset={plan.asset as AssetTicker}>
-                            <button 
-                              type="button"
-                              className="font-jakarta font-bold text-sm rounded-md px-1"
-                              style={{ 
-                                color: ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'],
-                                backgroundColor: `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`,
-                                cursor: 'pointer'
-                              }}
-                              onMouseEnter={(e) => {
-                                const target = e.currentTarget;
-                                target.style.backgroundColor = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
-                                target.style.color = 'hsl(var(--color-widget-bg))';
-                              }}
-                              onMouseLeave={(e) => {
-                                const target = e.currentTarget;
-                                target.style.backgroundColor = `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`;
-                                target.style.color = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
-                              }}
-                            >
-                              {plan.asset}
-                            </button>
-                          </AssetPriceTooltip>
+                          <AssetButtonWithPrice asset={plan.asset as AssetTicker} />
                         </div>
                       </div>
                     </div>
@@ -837,29 +809,7 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                         <p className="text-xs text-muted-foreground">Termination Fee</p>
                         <div className="font-medium text-amber-500 tabular-nums flex items-center gap-1">
                           <span>{plan.terminationFee.toFixed(4)}</span>
-                          <AssetPriceTooltip asset={plan.asset as AssetTicker}>
-                            <button 
-                              type="button"
-                              className="font-jakarta font-bold text-sm rounded-md px-1"
-                              style={{ 
-                                color: ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'],
-                                backgroundColor: `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`,
-                                cursor: 'pointer'
-                              }}
-                              onMouseEnter={(e) => {
-                                const target = e.currentTarget;
-                                target.style.backgroundColor = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
-                                target.style.color = 'hsl(var(--color-widget-bg))';
-                              }}
-                              onMouseLeave={(e) => {
-                                const target = e.currentTarget;
-                                target.style.backgroundColor = `${ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark']}14`;
-                                target.style.color = ASSETS[plan.asset as AssetTicker].theme[resolvedTheme as 'light' | 'dark'];
-                              }}
-                            >
-                              {plan.asset}
-                            </button>
-                          </AssetPriceTooltip>
+                          <span className="ml-1">{plan.asset}</span>
                         </div>
                       </div>
                       <div className="text-right">
