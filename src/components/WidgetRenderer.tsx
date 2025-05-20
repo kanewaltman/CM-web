@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DataSourceProvider } from '@/lib/DataSourceContext';
 import { WidgetContainer } from './WidgetContainer';
-import { WidgetContentOnly } from './WidgetContentOnly';
 import { PerformanceWidgetWrapper } from './PerformanceWidgetWrapper';
 import { InsightWidgetControls } from './InsightWidget';
 import { ReferralsWrapper } from './ReferralsWidget';
+import { MarketsWidgetWrapper } from './MarketWidget/MarketsWidgetWrapper';
 import { 
   CreateWidgetParams, 
   ExtendedGridStackWidget,
@@ -19,22 +19,47 @@ import {
 } from '@/lib/widgetRegistry';
 import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
 
-// Check if widget should use content-only view
-const shouldUseContentOnly = (widgetId: string): boolean => {
-  try {
-    const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-    if (savedLayout) {
-      const layout = JSON.parse(savedLayout);
-      const widgetData = layout.find((item: any) => item.id === widgetId);
-      
-      if (widgetData?.viewState?.useContentOnly) {
-        return true;
+// Create a wrapper component for Markets widget to use hooks properly
+const MarketsWidgetContainer = ({ 
+  widgetId, 
+  WidgetComponent, 
+  title, 
+  onRemove 
+}: { 
+  widgetId: string, 
+  WidgetComponent: React.FC<any>, 
+  title: string, 
+  onRemove: () => boolean 
+}) => {
+  return (
+    <WidgetContainer
+      title={title}
+      onRemove={onRemove}
+      widgetId={widgetId}
+      headerControls={
+        <MarketsWidgetWrapper 
+          isHeader 
+          widgetId={widgetId} 
+          widgetComponent={WidgetComponent} 
+          onRemove={onRemove}
+        />
       }
-    }
-  } catch (error) {
-    console.error('Error checking for content-only flag:', error);
-  }
-  return false;
+      widgetMenu={
+        <MarketsWidgetWrapper 
+          isMenu 
+          widgetId={widgetId} 
+          widgetComponent={WidgetComponent} 
+          onRemove={onRemove} 
+        />
+      }
+    >
+      <MarketsWidgetWrapper 
+        widgetId={widgetId} 
+        widgetComponent={WidgetComponent} 
+        onRemove={onRemove} 
+      />
+    </WidgetContainer>
+  );
 };
 
 /**
@@ -48,8 +73,7 @@ export const createWidget = ({
   w = 3, 
   h = 4, 
   minW = 2, 
-  minH = 2,
-  viewState
+  minH = 2 
 }: CreateWidgetParams): HTMLElement | null => {
   if (!widgetType || !widgetId) {
     console.error('Invalid widget parameters:', { widgetType, widgetId });
@@ -102,43 +126,11 @@ export const createWidget = ({
   widgetElement.appendChild(widgetContent);
 
   try {
-    // Check if this widget should use content-only mode
-    const useContentOnly = viewState?.useContentOnly || shouldUseContentOnly(widgetId);
-    
-    // Declare component variable before using it
-    let component: React.ReactNode;
-    
-    if (useContentOnly) {
-      console.log(`Rendering widget ${widgetId} with content-only mode`);
-      // Get the widget's viewState
-      let effectiveViewState = viewState || {};
-      if (!viewState) {
-        try {
-          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-          if (savedLayout) {
-            const layout = JSON.parse(savedLayout);
-            const widgetData = layout.find((item: any) => item.id === widgetId);
-            if (widgetData?.viewState) {
-              effectiveViewState = widgetData.viewState;
-            }
-          }
-        } catch (error) {
-          console.error('Error getting viewState for content-only widget:', error);
-        }
-      }
-
-      component = (
-        <DataSourceProvider>
-          <WidgetContentOnly
-            widgetType={widgetType}
-            widgetId={widgetId}
-            viewState={effectiveViewState}
-          />
-        </DataSourceProvider>
-      );
-    }
     // Create wrapper for special components or use generic wrapper
-    else if (widgetType === 'performance') {
+    let component;
+    
+    // For performance widget, use specialized wrapper with header controls
+    if (widgetType === 'performance') {
       // Get correct title from localStorage for performance widgets
       const widgetTitle = getPerformanceWidgetTitle(widgetId);
       
@@ -167,12 +159,14 @@ export const createWidget = ({
                 isHeader 
                 widgetId={widgetId} 
                 widgetComponent={WidgetComponent}
+                onRemove={() => true}
               />
             }
           >
             <PerformanceWidgetWrapper
               widgetId={widgetId}
               widgetComponent={WidgetComponent}
+              onRemove={() => true}
             />
           </WidgetContainer>
         </DataSourceProvider>
@@ -261,6 +255,36 @@ export const createWidget = ({
         </DataSourceProvider>
       );
     }
+    // For markets widget, use MarketsWidgetWrapper
+    else if (widgetType === 'markets') {
+      const handleRemove = () => {
+        console.log('Markets widget header remove callback triggered');
+        // Try both event approaches for maximum compatibility
+        document.dispatchEvent(new CustomEvent('widget-remove', { detail: { widgetId: widgetId }}));
+        
+        // Direct call fallback if window.handleRemoveWidget is available
+        try {
+          if ((window as any).handleGridStackWidgetRemove) {
+            (window as any).handleGridStackWidgetRemove(widgetId);
+          }
+        } catch (e) {
+          console.error('Direct removal fallback failed:', e);
+        }
+        
+        return true;
+      };
+      
+      component = (
+        <DataSourceProvider>
+          <MarketsWidgetContainer
+            widgetId={widgetId}
+            WidgetComponent={WidgetComponent}
+            title={widgetTitles[widgetType]}
+            onRemove={handleRemove}
+          />
+        </DataSourceProvider>
+      );
+    }
     // For all other widgets, use standard wrapper
     else {
       component = (
@@ -323,6 +347,91 @@ const getPerformanceWidgetTitle = (widgetId: string): string => {
 };
 
 /**
+ * Renders a React widget into a DOM element
+ */
+export const renderWidgetIntoElement = (
+  el: HTMLElement, 
+  widgetId: string, 
+  widgetType: string, 
+  widgetElement: HTMLElement,
+  onRemove: () => boolean
+): void => {
+  try {
+    const root = createRoot(el);
+    (widgetElement as any)._reactRoot = root;
+    
+    const baseId = widgetId.split('-')[0]; 
+    const WidgetComponent = widgetComponents[widgetType];
+    
+    if (!WidgetComponent) {
+      console.error('Widget component not found for type:', widgetType);
+      return;
+    }
+
+    if (baseId === 'performance') {
+      // Get correct title from localStorage for performance widgets
+      const widgetTitle = getPerformanceWidgetTitle(widgetId);
+      
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitle}
+              onRemove={onRemove}
+              headerControls={<PerformanceWidgetWrapper 
+                isHeader 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent} 
+                onRemove={onRemove} 
+              />}
+            >
+              <PerformanceWidgetWrapper 
+                widgetId={widgetId} 
+                widgetComponent={WidgetComponent} 
+                onRemove={onRemove} 
+              />
+            </WidgetContainer>
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    } else if (widgetType === 'markets') {
+      // Use MarketsWidgetContainer for markets widgets
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <MarketsWidgetContainer
+              widgetId={widgetId}
+              WidgetComponent={WidgetComponent}
+              title={widgetTitles[widgetType]}
+              onRemove={onRemove}
+            />
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    } else {
+      // For non-performance, non-markets widgets
+      root.render(
+        <React.StrictMode>
+          <DataSourceProvider>
+            <WidgetContainer
+              title={widgetTitles[widgetType]}
+              onRemove={onRemove}
+            >
+              <WidgetComponent 
+                widgetId={widgetId} 
+                onRemove={onRemove} 
+              />
+            </WidgetContainer>
+          </DataSourceProvider>
+        </React.StrictMode>
+      );
+    }
+  } catch (error) {
+    console.error('Error rendering widget:', error);
+  }
+};
+
+/**
  * Update all widgets with the new data source
  */
 export const updateWidgetsDataSource = (
@@ -334,7 +443,7 @@ export const updateWidgetsDataSource = (
   
   const items = grid.getGridItems();
   
-  items.forEach(item => {
+  items.forEach((item: any) => {
     const node = item.gridstackNode;
     if (!node?.id) return;
     
@@ -378,23 +487,7 @@ export const updateWidgetsDataSource = (
         x: node.x || 0,
         y: node.y || 0,
         w: node.w,
-        h: node.h,
-        // Pass the viewState from the layout to preserve content-only flag
-        viewState: (() => {
-          try {
-            const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-            if (savedLayout) {
-              const layout = JSON.parse(savedLayout);
-              const widgetData = layout.find((item: any) => item.id === node.id);
-              if (widgetData?.viewState) {
-                return widgetData.viewState;
-              }
-            }
-          } catch (e) {
-            console.error('Error retrieving viewState during update:', e);
-          }
-          return undefined;
-        })()
+        h: node.h
       };
       
       // Remove the old element and replace with a new one
