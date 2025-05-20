@@ -704,7 +704,25 @@ export const WidgetContainer = memo(function WidgetContainer({
                 {/* Clone children with additional dialog flag prop to ensure proper table ref passing */}
                 {React.Children.map(children, child => 
                   React.isValidElement(child) 
-                    ? React.cloneElement(child, { isInDialog: true } as React.ComponentProps<any>)
+                    ? React.cloneElement(child, { 
+                        isInDialog: true,
+                        // Pass all props from the original instance to maintain state
+                        ...(React.isValidElement(child) ? child.props : {}),
+                        // Ensure the dialog version has the same widget ID
+                        widgetId: widgetId.current || externalWidgetId,
+                        // For Markets widget, pass the specific state
+                        ...(isMarketsWidget && marketsList ? {
+                          // Pass markets list state
+                          marketsList: marketsList,
+                          activeList: marketsList.activeList,
+                          customLists: marketsList.customLists,
+                          // Transfer any filter/column state that might be in the props
+                          ...(React.isValidElement(child) && child.props.filters ? { filters: child.props.filters } : {}),
+                          ...(React.isValidElement(child) && child.props.columns ? { columns: child.props.columns } : {}),
+                          ...(React.isValidElement(child) && child.props.sortConfig ? { sortConfig: child.props.sortConfig } : {}),
+                          ...(React.isValidElement(child) && child.props.visibleColumns ? { visibleColumns: child.props.visibleColumns } : {})
+                        } : {})
+                      } as React.ComponentProps<any>)
                     : child
                 )}
               </div>

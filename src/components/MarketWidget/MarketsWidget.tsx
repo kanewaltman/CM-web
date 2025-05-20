@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSPro
 // Add a declaration for the global window extension
 declare global {
   interface Window {
-    __marketsWidgetDialogTable?: ReturnType<typeof useReactTable<MarketData>>;
+    __marketsWidgetDialogTable?: ReturnType<typeof useReactTable<MarketData>> | null;
+    __marketsWidgetDialogId?: string | null;
   }
 }
 
@@ -383,8 +384,21 @@ const DraggableMenuItem = ({
 
 // Component for column visibility to be used in widget context menu
 export const MarketsWidgetColumnVisibility: React.FC<{ 
-  table: ReturnType<typeof useReactTable<any>> 
+  table: ReturnType<typeof useReactTable<any>> | undefined | null
 }> = ({ table }) => {
+  // Early return with a message if table is not available
+  if (!table) {
+    return (
+      <>
+        <DropdownMenuLabel className="opacity-80 text-sm leading-[150%]">Customize Columns</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+          Table not available
+        </div>
+      </>
+    );
+  }
+
   const columnOrder = table.getState().columnOrder;
   const [localColumnOrder, setLocalColumnOrder] = useState<string[]>(
     columnOrder.filter(id => id !== 'pair')
@@ -415,16 +429,19 @@ export const MarketsWidgetColumnVisibility: React.FC<{
         
         // Update the full column order with 'pair' always at the beginning
         const fullOrder = ['pair', ...newOrder];
-        table.setColumnOrder(fullOrder);
+        if (table) { // Add check here
+          table.setColumnOrder(fullOrder);
+        }
         
         return newOrder;
       });
     }
   }
   
-  const tableRef = (table as any)._getTableOptions?.()?.meta?.updateColumnSizes; // Get updateColumnSizes function from table context
+  const tableRef = (table as any)?._getTableOptions?.()?.meta?.updateColumnSizes; // Get updateColumnSizes function from table context
   
   const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
+    if (!table) return; // Add check here
     if (columnId === 'pair') return; // Prevent toggling off the 'pair' column
     
     const newState = {...table.getState().columnVisibility}; // Create new visibility state object
@@ -992,10 +1009,12 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     } else {
       setInternalColumnVisibility(value);
       if (persistState) {
+        // Log column visibility persistence for debugging
+        console.log(`[MarketsWidget] Persisting column visibility for ID: ${id}`, value);
         setStoredValue(instanceStorageKeys.COLUMN_VISIBILITY, value);
       }
     }
-  }, [onColumnVisibilityChange, persistState, instanceStorageKeys.COLUMN_VISIBILITY]);
+  }, [onColumnVisibilityChange, persistState, instanceStorageKeys.COLUMN_VISIBILITY, id]);
 
   const handleColumnOrderChange = useCallback((value: string[]) => {
     if (onColumnOrderChange) {
@@ -1546,21 +1565,23 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     getTable: () => table
   }), [table]);
   
-  // When in dialog mode, we need to ensure the table reference is globally available
+  // When in dialog mode, set a global reference for the table with unique ID
   useEffect(() => {
     if (isInDialog && table) {
-      console.log('[MarketsWidget] In dialog mode, setting global table reference');
+      console.log(`[MarketsWidget ${id}] In dialog mode, setting global table reference`);
       window.__marketsWidgetDialogTable = table;
+      window.__marketsWidgetDialogId = id;
     }
-    
+
     return () => {
-      // Clean up when component unmounts
-      if (isInDialog) {
-        console.log('[MarketsWidget] Cleaning up global table reference');
+      // Only clean up if this instance was the one that set the global dialog table
+      if (isInDialog && window.__marketsWidgetDialogId === id) {
+        console.log(`[MarketsWidget ${id}] Cleaning up global table reference for dialog`);
         delete window.__marketsWidgetDialogTable;
+        delete window.__marketsWidgetDialogId;
       }
     };
-  }, [isInDialog, table]);
+  }, [isInDialog, table, id]);
   
   // For visual debugging
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');

@@ -79,6 +79,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
     let state = marketsWidgetRegistry.get(widgetId);
     
     if (!state) {
+      // Create a proper table reference that will be shared across components
       const tableRef = React.createRef<{ getTable: () => ReturnType<typeof useReactTable<MarketData>> | null }>();
       
       // Create new state with defaults and load from localStorage
@@ -102,6 +103,11 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       
       // Store in registry for shared access
       marketsWidgetRegistry.set(widgetId, state);
+      
+      // Log that we're creating a new widget instance
+      console.log(`[MarketsWidgetWrapper] Initialized new widget state for ID: ${widgetId}`);
+    } else {
+      console.log(`[MarketsWidgetWrapper] Using existing widget state for ID: ${widgetId}`);
     }
     
     return state;
@@ -116,7 +122,32 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   const [secondaryCurrency, setSecondaryCurrency] = useState(widgetState.secondaryCurrency);
   const [quoteAssets, setQuoteAssets] = useState(widgetState.quoteAssets);
   
-  // Add synchronization effect
+  // Use the table ref from the registry
+  const tableRef = widgetState.tableRef;
+
+  // Track table state for debugging
+  const [hasTable, setHasTable] = useState(false);
+  
+  // Check if table exists and update state
+  useEffect(() => {
+    const checkTableExists = () => {
+      const tableExists = tableRef?.current?.getTable() !== null && tableRef?.current?.getTable() !== undefined;
+      setHasTable(tableExists);
+      if (tableExists && !hasTable) {
+        console.log(`[MarketsWidgetWrapper] Table reference available for widget ID: ${widgetId}`);
+      }
+    };
+    
+    // Check immediately
+    checkTableExists();
+    
+    // And periodically
+    const interval = setInterval(checkTableExists, 500);
+    
+    return () => clearInterval(interval);
+  }, [tableRef, widgetId, hasTable]);
+  
+  // Add synchronization effect for state
   useEffect(() => {
     // When the component mounts, synchronize its state with the registry
     const state = marketsWidgetRegistry.get(widgetId);
@@ -218,10 +249,6 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       state.quoteAssets = assets;
     }
   }, [widgetId]);
-  
-  // Use the table ref from the registry
-  const tableRef = widgetState.tableRef;
-  
   
   // If this is the filter content component request
   if (isFilterContent) {
@@ -452,6 +479,9 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
   
   // If this is the header component, render the header
   if (isHeader) {
+    // Get the current table instance, if available
+    const currentTable = tableRef?.current?.getTable?.() || null;
+    
     return (
       <MarketsWidgetHeader
         widgetId={widgetId}
@@ -460,6 +490,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
         onSecondaryCurrencyChange={handleSecondaryCurrencyChange}
         quoteAssets={quoteAssets}
         tableRef={tableRef}
+        table={currentTable}
       />
     );
   }
@@ -483,7 +514,7 @@ export const MarketsWidgetWrapper: React.FC<MarketsWidgetWrapperProps> = ({
       onQuoteAssetsChange={handleQuoteAssetsChange}
       tableRef={tableRef}
       onRemove={onRemove}
-      persistState={false}
+      persistState={true}
     />
   );
 }; 

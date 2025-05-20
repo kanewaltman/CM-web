@@ -112,7 +112,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const actualTable = useMemo(() => {
     // First try direct table prop
     if (table) {
-      console.log('[MarketsWidgetHeader] Using direct table prop');
+      console.log('[MarketsWidgetHeader] Using direct table prop for widget', widgetId);
       return table;
     }
     
@@ -120,20 +120,21 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     if (tableRef?.current?.getTable) {
       const tableFromRef = tableRef.current.getTable();
       if (tableFromRef) {
-        console.log('[MarketsWidgetHeader] Using table from ref');
+        console.log('[MarketsWidgetHeader] Using table from ref for widget', widgetId);
+        console.log('[MarketsWidgetHeader] Column visibility state:', tableFromRef.getState().columnVisibility);
         return tableFromRef;
       }
     }
     
     // Lastly, check for dialog mode table reference
     if (typeof window !== 'undefined' && window.__marketsWidgetDialogTable) {
-      console.log('[MarketsWidgetHeader] Using global table reference (dialog mode)');
+      console.log('[MarketsWidgetHeader] Using global table reference (dialog mode) for widget', widgetId);
       return window.__marketsWidgetDialogTable;
     }
     
-    console.log('[MarketsWidgetHeader] No table reference found');
+    console.log('[MarketsWidgetHeader] No table reference found for widget', widgetId);
     return null;
-  }, [table, tableRef]);
+  }, [table, tableRef, widgetId]);
 
   // Storage keys for local storage
   const storageKeys = {
@@ -202,9 +203,9 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   
   // Update isFiltersActive whenever filters change
   useEffect(() => {
-    const active = searchQuery !== '' || selectedQuoteAsset !== 'ALL' || secondaryCurrency !== null;
+    const active = searchQuery !== '' || selectedQuoteAsset !== 'ALL';
     setIsFiltersActive(active);
-  }, [searchQuery, selectedQuoteAsset, secondaryCurrency]);
+  }, [searchQuery, selectedQuoteAsset]);
 
   // Handle filter changes
   const handleSearchChange = (value: string) => {
@@ -379,92 +380,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
                   </Command>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
-
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className={cn(
-                  "text-xs h-8 mx-1 pr-2",
-                  secondaryCurrency === null && "opacity-75"
-                )}>
-                  {secondaryCurrency === null ? (
-                    <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
-                  ) : ASSETS[secondaryCurrency]?.icon ? (
-                    <img 
-                      src={ASSETS[secondaryCurrency].icon} 
-                      alt={secondaryCurrency} 
-                      className="w-4 h-4 mr-2 rounded-full shrink-0" 
-                    />
-                  ) : (
-                    <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
-                      <span className="text-[10px] font-medium">{secondaryCurrency.charAt(0)}</span>
-                    </div>
-                  )}
-                  <span className="flex-1 text-left truncate   text-sm ">
-                    {secondaryCurrency ? `Show in: ${secondaryCurrency}` : 'Secondary: None'}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="p-0 w-48">
-                  <Command>
-                    <CommandInput placeholder="Filter currency..." className="h-8 text-xs" autoFocus />
-                    <CommandList>
-                      <CommandEmpty>
-                        <div className="  text-sm  py-2 text-center">No currency found.</div>
-                      </CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value=""
-                          onSelect={() => handleSecondaryCurrencyChange(null)}
-                          className="text-xs h-8 flex items-center justify-between"
-                        >
-                          <div className="flex items-center flex-1 truncate">
-                            <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
-                            <span className="truncate   text-sm ">None</span>
-                          </div>
-                          <Check
-                            className={cn(
-                              "ml-2 h-3 w-3 flex-shrink-0",
-                              secondaryCurrency === null ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                        </CommandItem>
-                        {(['USD', 'EUR', 'GBP'] as const).map((currency) => {
-                          const assetConfig = ASSETS[currency];
-                          return (
-                            <CommandItem
-                              key={currency}
-                              value={currency}
-                              onSelect={(currentValue) => {
-                                handleSecondaryCurrencyChange(currentValue.toUpperCase() as AssetTicker);
-                              }}
-                              className="text-xs h-8 flex items-center justify-between"
-                            >
-                              <div className="flex items-center flex-1 truncate">
-                                {assetConfig?.icon ? (
-                                  <img 
-                                    src={assetConfig.icon} 
-                                    alt={currency} 
-                                    className="w-4 h-4 mr-2 rounded-full shrink-0" 
-                                  />
-                                ) : (
-                                  <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
-                                    <span className="text-[10px] font-medium">{currency.charAt(0)}</span>
-                                  </div>
-                                )}
-                                <span className="truncate   text-sm ">Show in {currency}</span>
-                              </div>
-                              <Check
-                                className={cn(
-                                  "ml-2 h-3 w-3 flex-shrink-0",
-                                  secondaryCurrency === currency ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
             </DropdownMenuGroup>
             
             {/* Separator and Clear Filters Button */}
@@ -483,6 +398,96 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
               <span className="  text-sm ">Clear All Filters</span>
             </DropdownMenuItem>
           </>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* New Currency Dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button 
+            variant={secondaryCurrency ? "default" : "outline"} 
+            size="sm" 
+            className="h-7 px-2.5 text-xs whitespace-nowrap max-w-[180px] flex items-center"
+          >
+            {secondaryCurrency ? (
+              ASSETS[secondaryCurrency]?.icon ? (
+                <img 
+                  src={ASSETS[secondaryCurrency].icon} 
+                  alt={secondaryCurrency} 
+                  className="w-3.5 h-3.5 mr-1 rounded-full shrink-0" 
+                />
+              ) : (
+                <div className="w-3.5 h-3.5 mr-1 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                  <span className="text-[8px] font-medium">{secondaryCurrency.charAt(0)}</span>
+                </div>
+              )
+            ) : (
+              <CircleSlash className="mr-1 h-3 w-3 flex-shrink-0" />
+            )}
+            <span className="truncate leading-none">Currency</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="p-0 w-48" align="end">
+          <Command>
+            <CommandInput placeholder="Filter currency..." className="h-8 text-xs" autoFocus />
+            <CommandList>
+              <CommandEmpty>
+                <div className="text-sm py-2 text-center">No currency found.</div>
+              </CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value=""
+                  onSelect={() => handleSecondaryCurrencyChange(null)}
+                  className="text-xs h-8 flex items-center justify-between"
+                >
+                  <div className="flex items-center flex-1 truncate">
+                    <CircleSlash className="mr-2 h-3.5 w-3.5 opacity-80 shrink-0" />
+                    <span className="truncate text-sm">None</span>
+                  </div>
+                  <Check
+                    className={cn(
+                      "ml-2 h-3 w-3 flex-shrink-0",
+                      secondaryCurrency === null ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </CommandItem>
+                {(['USD', 'EUR', 'GBP'] as const).map((currency) => {
+                  const assetConfig = ASSETS[currency];
+                  return (
+                    <CommandItem
+                      key={currency}
+                      value={currency}
+                      onSelect={(currentValue) => {
+                        handleSecondaryCurrencyChange(currentValue.toUpperCase() as AssetTicker);
+                      }}
+                      className="text-xs h-8 flex items-center justify-between"
+                    >
+                      <div className="flex items-center flex-1 truncate">
+                        {assetConfig?.icon ? (
+                          <img 
+                            src={assetConfig.icon} 
+                            alt={currency} 
+                            className="w-4 h-4 mr-2 rounded-full shrink-0" 
+                          />
+                        ) : (
+                          <div className="w-4 h-4 mr-2 rounded-full bg-neutral-200 dark:bg-neutral-700 shrink-0 flex items-center justify-center">
+                            <span className="text-[10px] font-medium">{currency.charAt(0)}</span>
+                          </div>
+                        )}
+                        <span className="truncate text-sm">Show in {currency}</span>
+                      </div>
+                      <Check
+                        className={cn(
+                          "ml-2 h-3 w-3 flex-shrink-0",
+                          secondaryCurrency === currency ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
         </DropdownMenuContent>
       </DropdownMenu>
 
