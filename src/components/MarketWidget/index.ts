@@ -16,6 +16,9 @@ export { WidgetTab } from './WidgetTab';
 export { default as ValueFlash } from './ValueFlash';
 
 // Export market list related functionality
-export { MarketsListMenu, RenameListDialog, DeleteListDialog } from './ListManager';
+export { MarketsListMenu, RenameListDialog, DeleteListDialog, ListButton } from './MarketLists';
 export { useMarketsList } from './useMarketsList';
-export type { CustomList } from './useMarketsList'; 
+export type { CustomList } from './useMarketsList';
+
+// Export title component with list functionality
+export { MarketsWidgetTitle } from './MarketsWidgetTitle'; 

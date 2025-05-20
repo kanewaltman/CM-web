@@ -12,6 +12,34 @@
  * while maintaining globally shared list definitions.
  */
 
+import React from 'react';
+import { Button } from '../ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { Input } from '../ui/input';
+import {
+  ListChecks,
+  Plus,
+  Edit,
+  Trash2,
+  Check,
+  X
+} from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '../ui/dialog';
+
 // LocalStorage keys for custom lists
 const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
 const ACTIVE_LIST_KEY = 'markets-widget-active-list';
@@ -350,4 +378,351 @@ export const parseAssetPair = (pair: string): { baseAsset: string, quoteAsset: s
     return { baseAsset, quoteAsset };
   }
   return null;
+};
+
+// List Menu Component
+export interface MarketsListMenuProps {
+  customLists: CustomList[];
+  activeList: string | null;
+  newListName: string;
+  onSaveActiveList: (listId: string | null) => void;
+  onRenameList: (listId: string) => void;
+  onDeleteList: (listId: string) => void;
+  onNewListNameChange: (value: string) => void;
+  onSaveNewList: () => boolean;
+  onCloseMenu: () => void;
+}
+
+export const MarketsListMenu: React.FC<MarketsListMenuProps> = ({
+  customLists,
+  activeList,
+  newListName,
+  onSaveActiveList,
+  onRenameList,
+  onDeleteList,
+  onNewListNameChange,
+  onSaveNewList,
+  onCloseMenu
+}) => {
+  return (
+    <>
+      <DropdownMenuLabel>Lists</DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      
+      {/* Show All Markets option */}
+      <DropdownMenuItem 
+        className="flex items-center justify-between"
+        onClick={() => {
+          onSaveActiveList(null);
+          onCloseMenu();
+        }}
+      >
+        <span>All Markets</span>
+        {activeList === null && <Check className="h-4 w-4 ml-2" />}
+      </DropdownMenuItem>
+      
+      <DropdownMenuSeparator />
+      
+      {/* Custom Lists */}
+      {customLists.length > 0 && (
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-xs opacity-70">Custom Lists</DropdownMenuLabel>
+          {customLists.map(list => (
+            <DropdownMenuItem
+              key={list.id}
+              className="flex items-center justify-between group"
+              onClick={() => {
+                onSaveActiveList(list.id);
+                onCloseMenu();
+              }}
+            >
+              <span>{list.name}</span>
+              <div className="flex items-center">
+                {activeList === list.id && <Check className="h-4 w-4 mr-2" />}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRenameList(list.id);
+                  }}
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteList(list.id);
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      )}
+      
+      <DropdownMenuSeparator />
+      
+      {/* Create New List */}
+      <div className="p-2">
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="New list name..."
+            value={newListName}
+            onChange={(e) => onNewListNameChange(e.target.value)}
+            className="h-8 text-sm"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const success = onSaveNewList();
+                if (success) onCloseMenu();
+              }
+            }}
+          />
+          <Button 
+            size="sm" 
+            className="h-8 px-3"
+            onClick={() => {
+              const success = onSaveNewList();
+              if (success) onCloseMenu();
+            }}
+            disabled={!newListName.trim()}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// Rename List Dialog
+export interface RenameListDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  listName: string;
+  onListNameChange: (value: string) => void;
+  onSave: () => void;
+}
+
+export const RenameListDialog: React.FC<RenameListDialogProps> = ({
+  open,
+  onOpenChange,
+  listName,
+  onListNameChange,
+  onSave
+}) => {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Rename List</DialogTitle>
+        </DialogHeader>
+        
+        <div className="py-4">
+          <Input
+            value={listName}
+            onChange={(e) => onListNameChange(e.target.value)}
+            placeholder="List name"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onSave();
+              }
+            }}
+          />
+        </div>
+        
+        <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={onSave}
+            disabled={!listName.trim()}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Delete List Dialog
+export interface DeleteListDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}
+
+export const DeleteListDialog: React.FC<DeleteListDialogProps> = ({
+  open,
+  onOpenChange,
+  onConfirm
+}) => {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Delete List</DialogTitle>
+        </DialogHeader>
+        
+        <div className="py-4">
+          <p>Are you sure you want to delete this list? This action cannot be undone.</p>
+        </div>
+        
+        <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="destructive"
+            onClick={onConfirm}
+          >
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Component for the list button that appears next to the widget title
+export interface ListButtonProps {
+  widgetId: string;
+  activeList: string | null;
+  activeListName: string | null;
+  customLists: CustomList[];
+  onActiveListChange: (listId: string | null) => void;
+}
+
+export const ListButton: React.FC<ListButtonProps> = ({
+  widgetId,
+  activeList,
+  activeListName,
+  customLists,
+  onActiveListChange
+}) => {
+  const [dropdownOpen, setDropdownOpen] = React.useState(false);
+  const [newListName, setNewListName] = React.useState('');
+  const [renameListName, setRenameListName] = React.useState('');
+  const [renameListDialogOpen, setRenameListDialogOpen] = React.useState(false);
+  const [renameListId, setRenameListId] = React.useState<string | null>(null);
+  const [deleteListDialogOpen, setDeleteListDialogOpen] = React.useState(false);
+  const [deleteListId, setDeleteListId] = React.useState<string | null>(null);
+
+  const handleSaveNewList = () => {
+    if (newListName.trim()) {
+      const newList: CustomList = {
+        id: `list-${Date.now()}`,
+        name: newListName.trim(),
+        assets: []
+      };
+      
+      const updatedLists = [...customLists, newList];
+      ListManager.saveLists(updatedLists, widgetId);
+      ListManager.setActiveListId(newList.id, widgetId);
+      setNewListName('');
+      return true;
+    }
+    return false;
+  };
+
+  const handleRenameList = (listId: string) => {
+    const list = customLists.find(l => l.id === listId);
+    if (list) {
+      setRenameListId(listId);
+      setRenameListName(list.name);
+      setRenameListDialogOpen(true);
+    }
+  };
+
+  const handleSaveRenamedList = () => {
+    if (!renameListId || !renameListName.trim()) return;
+    
+    const updatedLists = customLists.map(list => {
+      if (list.id === renameListId) {
+        return { ...list, name: renameListName.trim() };
+      }
+      return list;
+    });
+    
+    ListManager.saveLists(updatedLists, widgetId);
+    setRenameListDialogOpen(false);
+  };
+
+  const handleDeleteList = (listId: string) => {
+    setDeleteListId(listId);
+    setDeleteListDialogOpen(true);
+  };
+
+  const confirmDeleteList = () => {
+    if (!deleteListId) return;
+    
+    const updatedLists = customLists.filter(list => list.id !== deleteListId);
+    ListManager.saveLists(updatedLists, widgetId);
+    
+    if (activeList === deleteListId) {
+      ListManager.setActiveListId(null, widgetId);
+    }
+    
+    setDeleteListDialogOpen(false);
+  };
+
+  return (
+    <>
+      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 ml-1 px-2 py-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center"
+          >
+            <ListChecks className="h-3.5 w-3.5 opacity-70 mr-1" />
+            <span className="text-xs">Lists</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56">
+          <MarketsListMenu
+            customLists={customLists}
+            activeList={activeList}
+            newListName={newListName}
+            onSaveActiveList={onActiveListChange}
+            onRenameList={handleRenameList}
+            onDeleteList={handleDeleteList}
+            onNewListNameChange={setNewListName}
+            onSaveNewList={handleSaveNewList}
+            onCloseMenu={() => setDropdownOpen(false)}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <RenameListDialog
+        open={renameListDialogOpen}
+        onOpenChange={setRenameListDialogOpen}
+        listName={renameListName}
+        onListNameChange={setRenameListName}
+        onSave={handleSaveRenamedList}
+      />
+
+      <DeleteListDialog
+        open={deleteListDialogOpen}
+        onOpenChange={setDeleteListDialogOpen}
+        onConfirm={confirmDeleteList}
+      />
+    </>
+  );
 }; 

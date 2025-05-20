@@ -522,7 +522,6 @@ const renderTableHeader = (
   
   // Common props for both div and TableHead
   const commonProps = {
-    key: header.id,
     onClick: () => {
       if (header.column.getCanSort()) {
         header.column.toggleSorting();
@@ -562,7 +561,8 @@ const renderTableHeader = (
   if (useTableHead) {
     return (
       <TableHead
-        {...commonProps}
+        key={header.id}
+        onClick={commonProps.onClick}
         className={cn(
           "sticky top-0 bg-[hsl(var(--color-widget-header))] z-20 whitespace-nowrap cursor-pointer hover:text-foreground/80 group text-sm text-muted-foreground",
           isNarrowColumn && "p-0 w-[30px] max-w-[30px]",
