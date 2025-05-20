@@ -1,4 +1,4 @@
-import { ChevronDown, Maximize2, MoreHorizontal, Trash2 } from '../components/ui-icons';
+import { ChevronDown, Maximize2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 import { useRef, useCallback, memo, useState, useEffect } from 'react';
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Dialog, DialogContent } from './ui/dialog';
+import { MarketsWidgetTitle } from './MarketWidget';
 import { 
   getWidgetIdFromHash, 
   markHashHandled, 
@@ -51,6 +52,9 @@ export const WidgetContainer = memo(function WidgetContainer({
 }: WidgetContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Check if this is a Markets widget
+  const isMarketsWidget = title === "Markets";
 
   // Determine widgetId from DOM if not provided
   useEffect(() => {
@@ -457,25 +461,33 @@ export const WidgetContainer = memo(function WidgetContainer({
             !isMobile && "cursor-move" // Only show move cursor on desktop
           )}>
             <div className="flex items-center space-x-2">
-              {/* Custom clickable button-like title that prevents drag */}
-              <button
-                type="button"
-                className="text-sm font-semibold bg-transparent border-0 p-0 m-0 cursor-pointer hover:text-primary transition-colors text-left"
-                onClick={handleTitleClick}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault(); // Always prevent default to avoid drag issues
-                }}
-                style={{
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  touchAction: 'none',
-                  outline: 'none'
-                }}
-              >
-                {title}
-              </button>
-              <ChevronDown className="h-4 w-4 opacity-50" />
+              {isMarketsWidget ? (
+                <MarketsWidgetTitle 
+                  widgetId={effectiveWidgetId || `widget-${Date.now()}`}
+                  onClick={handleTitleClick}
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="text-sm font-semibold bg-transparent border-0 p-0 m-0 cursor-pointer hover:text-primary transition-colors text-left"
+                    onClick={handleTitleClick}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault(); // Always prevent default to avoid drag issues
+                    }}
+                    style={{
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      touchAction: 'none',
+                      outline: 'none'
+                    }}
+                  >
+                    {title}
+                  </button>
+                  {/*<ChevronDown className="h-4 w-4 opacity-50" />*/}
+                </>
+              )}
             </div>
             
             <div className="flex items-center space-x-1">
@@ -518,8 +530,16 @@ export const WidgetContainer = memo(function WidgetContainer({
               {/* Dialog Header */}
               <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">
                 <div className="flex items-center space-x-2">
-                  <h2 key={title} className="text-sm font-semibold">{title}</h2>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
+                  {isMarketsWidget ? (
+                    <MarketsWidgetTitle 
+                      widgetId={effectiveWidgetId || `widget-${Date.now()}`}
+                    />
+                  ) : (
+                    <>
+                      <h2 key={title} className="text-sm font-semibold">{title}</h2>
+                      <ChevronDown className="h-4 w-4 opacity-50" />
+                    </>
+                  )}
                 </div>
                 
                 <div className="flex items-center space-x-1">
