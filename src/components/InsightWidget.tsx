@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { format, parseISO, isToday, startOfDay, isSameDay, Match } from 'date-fns';
+import { format, parseISO, isToday, startOfDay, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, RefreshCcw, Link, ArrowUpIcon, ArrowDownIcon, MinusIcon, Type } from 'lucide-react';
+import { motion, useMotionValue, useSpring, AnimatePresence } from "framer-motion";
 import { supabase } from '@/lib/supabase';
 import { 
   Pagination, 
@@ -18,7 +19,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { v4 as uuidv4 } from 'uuid';
+import { WidgetContainer } from './WidgetContainer';
 
 // Types from CM-Intel
 interface Citation {
@@ -86,6 +89,60 @@ interface TextMatch {
   type: 'asset' | 'citation';
 }
 
+// Animation variants for blur wipe effect
+const blurVariants = {
+  hidden: {
+    filter: "blur(8px)",
+    opacity: 0,
+    y: 5,
+  },
+  visible: {
+    filter: "blur(0px)",
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.2,
+    }
+  },
+  exit: {
+    filter: "blur(8px)",
+    opacity: 0,
+    y: -5,
+    transition: {
+      duration: 0.1,
+    }
+  }
+};
+
+// Variant for text content with cascading blur effect
+const textVariants = {
+  hidden: (i: number) => ({
+    filter: "blur(4px)",
+    opacity: 0,
+    y: 3,
+    transition: {
+      duration: 0.1,
+    }
+  }),
+  visible: (i: number) => ({
+    filter: "blur(0px)",
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.2,
+      delay: i * 0.03,
+    }
+  }),
+  exit: (i: number) => ({
+    filter: "blur(4px)",
+    opacity: 0,
+    y: -3,
+    transition: {
+      duration: 0.1,
+    }
+  }),
+};
+
 export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemove, widgetId }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +154,19 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
   const { theme, resolvedTheme } = useTheme();
   const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('light');
   const [contentParts, setContentParts] = useState<React.ReactNode[]>([]);
+  
+  // Refs for scrolling
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Motion values for smooth scrolling
+  const y = useMotionValue(0);
+  const springY = useSpring(y, {
+    stiffness: 50,
+    damping: 20,
+    mass: 1.5,
+  });
   
   // Load font size from localStorage with a default of 14px
   const [fontSize, setFontSize] = useState<number>(() => {
@@ -117,7 +187,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       return 1.5;
     }
   });
-
+  
   // Fetch all available market digests
   const fetchDigests = useCallback(async () => {
     setLoading(true);
@@ -157,11 +227,13 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         setAllDigests(processedDigests);
         setCurrentDigest(processedDigests[0]);
         setMarketSentiment(analyzeMarketSentiment(processedDigests[0].content));
+        setSelectedIndex(0);
         setUsingFallback(false);
       } else {
         // If no data, use fallback
         setAllDigests([FALLBACK_DATA]);
         setCurrentDigest(FALLBACK_DATA);
+        setSelectedIndex(0);
         setUsingFallback(true);
       }
     } catch (err) {
@@ -171,6 +243,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
       // Use fallback data
       setAllDigests([FALLBACK_DATA]);
       setCurrentDigest(FALLBACK_DATA);
+      setSelectedIndex(0);
       setUsingFallback(true);
     } finally {
       setLoading(false);
@@ -277,8 +350,6 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
 
   // Helper function to process text for assets and citations
   const processText = (text: string): React.ReactNode[] => {
-    console.log('Processing text:', text); // Debugging log
-
     // Split text into paragraphs and headers
     const sections = text.split(/\n\n|###/);
     const parts: React.ReactNode[] = [];
@@ -433,24 +504,84 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     }
   }, [currentDigest, formatContentWithAssets]);
 
-  // Handle pagination navigation
-  const goToNext = () => {
-    if (selectedIndex < allDigests.length - 1) {
-      const newIndex = selectedIndex + 1;
+  // Handle pagination navigation with more defensive checks
+  const navigateTo = useCallback((index: number) => {
+    // Only proceed if we have digests available
+    if (allDigests.length === 0) return;
+    
+    const newIndex = Math.min(allDigests.length - 1, Math.max(0, index));
+    
+    // Make sure the digest at this index exists
+    if (!allDigests[newIndex]) return;
+    
+    if (newIndex !== selectedIndex) {
+      // Update both states in a more synchronized way
       setSelectedIndex(newIndex);
       setCurrentDigest(allDigests[newIndex]);
       setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
+       
+      // Scroll content back to top when changing days
+      if (contentRef.current) {
+        contentRef.current.scrollTop = 0;
+      }
+      
+      // Ensure content parts are immediately cleared so we don't show stale content
+      setContentParts([]);
     }
-  };
+  }, [allDigests, selectedIndex, analyzeMarketSentiment]);
+  
+  // Handle wheel scrolling with debounce to prevent rapid scrolling
+  useEffect(() => {
+    let isScrolling = false;
+    let scrollTimeout: NodeJS.Timeout;
+    
+    const handleWheel = (e: WheelEvent) => {
+      // Ignore scrolling on content area
+      if (!sidebarRef.current || e.target === contentRef.current || contentRef.current?.contains(e.target as Node)) {
+        return;
+      }
+      
+      e.preventDefault();
+      
+      // Prevent rapid scrolling
+      if (isScrolling || loading || allDigests.length <= 1) return;
+      
+      isScrolling = true;
+      
+      // Clear any existing timeout
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      
+      // Determine scroll direction
+      if (e.deltaY > 0) {
+        // Make sure we don't go past the end of the array
+        if (selectedIndex < allDigests.length - 1) {
+          navigateTo(selectedIndex + 1);
+        }
+      } else {
+        // Make sure we don't go before the beginning of the array
+        if (selectedIndex > 0) {
+          navigateTo(selectedIndex - 1);
+        }
+      }
+      
+      // Reset scrolling flag after a short delay
+      scrollTimeout = setTimeout(() => {
+        isScrolling = false;
+      }, 200);
+    };
 
-  const goToPrevious = () => {
-    if (selectedIndex > 0) {
-      const newIndex = selectedIndex - 1;
-      setSelectedIndex(newIndex);
-      setCurrentDigest(allDigests[newIndex]);
-      setMarketSentiment(analyzeMarketSentiment(allDigests[newIndex].content));
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("wheel", handleWheel, { passive: false });
     }
-  };
+
+    return () => {
+      if (container) {
+        container.removeEventListener("wheel", handleWheel);
+      }
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
+  }, [selectedIndex, navigateTo, allDigests.length, loading]);
 
   // Refresh data
   const handleRefresh = () => {
@@ -471,7 +602,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
         return 'Today';
       }
       
-      return format(date, 'MMM d, yyyy');
+      return format(date, 'MMM d');
     } catch {
       return 'Unknown date';
     }
@@ -571,109 +702,276 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ className, onRemov
     };
   }, [widgetId]);
 
+  // Helper function to analyze market sentiment for a specific digest
+  const getDigestSentiment = useCallback((content: string): MarketSentiment => {
+    if (!content) return 'neutral';
+    const positiveTerms = ['bullish', 'surge', 'soar', 'gain', 'rally', 'rise', 'up', 'growth', 'positive', 'optimistic', 'outperform'];
+    const negativeTerms = ['bearish', 'plunge', 'plummet', 'drop', 'fall', 'decline', 'down', 'negative', 'pessimistic', 'underperform'];
+    
+    let positiveCount = 0;
+    let negativeCount = 0;
+    
+    // Count occurrences of sentiment terms
+    positiveTerms.forEach(term => {
+      const regex = new RegExp(`\\b${term}\\w*\\b`, 'gi');
+      const matches = content.match(regex);
+      if (matches) positiveCount += matches.length;
+    });
+    
+    negativeTerms.forEach(term => {
+      const regex = new RegExp(`\\b${term}\\w*\\b`, 'gi');
+      const matches = content.match(regex);
+      if (matches) negativeCount += matches.length;
+    });
+    
+    // Determine sentiment based on counts
+    if (positiveCount > negativeCount + 2) return 'up';
+    if (negativeCount > positiveCount + 2) return 'down';
+    return 'neutral';
+  }, []);
+
+  // Render the sentiment icon for date list
+  const renderSentimentIcon = (sentiment: MarketSentiment, small: boolean = false) => {
+    const size = small ? 'h-3 w-3' : 'h-4 w-4';
+    switch (sentiment) {
+      case 'up':
+        return <ArrowUpIcon className={`${size} text-green-500`} />;
+      case 'down':
+        return <ArrowDownIcon className={`${size} text-red-500`} />;
+      default:
+        return <MinusIcon className={`${size} text-gray-400`} />;
+    }
+  };
+
+  // Calculate sentiment for all digests
+  const digestSentiments = useMemo(() => {
+    return allDigests.map(digest => getDigestSentiment(digest.content));
+  }, [allDigests, getDigestSentiment]);
+
+  const itemHeight = 32; // Height of each date item
+
+  // Controls to be passed to WidgetContainer
+  const widgetControls = (
+    <InsightWidgetControls widgetId={widgetId} />
+  );
+
   return (
-    <div className={`flex flex-col h-full ${className}`}>
-      {/* Main content */}
-      <div className="flex-1 overflow-auto scrollbar-thin p-4">
-        {loading ? (
-          <div className="flex flex-col space-y-2 animate-pulse">
-            <div className="h-4 bg-muted rounded w-3/4"></div>
-            <div className="h-4 bg-muted rounded w-full"></div>
-            <div className="h-4 bg-muted rounded w-5/6"></div>
-            <div className="h-4 bg-muted rounded w-full"></div>
-            <div className="h-4 bg-muted rounded w-4/5"></div>
-          </div>
-        ) : error ? (
-          <div className="text-red-500 text-sm">
-            {error}
-          </div>
-        ) : currentDigest ? (
-          <div className="space-y-4">
-            {/* Date and sentiment indicator */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium">
-                {renderDate(currentDigest.timestamp)}
-              </div>
-              {renderSentimentIndicator()}
-              {usingFallback && (
-                <span className="text-xs text-muted-foreground">Using cached data</span>
-              )}
-            </div>
+    <Card className={`h-full flex flex-col relative ${className}`} ref={containerRef}>
+      {/* Date sidebar */}
+      <div 
+        ref={sidebarRef}
+        className="absolute left-0 top-0 bottom-0 w-16 border-r border-border overflow-hidden z-10"
+      >
+        <motion.div 
+          className="h-full flex flex-col items-center py-2 px-2"
+          animate={{ 
+            y: Math.max(0, Math.min(
+              allDigests.length * itemHeight - (containerRef.current?.clientHeight || 300), 
+              selectedIndex * itemHeight - (containerRef.current?.clientHeight || 300) / 2
+            )) * -1 
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 30, mass: 1 }}
+        >
+          {allDigests.map((digest, index) => {
+            const isActive = index === selectedIndex;
+            const date = parseISO(digest.timestamp);
+            const sentiment = digestSentiments[index];
             
-            {/* Content with enhanced asset formatting and dynamic font size */}
-            <div 
-              className="text-sm leading-relaxed select-text"
-              style={{ 
-                fontSize: `${fontSize}px`,
-                lineHeight: lineHeight
-              }}
-            >
-              {contentParts}
-            </div>
+            // Check if this is the first day of a new month in the list
+            const isNewMonth = index === 0 || 
+              format(parseISO(allDigests[index].timestamp), 'MMM') !== 
+              format(parseISO(allDigests[index-1].timestamp), 'MMM');
             
-            {/* Citations */}
-            {currentDigest.citations && currentDigest.citations.length > 0 && (
-              <div className="mt-4 pt-2 border-t border-border select-text">
-                <h4 className="text-xs font-medium mb-2">Sources:</h4>
-                <ul className="space-y-1">
-                  {currentDigest.citations.map((citation) => (
-                    <li key={citation.number} className="text-xs flex items-center">
-                      <span className="mr-1">[{citation.number}]</span>
-                      <a 
-                        href={citation.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline flex items-center"
-                      >
-                        {citation.title}
-                        <Link className="h-3 w-3 ml-1 inline" />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center text-muted-foreground">
-            No insight available
-          </div>
-        )}
+            return (
+              <React.Fragment key={`date-item-${index}`}>
+                {isNewMonth && (
+                  <div className="w-full flex items-center justify-center my-1 py-1">
+                    <div className="h-px w-4 bg-muted-foreground/40 flex-grow max-w-[10px]"></div>
+                    <span className="text-xs font-bold text-muted-foreground px-1">
+                      {format(date, 'MMM').toUpperCase()}
+                    </span>
+                    <div className="h-px w-4 bg-muted-foreground/40 flex-grow max-w-[10px]"></div>
+                  </div>
+                )}
+                <motion.div
+                  className={`w-full flex items-center justify-between py-1 px-2 rounded-md cursor-pointer 
+                    ${isActive 
+                      ? "bg-primary/15 text-primary" 
+                      : "text-muted-foreground hover:bg-muted/15 hover:text-foreground focus:bg-muted/20 focus-visible:ring-1 focus-visible:ring-primary"
+                    }`}
+                  layout
+                  animate={{
+                    backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "transparent",
+                    color: isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
+                    transition: { duration: 0.2 }
+                  }}
+                  whileHover={{ 
+                    backgroundColor: isActive ? "hsla(var(--primary) / 0.15)" : "hsla(var(--muted) / 0.15)",
+                    color: isActive ? "hsl(var(--primary))" : "hsl(var(--foreground))"
+                  }}
+                  tabIndex={0}
+                  onClick={() => navigateTo(index)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigateTo(index);
+                    }
+                  }}
+                >
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-sm font-bold text-right min-w-[14px]">{format(date, 'd')}</span>
+                    <div className="ml-1">
+                      {renderSentimentIcon(sentiment, true)}
+                    </div>
+                  </div>
+                </motion.div>
+              </React.Fragment>
+            );
+          })}
+        </motion.div>
       </div>
 
-      {/* Pagination controls */}
-      <div className="border-t border-border p-2">
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={goToPrevious}
-                disabled={selectedIndex === 0 || loading}
-                className="h-8 w-8"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </PaginationItem>
-            <div className="flex items-center px-2 text-xs text-muted-foreground">
-              {selectedIndex + 1} / {allDigests.length}
+      {/* Content area with header */}
+      <div className="ml-16 h-full flex flex-col">
+        {/* Date header now above content */}
+        {currentDigest && (
+          <div className="p-3 border-b border-border">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <div className="font-medium">
+                  {renderDate(currentDigest.timestamp)}
+                </div>
+                <div className="flex items-center">
+                  {renderSentimentIcon(marketSentiment)}
+                  <span className="text-xs font-medium ml-1">
+                    {marketSentiment === 'up' ? 'Bullish' : marketSentiment === 'down' ? 'Bearish' : 'Neutral'}
+                  </span>
+                </div>
+                {usingFallback && (
+                  <span className="text-xs text-muted-foreground">Cached data</span>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigateTo(selectedIndex - 1)}
+                  disabled={selectedIndex === 0 || loading}
+                  className="h-7 w-7 rounded-full"
+                  aria-label="Previous day"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => navigateTo(selectedIndex + 1)}
+                  disabled={selectedIndex === allDigests.length - 1 || loading}
+                  className="h-7 w-7 rounded-full"
+                  aria-label="Next day"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <PaginationItem>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={goToNext}
-                disabled={selectedIndex === allDigests.length - 1 || loading}
-                className="h-8 w-8"
+          </div>
+        )}
+
+        {/* Main content - independently scrollable */}
+        <div 
+          ref={contentRef}
+          className="flex-1 overflow-y-auto scrollbar-thin p-0"
+        >
+          {loading ? (
+            <div className="flex flex-col space-y-2 animate-pulse p-4">
+              <div className="h-4 bg-muted rounded w-3/4"></div>
+              <div className="h-4 bg-muted rounded w-full"></div>
+              <div className="h-4 bg-muted rounded w-5/6"></div>
+              <div className="h-4 bg-muted rounded w-full"></div>
+              <div className="h-4 bg-muted rounded w-4/5"></div>
+            </div>
+          ) : error ? (
+            <div className="text-red-500 text-sm p-4">
+              {error}
+            </div>
+          ) : currentDigest ? (
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={`digest-${selectedIndex}-${currentDigest.timestamp}`}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                variants={blurVariants}
+                transition={{ duration: 0.25 }}
+                className="p-4 space-y-4"
               >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+                {/* Content with enhanced asset formatting and dynamic font size */}
+                <div 
+                  className="text-foreground select-text space-y-2"
+                  style={{ 
+                    fontSize: `${fontSize}px`,
+                    lineHeight: lineHeight
+                  }}
+                >
+                  {contentParts.map((part, index) => (
+                    <motion.div 
+                      key={`content-part-${selectedIndex}-${index}`}
+                      custom={index}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      variants={textVariants}
+                    >
+                      {part}
+                    </motion.div>
+                  ))}
+                </div>
+                
+                {/* Citations */}
+                {currentDigest.citations && currentDigest.citations.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1, transition: { delay: 0.3 } }}
+                    exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                    className="mt-4 pt-2 border-t border-border select-text"
+                  >
+                    <h4 className="text-xs font-medium mb-2">Sources:</h4>
+                    <ul className="space-y-1">
+                      {currentDigest.citations.map((citation, idx) => (
+                        <motion.li 
+                          key={`citation-${selectedIndex}-${citation.number}`}
+                          custom={idx + contentParts.length}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          variants={textVariants}
+                          className="text-xs flex items-center"
+                        >
+                          <span className="mr-1">[{citation.number}]</span>
+                          <a 
+                            href={citation.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline flex items-center"
+                          >
+                            {citation.title}
+                            <Link className="h-3 w-3 ml-1 inline" />
+                          </a>
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          ) : (
+            <div className="text-center text-muted-foreground p-4">
+              No insight available
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
