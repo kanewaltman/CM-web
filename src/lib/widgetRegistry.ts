@@ -11,7 +11,6 @@ import MarketsWidget from '@/components/MarketWidget/MarketsWidget';
 import { TransactionsWidget } from '@/components/TransactionsWidget';
 import { InsightWidget } from '@/components/InsightWidget';
 import { ReferralsWrapper } from '@/components/ReferralsWidget';
-import { EarnWidgetWrapper } from '@/components/EarnWidget/EarnWidget';
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
 
 // Widget Registry - Single source of truth for widget configuration

@@ -688,35 +688,11 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
 
   // Update row count based on available vertical space
   useLayoutEffect(() => {
-    // Debounce function to limit update frequency
-    const debounce = (func: Function, wait: number) => {
-      let timeout: NodeJS.Timeout;
-      return function executedFunction(...args: any[]) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-      };
-    };
-    
-    // Cache the last valid container height to prevent negative values
-    let lastValidContainerHeight = 0;
-    
     const updateRowsPerPage = () => {
-      if (!containerRef.current || !document.contains(containerRef.current)) return;
+      if (!containerRef.current) return;
       
       // Get container dimensions
       const containerRect = containerRef.current.getBoundingClientRect();
-      
-      // Ignore invalid measurements
-      if (containerRect.height <= 0) {
-        return;
-      }
-      
-      // Save valid height
-      lastValidContainerHeight = containerRect.height;
       setContainerHeight(containerRect.height);
       
       // More accurate measurements based on the screenshot
@@ -727,11 +703,6 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
       
       // Calculate available space for rows
       const availableHeight = containerRect.height - filtersHeight - paginationHeight - headerHeight - bufferSpace;
-      
-      // Ignore negative or unusually small heights
-      if (availableHeight < 50) {
-        return;
-      }
       
       // Fixed row height - prevent dynamic expansion
       const rowHeight = 32; // Single table row height
@@ -744,65 +715,65 @@ export const TransactionsWidget: React.FC<RemovableWidgetProps> = ({ className, 
       
       // Update pagination if different from current
       if (rowsPerPage !== pagination.pageSize) {
-        // Only log in development
-        if (process.env.NODE_ENV === 'development') {
-          console.debug(`Updating rows per page: ${rowsPerPage} (available height: ${availableHeight}px, container: ${containerRect.height}px)`);
-        }
+        console.log(`Updating rows per page: ${rowsPerPage} (available height: ${availableHeight}px, container: ${containerRect.height}px)`);
         setPagination(prev => ({
           ...prev,
           pageSize: rowsPerPage
         }));
       }
     };
-    
-    // Debounced version of the update function (200ms)
-    const debouncedUpdate = debounce(updateRowsPerPage, 200);
 
-    // Create resize observer with debounced handler
+    // Create both resize and mutation observers
     const resizeObserver = new ResizeObserver(() => {
-      debouncedUpdate();
+      requestAnimationFrame(updateRowsPerPage);
     });
 
-    // Initial update (with a small delay to ensure DOM is ready)
-    setTimeout(updateRowsPerPage, 100);
+    const mutationObserver = new MutationObserver((mutations) => {
+      requestAnimationFrame(updateRowsPerPage);
+    });
 
-    // Observe container and relevant parent elements
+    // Initial update
+    updateRowsPerPage();
+
+    // Observe both size changes and attribute changes
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
       
-      // Also observe parent elements up to two levels
+      // Also observe parent elements up to three levels
       let parent = containerRef.current.parentElement;
-      if (parent) {
-        resizeObserver.observe(parent);
-        const grandparent = parent.parentElement;
-        if (grandparent) {
-          resizeObserver.observe(grandparent);
+      for (let i = 0; i < 3; i++) {
+        if (parent) {
+          resizeObserver.observe(parent);
+          parent = parent.parentElement;
         }
       }
+      
+      // Watch for attribute changes that might affect size
+      mutationObserver.observe(containerRef.current, {
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+        subtree: true
+      });
     }
+
+    // Setup an interval as a fallback to check for changes
+    const intervalCheck = setInterval(updateRowsPerPage, 1000);
 
     // Cleanup
     return () => {
       resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      clearInterval(intervalCheck);
     };
-  }, []);
+  }, [containerHeight]);
 
-  // Force recalculation when visibility changes, but use debounce
+  // Force recalculation when visibility changes
   useEffect(() => {
-    // Skip if no container ref
-    if (!containerRef.current) return;
-    
-    // Update with delay to ensure layout has settled
-    const timeoutId = setTimeout(() => {
-      if (containerRef.current) {
-        const containerRect = containerRef.current.getBoundingClientRect();
-        if (containerRect.height > 0) {
-          setContainerHeight(containerRect.height);
-        }
-      }
-    }, 100);
-    
-    return () => clearTimeout(timeoutId);
+    // When column visibility changes, recalculate rows
+    if (containerRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      setContainerHeight(containerRect.height);
+    }
   }, [columnVisibility]);
 
   // Get unique status values
@@ -1498,8 +1469,4 @@ function RowActions({ row }: { row: Row<Transaction> }) {
       </DropdownMenu>
     </div>
   );
-}
-
-// Add a helper function to check if the file is correctly modified
-// This will only get added if there's a successful edit
-const noopChange = true; 
+} 

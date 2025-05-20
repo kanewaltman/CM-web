@@ -1,6 +1,4 @@
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
-import { ReferralsViewMode } from '@/components/ReferralsWidget';
-import { EarnViewMode } from '@/components/EarnWidget/EarnWidget';
 
 // Layout widget type definitions
 export interface LayoutWidget {
