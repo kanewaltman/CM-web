@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StandaloneWidgetDialog } from './StandaloneWidgetDialog';
 import { findWidgetById } from '@/lib/widgetRegistry';
 import { resetDialogOpenedState } from '@/lib/widgetDialogService';
+import { useDialogContentStore, clearDialogContentHistory } from '@/lib/dialogContentService';
 
 // Track which events have been handled globally
 const handledGlobalEvents = new Set<string>();
@@ -13,6 +14,9 @@ const handledGlobalEvents = new Set<string>();
 export function GlobalWidgetDialogRenderer() {
   const [openWidgets, setOpenWidgets] = useState<Record<string, boolean>>({});
   
+  // Access content store to clear history when all dialogs are closed
+  const { clearHistory } = useDialogContentStore();
+  
   useEffect(() => {
     // Listen for open widget dialog events
     const handleOpenDialog = (e: CustomEvent) => {
@@ -22,8 +26,82 @@ export function GlobalWidgetDialogRenderer() {
       // Get event ID if available
       const eventId = typeof e.detail?.eventId === 'string' ? e.detail.eventId : null;
       
-      // Skip if this event has already been handled globally
-      if (eventId && handledGlobalEvents.has(eventId)) {
+      // Skip events from container title clicks (source = 'container')
+      if (e.detail?.source === 'container') {
+        console.log('🌐 Skipping global renderer for container-sourced event:', widgetId);
+        return;
+      }
+      
+      // Check for special flags
+      const isDirectNavigation = e.detail?.isDirectNavigation === true;
+      const isInitialNavigation = e.detail?.isInitialNavigation === true;
+      const isForceOpen = e.detail?.forceOpen === true || 
+                         (eventId && eventId.startsWith('force-open-')) ||
+                         (eventId && eventId.startsWith('direct-nav-init-')) ||
+                         (eventId && eventId.startsWith('direct-nav-retry-'));
+      
+      // For initial URL navigation or force open, ALWAYS bypass protection
+      if (isInitialNavigation || isForceOpen) {
+        console.log('🌐 Direct or force navigation detected, bypassing all protection');
+        // Clear the protection flag to ensure dialog opens 
+        sessionStorage.removeItem('dialog_last_closed');
+        sessionStorage.removeItem('last_processed_dialog_event');
+        
+        // Prioritize handling this dialog immediately
+        // Special handling for direct navigation: highest priority handling
+        console.log('🌐 Prioritizing direct navigation or force open in global renderer:', widgetId);
+        
+        // If event has an ID, mark it as handled
+        if (eventId) {
+          handledGlobalEvents.add(eventId);
+        }
+        
+        // Check if the widget exists
+        const widgetInfo = findWidgetById(widgetId);
+        if (!widgetInfo) {
+          console.warn(`Widget with ID "${widgetId}" not found in registry.`);
+          return;
+        }
+        
+        // Save the asset in session storage if applicable
+        if (e.detail?.asset && widgetId === 'earn-stake') {
+          sessionStorage.setItem('selected_stake_asset', e.detail.asset);
+          console.log('🌐 Storing asset in session storage:', e.detail.asset);
+        }
+        
+        console.log('🌐 Forcefully opening widget from direct navigation in global renderer:', widgetId);
+        setOpenWidgets(prev => ({
+          ...prev,
+          [widgetId]: true
+        }));
+        
+        // Check if there's custom content to display immediately
+        if (e.detail?.initialContent) {
+          // Dispatch event to push content after dialog opens
+          setTimeout(() => {
+            const contentEvent = new CustomEvent('dialog-content-change', {
+              detail: {
+                type: 'push',
+                widgetId: widgetId,
+                contentId: e.detail.initialContent,
+                data: e.detail.contentData || {}
+              }
+            });
+            document.dispatchEvent(contentEvent);
+          }, 300);
+        }
+        
+        return;
+      }
+      
+      // Otherwise check if dialog was recently closed
+      if (!isForceOpen && !isDirectNavigation && wasDialogRecentlyClosed()) {
+        console.log('🌐 Dialog was recently closed, preventing immediate reopening:', widgetId);
+        return;
+      }
+      
+      // Skip if this event has already been handled globally (unless force open or initial navigation)
+      if (!isForceOpen && !isInitialNavigation && eventId && handledGlobalEvents.has(eventId)) {
         console.log('🌐 Event already handled globally:', eventId);
         return;
       }
@@ -105,6 +183,22 @@ export function GlobalWidgetDialogRenderer() {
               ...prev,
               [widgetId]: true
             }));
+            
+            // Check if there's custom content to display immediately
+            if (e.detail?.initialContent) {
+              // Dispatch event to push content after dialog opens
+              setTimeout(() => {
+                const contentEvent = new CustomEvent('dialog-content-change', {
+                  detail: {
+                    type: 'push',
+                    widgetId: widgetId,
+                    contentId: e.detail.initialContent,
+                    data: e.detail.contentData || {}
+                  }
+                });
+                document.dispatchEvent(contentEvent);
+              }, 300);
+            }
           } else {
             console.log('🌐 Dialog already handled by a widget container, skipping global renderer');
           }
@@ -118,7 +212,44 @@ export function GlobalWidgetDialogRenderer() {
         setOpenWidgets({});
         // Reset dialog state to ensure they can be reopened
         resetDialogOpenedState();
+        
+        // Record dialog close time to prevent immediate reopening
+        sessionStorage.setItem('dialog_last_closed', Date.now().toString());
+        
+        // Clear any specific asset storage
+        sessionStorage.removeItem('selected_stake_asset');
+        
+        // Clear dialog content history
+        clearHistory();
       }
+    };
+    
+    // Listen for global close all dialogs event (new)
+    const handleGlobalCloseAllDialogs = (e: CustomEvent) => {
+      console.log('🌐 Global dialog renderer received close-all command', e.detail);
+      
+      // Force close all widget dialogs
+      setOpenWidgets({});
+      
+      // Reset all dialog state completely
+      resetDialogOpenedState();
+      
+      // Clean up DOM state
+      document.body.classList.remove('widget-dialog-open');
+      document.querySelectorAll('.widget-dialog-open').forEach(el => {
+        el.classList.remove('widget-dialog-open');
+      });
+      
+      // Record dialog close time to prevent immediate reopening
+      sessionStorage.setItem('dialog_last_closed', Date.now().toString());
+      
+      // Clear any specific asset storage 
+      sessionStorage.removeItem('selected_stake_asset');
+      
+      // Clear dialog content history
+      clearHistory();
+      
+      console.log('🌐 All dialogs have been forcibly closed and state reset');
     };
     
     // Register event listeners
@@ -129,7 +260,7 @@ export function GlobalWidgetDialogRenderer() {
       document.removeEventListener('open-widget-dialog', handleOpenDialog as EventListener);
       document.removeEventListener('close-widget-dialogs', handleCloseDialogs);
     };
-  }, [openWidgets]);
+  }, [openWidgets, clearHistory]);
   
   // Handler for individual dialog open state changes
   const handleDialogOpenChange = (widgetId: string, open: boolean) => {
@@ -146,6 +277,8 @@ export function GlobalWidgetDialogRenderer() {
       
       if (!otherDialogsOpen) {
         resetDialogOpenedState();
+        // Clear content history for this widget
+        clearDialogContentHistory(widgetId);
       }
     } else {
       setOpenWidgets(prev => ({
