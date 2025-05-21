@@ -703,7 +703,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             }
           });
 
-          // First update existing widgets
+          // Track created widgets by ID to prevent duplicates
+          const createdWidgets = new Set<string>();
+
+          // Process all widgets in the layout
           layout.forEach(node => {
             const baseId = node.id.split('-')[0];
             const widgetType = widgetTypes[baseId];
@@ -714,7 +717,16 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
               return;
             }
 
-            // For performance widgets, always create new ones to avoid duplicates
+            // Skip duplicate widgets with same ID
+            if (createdWidgets.has(node.id)) {
+              console.log(`⚠️ Skipping duplicate widget with same ID: ${node.id}`);
+              return;
+            }
+            
+            // Track this widget ID as created
+            createdWidgets.add(node.id);
+
+            // For performance widgets, always create new ones
             if (widgetType === 'performance') {
               try {
                 const widgetElement = createWidget({
@@ -1268,8 +1280,8 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             orphanedPerformanceWidgets.forEach(widget => widget.remove());
           }
 
-          // Track performance widgets we've already created by ID prefix
-          const createdPerformanceWidgets = new Set<string>();
+          // Track created widgets by ID to prevent duplicates
+          const createdWidgets = new Set<string>();
           
           // Create and add all widgets from the layout
           layoutToApply.forEach((node: LayoutWidget) => {
@@ -1282,16 +1294,14 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
               return;
             }
 
-            // Skip duplicate performance widgets
-            if (widgetType === 'performance') {
-              // Check if we've already created a performance widget
-              if (createdPerformanceWidgets.has('performance')) {
-                console.log(`⚠️ Skipping duplicate performance widget: ${node.id}`);
-                return;
-              }
-              // Mark this performance widget as created
-              createdPerformanceWidgets.add('performance');
+            // Changed: Instead of skipping by type, track by full ID to allow multiple performance widgets
+            if (createdWidgets.has(node.id)) {
+              console.log(`⚠️ Skipping duplicate widget with same ID: ${node.id}`);
+              return;
             }
+            
+            // Track this widget ID as created
+            createdWidgets.add(node.id);
 
             // Pre-register viewState in widget registry if it exists
             if (node.viewState && baseWidgetId === 'performance') {
@@ -1366,7 +1376,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
                   noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
                   locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
-                });
+                } as ExtendedGridStackWidget);
               } else {
                 console.error('Failed to create widget element:', node.id);
               }
