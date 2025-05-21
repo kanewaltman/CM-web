@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useContext, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useContext, useLayoutEffect, useId, CSSProperties, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
@@ -22,8 +22,30 @@ import {
   ChevronsUpDown,
   SlidersHorizontal,
   Coins,
-  CircleSlash
+  CircleSlash,
+  GripVertical as GripVerticalIcon
 } from 'lucide-react';
+
+// DnD Kit imports
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
 import {
   Command,
   CommandEmpty,
@@ -80,11 +102,101 @@ const setLocalStorageItem = <T,>(key: string, value: T): void => {
   }
 };
 
+// Draggable Menu Item Component for FallbackColumnVisibility
+const DraggableMenuItem = ({ 
+  id, 
+  children, 
+  isChecked, 
+  onCheckedChange 
+}: { 
+  id: string, 
+  children: React.ReactNode, 
+  isChecked: boolean, 
+  onCheckedChange: (checked: boolean) => void 
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: false,
+  });
+  
+  const style: CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 50 : 0,
+  };
+  
+  const [internalChecked, setInternalChecked] = useState(isChecked); // For immediate checkbox interaction
+  
+  useEffect(() => {
+    setInternalChecked(isChecked);
+  }, [isChecked]);
+  
+  const handleDragHandleProps = useMemo(() => ({ ...attributes, ...listeners }), [attributes, listeners]); // Only allow drag on handle
+  
+  const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setInternalChecked(!internalChecked); // Update internal state immediately
+    requestAnimationFrame(() => { onCheckedChange(!internalChecked); }); // Debounce parent update to prevent flickering
+  }, [internalChecked, onCheckedChange]);
+  
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="flex items-center justify-between rounded-sm px-1 py-0.5"
+    >
+      {/* Clickable checkbox area */}
+      <div 
+        className="flex items-center gap-3 py-1.5 px-1.5 cursor-pointer flex-1 hover:bg-accent/50 rounded-sm"
+        onClick={handleCheckboxClick}
+      >
+        <div 
+          className="flex items-center justify-center h-4 w-4 relative"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCheckboxClick(e);
+          }}
+        >
+          {/* Custom checkbox appearance */}
+          <div 
+            className={cn(
+              "h-4 w-4 rounded-sm transition-colors flex items-center justify-center", 
+              internalChecked ? "bg-white" : "bg-muted"
+            )}
+          >
+            {internalChecked && (
+              <svg width="10" height="8" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 1L3.5 6.5L1 4" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+        </div>
+        
+        <span className="opacity-80 text-sm leading-[150%] select-none">
+          {children}
+        </span>
+      </div>
+      
+      {/* Drag handle - only this triggers dragging */}
+      <div 
+        {...handleDragHandleProps}
+        className="cursor-grab active:cursor-grabbing h-full px-2 flex items-center justify-center"
+      >
+        <GripVerticalIcon size={16} className="text-muted-foreground flex-shrink-0" />
+      </div>
+    </div>
+  );
+};
+
 // Create a simple placeholder component for column visibility when table isn't directly available
 const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
   // This is a minimal implementation that shows standard columns
   // We'll store visibility in localStorage to maintain consistency
   const storageKey = `markets-widget-${id}-column-visibility`;
+  const orderStorageKey = `markets-widget-${id}-column-order`;
   
   // Default columns - similar to what's in MarketsWidget
   const standardColumns = [
@@ -96,7 +208,7 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
     { id: 'volume', label: 'Volume' }
   ];
   
-  // Get stored visibility or use defaults (all visible except maybe some specific ones)
+  // Get stored visibility or use defaults
   const [columnVisibility, setColumnVisibility] = useState(() => {
     try {
       const stored = localStorage.getItem(storageKey);
@@ -105,6 +217,58 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
       return {};
     }
   });
+  
+  // Get stored column order or use default
+  const defaultOrder = standardColumns.map(col => col.id).filter(id => id !== 'pair');
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(orderStorageKey);
+      const parsedOrder = stored ? JSON.parse(stored) : defaultOrder;
+      return parsedOrder.filter((id: string) => id !== 'pair');
+    } catch (e) {
+      return defaultOrder;
+    }
+  });
+
+  // Initialize sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, {})
+  );
+  
+  // Handle drag end for column visibility menu reordering
+  function handleMenuDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (active && over && active.id !== over.id) {
+      setColumnOrder(prevOrder => {
+        const oldIndex = prevOrder.indexOf(active.id as string);
+        const newIndex = prevOrder.indexOf(over.id as string);
+        
+        // Create a new order by moving the item
+        const newOrder = arrayMove(prevOrder, oldIndex, newIndex);
+        
+        // Save to localStorage
+        try {
+          const fullOrder = ['pair', ...newOrder];
+          localStorage.setItem(orderStorageKey, JSON.stringify(newOrder));
+          
+          // Dispatch an event for column order change
+          const orderEvent = new CustomEvent('markets-column-order-changed', {
+            detail: {
+              widgetId: id,
+              order: fullOrder
+            }
+          });
+          document.dispatchEvent(orderEvent);
+        } catch (e) {
+          console.error('Error saving column order', e);
+        }
+        
+        return newOrder;
+      });
+    }
+  }
   
   // Update visibility and store it
   const toggleVisibility = (columnId: string) => {
@@ -137,25 +301,38 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
   
   return (
     <>
-      <DropdownMenuLabel className="text-sm">Customize Columns</DropdownMenuLabel>
+      <DropdownMenuLabel className="opacity-80 text-sm leading-[150%]">Customize Columns</DropdownMenuLabel>
+      <DropdownMenuSeparator />
       <div className="max-h-[300px] overflow-auto py-1">
-        {standardColumns.map(column => (
-          <DropdownMenuItem
-            key={column.id}
-            className="text-xs h-8 flex items-center px-2 justify-between cursor-pointer"
-            onSelect={(e) => {
-              e.preventDefault();
-              toggleVisibility(column.id);
-            }}
+        <DndContext
+          id={useId() + "-menu"}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragEnd={handleMenuDragEnd}
+          sensors={sensors}
+        >
+          <SortableContext
+            items={columnOrder}
+            strategy={verticalListSortingStrategy}
           >
-            <span>{column.label}</span>
-            <span className={`h-4 w-4 rounded-sm border border-primary ${columnVisibility[column.id] !== false ? 'bg-primary text-primary-foreground' : 'opacity-50'}`}>
-              {columnVisibility[column.id] !== false && (
-                <Check className="h-3 w-3" />
-              )}
-            </span>
-          </DropdownMenuItem>
-        ))}
+            {columnOrder.map((columnId) => {
+              // Look up column details
+              const column = standardColumns.find(col => col.id === columnId);
+              if (!column) return null;
+              
+              return (
+                <DraggableMenuItem
+                  key={column.id}
+                  id={column.id}
+                  isChecked={columnVisibility[column.id] !== false}
+                  onCheckedChange={(checked) => toggleVisibility(column.id)}
+                >
+                  {column.label}
+                </DraggableMenuItem>
+              );
+            })}
+          </SortableContext>
+        </DndContext>
       </div>
     </>
   );

@@ -1117,14 +1117,55 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
       }
     };
     
-    // Add event listener
+    // Handle column order changes from FallbackColumnVisibility
+    const handleColumnOrderChanged = (event: CustomEvent) => {
+      // Make sure this is for our widget
+      if (event.detail?.widgetId === id) {
+        console.log(`[MarketsWidget] Received column order update for ${id}:`, event.detail.order);
+        
+        // Update column order via proper channels
+        if (onColumnOrderChange) {
+          // External control
+          onColumnOrderChange(event.detail.order);
+        } else {
+          // Internal state
+          setInternalColumnOrder(event.detail.order);
+          
+          // Save to localStorage if needed
+          if (persistState) {
+            setStoredValue(instanceStorageKeys.COLUMN_ORDER, event.detail.order);
+          }
+          
+          // Trigger resize after a short delay
+          setTimeout(() => {
+            if (typeof updateColumnSizes === 'function') {
+              updateColumnSizes();
+            }
+          }, 50);
+        }
+      }
+    };
+    
+    // Add event listeners
     document.addEventListener('markets-column-visibility-changed', handleColumnVisibilityChanged as EventListener);
+    document.addEventListener('markets-column-order-changed', handleColumnOrderChanged as EventListener);
     
     // Cleanup
     return () => {
       document.removeEventListener('markets-column-visibility-changed', handleColumnVisibilityChanged as EventListener);
+      document.removeEventListener('markets-column-order-changed', handleColumnOrderChanged as EventListener);
     };
-  }, [id, onColumnVisibilityChange, persistState, instanceStorageKeys.COLUMN_VISIBILITY, updateColumnSizes]);
+  }, [
+    id, 
+    onColumnVisibilityChange, 
+    onColumnOrderChange, 
+    setInternalColumnVisibility, 
+    setInternalColumnOrder, 
+    persistState, 
+    instanceStorageKeys?.COLUMN_VISIBILITY, 
+    instanceStorageKeys?.COLUMN_ORDER, 
+    updateColumnSizes
+  ]);
   
   // Initialize the widget
   useEffect(() => {
