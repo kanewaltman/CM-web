@@ -177,7 +177,11 @@ export const TableWithAddAssetRow: React.FC<TableWithAddAssetRowProps> = ({
             const columnId = header.column.id;
             return columnVisibility[columnId] !== false && dynamicVisibility[columnId] !== false;
           })
-          .map((header: any) => renderTableHeader(header, currentTheme, columnSizes, () => getTotalColumnsWidth()))}
+          .map((header: any) => (
+            <React.Fragment key={header.id}>
+              {renderTableHeader(header, currentTheme, columnSizes, () => getTotalColumnsWidth())}
+            </React.Fragment>
+          ))}
       </div>
       
       <div 
@@ -221,7 +225,7 @@ export const TableWithAddAssetRow: React.FC<TableWithAddAssetRowProps> = ({
 
                 return (
                   <div
-                    key={cell.id}
+                    key={columnId + "-" + row.id}
                     className={cn(
                       "flex items-center px-4 py-2 overflow-hidden",
                       isNarrowColumn && "w-[30px] max-w-[30px] p-0",
@@ -252,12 +256,14 @@ export const TableWithAddAssetRow: React.FC<TableWithAddAssetRowProps> = ({
         {/* Add Asset Row - Only show when a list is active */}
         {activeListId && (
           <div
+            key="add-asset-row"
             className="absolute top-0 left-0 flex w-full"
             style={{
               transform: `translateY(${rowVirtualizer.getTotalSize()}px)`,
             }}
           >
             <div 
+              key="add-asset-row-inner"
               className="flex-1"
               style={{
                 minWidth: `${getTotalColumnsWidth()}px`,
