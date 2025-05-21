@@ -1,12 +1,39 @@
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { GridStack, GridStackNode, GridStackOptions } from 'gridstack';
 import { ExtendedGridStackWidget, LayoutWidget, DASHBOARD_LAYOUT_KEY } from '@/types/widgets';
-import { widgetStateRegistry } from '@/lib/widgetState';
+import { widgetStateRegistry, WidgetState, ReferralsWidgetState, EarnWidgetState } from '@/lib/widgetState';
 import { widgetTypes, WIDGET_REGISTRY, widgetComponents } from '@/lib/widgetRegistry';
 import { createWidget } from '@/components/WidgetRenderer';
 import { defaultLayout, mobileLayout, isValidLayout } from '@/layouts/dashboardLayout';
 import { PageType, getLayoutForPage } from '@/layouts';
 import { getPerformanceTitle } from '@/lib/widgetState';
+import { ReferralsViewMode } from '@/components/ReferralsWidget';
+import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
+
+// Define viewLabels for referrals view modes
+const viewLabels: Record<ReferralsViewMode, string> = {
+  'warp': 'Warp Background',
+  'grid': 'Animated Grid',
+  'ripple': 'Ripple Effect',
+  'dots': 'Dot Pattern'
+};
+
+// Type guard functions to improve type safety
+function isReferralsWidgetState(state: any): state is ReferralsWidgetState {
+  return state && typeof state === 'object' && 'setViewMode' in state && !('setVariant' in state);
+}
+
+function isPerformanceWidgetState(state: any): state is WidgetState {
+  return state && typeof state === 'object' && 'setViewMode' in state && 'setVariant' in state;
+}
+
+function isValidReferralsViewMode(mode: any): mode is ReferralsViewMode {
+  return mode && typeof mode === 'string' && (mode === 'warp' || mode === 'grid' || mode === 'ripple' || mode === 'dots');
+}
+
+function isValidPerformanceViewMode(mode: any): mode is ('split' | 'cumulative' | 'combined') {
+  return mode && typeof mode === 'string' && (mode === 'split' || mode === 'cumulative' || mode === 'combined');
+}
 
 interface UseGridStackOptions {
   isMobile: boolean;
@@ -227,7 +254,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     
     const serializedLayout = items
       .map((item): LayoutWidget | null => {
-        const node = item.gridstackNode;
+        const node = (item as HTMLElement & { gridstackNode?: GridStackNode }).gridstackNode;
         if (!node?.id) return null;
         
         const baseId = node.id.split('-')[0];
@@ -253,7 +280,6 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             } else if (state.type === 'referrals') {
               viewState = {
                 referralViewMode: state.viewMode,
-                viewMode: state.viewMode // Save both for backward compatibility
               };
             }
           } else if (widgetType === 'performance' && 'variant' in widgetState && 'viewMode' in widgetState) {
@@ -263,10 +289,9 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
               viewMode: widgetState.viewMode
             };
           } else if (widgetType === 'referrals' && 'viewMode' in widgetState) {
-            // For Referrals widget - ensure we save both fields
+            // For Referrals widget - ensure we save only referralViewMode 
             viewState = {
               referralViewMode: widgetState.viewMode,
-              viewMode: widgetState.viewMode // Save both for backward compatibility
             };
           }
         }
@@ -284,9 +309,12 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
       })
       .filter((item): item is LayoutWidget => item !== null);
 
-    if (isValidLayout(serializedLayout, Object.values(widgetTypes))) {
-      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(serializedLayout));
-      console.log('✅ Saved layout:', serializedLayout);
+    // Make sure we've processed the viewState correctly for each widget type
+    const sanitizedLayout = sanitizeLayoutWidget(serializedLayout);
+
+    if (isValidLayout(sanitizedLayout, Object.values(widgetTypes))) {
+      localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(sanitizedLayout));
+      console.log('✅ Saved layout:', sanitizedLayout);
     }
   }, [currentPage]);
   
@@ -447,65 +475,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                 const widgetState = widgetStateRegistry.get(node.id);
                 if (widgetState) {
                   console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
-                  // Handle performance widget state
-                  if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
-                    if (node.viewState.chartVariant) {
-                      widgetState.setVariant(node.viewState.chartVariant);
-                    }
-                    if (node.viewState.viewMode) {
-                      widgetState.setViewMode(node.viewState.viewMode as 'split' | 'cumulative' | 'combined');
-                    }
-                  }
-                  
-                  // Handle referrals widget state - only apply referralViewMode for referrals widgets
-                  if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
-                    // Use referralViewMode with precedence over viewMode
-                    const referralsMode = node.viewState.referralViewMode || 
-                                         (Object.prototype.hasOwnProperty.call(viewLabels, node.viewState.viewMode) ? 
-                                          node.viewState.viewMode : null);
-                    
-                    if (referralsMode) {
-                      console.log(`📊 Setting referrals view mode to ${referralsMode}`);
-                      widgetState.setViewMode(referralsMode);
-                      
-                      // Ensure both viewMode and referralViewMode are set in viewState for consistency
-                      node.viewState.viewMode = referralsMode;
-                      node.viewState.referralViewMode = referralsMode;
-                    }
-                  }
+                  updateWidgetViewState(widgetType, node, widgetState);
                 } else {
                   // If widget state doesn't exist yet, ensure we set it with type-appropriate fields
-                  if (widgetType === 'performance') {
-                    console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
-                    widgetStateRegistry.set(node.id, {
-                      variant: node.viewState.chartVariant,
-                      viewMode: node.viewState.viewMode || 'split',
-                      title: getPerformanceTitle(node.viewState.chartVariant),
-                      dateRange: {
-                        from: new Date(),
-                        to: new Date()
-                      },
-                      setVariant: () => {},  // Placeholder - will be replaced by actual component
-                      setViewMode: () => {},  // Placeholder - will be replaced by actual component
-                      setTitle: () => {},    // Will be replaced when component mounts
-                      setDateRange: () => {}, // Will be replaced when component mounts
-                      subscribe: () => { return () => {}; }  // Add placeholder subscribe method
-                    });
-                  } else if (widgetType === 'referrals') {
-                    // Handle referrals widget specifically
-                    // Default to 'warp' for referrals widgets if not specified properly
-                    const referralsViewMode = node.viewState.referralViewMode || 'warp';
-                    console.log(`📊 Setting initial referrals viewState for ${node.id}: ${referralsViewMode}`);
-                    
-                    // Empty placeholder state that will be replaced when component mounts
-                    widgetStateRegistry.set(node.id, {
-                      viewMode: referralsViewMode,
-                      title: 'Referrals',
-                      setViewMode: () => {},
-                      setTitle: () => {},
-                      subscribe: () => { return () => {}; }
-                    });
-                  }
+                  createInitialWidgetState(widgetType, node);
                 }
               }
               
@@ -609,10 +582,25 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
 
         // Get widget state if it exists
         const widgetState = widgetStateRegistry.get(node.id);
-        const viewState = widgetState ? { 
-          chartVariant: widgetState.variant,
-          viewMode: widgetState.viewMode 
-        } : undefined;
+        
+        // Initialize an empty viewState object
+        let viewState: LayoutWidget['viewState'] = {};
+        
+        // Handle different widget types differently
+        if (widgetState) {
+          if (widgetType === 'performance' && 'variant' in widgetState && 'viewMode' in widgetState) {
+            // For Performance widget
+            viewState = {
+              chartVariant: widgetState.variant,
+              viewMode: widgetState.viewMode
+            };
+          } else if (widgetType === 'referrals' && 'viewMode' in widgetState) {
+            // For Referrals widget - ensure we save only referralViewMode 
+            viewState = {
+              referralViewMode: widgetState.viewMode as ReferralsViewMode,
+            };
+          }
+        }
 
         return {
           id: node.id,
@@ -623,11 +611,13 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           minW: widgetConfig.minSize.w,
           minH: widgetConfig.minSize.h,
           viewState
-        };
+        } as LayoutWidget;
       })
       .filter((item): item is LayoutWidget => item !== null);
 
-    return JSON.stringify(serializedLayout);
+    // Make sure we've processed the viewState correctly for each widget type
+    const sanitizedLayout = sanitizeLayoutWidget(serializedLayout);
+    return JSON.stringify(sanitizedLayout);
   }, []);
 
   // Paste layout from clipboard
@@ -795,29 +785,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
               if (node.viewState) {
                 const widgetState = widgetStateRegistry.get(node.id);
                 if (widgetState) {
-                  // Handle performance widget state
-                  if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
-                    if (node.viewState.chartVariant) {
-                      widgetState.setVariant(node.viewState.chartVariant);
-                    }
-                  }
-                  
-                  // Handle referrals widget state
-                  if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
-                    if (node.viewState.referralViewMode) {
-                      widgetState.setViewMode(node.viewState.referralViewMode);
-                      
-                      // Also ensure both viewMode and referralViewMode are saved in layout
-                      if (node.viewState && !node.viewState.viewMode) {
-                        node.viewState.viewMode = node.viewState.referralViewMode;
-                      }
-                    } else if (node.viewState.viewMode) {
-                      widgetState.setViewMode(node.viewState.viewMode);
-                      
-                      // Also ensure referralViewMode is set
-                      node.viewState.referralViewMode = node.viewState.viewMode;
-                    }
-                  }
+                  updateWidgetViewState(widgetType, node, widgetState);
                 }
               }
 
@@ -863,32 +831,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   if (node.viewState) {
                     const widgetState = widgetStateRegistry.get(node.id);
                     if (widgetState) {
-                      // Handle performance widget state
-                      if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
-                        if (node.viewState.chartVariant) {
-                          widgetState.setVariant(node.viewState.chartVariant);
-                        }
-                        if (node.viewState.viewMode) {
-                          widgetState.setViewMode(node.viewState.viewMode as 'split' | 'cumulative' | 'combined');
-                        }
-                      }
-                      
-                      // Handle referrals widget state
-                      if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
-                        if (node.viewState.referralViewMode) {
-                          widgetState.setViewMode(node.viewState.referralViewMode);
-                          
-                          // Also ensure both viewMode and referralViewMode are saved in layout
-                          if (node.viewState && !node.viewState.viewMode) {
-                            node.viewState.viewMode = node.viewState.referralViewMode;
-                          }
-                        } else if (node.viewState.viewMode) {
-                          widgetState.setViewMode(node.viewState.viewMode);
-                          
-                          // Also ensure referralViewMode is set
-                          node.viewState.referralViewMode = node.viewState.viewMode;
-                        }
-                      }
+                      updateWidgetViewState(widgetType, node, widgetState);
                     }
                   }
                 }
@@ -1154,6 +1097,8 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             // Start a short delay timer to ensure we capture the most recent view mode
             // This is necessary because the resize might happen right after a view mode change
             setTimeout(() => {
+              if (!el.id) return; // Skip if id is undefined
+              
               const widgetState = widgetStateRegistry.get(el.id);
               if (widgetState && 'viewMode' in widgetState) {
                 // Create a map with just this widget's state to update the layout
@@ -1351,20 +1296,16 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             // Pre-register viewState in widget registry if it exists
             if (node.viewState && baseWidgetId === 'performance') {
               console.log(`🔄 Pre-registering viewState for ${node.id}:`, node.viewState);
-              widgetStateRegistry.set(node.id, {
-                variant: node.viewState.chartVariant,
-                viewMode: node.viewState.viewMode || 'split',
-                title: getPerformanceTitle(node.viewState.chartVariant),
-                dateRange: {
-                  from: new Date(),
-                  to: new Date()
-                },
-                setVariant: () => {},  // Will be replaced when component mounts
-                setViewMode: () => {},  // Will be replaced when component mounts
-                setTitle: () => {},    // Will be replaced when component mounts
-                setDateRange: () => {}, // Will be replaced when component mounts
-                subscribe: () => { return () => {}; }  // Add placeholder subscribe method
-              });
+              const chartVariant = node.viewState.chartVariant || 'revenue';
+              const viewMode = node.viewState.viewMode || 'split';
+              const title = getPerformanceTitle(chartVariant as ChartVariant);
+              
+              const initialState = new WidgetState(
+                chartVariant as ChartVariant,
+                title,
+                viewMode as 'split' | 'cumulative' | 'combined'
+              );
+              widgetStateRegistry.set(node.id, initialState);
             }
 
             try {
@@ -1401,65 +1342,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   const widgetState = widgetStateRegistry.get(node.id);
                   if (widgetState) {
                     console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
-                    // Handle performance widget state
-                    if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
-                      if (node.viewState.chartVariant) {
-                        widgetState.setVariant(node.viewState.chartVariant);
-                      }
-                      if (node.viewState.viewMode) {
-                        widgetState.setViewMode(node.viewState.viewMode as 'split' | 'cumulative' | 'combined');
-                      }
-                    }
-                    
-                    // Handle referrals widget state - only apply referralViewMode for referrals widgets
-                    if (widgetType === 'referrals' && 'setViewMode' in widgetState) {
-                      // Use referralViewMode with precedence over viewMode
-                      const referralsMode = node.viewState.referralViewMode || 
-                                           (Object.prototype.hasOwnProperty.call(viewLabels, node.viewState.viewMode) ? 
-                                            node.viewState.viewMode : null);
-                      
-                      if (referralsMode) {
-                        console.log(`📊 Setting referrals view mode to ${referralsMode}`);
-                        widgetState.setViewMode(referralsMode);
-                        
-                        // Ensure both viewMode and referralViewMode are set in viewState for consistency
-                        node.viewState.viewMode = referralsMode;
-                        node.viewState.referralViewMode = referralsMode;
-                      }
-                    }
+                    updateWidgetViewState(widgetType, node, widgetState);
                   } else {
                     // If widget state doesn't exist yet, ensure we set it with type-appropriate fields
-                    if (widgetType === 'performance') {
-                      console.log(`📊 Setting initial viewState for ${node.id}:`, node.viewState);
-                      widgetStateRegistry.set(node.id, {
-                        variant: node.viewState.chartVariant,
-                        viewMode: node.viewState.viewMode || 'split',
-                        title: getPerformanceTitle(node.viewState.chartVariant),
-                        dateRange: {
-                          from: new Date(),
-                          to: new Date()
-                        },
-                        setVariant: () => {},  // Placeholder - will be replaced by actual component
-                        setViewMode: () => {},  // Placeholder - will be replaced by actual component
-                        setTitle: () => {},    // Will be replaced when component mounts
-                        setDateRange: () => {}, // Will be replaced when component mounts
-                        subscribe: () => { return () => {}; }  // Add placeholder subscribe method
-                      });
-                    } else if (widgetType === 'referrals') {
-                      // Handle referrals widget specifically
-                      // Default to 'warp' for referrals widgets if not specified properly
-                      const referralsViewMode = node.viewState.referralViewMode || 'warp';
-                      console.log(`📊 Setting initial referrals viewState for ${node.id}: ${referralsViewMode}`);
-                      
-                      // Empty placeholder state that will be replaced when component mounts
-                      widgetStateRegistry.set(node.id, {
-                        viewMode: referralsViewMode,
-                        title: 'Referrals',
-                        setViewMode: () => {},
-                        setTitle: () => {},
-                        subscribe: () => { return () => {}; }
-                      });
-                    }
+                    createInitialWidgetState(widgetType, node);
                   }
                 }
                 
@@ -1616,4 +1502,101 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
     compactGrid,
     saveLayout
   };
-}; 
+};
+
+// Type safe function to handle widget viewModes
+function updateWidgetViewState(widgetType: string, node: any, widgetState: any): void {
+  // Handle performance widget state
+  if (widgetType === 'performance' && isPerformanceWidgetState(widgetState)) {
+    if (node.viewState?.chartVariant) {
+      widgetState.setVariant(node.viewState.chartVariant);
+    }
+    if (node.viewState?.viewMode && isValidPerformanceViewMode(node.viewState.viewMode)) {
+      widgetState.setViewMode(node.viewState.viewMode);
+    }
+  }
+  
+  // Handle referrals widget state
+  if (widgetType === 'referrals' && isReferralsWidgetState(widgetState)) {
+    let referralsMode: ReferralsViewMode | null = null;
+    
+    if (node.viewState?.referralViewMode && isValidReferralsViewMode(node.viewState.referralViewMode)) {
+      referralsMode = node.viewState.referralViewMode;
+    } else if (node.viewState?.viewMode && isValidReferralsViewMode(node.viewState.viewMode)) {
+      referralsMode = node.viewState.viewMode;
+    }
+    
+    if (referralsMode) {
+      widgetState.setViewMode(referralsMode);
+      
+      // For consistency in storage, ensure both are set correctly
+      if (node.viewState) {
+        node.viewState.referralViewMode = referralsMode;
+      }
+    }
+  }
+}
+
+// Function to safely create an initial widget state
+function createInitialWidgetState(widgetType: string, node: any): void {
+  if (widgetType === 'performance' && node.viewState) {
+    const chartVariant = node.viewState.chartVariant || 'revenue';
+    const viewMode = node.viewState.viewMode || 'split';
+    const title = getPerformanceTitle(chartVariant);
+    
+    const initialState = new WidgetState(
+      chartVariant,
+      title, 
+      viewMode
+    );
+    widgetStateRegistry.set(node.id, initialState);
+  } 
+  else if (widgetType === 'referrals' && node.viewState) {
+    // Default to 'warp' for referrals widgets if not specified properly
+    const referralsViewMode = (node.viewState.referralViewMode && isValidReferralsViewMode(node.viewState.referralViewMode))
+      ? node.viewState.referralViewMode 
+      : 'warp';
+
+    console.log(`📊 Setting initial referrals viewState for ${node.id}: ${referralsViewMode}`);
+    
+    // Create a proper ReferralsWidgetState instance
+    const initialState = new ReferralsWidgetState(referralsViewMode, 'Referrals', node.id || '');
+    widgetStateRegistry.set(node.id, initialState);
+
+    // Ensure viewState consistency
+    if (node.viewState) {
+      node.viewState.referralViewMode = referralsViewMode;
+    }
+  }
+}
+
+// Fix for the viewState type incompatibility in various places
+function sanitizeLayoutWidget(layout: any[]): any[] {
+  return layout.map(node => {
+    // Make a shallow copy so we don't modify the original
+    const result = {...node};
+    
+    // If this is a referrals widget with a referralViewMode, ensure we handle it correctly
+    if (result.id && result.id.startsWith('referrals') && result.viewState) {
+      if (result.viewState.referralViewMode) {
+        // Only keep referralViewMode for referrals widgets
+        result.viewState = {
+          referralViewMode: result.viewState.referralViewMode
+        };
+      }
+    }
+    
+    // For performance widgets, only keep the appropriate viewMode
+    if (result.id && result.id.startsWith('performance') && result.viewState) {
+      if (result.viewState.viewMode && isValidPerformanceViewMode(result.viewState.viewMode)) {
+        // Only keep chartVariant and viewMode for performance widgets
+        result.viewState = {
+          chartVariant: result.viewState.chartVariant,
+          viewMode: result.viewState.viewMode
+        };
+      }
+    }
+    
+    return result;
+  });
+} 

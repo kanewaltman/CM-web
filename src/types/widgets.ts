@@ -69,7 +69,7 @@ export interface LayoutWidget {
   minH?: number;
   viewState?: {
     chartVariant?: ChartVariant;
-    viewMode?: 'split' | 'cumulative' | 'combined';
+    viewMode?: 'split' | 'cumulative' | 'combined' | ReferralsViewMode;
     referralViewMode?: ReferralsViewMode;
   };
 }
