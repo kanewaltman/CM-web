@@ -346,6 +346,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           remainingWidgets.forEach(widget => widget.remove());
         }
         
+        // Additionally, find and remove any orphaned performance widgets in the DOM
+        const orphanedPerformanceWidgets = document.querySelectorAll('[gs-id^="performance"]');
+        orphanedPerformanceWidgets.forEach(widget => widget.remove());
+        
         // Store the final layout in localStorage without preserving old viewStates
         localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
         
@@ -444,12 +448,12 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                 if (widgetState) {
                   console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
                   // Handle performance widget state
-                  if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                  if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
                     if (node.viewState.chartVariant) {
                       widgetState.setVariant(node.viewState.chartVariant);
                     }
                     if (node.viewState.viewMode) {
-                      widgetState.setViewMode(node.viewState.viewMode);
+                      widgetState.setViewMode(node.viewState.viewMode as 'split' | 'cumulative' | 'combined');
                     }
                   }
                   
@@ -682,6 +686,33 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           // Track which widgets we've updated
           const updatedWidgets = new Set<string>();
           
+          // Step 1: Remove ALL existing performance widgets from GridStack
+          currentWidgets.forEach(widget => {
+            const widgetId = widget.gridstackNode?.id;
+            if (widgetId && widgetId.includes('performance')) {
+              // Clean up widget state before removing
+              widgetStateRegistry.delete(widgetId);
+              grid.removeWidget(widget, false);
+            }
+          });
+          
+          // Step 2: Remove ANY orphaned performance widgets in the DOM that might not be in GridStack
+          const orphanedPerformanceWidgets = document.querySelectorAll('[gs-id^="performance"]');
+          console.log(`🧹 Removing ${orphanedPerformanceWidgets.length} orphaned performance widgets from DOM`);
+          orphanedPerformanceWidgets.forEach(widget => {
+            widget.remove();
+          });
+          
+          // Step 3: Remove any OTHER performance elements that might be in the DOM without proper attributes
+          const performanceElements = document.querySelectorAll('.grid-stack-item');
+          performanceElements.forEach(element => {
+            const idAttr = element.getAttribute('gs-id');
+            if (idAttr && idAttr.includes('performance')) {
+              console.log(`🧹 Removing performance element with gs-id: ${idAttr}`);
+              element.remove();
+            }
+          });
+
           // First update existing widgets
           layout.forEach(node => {
             const baseId = node.id.split('-')[0];
@@ -690,6 +721,58 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             
             if (!widgetConfig) {
               console.warn('❌ Unknown widget type:', widgetType);
+              return;
+            }
+
+            // For performance widgets, always create new ones to avoid duplicates
+            if (widgetType === 'performance') {
+              try {
+                const widgetElement = createWidget({
+                  widgetType,
+                  widgetId: node.id,
+                  x: node.x,
+                  y: node.y,
+                  w: Math.max(node.w, widgetConfig.minSize.w),
+                  h: Math.max(node.h, widgetConfig.minSize.h),
+                  minW: widgetConfig.minSize.w,
+                  minH: widgetConfig.minSize.h
+                });
+
+                if (widgetElement) {
+                  grid.addWidget({
+                    el: widgetElement,
+                    id: node.id,
+                    x: node.x,
+                    y: node.y,
+                    w: Math.max(node.w, widgetConfig.minSize.w),
+                    h: Math.max(node.h, widgetConfig.minSize.h),
+                    minW: widgetConfig.minSize.w,
+                    minH: widgetConfig.minSize.h,
+                    autoPosition: false,
+                    // Only lock if on mobile or not on dashboard or globally locked
+                    noMove: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                    noResize: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true,
+                    locked: isMobile || currentPage !== 'dashboard' || (window as any).isLayoutLocked === true
+                  } as ExtendedGridStackWidget);
+
+                  // Update widget state if it exists
+                  if (node.viewState) {
+                    const widgetState = widgetStateRegistry.get(node.id);
+                    if (widgetState && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
+                      if (node.viewState.chartVariant) {
+                        widgetState.setVariant(node.viewState.chartVariant);
+                      }
+                      if (node.viewState.viewMode) {
+                        widgetState.setViewMode(node.viewState.viewMode as 'split' | 'cumulative' | 'combined');
+                      }
+                    }
+                  }
+
+                  updatedWidgets.add(node.id);
+                }
+              } catch (error) {
+                console.error('Failed to create performance widget:', node.id, error);
+              }
               return;
             }
 
@@ -713,7 +796,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                 const widgetState = widgetStateRegistry.get(node.id);
                 if (widgetState) {
                   // Handle performance widget state
-                  if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                  if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
                     if (node.viewState.chartVariant) {
                       widgetState.setVariant(node.viewState.chartVariant);
                     }
@@ -781,9 +864,12 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                     const widgetState = widgetStateRegistry.get(node.id);
                     if (widgetState) {
                       // Handle performance widget state
-                      if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                      if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
                         if (node.viewState.chartVariant) {
                           widgetState.setVariant(node.viewState.chartVariant);
+                        }
+                        if (node.viewState.viewMode) {
+                          widgetState.setViewMode(node.viewState.viewMode as 'split' | 'cumulative' | 'combined');
                         }
                       }
                       
@@ -1230,6 +1316,16 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           }
           console.log('🔄 Applying layout with widgets:', layoutToApply.length);
           
+          // First, ensure there are no orphaned performance widgets in the DOM
+          const orphanedPerformanceWidgets = document.querySelectorAll('[gs-id^="performance"]');
+          if (orphanedPerformanceWidgets.length > 0) {
+            console.log(`🧹 Removing ${orphanedPerformanceWidgets.length} orphaned performance widgets before initialization`);
+            orphanedPerformanceWidgets.forEach(widget => widget.remove());
+          }
+
+          // Track performance widgets we've already created by ID prefix
+          const createdPerformanceWidgets = new Set<string>();
+          
           // Create and add all widgets from the layout
           layoutToApply.forEach((node: LayoutWidget) => {
             // Get the base widget type from the ID (handle both default and dynamic IDs)
@@ -1239,6 +1335,17 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             if (!widgetComponents[widgetType]) {
               console.warn('❌ Unknown widget type:', widgetType);
               return;
+            }
+
+            // Skip duplicate performance widgets
+            if (widgetType === 'performance') {
+              // Check if we've already created a performance widget
+              if (createdPerformanceWidgets.has('performance')) {
+                console.log(`⚠️ Skipping duplicate performance widget: ${node.id}`);
+                return;
+              }
+              // Mark this performance widget as created
+              createdPerformanceWidgets.add('performance');
             }
 
             // Pre-register viewState in widget registry if it exists
@@ -1295,12 +1402,12 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
                   if (widgetState) {
                     console.log(`📊 Applying viewState to ${node.id}:`, node.viewState);
                     // Handle performance widget state
-                    if (widgetType === 'performance' && 'setVariant' in widgetState) {
+                    if (widgetType === 'performance' && 'setVariant' in widgetState && 'setViewMode' in widgetState) {
                       if (node.viewState.chartVariant) {
                         widgetState.setVariant(node.viewState.chartVariant);
                       }
                       if (node.viewState.viewMode) {
-                        widgetState.setViewMode(node.viewState.viewMode);
+                        widgetState.setViewMode(node.viewState.viewMode as 'split' | 'cumulative' | 'combined');
                       }
                     }
                     
