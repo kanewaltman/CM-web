@@ -1080,7 +1080,7 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
           hardLimit={40}
           density={0.0008}
           restitution={0.4}
-          onTokenClick={handleTokenClick}
+          // TODO: Leave commented - onTokenClick={handleTokenClick}
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
