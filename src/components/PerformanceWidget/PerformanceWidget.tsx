@@ -350,13 +350,13 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     onDateRangeChange
   ]);
 
-  // Load variant from localStorage once on mount
+  // Load variant and viewMode from localStorage once on mount
   useEffect(() => {
     // Only run once
     if (!widgetId) return;
     
     try {
-      // Check localStorage for the correct variant
+      // Check localStorage for the correct variant and viewMode
       const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
       const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
       if (!savedLayout) return;
@@ -364,20 +364,35 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
       const layout = JSON.parse(savedLayout);
       const widgetData = layout.find((item: any) => item.id === widgetId);
       
-      if (widgetData?.viewState?.chartVariant) {
-        const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
-        console.log(`PerformanceWidget: Direct init from localStorage for ${widgetId}:`, storedVariant);
+      if (widgetData?.viewState) {
+        // Handle variant if present
+        if (widgetData.viewState.chartVariant) {
+          const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
+          console.log(`PerformanceWidget: Direct init variant from localStorage for ${widgetId}:`, storedVariant);
+          
+          // Set the variant in state
+          setSelectedVariant(storedVariant);
+          
+          // Notify parent of variant change
+          onVariantChange?.(storedVariant);
+          
+          // Update title
+          if (onTitleChange) {
+            const newTitle = chartLabels[storedVariant];
+            onTitleChange(newTitle);
+          }
+        }
         
-        // Set the variant in state
-        setSelectedVariant(storedVariant);
-        
-        // Notify parent of variant change
-        onVariantChange?.(storedVariant);
-        
-        // Update title
-        if (onTitleChange) {
-          const newTitle = chartLabels[storedVariant];
-          onTitleChange(newTitle);
+        // Handle viewMode if present
+        if (widgetData.viewState.viewMode) {
+          const storedViewMode = widgetData.viewState.viewMode as WidgetViewMode;
+          console.log(`PerformanceWidget: Direct init viewMode from localStorage for ${widgetId}:`, storedViewMode);
+          
+          // Set the viewMode in state
+          setViewMode(storedViewMode);
+          
+          // Notify parent of viewMode change
+          onViewModeChange?.(storedViewMode);
         }
         
         // Force re-render
@@ -387,16 +402,16 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
         const widgetContainer = document.querySelector(`[gs-id="${widgetId}"]`);
         if (widgetContainer) {
           const titleElement = widgetContainer.querySelector('.widget-title');
-          if (titleElement) {
-            const correctTitle = chartLabels[storedVariant];
+          if (titleElement && widgetData.viewState.chartVariant) {
+            const correctTitle = chartLabels[widgetData.viewState.chartVariant as ChartVariant];
             titleElement.textContent = correctTitle;
           }
         }
       }
     } catch (error) {
-      console.error('Error initializing variant from localStorage:', error);
+      console.error('Error initializing from localStorage:', error);
     }
-  }, [widgetId, onVariantChange, onTitleChange, chartLabels]);
+  }, [widgetId, onVariantChange, onViewModeChange, onTitleChange, chartLabels]);
 
   // Update local state when defaultVariant changes from parent props
   useEffect(() => {
@@ -661,12 +676,39 @@ export const PerformanceWidget: React.FC<PerformanceWidgetProps> = ({
     } else {
       // If no parent handler, save locally as fallback
       try {
-        localStorage.setItem('performance_widget_view_mode', widgetMode);
+        // Save in widget-specific localStorage key
+        if (widgetId) {
+          localStorage.setItem(`widget_${widgetId}_view_mode`, widgetMode);
+          
+          // Update the dashboard layout directly 
+          const DASHBOARD_LAYOUT_KEY = 'dashboard_layout';
+          const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+          if (savedLayout) {
+            const layout = JSON.parse(savedLayout);
+            const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+            
+            if (widgetIndex !== -1) {
+              console.log(`PerformanceWidget: Updating layout for widget ${widgetId} with viewMode: ${widgetMode}`);
+              // Create or update viewState object
+              layout[widgetIndex].viewState = {
+                ...(layout[widgetIndex].viewState || {}),
+                viewMode: widgetMode,
+                // Preserve chartVariant if it exists
+                chartVariant: layout[widgetIndex].viewState?.chartVariant || selectedVariant
+              };
+              
+              localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+            }
+          }
+        } else {
+          // Fallback for legacy widgets without ID
+          localStorage.setItem('performance_widget_view_mode', widgetMode);
+        }
       } catch (error) {
         console.error('Failed to save view mode to localStorage:', error);
       }
     }
-  }, [onViewModeChange]);
+  }, [onViewModeChange, widgetId, selectedVariant]);
 
   const handleDateRangeChange = useCallback((newDate: { from: Date; to: Date } | undefined) => {
     if (!newDate?.from || !newDate?.to) return;

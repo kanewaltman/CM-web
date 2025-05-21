@@ -147,11 +147,21 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
           const layout = JSON.parse(savedLayout);
           const widgetData = layout.find((item: any) => item.id === widgetId);
           
-          if (widgetData?.viewState?.chartVariant) {
-            const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
-            console.log(`Widget ${widgetId} initial variant from localStorage:`, storedVariant);
-            initialVariant = storedVariant;
-            initialTitle = getPerformanceTitle(storedVariant);
+          if (widgetData?.viewState) {
+            // Get variant from layout
+            if (widgetData.viewState.chartVariant) {
+              const storedVariant = widgetData.viewState.chartVariant as ChartVariant;
+              console.log(`Widget ${widgetId} initial variant from localStorage:`, storedVariant);
+              initialVariant = storedVariant;
+              initialTitle = getPerformanceTitle(storedVariant);
+            }
+            
+            // Get viewMode from layout - this is critical for maintaining separate viewModes
+            if (widgetData.viewState.viewMode) {
+              const storedViewMode = widgetData.viewState.viewMode as 'split' | 'cumulative' | 'combined';
+              console.log(`Widget ${widgetId} initial viewMode from localStorage:`, storedViewMode);
+              initialViewMode = storedViewMode;
+            }
           }
         }
       } catch (error) {
@@ -412,47 +422,37 @@ export const PerformanceWidgetWrapper: React.FC<PerformanceWidgetWrapperProps> =
     }
   }, [widgetId, onRemove, WidgetComponent, widgetState, variant]);
 
+  // Synchronize viewMode changes with layout to ensure persistence
   const handleViewModeChange = useCallback((newViewMode: 'split' | 'cumulative' | 'combined') => {
-    if (!newViewMode) return;
-    
-    // Only log in development mode and occasionally
-    if (process.env.NODE_ENV === 'development' && (++operationCount.current % 1000 === 0)) {
-      console.log('PerformanceWidgetWrapper: view mode changing to:', newViewMode);
-    }
-    
-    // Update local state first for immediate UI feedback
-    setViewMode(newViewMode);
-    
-    // Then update the shared state
+    // Update the widget state
     widgetState.setViewMode(newViewMode);
+    setViewMode(newViewMode);
 
-    // Save to layout data
-    const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
-    if (savedLayout) {
-      try {
-        const layout = JSON.parse(savedLayout);
-        const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
-        if (widgetIndex !== -1) {
-          layout[widgetIndex] = {
-            ...layout[widgetIndex],
-            viewState: {
-              ...layout[widgetIndex].viewState,
-              chartVariant: widgetState.variant,
-              viewMode: newViewMode
-            }
-          };
-          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
-        }
-      } catch (error) {
-        console.error('Failed to save widget view state:', error);
-      }
-    }
-    
-    // Also store in a simple localStorage key for redundancy
+    // Store in widget-specific localStorage for backup
     try {
       localStorage.setItem(`widget_${widgetId}_view_mode`, newViewMode);
+      
+      // Also update the dashboard layout in localStorage to ensure persistence
+      const savedLayout = localStorage.getItem(DASHBOARD_LAYOUT_KEY);
+      if (savedLayout) {
+        const layout = JSON.parse(savedLayout);
+        const widgetIndex = layout.findIndex((item: any) => item.id === widgetId);
+        
+        if (widgetIndex !== -1) {
+          console.log(`Updating layout for widget ${widgetId} with viewMode: ${newViewMode}`);
+          // Create or update viewState object
+          layout[widgetIndex].viewState = {
+            ...(layout[widgetIndex].viewState || {}),
+            viewMode: newViewMode,
+            // Preserve chartVariant if it exists
+            chartVariant: layout[widgetIndex].viewState?.chartVariant || widgetState.variant
+          };
+          
+          localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layout));
+        }
+      }
     } catch (error) {
-      console.error('Failed to save view mode to localStorage:', error);
+      console.error('Error saving viewMode to localStorage:', error);
     }
   }, [widgetId, widgetState]);
 
