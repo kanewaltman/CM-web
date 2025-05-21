@@ -730,7 +730,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
 
   // Determine the component to render based on the view mode
   const contentComponent = effectiveViewMode === 'ripple' ? (
-    <RippleView />
+    <RippleView widgetId={props.widgetId} />
   ) : effectiveViewMode === 'cards' ? (
     <EarnWidgetStakingOptions forcedTheme={forcedTheme} widgetId={props.widgetId} />
   ) : (
@@ -756,79 +756,95 @@ export const EarnWidgetWrapper: React.FC<EarnWidgetProps> = (props) => {
   return <EarnWidget {...props} />;
 };
 
-// Replace the entire RippleView component
-const RippleView: React.FC = () => {
+// Update the RippleView component to accept props
+const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
   const { resolvedTheme } = useTheme();
   const [hasError, setHasError] = useState(false);
   const [featuredToken, setFeaturedToken] = useState<string>(
     stakingTokens[Math.floor(Math.random() * stakingTokens.length)]
   );
-  const [showPlans, setShowPlans] = useState<boolean>(false);
-  const [userPlans, setUserPlans] = useState<StakingPlan[]>([]);
+  
+  // Initialize showActivePlans by checking for active plans immediately
+  const [showActivePlans, setShowActivePlans] = useState<boolean>(() => {
+    // Check if there are any active plans on initial render
+    const plans = stakingPlansManager.getPlans();
+    return plans.some(plan => plan.isActive);
+  });
+  
   const ignoreNextHashChange = useRef(false);
   // Add refresh interval ref
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
+  
+  // Get the widget state from the registry
+  const widgetState = useMemo(() => {
+    if (!widgetStateRegistry.has(widgetId)) {
+      const defaultState = createDefaultEarnWidgetState('ripple', widgetId);
+      widgetStateRegistry.set(widgetId, defaultState);
+      return defaultState;
+    }
+    return widgetStateRegistry.get(widgetId) as EarnWidgetState;
+  }, [widgetId]);
+  
+  // Force refresh the component when widget state changes
+  const [, forceUpdate] = useState<{}>({});
+  useEffect(() => {
+    const unsubscribe = widgetState.subscribe(() => {
+      forceUpdate({});
+    });
+    return unsubscribe;
+  }, [widgetState]);
+  
   // Force update of the gradient when theme changes
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
   
+  // Initialize userPlans with existing plans to avoid flicker
+  const [userPlans, setUserPlans] = useState<StakingPlan[]>(() => {
+    return stakingPlansManager.getPlans();
+  });
+  
   // Debug theme detection
   useEffect(() => {
-    console.log('Current theme detection:', { 
-      resolvedTheme, 
-      documentClassList: typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : 'N/A',
-      htmlHasDarkClass: typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : 'N/A'
-    });
-  }, [resolvedTheme]);
-  
-  useEffect(() => {
-    // Update gradient key whenever theme changes to force a re-render
+    console.log('The current theme is:', resolvedTheme);
     setGradientKey(Date.now());
   }, [resolvedTheme]);
   
+  // Calculate if there are any active and historic plans
+  const hasActivePlans = useMemo(() => {
+    return userPlans.some(plan => plan.isActive);
+  }, [userPlans]);
+ 
+  const hasHistoricPlans = useMemo(() => {
+    return userPlans.some(plan => !plan.isActive);
+  }, [userPlans]);
+  
   // Function to load plans from localStorage
   const loadPlans = useCallback(() => {
-    if (typeof window === 'undefined') return;
+    const plans = stakingPlansManager.getPlans();
+    console.log('Loaded staking plans:', plans);
+    setUserPlans(plans);
     
-    // Get plans from localStorage
-    const loadedPlans = stakingPlansManager.getPlans();
-    setUserPlans(loadedPlans);
-    setShowPlans(loadedPlans.length > 0);
-  }, []);
+    // Update showActivePlans if active plans state changes
+    const hasActive = plans.some(plan => plan.isActive);
+    if (hasActive !== showActivePlans) {
+      console.log(`Active plans state changed: ${hasActive}`);
+      setShowActivePlans(hasActive);
+    }
+  }, [showActivePlans]);
   
-  // Check for user plans and set up refresh interval
+  // Load plans on mount and set up event listeners
   useEffect(() => {
-    // Initial load
-    loadPlans();
+    // Initial load already happened in state initialization,
+    // but we still want to set up refresh and event listeners
     
     // Set up refresh interval (every 15 seconds)
     refreshIntervalRef.current = setInterval(() => {
       loadPlans();
     }, 15000);
     
-    // Listen for staking plan creation events
-    const handlePlanCreated = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      console.log('📊 Staking plan created:', customEvent.detail);
-      
-      // Refresh plans
-      loadPlans();
-    };
-    
-    // Listen for staking plan termination events
-    const handlePlanTerminated = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      console.log('📊 Staking plan terminated:', customEvent.detail);
-      
-      // Refresh plans
-      loadPlans();
-    };
-    
-    // Add event listeners
+    // Set up event listeners for plan updates
     document.addEventListener('staking-plan-created', handlePlanCreated);
     document.addEventListener('staking-plan-terminated', handlePlanTerminated);
     
-    // Cleanup
     return () => {
       document.removeEventListener('staking-plan-created', handlePlanCreated);
       document.removeEventListener('staking-plan-terminated', handlePlanTerminated);
@@ -838,10 +854,46 @@ const RippleView: React.FC = () => {
       }
     };
   }, [loadPlans]);
-  
+
   const handleMatterError = (error: any) => {
     console.error('Error in Matter.js component:', error);
     setHasError(true);
+  };
+
+  // Update event handlers to use widgetState
+  const showHistoric = useCallback(() => {
+    console.log('showHistoric called, setting showHistoricPlans=true, showActivePlans=false');
+    setShowActivePlans(false);
+    widgetState.setShowHistoricPlans(true);
+  }, [widgetState]);
+
+  const showDefault = useCallback(() => {
+    console.log('showDefault called, setting showHistoricPlans=false, showActivePlans=false');
+    setShowActivePlans(false);
+    widgetState.setShowHistoricPlans(false);
+  }, [widgetState]);
+
+  const showActiveView = useCallback(() => {
+    console.log('showActiveView called, setting showHistoricPlans=false, showActivePlans=true');
+    setShowActivePlans(true);
+    widgetState.setShowHistoricPlans(false);
+  }, [widgetState]);
+
+  // Set up event handlers for plan updates
+  const handlePlanCreated = (e: Event) => {
+    const customEvent = e as CustomEvent;
+    console.log('📊 Staking plan created:', customEvent.detail);
+    
+    // Refresh plans
+    loadPlans();
+  };
+  
+  const handlePlanTerminated = (e: Event) => {
+    const customEvent = e as CustomEvent;
+    console.log('📊 Staking plan terminated:', customEvent.detail);
+    
+    // Refresh plans
+    loadPlans();
   };
 
   // Use an effect to detect and respond to URL changes
@@ -879,14 +931,6 @@ const RippleView: React.FC = () => {
     
     // Force reset dialog state
     forceResetDialogState();
-    
-    // Create a cleanup event
-    const closeEvent = new CustomEvent('close-widget-dialogs', {
-      bubbles: true
-    });
-    
-    // Dispatch the close event
-    document.dispatchEvent(closeEvent);
     
     // Flag that we're about to change the URL to avoid loops
     ignoreNextHashChange.current = true;
@@ -967,9 +1011,37 @@ const RippleView: React.FC = () => {
     }
   };
 
-  // If user has staking plans, show them
-  if (showPlans && userPlans.length > 0) {
-    return <ActivePlansView plans={userPlans} onNewPlan={handleRippleGetStartedClick} />;
+  // If viewing active plans and they exist
+  if (showActivePlans && hasActivePlans) {
+    console.log('Rendering ActivePlansView for active plans');
+    return (
+      <div className="h-full">
+        <ActivePlansView 
+          plans={userPlans} 
+          onNewPlan={handleRippleGetStartedClick} 
+          onReturnToRippleView={showDefault}
+          onShowHistoric={showHistoric}
+          widgetId={widgetId}
+        />
+      </div>
+    );
+  }
+  
+  // Use widgetState for showing historic plans
+  if (widgetState.showHistoricPlans && hasHistoricPlans) {
+    console.log('Rendering ActivePlansView for historic plans');
+    return (
+      <div className="h-full">
+        <ActivePlansView 
+          plans={userPlans} 
+          onNewPlan={handleRippleGetStartedClick}
+          initialShowHistoric={true}
+          onShowActivePlans={showActiveView}
+          onReturnToRippleView={showDefault}
+          widgetId={widgetId}
+        />
+      </div>
+    );
   }
 
   // Otherwise show the default ripple view
@@ -984,7 +1056,7 @@ const RippleView: React.FC = () => {
           hardLimit={40}
           density={0.0008}
           restitution={0.4}
-          // onTokenClick={handleTokenClick}
+          onTokenClick={handleTokenClick}
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
@@ -1080,6 +1152,18 @@ const RippleView: React.FC = () => {
           }
         `}</style>
         <div className="p-6">
+          {hasHistoricPlans && (
+            <div className="absolute top-0 right-0 m-4">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={showHistoric}
+                className="h-7 px-2.5 text-xs"
+              >
+                Show Historic
+              </Button>
+            </div>
+          )}
           <h2 className="text-2xl font-bold mb-2">Let your assets pile up</h2>
           <p className="text-muted-foreground mb-8">
             Stake to earn passive income with competitive APY rates and flexible lock periods.

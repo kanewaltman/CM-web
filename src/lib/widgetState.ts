@@ -182,6 +182,8 @@ export class ReferralsWidgetState {
 export class EarnWidgetState {
   private listeners: Set<() => void> = new Set();
   private _viewMode: EarnViewMode;
+  private _showHistoricPlans: boolean = false;
+  private _featuredToken: string = 'XCM';
   public widgetId: string;
 
   constructor(initialViewMode: EarnViewMode = 'ripple', widgetId: string) {
@@ -204,9 +206,29 @@ export class EarnWidgetState {
     return this._viewMode;
   }
 
+  get showHistoricPlans(): boolean {
+    return this._showHistoricPlans;
+  }
+
+  get featuredToken(): string {
+    return this._featuredToken;
+  }
+
   setViewMode(newViewMode: EarnViewMode): void {
     if (!newViewMode) return;
     this._viewMode = newViewMode;
+    this.notifyListeners();
+  }
+
+  setShowHistoricPlans(show: boolean): void {
+    if (this._showHistoricPlans === show) return;
+    this._showHistoricPlans = show;
+    this.notifyListeners();
+  }
+  
+  setFeaturedToken(token: string): void {
+    if (!token || this._featuredToken === token) return;
+    this._featuredToken = token;
     this.notifyListeners();
   }
 }

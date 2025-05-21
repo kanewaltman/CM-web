@@ -14,12 +14,51 @@ import NumberFlow, { continuous } from '@number-flow/react';
 import { AssetPriceTooltip, AssetButtonWithPrice } from '../AssetPriceTooltip';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { StakingPlan, stakingPlansManager } from '../EarnConfirmationContent'; // Assuming StakingPlan and stakingPlansManager are here or in a shared types/utils file
+import { EarnWidgetState, widgetStateRegistry, createDefaultEarnWidgetState } from '@/lib/widgetState';
 
 // ActivePlansView component
-export const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => void }> = ({ plans, onNewPlan }) => {
+export const ActivePlansView: React.FC<{ 
+  plans: StakingPlan[], 
+  onNewPlan: () => void,
+  initialShowHistoric?: boolean,
+  onShowHistoric?: () => void,
+  onReturnToRippleView?: () => void,
+  onShowActivePlans?: () => void,
+  widgetId?: string
+}> = ({ 
+  plans, 
+  onNewPlan, 
+  initialShowHistoric = false,
+  onShowHistoric,
+  onReturnToRippleView,
+  onShowActivePlans,
+  widgetId
+}) => {
   const { resolvedTheme } = useTheme();
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
-  const [showHistoric, setShowHistoric] = useState<boolean>(false);
+  
+  // Get widget state or create one if it doesn't exist
+  const widgetState = useMemo(() => {
+    if (!widgetId) return null;
+    
+    if (!widgetStateRegistry.has(widgetId)) {
+      const newState = createDefaultEarnWidgetState('ripple', widgetId);
+      widgetStateRegistry.set(widgetId, newState);
+      if (initialShowHistoric) {
+        newState.setShowHistoricPlans(true);
+      }
+      return newState;
+    }
+    
+    return widgetStateRegistry.get(widgetId) as EarnWidgetState;
+  }, [widgetId, initialShowHistoric]);
+  
+  // Fallback to local state when widgetState is not available
+  const [localShowHistoric, setLocalShowHistoric] = useState<boolean>(initialShowHistoric);
+  
+  // Use widget state if available, otherwise use local state
+  const showHistoric = widgetState ? widgetState.showHistoricPlans : localShowHistoric;
+  
   // Change from continuous updates to interval-based updates with a key for forcing refresh
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [lastClaimTime, setLastClaimTime] = useState<number>(0);
@@ -52,6 +91,19 @@ export const ActivePlansView: React.FC<{ plans: StakingPlan[], onNewPlan: () => 
     const indexOfFirstPlan = indexOfLastPlan - plansPerPage;
     return plansToShow.slice(indexOfFirstPlan, indexOfLastPlan);
   }, [activePlans, historicPlans, showHistoric, currentPage, plansPerPage]);
+
+  // If no plans are available in the current view, show the empty state earlier
+  const noPlansInCurrentView = useMemo(() => {
+    return showHistoric ? historicPlans.length === 0 : activePlans.length === 0;
+  }, [showHistoric, historicPlans.length, activePlans.length]);
+
+  // If we're showing active plans but there are none, redirect back to ripple view
+  useEffect(() => {
+    if (!showHistoric && activePlans.length === 0 && !initialShowHistoric) {
+      // Return to ripple view by calling onNewPlan - it will redirect to main view
+      onNewPlan();
+    }
+  }, [showHistoric, activePlans.length, onNewPlan, initialShowHistoric]);
 
   // Calculate pagination information
   const totalPlans = useMemo(() => 
@@ -363,10 +415,40 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
     setCurrentPage(page);
   }, []);
 
-  // Handle toggle between active and historic plans
-  const handleTogglePlansView = useCallback(() => {
-    setShowHistoric(!showHistoric);
-  }, [showHistoric]);
+  // Handler for showing active plans
+  const handleShowActiveClick = useCallback(() => {
+    console.log('Active Plans click handler called', { activePlans, onShowActivePlans, onReturnToRippleView });
+    if (onShowActivePlans) {
+      console.log('Calling onShowActivePlans');
+      onShowActivePlans();
+    } else if (activePlans.length === 0 && onReturnToRippleView) {
+      console.log('No active plans, returning to ripple view');
+      onReturnToRippleView();
+    } else {
+      console.log('Setting showHistoric to false');
+      if (widgetState) {
+        widgetState.setShowHistoricPlans(false);
+      } else {
+        setLocalShowHistoric(false);
+      }
+    }
+  }, [activePlans, onShowActivePlans, onReturnToRippleView, widgetState]);
+
+  // Handler for showing historic plans
+  const handleShowHistoricClick = useCallback(() => {
+    console.log('Historic click handler called', { onShowHistoric });
+    if (onShowHistoric) {
+      console.log('Calling onShowHistoric');
+      onShowHistoric();
+    } else {
+      console.log('Setting showHistoric to true');
+      if (widgetState) {
+        widgetState.setShowHistoricPlans(true);
+      } else {
+        setLocalShowHistoric(true);
+      }
+    }
+  }, [onShowHistoric, widgetState]);
 
   // Add a ref to track button elements
   const claimButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -590,14 +672,23 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
           <div className="text-lg font-semibold">
             {showHistoric ? 'Historic Plans' : 'Your Active Plans'}
           </div>
-          {historicPlans.length > 0 && (
+          {showHistoric ? (
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={handleTogglePlansView}
+              onClick={handleShowActiveClick}
               className="h-7 px-2.5 text-xs"
             >
-              {showHistoric ? 'Show Active' : 'Show Historic'}
+              {activePlans.length > 0 ? "Show Active Plans" : "Return to Earn View"}
+            </Button>
+          ) : historicPlans.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleShowHistoricClick}
+              className="h-7 px-2.5 text-xs"
+            >
+              Show Historic
             </Button>
           )}
         </div>
@@ -824,19 +915,33 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
               ))
             ) : (
               <div className="flex flex-col justify-center items-center h-full min-h-[150px] text-center text-muted-foreground py-8">
-                <span>
-                  {showHistoric ? 'No historic plans found' : 'No active staking plans found'}
-                </span>
-                <ShimmerButton
-                  className="mt-4 px-4 py-2 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 font-semibold w-fit min-w-0"
-                  shimmerColor="rgba(16, 185, 129, 0.5)"
-                  shimmerDuration="4s"
-                  borderRadius="8px"
-                  background="rgba(16,185,129,0.08)"
-                  onClick={onNewPlan}
-                >
-                  Start Earning
-                </ShimmerButton>
+                {showHistoric ? (
+                  <>
+                    <span>No historic plans found</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShowActiveClick}
+                      className="mt-4"
+                    >
+                      {activePlans.length > 0 ? "Show Active Plans" : "Return to Earn View"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span>No active staking plans found</span>
+                    <ShimmerButton
+                      className="mt-4 px-4 py-2 text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 font-semibold w-fit min-w-0"
+                      shimmerColor="rgba(16, 185, 129, 0.5)"
+                      shimmerDuration="4s"
+                      borderRadius="8px"
+                      background="rgba(16,185,129,0.08)"
+                      onClick={onNewPlan}
+                    >
+                      Start Earning
+                    </ShimmerButton>
+                  </>
+                )}
               </div>
             )}
           </div>
