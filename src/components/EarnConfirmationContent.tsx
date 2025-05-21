@@ -70,6 +70,15 @@ export const stakingPlansManager = {
       plans[index].terminationFee = terminationFee;
       localStorage.setItem('staking_plans', JSON.stringify(plans));
     }
+  },
+  
+  refreshPlans: (): StakingPlan[] => {
+    // This method doesn't change anything in storage,
+    // but it forces a fresh read which can be useful for ensuring
+    // consistency after terminating a plan
+    if (typeof window === 'undefined') return [];
+    const plans = localStorage.getItem('staking_plans');
+    return plans ? JSON.parse(plans) : [];
   }
 };
 

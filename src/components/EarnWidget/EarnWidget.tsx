@@ -812,10 +812,19 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
   const hasActivePlans = useMemo(() => {
     return userPlans.some(plan => plan.isActive);
   }, [userPlans]);
- 
+  
+  // Update the hasHistoricPlans to include the setter
+  const [hasHistoricPlansState, setHasHistoricPlans] = useState<boolean>(() => {
+    // Initialize from current plans
+    const plans = stakingPlansManager.getPlans();
+    return plans.some(plan => !plan.isActive);
+  });
+  
+  // Use both the state and the memoized value to ensure we catch all updates
   const hasHistoricPlans = useMemo(() => {
-    return userPlans.some(plan => !plan.isActive);
-  }, [userPlans]);
+    // Combine both sources for maximum reliability
+    return hasHistoricPlansState || userPlans.some(plan => !plan.isActive);
+  }, [userPlans, hasHistoricPlansState]);
   
   // Function to load plans from localStorage
   const loadPlans = useCallback(() => {
@@ -829,7 +838,14 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
       console.log(`Active plans state changed: ${hasActive}`);
       setShowActivePlans(hasActive);
     }
-  }, [showActivePlans]);
+    
+    // Also update the historic plans state directly if needed
+    const hasHistoric = plans.some(plan => !plan.isActive);
+    if (hasHistoric !== hasHistoricPlansState) {
+      console.log(`Historic plans state changed: ${hasHistoric}`);
+      setHasHistoricPlans(hasHistoric);
+    }
+  }, [showActivePlans, hasHistoricPlansState, setHasHistoricPlans]);
   
   // Load plans on mount and set up event listeners
   useEffect(() => {
@@ -841,19 +857,44 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
       loadPlans();
     }, 15000);
     
+    // Define event handlers inside useEffect
+    const handlePlanEvent = () => {
+      console.log('📊 Plan event (create/terminate) received, refreshing plans');
+      loadPlans();
+    };
+    
+    const handlePlansStatusUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      console.log('📊 Plans status update received:', customEvent.detail);
+      
+      if (customEvent.detail) {
+        // Update the hasHistoricPlans state immediately based on event data
+        const hasHistoric = customEvent.detail.hasHistoric === true;
+        if (hasHistoric !== hasHistoricPlansState) {
+          console.log(`Updating hasHistoricPlansState from event: ${hasHistoric}`);
+          setHasHistoricPlans(hasHistoric);
+        }
+        
+        // Also refresh plans to ensure data consistency
+        loadPlans();
+      }
+    };
+    
     // Set up event listeners for plan updates
-    document.addEventListener('staking-plan-created', handlePlanCreated);
-    document.addEventListener('staking-plan-terminated', handlePlanTerminated);
+    document.addEventListener('staking-plan-created', handlePlanEvent);
+    document.addEventListener('staking-plan-terminated', handlePlanEvent);
+    document.addEventListener('plans-status-update', handlePlansStatusUpdate);
     
     return () => {
-      document.removeEventListener('staking-plan-created', handlePlanCreated);
-      document.removeEventListener('staking-plan-terminated', handlePlanTerminated);
+      document.removeEventListener('staking-plan-created', handlePlanEvent);
+      document.removeEventListener('staking-plan-terminated', handlePlanEvent);
+      document.removeEventListener('plans-status-update', handlePlansStatusUpdate);
       
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, [loadPlans]);
+  }, [loadPlans, hasHistoricPlansState, setHasHistoricPlans]);
 
   const handleMatterError = (error: any) => {
     console.error('Error in Matter.js component:', error);
@@ -878,23 +919,6 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
     setShowActivePlans(true);
     widgetState.setShowHistoricPlans(false);
   }, [widgetState]);
-
-  // Set up event handlers for plan updates
-  const handlePlanCreated = (e: Event) => {
-    const customEvent = e as CustomEvent;
-    console.log('📊 Staking plan created:', customEvent.detail);
-    
-    // Refresh plans
-    loadPlans();
-  };
-  
-  const handlePlanTerminated = (e: Event) => {
-    const customEvent = e as CustomEvent;
-    console.log('📊 Staking plan terminated:', customEvent.detail);
-    
-    // Refresh plans
-    loadPlans();
-  };
 
   // Use an effect to detect and respond to URL changes
   useEffect(() => {
@@ -1046,7 +1070,7 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
 
   // Otherwise show the default ripple view
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center p-4 overflow-hidden">
+    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
       {!hasError ? (
         <MatterStacking 
           className="absolute inset-0" 
@@ -1152,18 +1176,6 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
           }
         `}</style>
         <div className="p-6">
-          {hasHistoricPlans && (
-            <div className="absolute top-0 right-0 m-4">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={showHistoric}
-                className="h-7 px-2.5 text-xs"
-              >
-                Show Historic
-              </Button>
-            </div>
-          )}
           <h2 className="text-2xl font-bold mb-2">Let your assets pile up</h2>
           <p className="text-muted-foreground mb-8">
             Stake to earn passive income with competitive APY rates and flexible lock periods.
@@ -1188,6 +1200,20 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
           </div>
         </div>
       </div>
+      
+      {/* Consistently position the "Show Historic" button at the top right */}
+      {hasHistoricPlans && (
+        <div className="absolute top-4 right-4 z-20">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={showHistoric}
+            className="h-7 px-2.5 text-xs"
+          >
+            Show Historic
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

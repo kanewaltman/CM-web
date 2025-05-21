@@ -360,10 +360,37 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
         document.dispatchEvent(event);
       }
 
-      // Refresh the view
-      window.location.reload();
+      // Update local state instead of reloading the page
+      setUserPlans(prevPlans => 
+        prevPlans.map(p => p.id === plan.id ? updatedPlan : p)
+      );
+      
+      // Check if we still have active plans after this termination
+      const remainingActivePlans = userPlans
+        .filter(p => p.id !== plan.id)
+        .filter(p => p.isActive);
+      
+      if (remainingActivePlans.length === 0) {
+        // No active plans left, return to ripple view
+        if (onReturnToRippleView) {
+          // First make sure the plans data is up to date 
+          const updatedPlans = stakingPlansManager.refreshPlans();
+          
+          // Dispatch a custom event to notify components about terminated plans
+          const event = new CustomEvent('plans-status-update', { 
+            detail: { 
+              hasHistoric: updatedPlans.some(p => !p.isActive),
+              hasActive: updatedPlans.some(p => p.isActive)
+            } 
+          });
+          document.dispatchEvent(event);
+          
+          // Then return to ripple view
+          onReturnToRippleView();
+        }
+      }
     }
-  }, [calculateTerminationFee, calculateCurrentEarnings]);
+  }, [calculateTerminationFee, calculateCurrentEarnings, userPlans, onReturnToRippleView]);
 
   // Format date string
   const formatDate = useCallback((dateStr: string): string => {
