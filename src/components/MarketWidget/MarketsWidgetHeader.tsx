@@ -1,18 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useContext } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { useReactTable } from '@tanstack/react-table';
 import { MarketData } from './MarketsWidget'; // Import MarketData type
+import { MarketsWidgetState, widgetStateRegistry } from '@/lib/widgetState';
+import { TableRefContext } from './MarketsWidgetWrapper';
 
-// Add window extension declaration
-declare global {
-  interface Window {
-    __marketsWidgetDialogTable?: ReturnType<typeof useReactTable<MarketData>>;
-  }
-}
-
+// Lucide Icon imports
 import { 
   Filter as FilterIcon,
   Search, 
@@ -108,39 +104,32 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [activeListName, setActiveListName] = useState<string>('');
   
-  // Get actual table instance - enhanced access pattern with dialog support
+  // Get table ref from context if not provided directly
+  const contextTableRef = useContext(TableRefContext);
+  const effectiveTableRef = tableRef || contextTableRef;
+  
+  // Get actual table instance
   const actualTable = useMemo(() => {
     // First try direct table prop
     if (table) {
-      console.log('[MarketsWidgetHeader] Using direct table prop');
       return table;
     }
     
     // Then try tableRef
-    if (tableRef?.current?.getTable) {
-      const tableFromRef = tableRef.current.getTable();
+    if (effectiveTableRef?.current?.getTable) {
+      const tableFromRef = effectiveTableRef.current.getTable();
       if (tableFromRef) {
-        console.log('[MarketsWidgetHeader] Using table from ref');
         return tableFromRef;
       }
     }
     
-    // Lastly, check for dialog mode table reference
-    if (typeof window !== 'undefined' && window.__marketsWidgetDialogTable) {
-      console.log('[MarketsWidgetHeader] Using global table reference (dialog mode)');
-      return window.__marketsWidgetDialogTable;
-    }
-    
-    console.log('[MarketsWidgetHeader] No table reference found');
     return null;
-  }, [table, tableRef]);
+  }, [table, effectiveTableRef]);
 
-  // Storage keys for local storage
-  const storageKeys = {
-    search: `marketsWidget_${widgetId}_searchQuery`,
-    quoteAsset: `marketsWidget_${widgetId}_selectedQuoteAsset`,
-    secondaryCurrency: `marketsWidget_${widgetId}_secondaryCurrency`,
-  };
+  // Get state from widget registry
+  const widgetState = useMemo(() => {
+    return widgetStateRegistry.get(widgetId) as MarketsWidgetState | undefined;
+  }, [widgetId]);
 
   // Local state variables for filter values
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,23 +137,38 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(null);
   const [isFiltersActive, setIsFiltersActive] = useState(false);
   
-  // Initialize from localStorage
+  // Initialize from widget state
   useEffect(() => {
-    try {
-      const storedSearchQuery = getLocalStorageItem<string>(storageKeys.search, '');
-      const storedQuoteAsset = getLocalStorageItem<AssetTicker | 'ALL'>(storageKeys.quoteAsset, 'ALL');
-      const storedSecondaryCurrency = getLocalStorageItem<AssetTicker | null>(storageKeys.secondaryCurrency, null);
+    if (widgetState) {
+      setSearchQuery(widgetState.searchQuery);
+      setSelectedQuoteAsset(widgetState.selectedQuoteAsset);
+      setSecondaryCurrency(widgetState.secondaryCurrency);
       
-      setSearchQuery(storedSearchQuery);
-      setSelectedQuoteAsset(storedQuoteAsset);
-      setSecondaryCurrency(storedSecondaryCurrency);
-      
-      const active = storedSearchQuery !== '' || storedQuoteAsset !== 'ALL' || storedSecondaryCurrency !== null;
+      const active = widgetState.searchQuery !== '' || 
+                    widgetState.selectedQuoteAsset !== 'ALL' || 
+                    widgetState.secondaryCurrency !== null;
+                    
       setIsFiltersActive(active);
-    } catch (error) {
-      console.error('Error loading filter state from localStorage:', error);
     }
-  }, [widgetId]);
+  }, [widgetState]);
+  
+  // Subscribe to widget state changes
+  useEffect(() => {
+    if (widgetState) {
+      return widgetState.subscribe(() => {
+        setSearchQuery(widgetState.searchQuery);
+        setSelectedQuoteAsset(widgetState.selectedQuoteAsset);
+        setSecondaryCurrency(widgetState.secondaryCurrency);
+        
+        const active = widgetState.searchQuery !== '' || 
+                      widgetState.selectedQuoteAsset !== 'ALL' || 
+                      widgetState.secondaryCurrency !== null;
+                      
+        setIsFiltersActive(active);
+      });
+    }
+    return () => {};
+  }, [widgetState]);
   
   // Check for active list 
   useEffect(() => {
@@ -188,7 +192,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     const handleListChanged = (event: CustomEvent) => {
       // Only process if the event is for this widget
       if (event.detail?.instanceId === widgetId) {
-        console.log(`[MarketsWidgetHeader] Received list change event for widget ${widgetId}:`, event.detail);
         checkActiveList();
       }
     };
@@ -199,29 +202,20 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
       document.removeEventListener('markets-active-list-changed', handleListChanged as EventListener);
     };
   }, [widgetId]);
-  
-  // Update isFiltersActive whenever filters change
-  useEffect(() => {
-    const active = searchQuery !== '' || selectedQuoteAsset !== 'ALL' || secondaryCurrency !== null;
-    setIsFiltersActive(active);
-  }, [searchQuery, selectedQuoteAsset, secondaryCurrency]);
 
   // Handle filter changes
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    setLocalStorageItem(storageKeys.search, value);
     onSearchQueryChange(value);
   };
 
   const handleQuoteAssetChange = (value: AssetTicker | 'ALL') => {
     setSelectedQuoteAsset(value);
-    setLocalStorageItem(storageKeys.quoteAsset, value);
     onSelectedQuoteAssetChange(value);
   };
 
   const handleSecondaryCurrencyChange = (value: AssetTicker | null) => {
     setSecondaryCurrency(value);
-    setLocalStorageItem(storageKeys.secondaryCurrency, value);
     onSecondaryCurrencyChange(value);
   };
 
@@ -234,7 +228,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
 
   // Listen for tab click events
   const handleTabClick = (value: string) => {
-    console.log(`[MarketsWidgetHeader] Tab clicked: ${value} for widget ${widgetId}`);
     if (value === 'markets') {
       // Deactivate any active list
       ListManager.setActiveListId(null, widgetId);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSProperties, forwardRef, useImperativeHandle } from 'react';
 
+// TODO: Remove global declaration once fully refactored
 // Add a declaration for the global window extension
 declare global {
   interface Window {
@@ -632,7 +633,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     onCustomListsChange,
     activeListId: externalActiveListId,
     onActiveListChange,
-    persistState = false,
+    persistState = true,
     isInDialog = false,
     onRemove,
   } = props;
@@ -1548,19 +1549,11 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   
   // When in dialog mode, we need to ensure the table reference is globally available
   useEffect(() => {
-    if (isInDialog && table) {
-      console.log('[MarketsWidget] In dialog mode, setting global table reference');
-      window.__marketsWidgetDialogTable = table;
+    if (isInDialog && ref && table) {
+      // Make table available to dialog parent
+      // No need to store in window anymore since we have ref
     }
-    
-    return () => {
-      // Clean up when component unmounts
-      if (isInDialog) {
-        console.log('[MarketsWidget] Cleaning up global table reference');
-        delete window.__marketsWidgetDialogTable;
-      }
-    };
-  }, [isInDialog, table]);
+  }, [isInDialog, table, ref]);
   
   // For visual debugging
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
@@ -2034,10 +2027,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   );
 });
 
-// Add displayName for easier debugging
+// Add proper display name
 MarketsWidget.displayName = 'MarketsWidget';
 
-export default MarketsWidget; 
+export default MarketsWidget;
 
 // Define storage key prefix for localStorage
 const STORAGE_KEY_PREFIX = 'markets-widget-';

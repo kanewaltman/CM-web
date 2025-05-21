@@ -17,7 +17,13 @@ import {
   widgetComponents,
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
-import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
+import { 
+  widgetStateRegistry, 
+  WidgetState, 
+  getPerformanceTitle, 
+  ReferralsWidgetState, 
+  createDefaultMarketsWidgetState 
+} from '@/lib/widgetState';
 
 // Create a wrapper component for Markets widget to use hooks properly
 const MarketsWidgetContainer = ({ 
@@ -31,6 +37,14 @@ const MarketsWidgetContainer = ({
   title: string, 
   onRemove: () => boolean 
 }) => {
+  // Initialize MarketsWidgetState if it doesn't exist yet
+  React.useEffect(() => {
+    if (!widgetStateRegistry.has(widgetId)) {
+      const state = createDefaultMarketsWidgetState('', 'ALL', null, undefined, widgetId);
+      widgetStateRegistry.set(widgetId, state);
+    }
+  }, [widgetId]);
+
   return (
     <WidgetContainer
       title={title}
