@@ -728,37 +728,41 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
             {showHistoric ? 'Historic Plans' : (
               <div>
                 {/* Desktop version */}
-                <div className="hidden md:flex md:items-center md:gap-1">
-                  <span>Actively staking</span>
-                  <span className="flex items-center font-bold tabular-nums">
-                    <NumberFlow
-                      className="translate-y-[1px]"
-                      value={totalStakedInfo.valueInEUR}
-                      format={{
-                        style: 'decimal',
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      }}
-                      plugins={[continuous]}
-                      animated={true}
-                    />
-                    <span className="ml-1">EUR</span>
-                  </span>
-                  <span>earning a total of</span>
-                  <span className="flex items-center font-bold text-emerald-500 tabular-nums ml-1 mr-0">
-                    <NumberFlow
-                      className="translate-y-[1px]"
-                      value={totalEarningsInfo.valueInEUR}
-                      format={{
-                        style: 'decimal',
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      }}
-                      plugins={[continuous]}
-                      animated={true}
-                    />
-                    <span className="ml-1">EUR</span>
-                  </span>
+                <div className="hidden md:flex md:items-center md:flex-wrap md:justify-start">
+                  <div className="flex items-center flex-nowrap ml-1">
+                    <span>Actively staking</span>
+                    <span className="flex items-center font-bold tabular-nums ml-1">
+                      <NumberFlow
+                        className="translate-y-[1px]"
+                        value={totalStakedInfo.valueInEUR}
+                        format={{
+                          style: 'decimal',
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        }}
+                        plugins={[continuous]}
+                        animated={true}
+                      />
+                      <span className="ml-1">EUR</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center flex-nowrap">
+                    <span className="ml-1">earning a total of</span>
+                    <span className="flex items-center font-bold text-emerald-500 tabular-nums ml-1">
+                      <NumberFlow
+                        className="translate-y-[1px]"
+                        value={totalEarningsInfo.valueInEUR}
+                        format={{
+                          style: 'decimal',
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        }}
+                        plugins={[continuous]}
+                        animated={true}
+                      />
+                      <span className="ml-1">EUR</span>
+                    </span>
+                  </div>
                 </div>
                 {/* Mobile version */}
                 <div className="md:hidden flex flex-col text-left">
