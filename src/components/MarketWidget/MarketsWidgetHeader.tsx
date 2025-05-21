@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useContext } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useContext, useLayoutEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
@@ -80,6 +80,87 @@ const setLocalStorageItem = <T,>(key: string, value: T): void => {
   }
 };
 
+// Create a simple placeholder component for column visibility when table isn't directly available
+const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
+  // This is a minimal implementation that shows standard columns
+  // We'll store visibility in localStorage to maintain consistency
+  const storageKey = `markets-widget-${id}-column-visibility`;
+  
+  // Default columns - similar to what's in MarketsWidget
+  const standardColumns = [
+    { id: 'pair', label: 'Pair' },
+    { id: 'price', label: 'Price' },
+    { id: 'change24h', label: '24h %' },
+    { id: 'change7d', label: '7d %' },
+    { id: 'marketCap', label: 'Market Cap' },
+    { id: 'volume', label: 'Volume' }
+  ];
+  
+  // Get stored visibility or use defaults (all visible except maybe some specific ones)
+  const [columnVisibility, setColumnVisibility] = useState(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  
+  // Update visibility and store it
+  const toggleVisibility = (columnId: string) => {
+    const newVisibility = { ...columnVisibility };
+    newVisibility[columnId] = !newVisibility[columnId];
+    
+    // Don't allow hiding the pair column
+    if (columnId === 'pair') {
+      delete newVisibility['pair'];
+    }
+    
+    setColumnVisibility(newVisibility);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(newVisibility));
+    } catch (e) {
+      console.error('Error saving column visibility', e);
+    }
+    
+    // Dispatch an event that MarketsWidget can listen for
+    const event = new CustomEvent('markets-column-visibility-changed', {
+      detail: {
+        widgetId: id,
+        visibility: newVisibility
+      }
+    });
+    document.dispatchEvent(event);
+  };
+  
+  return (
+    <>
+      <DropdownMenuLabel className="text-sm">Customize Columns</DropdownMenuLabel>
+      <div className="max-h-[300px] overflow-auto py-1">
+        {standardColumns.map(column => (
+          <DropdownMenuItem
+            key={column.id}
+            className="text-xs h-8 flex items-center px-2 justify-between cursor-pointer"
+            onSelect={(e) => {
+              e.preventDefault();
+              toggleVisibility(column.id);
+            }}
+          >
+            <span>{column.label}</span>
+            <span className={`h-4 w-4 rounded-sm border border-primary ${columnVisibility[column.id] !== false ? 'bg-primary text-primary-foreground' : 'opacity-50'}`}>
+              {columnVisibility[column.id] !== false && (
+                <Check className="h-3 w-3" />
+              )}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </div>
+    </>
+  );
+};
+
 interface MarketsWidgetHeaderProps {
   onSearchQueryChange: (value: string) => void;
   onSelectedQuoteAssetChange: (value: AssetTicker | 'ALL') => void;
@@ -103,6 +184,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false);
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [activeListName, setActiveListName] = useState<string>('');
+  const [forceUpdate, setForceUpdate] = useState(0);
   
   // Get table ref from context if not provided directly
   const contextTableRef = useContext(TableRefContext);
@@ -112,6 +194,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const actualTable = useMemo(() => {
     // First try direct table prop
     if (table) {
+      console.log(`[${widgetId}] Using direct table prop`);
       return table;
     }
     
@@ -119,12 +202,63 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     if (effectiveTableRef?.current?.getTable) {
       const tableFromRef = effectiveTableRef.current.getTable();
       if (tableFromRef) {
+        console.log(`[${widgetId}] Using table from ref`, effectiveTableRef.current);
         return tableFromRef;
       }
     }
     
+    // If we couldn't get a table, log more details to help debug
+    if (effectiveTableRef) {
+      console.log(`[${widgetId}] Table ref exists but couldn't get table:`, 
+        effectiveTableRef.current ? 'Ref has current' : 'Ref missing current',
+        effectiveTableRef.current?.getTable ? 'getTable exists' : 'getTable missing');
+    } else {
+      console.log(`[${widgetId}] No table ref available`);
+    }
+    
     return null;
-  }, [table, effectiveTableRef]);
+  }, [table, effectiveTableRef, widgetId, forceUpdate]);
+
+  // Poll for the table ref to be available - handles late initialization
+  useEffect(() => {
+    let pollCount = 0;
+    const maxPolls = 10;
+    const pollIntervalMs = 500;
+    
+    // Function to check if the table is available
+    const pollForTable = () => {
+      // Only poll if we don't have a table yet
+      if (!actualTable) {
+        // Check if we have a table ref that's been populated
+        let tableFound = false;
+        
+        if (table) {
+          tableFound = true;
+        } else if (effectiveTableRef?.current?.getTable?.()) {
+          tableFound = true;
+        }
+        
+        if (tableFound) {
+          // Force update to re-run the actualTable useMemo
+          setForceUpdate(prev => prev + 1);
+          return;
+        }
+        
+        // Continue polling if we haven't reached the max count
+        pollCount++;
+        if (pollCount < maxPolls) {
+          setTimeout(pollForTable, pollIntervalMs);
+        }
+      }
+    };
+    
+    // Start polling
+    pollForTable();
+    
+    return () => {
+      pollCount = maxPolls; // Stop polling if component unmounts
+    };
+  }, [actualTable, table, effectiveTableRef]);
 
   // Get state from widget registry
   const widgetState = useMemo(() => {
@@ -203,31 +337,92 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     };
   }, [widgetId]);
 
+  // Add an effect to log when the table becomes available
+  useEffect(() => {
+    let checkCount = 0;
+    const maxChecks = 5;
+    
+    const checkForTable = () => {
+      let tableFound = false;
+      
+      // Try direct table prop first
+      if (table) {
+        tableFound = true;
+        console.log(`[TableCheck-${widgetId}] Found direct table prop`);
+      }
+      // Then try from ref
+      else if (effectiveTableRef?.current?.getTable?.()) {
+        tableFound = true;
+        console.log(`[TableCheck-${widgetId}] Found table via ref`);
+      }
+      
+      if (tableFound) {
+        console.log(`[TableCheck-${widgetId}] Table is now available`);
+        return; // Stop checking if we found a table
+      }
+      
+      checkCount++;
+      if (checkCount < maxChecks) {
+        setTimeout(checkForTable, 500); // Check again after 500ms
+      } else {
+        console.log(`[TableCheck-${widgetId}] Gave up looking for table after ${maxChecks} attempts`);
+      }
+    };
+    
+    // Start checking
+    checkForTable();
+    
+    return () => {
+      checkCount = maxChecks; // Prevent further checks if component unmounts
+    };
+  }, [table, effectiveTableRef, widgetId]);
+
+  // Define original handlers directly without referencing themselves
+  function handleFilterDropdownOpenChange(open: boolean) {
+    setFilterDropdownOpen(open);
+    if (open) {
+      console.log('Filter dropdown opened with:',
+        `Widget ID: ${widgetId}`,
+        `Cached actualTable: ${actualTable ? 'Available' : 'Not available'}`
+      );
+    }
+  }
+
+  function handleColumnsDropdownOpenChange(open: boolean) {
+    setColumnsDropdownOpen(open);
+    if (open) {
+      console.log('Columns dropdown opened with:',
+        `Widget ID: ${widgetId}`,
+        `Cached actualTable: ${actualTable ? 'Available' : 'Not available'}`
+      );
+    }
+  }
+
   // Handle filter changes
-  const handleSearchChange = (value: string) => {
+  function handleSearchChange(value: string) {
     setSearchQuery(value);
     onSearchQueryChange(value);
-  };
+  }
 
-  const handleQuoteAssetChange = (value: AssetTicker | 'ALL') => {
+  function handleQuoteAssetChange(value: AssetTicker | 'ALL') {
     setSelectedQuoteAsset(value);
     onSelectedQuoteAssetChange(value);
-  };
+  }
 
-  const handleSecondaryCurrencyChange = (value: AssetTicker | null) => {
+  function handleSecondaryCurrencyChange(value: AssetTicker | null) {
     setSecondaryCurrency(value);
     onSecondaryCurrencyChange(value);
-  };
+  }
 
-  const clearAllFilters = () => {
+  function clearAllFilters() {
     handleSearchChange('');
     handleQuoteAssetChange('ALL');
     handleSecondaryCurrencyChange(null);
     setFilterDropdownOpen(false);
-  };
+  }
 
   // Listen for tab click events
-  const handleTabClick = (value: string) => {
+  function handleTabClick(value: string) {
     if (value === 'markets') {
       // Deactivate any active list
       ListManager.setActiveListId(null, widgetId);
@@ -235,11 +430,30 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
       const listId = value.substring(5); // Remove 'list-' prefix
       ListManager.setActiveListId(listId, widgetId);
     }
-  };
+  }
+
+  // Get a fresh reference to the table at render time
+  function getTableForComponent() {
+    // First try direct table prop
+    if (table) {
+      return table;
+    }
+    
+    // Then try tableRef for most up-to-date reference
+    if (effectiveTableRef?.current?.getTable) {
+      const tableFromRef = effectiveTableRef.current.getTable();
+      if (tableFromRef) {
+        return tableFromRef;
+      }
+    }
+    
+    // Last resort - use cached actualTable
+    return actualTable;
+  }
 
   return (
     <div className="flex items-center gap-2">
-      <DropdownMenu open={filterDropdownOpen} onOpenChange={setFilterDropdownOpen}>
+      <DropdownMenu open={filterDropdownOpen} onOpenChange={handleFilterDropdownOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button 
             variant={isFiltersActive ? "default" : "outline"}
@@ -479,7 +693,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <DropdownMenu open={columnsDropdownOpen} onOpenChange={setColumnsDropdownOpen}>
+      <DropdownMenu open={columnsDropdownOpen} onOpenChange={handleColumnsDropdownOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button 
             variant="outline" 
@@ -494,13 +708,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
           {actualTable ? (
             <MarketsWidgetColumnVisibility table={actualTable} />
           ) : (
-            <>
-              <DropdownMenuLabel className="  text-sm ">Column Options</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="p-2   text-sm  text-muted-foreground text-center">
-                Table not available
-              </div>
-            </>
+            <FallbackColumnVisibility id={widgetId} />
           )}
         </DropdownMenuContent>
       </DropdownMenu>

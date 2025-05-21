@@ -1086,6 +1086,46 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     console.log(`[MarketsWidget] Widget ${id} active list changed to:`, activeListId);
   }, [activeListId, id]);
   
+  // Listen for custom events for column visibility changes from the header component
+  useEffect(() => {
+    const handleColumnVisibilityChanged = (event: CustomEvent) => {
+      // Make sure this is for our widget
+      if (event.detail?.widgetId === id) {
+        console.log(`[MarketsWidget] Received column visibility update for ${id}:`, event.detail.visibility);
+        
+        // Update column visibility via proper channels
+        if (onColumnVisibilityChange) {
+          // External control
+          onColumnVisibilityChange(event.detail.visibility);
+        } else {
+          // Internal state
+          setInternalColumnVisibility(event.detail.visibility);
+          
+          // Save to localStorage if needed
+          if (persistState) {
+            setStoredValue(instanceStorageKeys.COLUMN_VISIBILITY, event.detail.visibility);
+          }
+          
+          // Table will pick up the changes through the columnVisibility state
+          // Trigger resize after a short delay
+          setTimeout(() => {
+            if (typeof updateColumnSizes === 'function') {
+              updateColumnSizes();
+            }
+          }, 50);
+        }
+      }
+    };
+    
+    // Add event listener
+    document.addEventListener('markets-column-visibility-changed', handleColumnVisibilityChanged as EventListener);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('markets-column-visibility-changed', handleColumnVisibilityChanged as EventListener);
+    };
+  }, [id, onColumnVisibilityChange, persistState, instanceStorageKeys.COLUMN_VISIBILITY, updateColumnSizes]);
+  
   // Initialize the widget
   useEffect(() => {
     // Ensure widget has an ID for proper instance management
