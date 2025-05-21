@@ -1063,6 +1063,18 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
           Could not load physics animation
         </div>
       )}
+      {hasHistoricPlans && (
+        <div className="absolute top-0 right-0 m-4 z-10">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={showHistoric}
+            className="h-7 px-2.5 text-xs"
+          >
+            Show Historic
+          </Button>
+        </div>
+      )}
       <div className="z-10 text-center max-w-md mx-auto relative">
         <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
         <style>{`
@@ -1152,18 +1164,6 @@ const RippleView: React.FC<{ widgetId: string }> = ({ widgetId }) => {
           }
         `}</style>
         <div className="p-6">
-          {hasHistoricPlans && (
-            <div className="absolute top-0 right-0 m-4">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={showHistoric}
-                className="h-7 px-2.5 text-xs"
-              >
-                Show Historic
-              </Button>
-            </div>
-          )}
           <h2 className="text-2xl font-bold mb-2">Let your assets pile up</h2>
           <p className="text-muted-foreground mb-8">
             Stake to earn passive income with competitive APY rates and flexible lock periods.
