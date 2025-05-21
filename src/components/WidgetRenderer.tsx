@@ -17,7 +17,13 @@ import {
   widgetComponents,
   WIDGET_REGISTRY
 } from '@/lib/widgetRegistry';
-import { widgetStateRegistry, WidgetState, getPerformanceTitle, ReferralsWidgetState } from '@/lib/widgetState';
+import { 
+  widgetStateRegistry, 
+  WidgetState, 
+  getPerformanceTitle, 
+  ReferralsWidgetState, 
+  createDefaultMarketsWidgetState 
+} from '@/lib/widgetState';
 
 // Create a wrapper component for Markets widget to use hooks properly
 const MarketsWidgetContainer = ({ 
@@ -31,32 +37,32 @@ const MarketsWidgetContainer = ({
   title: string, 
   onRemove: () => boolean 
 }) => {
+  // Initialize MarketsWidgetState if it doesn't exist yet
+  React.useEffect(() => {
+    if (!widgetStateRegistry.has(widgetId)) {
+      const state = createDefaultMarketsWidgetState('', 'ALL', null, undefined, widgetId);
+      widgetStateRegistry.set(widgetId, state);
+    }
+  }, [widgetId]);
+
   return (
     <WidgetContainer
       title={title}
       onRemove={onRemove}
       widgetId={widgetId}
       headerControls={
-        <MarketsWidgetWrapper 
-          isHeader 
-          widgetId={widgetId} 
-          widgetComponent={WidgetComponent} 
+        <MarketsWidgetWrapper
+          isHeader
+          widgetId={widgetId}
+          widgetComponent={WidgetComponent}
           onRemove={onRemove}
         />
       }
-      widgetMenu={
-        <MarketsWidgetWrapper 
-          isMenu 
-          widgetId={widgetId} 
-          widgetComponent={WidgetComponent} 
-          onRemove={onRemove} 
-        />
-      }
     >
-      <MarketsWidgetWrapper 
-        widgetId={widgetId} 
-        widgetComponent={WidgetComponent} 
-        onRemove={onRemove} 
+      <MarketsWidgetWrapper
+        widgetId={widgetId}
+        widgetComponent={WidgetComponent}
+        onRemove={onRemove}
       />
     </WidgetContainer>
   );
@@ -503,3 +509,7 @@ export const updateWidgetsDataSource = (
     }
   });
 }; 
+
+function onRemove(): void {
+  throw new Error('Function not implemented.');
+}

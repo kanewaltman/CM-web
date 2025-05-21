@@ -374,9 +374,10 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           remainingWidgets.forEach(widget => widget.remove());
         }
         
-        // Additionally, find and remove any orphaned performance widgets in the DOM
-        const orphanedPerformanceWidgets = document.querySelectorAll('[gs-id^="performance"]');
-        orphanedPerformanceWidgets.forEach(widget => widget.remove());
+        // Additionally, find and remove any orphaned performance and balances widgets in the DOM
+        const orphanedWidgets = document.querySelectorAll('[gs-id^="performance"],[gs-id^="balances"]');
+        console.log(`🧹 Removing ${orphanedWidgets.length} orphaned performance/balances widgets from DOM`);
+        orphanedWidgets.forEach(widget => widget.remove());
         
         // Store the final layout in localStorage without preserving old viewStates
         localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(layoutToApply));
@@ -676,29 +677,29 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
           // Track which widgets we've updated
           const updatedWidgets = new Set<string>();
           
-          // Step 1: Remove ALL existing performance widgets from GridStack
+          // Step 1: Remove ALL existing performance and balances widgets from GridStack
           currentWidgets.forEach(widget => {
             const widgetId = widget.gridstackNode?.id;
-            if (widgetId && widgetId.includes('performance')) {
+            if (widgetId && (widgetId.includes('performance') || widgetId.includes('balances'))) {
               // Clean up widget state before removing
               widgetStateRegistry.delete(widgetId);
               grid.removeWidget(widget, false);
             }
           });
           
-          // Step 2: Remove ANY orphaned performance widgets in the DOM that might not be in GridStack
-          const orphanedPerformanceWidgets = document.querySelectorAll('[gs-id^="performance"]');
-          console.log(`🧹 Removing ${orphanedPerformanceWidgets.length} orphaned performance widgets from DOM`);
-          orphanedPerformanceWidgets.forEach(widget => {
+          // Step 2: Remove ANY orphaned performance and balances widgets in the DOM that might not be in GridStack
+          const orphanedWidgets = document.querySelectorAll('[gs-id^="performance"],[gs-id^="balances"]');
+          console.log(`🧹 Removing ${orphanedWidgets.length} orphaned performance/balances widgets from DOM`);
+          orphanedWidgets.forEach(widget => {
             widget.remove();
           });
           
-          // Step 3: Remove any OTHER performance elements that might be in the DOM without proper attributes
-          const performanceElements = document.querySelectorAll('.grid-stack-item');
-          performanceElements.forEach(element => {
+          // Step 3: Remove any OTHER performance or balances elements that might be in the DOM without proper attributes
+          const gridElements = document.querySelectorAll('.grid-stack-item');
+          gridElements.forEach(element => {
             const idAttr = element.getAttribute('gs-id');
-            if (idAttr && idAttr.includes('performance')) {
-              console.log(`🧹 Removing performance element with gs-id: ${idAttr}`);
+            if (idAttr && (idAttr.includes('performance') || idAttr.includes('balances'))) {
+              console.log(`🧹 Removing performance/balances element with gs-id: ${idAttr}`);
               element.remove();
             }
           });
@@ -727,7 +728,7 @@ export const useGridStack = ({ isMobile, currentPage, element }: UseGridStackOpt
             createdWidgets.add(node.id);
 
             // For performance widgets, always create new ones
-            if (widgetType === 'performance') {
+            if (widgetType === 'performance' || widgetType === 'balances') {
               try {
                 const widgetElement = createWidget({
                   widgetType,

@@ -1,6 +1,8 @@
 import { ChartVariant } from '@/components/PerformanceWidget/PerformanceWidget';
 import { ReferralsViewMode } from '@/components/ReferralsWidget';
 import { EarnViewMode } from '@/components/EarnWidget/EarnWidget';
+import { AssetTicker } from '@/assets/AssetTicker';
+import { QuoteAssetsWithCounts } from '@/components/MarketWidget/MarketsWidget';
 
 // Widget State Management
 export class WidgetState {
@@ -213,8 +215,120 @@ export function createDefaultEarnWidgetState(initialViewMode: EarnViewMode = 'ri
   return new EarnWidgetState(initialViewMode, widgetId);
 }
 
+// Markets Widget State Class
+export class MarketsWidgetState {
+  private listeners: Set<() => void> = new Set();
+  private _searchQuery: string;
+  private _selectedQuoteAsset: AssetTicker | 'ALL';
+  private _secondaryCurrency: AssetTicker | null;
+  private _quoteAssets: QuoteAssetsWithCounts;
+  private _widgetId: string;
+
+  constructor(
+    initialSearchQuery: string = '',
+    initialSelectedQuoteAsset: AssetTicker | 'ALL' = 'ALL',
+    initialSecondaryCurrency: AssetTicker | null = null,
+    initialQuoteAssets: QuoteAssetsWithCounts = {
+      assets: ['USDT', 'BTC', 'ETH', 'USD', 'EUR'] as AssetTicker[],
+      counts: {
+        'USDT': 0,
+        'BTC': 0,
+        'ETH': 0,
+        'USD': 0,
+        'EUR': 0
+      },
+      totalCount: 0
+    },
+    widgetId: string = ''
+  ) {
+    this._searchQuery = initialSearchQuery;
+    this._selectedQuoteAsset = initialSelectedQuoteAsset;
+    this._secondaryCurrency = initialSecondaryCurrency;
+    this._quoteAssets = initialQuoteAssets;
+    this._widgetId = widgetId;
+  }
+
+  get searchQuery(): string {
+    return this._searchQuery;
+  }
+
+  get selectedQuoteAsset(): AssetTicker | 'ALL' {
+    return this._selectedQuoteAsset;
+  }
+
+  get secondaryCurrency(): AssetTicker | null {
+    return this._secondaryCurrency;
+  }
+
+  get quoteAssets(): QuoteAssetsWithCounts {
+    return this._quoteAssets;
+  }
+
+  get widgetId(): string {
+    return this._widgetId;
+  }
+
+  setSearchQuery(newSearchQuery: string) {
+    if (this._searchQuery === newSearchQuery) return;
+    this._searchQuery = newSearchQuery;
+    this.notifyListeners();
+  }
+
+  setSelectedQuoteAsset(newSelectedQuoteAsset: AssetTicker | 'ALL') {
+    if (this._selectedQuoteAsset === newSelectedQuoteAsset) return;
+    this._selectedQuoteAsset = newSelectedQuoteAsset;
+    this.notifyListeners();
+  }
+
+  setSecondaryCurrency(newSecondaryCurrency: AssetTicker | null) {
+    if (this._secondaryCurrency === newSecondaryCurrency) return;
+    this._secondaryCurrency = newSecondaryCurrency;
+    this.notifyListeners();
+  }
+
+  setQuoteAssets(newQuoteAssets: QuoteAssetsWithCounts) {
+    this._quoteAssets = newQuoteAssets;
+    this.notifyListeners();
+  }
+
+  subscribe(listener: () => void) {
+    if (!listener) return () => {};
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach(listener => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Error in markets widget state listener:', error);
+      }
+    });
+  }
+}
+
+// Create a default state for a markets widget
+export const createDefaultMarketsWidgetState = (
+  searchQuery: string = '',
+  selectedQuoteAsset: AssetTicker | 'ALL' = 'ALL',
+  secondaryCurrency: AssetTicker | null = null,
+  quoteAssets?: QuoteAssetsWithCounts,
+  widgetId: string = ''
+): MarketsWidgetState => {
+  return new MarketsWidgetState(
+    searchQuery,
+    selectedQuoteAsset,
+    secondaryCurrency,
+    quoteAssets,
+    widgetId
+  );
+};
+
 // Global widget state registry
-export const widgetStateRegistry = new Map<string, WidgetState | ReferralsWidgetState | EarnWidgetState>();
+export const widgetStateRegistry = new Map<string, WidgetState | ReferralsWidgetState | EarnWidgetState | MarketsWidgetState>();
 
 // Create a default state for a widget
 export const createDefaultWidgetState = (

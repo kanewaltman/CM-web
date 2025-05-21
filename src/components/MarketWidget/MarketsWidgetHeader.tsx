@@ -1,18 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useContext, useLayoutEffect, useId, CSSProperties, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { useReactTable } from '@tanstack/react-table';
 import { MarketData } from './MarketsWidget'; // Import MarketData type
+import { MarketsWidgetState, widgetStateRegistry } from '@/lib/widgetState';
+import { TableRefContext } from './MarketsWidgetWrapper';
 
-// Add window extension declaration
-declare global {
-  interface Window {
-    __marketsWidgetDialogTable?: ReturnType<typeof useReactTable<MarketData>>;
-  }
-}
-
+// Lucide Icon imports
 import { 
   Filter as FilterIcon,
   Search, 
@@ -26,8 +22,30 @@ import {
   ChevronsUpDown,
   SlidersHorizontal,
   Coins,
-  CircleSlash
+  CircleSlash,
+  GripVertical as GripVerticalIcon
 } from 'lucide-react';
+
+// DnD Kit imports
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
 import {
   Command,
   CommandEmpty,
@@ -84,6 +102,242 @@ const setLocalStorageItem = <T,>(key: string, value: T): void => {
   }
 };
 
+// Draggable Menu Item Component for FallbackColumnVisibility
+const DraggableMenuItem = ({ 
+  id, 
+  children, 
+  isChecked, 
+  onCheckedChange 
+}: { 
+  id: string, 
+  children: React.ReactNode, 
+  isChecked: boolean, 
+  onCheckedChange: (checked: boolean) => void 
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: false,
+  });
+  
+  const style: CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 50 : 0,
+  };
+  
+  const [internalChecked, setInternalChecked] = useState(isChecked); // For immediate checkbox interaction
+  
+  useEffect(() => {
+    setInternalChecked(isChecked);
+  }, [isChecked]);
+  
+  const handleDragHandleProps = useMemo(() => ({ ...attributes, ...listeners }), [attributes, listeners]); // Only allow drag on handle
+  
+  const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setInternalChecked(!internalChecked); // Update internal state immediately
+    requestAnimationFrame(() => { onCheckedChange(!internalChecked); }); // Debounce parent update to prevent flickering
+  }, [internalChecked, onCheckedChange]);
+  
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="flex items-center justify-between rounded-sm px-1 py-0.5"
+    >
+      {/* Clickable checkbox area */}
+      <div 
+        className="flex items-center gap-3 py-1.5 px-1.5 cursor-pointer flex-1 hover:bg-accent/50 rounded-sm"
+        onClick={handleCheckboxClick}
+      >
+        <div 
+          className="flex items-center justify-center h-4 w-4 relative"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCheckboxClick(e);
+          }}
+        >
+          {/* Custom checkbox appearance */}
+          <div 
+            className={cn(
+              "h-4 w-4 rounded-sm transition-colors flex items-center justify-center", 
+              internalChecked ? "bg-white" : "bg-muted"
+            )}
+          >
+            {internalChecked && (
+              <svg width="10" height="8" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 1L3.5 6.5L1 4" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+        </div>
+        
+        <span className="opacity-80 text-sm leading-[150%] select-none">
+          {children}
+        </span>
+      </div>
+      
+      {/* Drag handle - only this triggers dragging */}
+      <div 
+        {...handleDragHandleProps}
+        className="cursor-grab active:cursor-grabbing h-full px-2 flex items-center justify-center"
+      >
+        <GripVerticalIcon size={16} className="text-muted-foreground flex-shrink-0" />
+      </div>
+    </div>
+  );
+};
+
+// Create a simple placeholder component for column visibility when table isn't directly available
+const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
+  // This is a minimal implementation that shows standard columns
+  // We'll store visibility in localStorage to maintain consistency
+  const storageKey = `markets-widget-${id}-column-visibility`;
+  const orderStorageKey = `markets-widget-${id}-column-order`;
+  
+  // Default columns - similar to what's in MarketsWidget
+  const standardColumns = [
+    { id: 'pair', label: 'Pair' },
+    { id: 'price', label: 'Price' },
+    { id: 'change24h', label: '24h %' },
+    { id: 'change7d', label: '7d %' },
+    { id: 'marketCap', label: 'Market Cap' },
+    { id: 'volume', label: 'Volume' }
+  ];
+  
+  // Get stored visibility or use defaults
+  const [columnVisibility, setColumnVisibility] = useState(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  
+  // Get stored column order or use default
+  const defaultOrder = standardColumns.map(col => col.id).filter(id => id !== 'pair');
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(orderStorageKey);
+      const parsedOrder = stored ? JSON.parse(stored) : defaultOrder;
+      return parsedOrder.filter((id: string) => id !== 'pair');
+    } catch (e) {
+      return defaultOrder;
+    }
+  });
+
+  // Initialize sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, {})
+  );
+  
+  // Handle drag end for column visibility menu reordering
+  function handleMenuDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (active && over && active.id !== over.id) {
+      setColumnOrder(prevOrder => {
+        const oldIndex = prevOrder.indexOf(active.id as string);
+        const newIndex = prevOrder.indexOf(over.id as string);
+        
+        // Create a new order by moving the item
+        const newOrder = arrayMove(prevOrder, oldIndex, newIndex);
+        
+        // Save to localStorage
+        try {
+          const fullOrder = ['pair', ...newOrder];
+          localStorage.setItem(orderStorageKey, JSON.stringify(newOrder));
+          
+          // Dispatch an event for column order change
+          const orderEvent = new CustomEvent('markets-column-order-changed', {
+            detail: {
+              widgetId: id,
+              order: fullOrder
+            }
+          });
+          document.dispatchEvent(orderEvent);
+        } catch (e) {
+          console.error('Error saving column order', e);
+        }
+        
+        return newOrder;
+      });
+    }
+  }
+  
+  // Update visibility and store it
+  const toggleVisibility = (columnId: string) => {
+    const newVisibility = { ...columnVisibility };
+    newVisibility[columnId] = !newVisibility[columnId];
+    
+    // Don't allow hiding the pair column
+    if (columnId === 'pair') {
+      delete newVisibility['pair'];
+    }
+    
+    setColumnVisibility(newVisibility);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(newVisibility));
+    } catch (e) {
+      console.error('Error saving column visibility', e);
+    }
+    
+    // Dispatch an event that MarketsWidget can listen for
+    const event = new CustomEvent('markets-column-visibility-changed', {
+      detail: {
+        widgetId: id,
+        visibility: newVisibility
+      }
+    });
+    document.dispatchEvent(event);
+  };
+  
+  return (
+    <>
+      <DropdownMenuLabel className="opacity-80 text-sm leading-[150%]">Customize Columns</DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      <div className="max-h-[300px] overflow-auto py-1">
+        <DndContext
+          id={useId() + "-menu"}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragEnd={handleMenuDragEnd}
+          sensors={sensors}
+        >
+          <SortableContext
+            items={columnOrder}
+            strategy={verticalListSortingStrategy}
+          >
+            {columnOrder.map((columnId) => {
+              // Look up column details
+              const column = standardColumns.find(col => col.id === columnId);
+              if (!column) return null;
+              
+              return (
+                <DraggableMenuItem
+                  key={column.id}
+                  id={column.id}
+                  isChecked={columnVisibility[column.id] !== false}
+                  onCheckedChange={(checked) => toggleVisibility(column.id)}
+                >
+                  {column.label}
+                </DraggableMenuItem>
+              );
+            })}
+          </SortableContext>
+        </DndContext>
+      </div>
+    </>
+  );
+};
+
 interface MarketsWidgetHeaderProps {
   onSearchQueryChange: (value: string) => void;
   onSelectedQuoteAssetChange: (value: AssetTicker | 'ALL') => void;
@@ -107,40 +361,86 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const [columnsDropdownOpen, setColumnsDropdownOpen] = useState(false);
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [activeListName, setActiveListName] = useState<string>('');
+  const [forceUpdate, setForceUpdate] = useState(0);
   
-  // Get actual table instance - enhanced access pattern with dialog support
+  // Get table ref from context if not provided directly
+  const contextTableRef = useContext(TableRefContext);
+  const effectiveTableRef = tableRef || contextTableRef;
+  
+  // Get actual table instance
   const actualTable = useMemo(() => {
     // First try direct table prop
     if (table) {
-      console.log('[MarketsWidgetHeader] Using direct table prop');
+      console.log(`[${widgetId}] Using direct table prop`);
       return table;
     }
     
     // Then try tableRef
-    if (tableRef?.current?.getTable) {
-      const tableFromRef = tableRef.current.getTable();
+    if (effectiveTableRef?.current?.getTable) {
+      const tableFromRef = effectiveTableRef.current.getTable();
       if (tableFromRef) {
-        console.log('[MarketsWidgetHeader] Using table from ref');
+        console.log(`[${widgetId}] Using table from ref`, effectiveTableRef.current);
         return tableFromRef;
       }
     }
     
-    // Lastly, check for dialog mode table reference
-    if (typeof window !== 'undefined' && window.__marketsWidgetDialogTable) {
-      console.log('[MarketsWidgetHeader] Using global table reference (dialog mode)');
-      return window.__marketsWidgetDialogTable;
+    // If we couldn't get a table, log more details to help debug
+    if (effectiveTableRef) {
+      console.log(`[${widgetId}] Table ref exists but couldn't get table:`, 
+        effectiveTableRef.current ? 'Ref has current' : 'Ref missing current',
+        effectiveTableRef.current?.getTable ? 'getTable exists' : 'getTable missing');
+    } else {
+      console.log(`[${widgetId}] No table ref available`);
     }
     
-    console.log('[MarketsWidgetHeader] No table reference found');
     return null;
-  }, [table, tableRef]);
+  }, [table, effectiveTableRef, widgetId, forceUpdate]);
 
-  // Storage keys for local storage
-  const storageKeys = {
-    search: `marketsWidget_${widgetId}_searchQuery`,
-    quoteAsset: `marketsWidget_${widgetId}_selectedQuoteAsset`,
-    secondaryCurrency: `marketsWidget_${widgetId}_secondaryCurrency`,
-  };
+  // Poll for the table ref to be available - handles late initialization
+  useEffect(() => {
+    let pollCount = 0;
+    const maxPolls = 10;
+    const pollIntervalMs = 500;
+    
+    // Function to check if the table is available
+    const pollForTable = () => {
+      // Only poll if we don't have a table yet
+      if (!actualTable) {
+        // Check if we have a table ref that's been populated
+        let tableFound = false;
+        
+        if (table) {
+          tableFound = true;
+        } else if (effectiveTableRef?.current?.getTable?.()) {
+          tableFound = true;
+        }
+        
+        if (tableFound) {
+          // Force update to re-run the actualTable useMemo
+          setForceUpdate(prev => prev + 1);
+          return;
+        }
+        
+        // Continue polling if we haven't reached the max count
+        pollCount++;
+        if (pollCount < maxPolls) {
+          setTimeout(pollForTable, pollIntervalMs);
+        }
+      }
+    };
+    
+    // Start polling
+    pollForTable();
+    
+    return () => {
+      pollCount = maxPolls; // Stop polling if component unmounts
+    };
+  }, [actualTable, table, effectiveTableRef]);
+
+  // Get state from widget registry
+  const widgetState = useMemo(() => {
+    return widgetStateRegistry.get(widgetId) as MarketsWidgetState | undefined;
+  }, [widgetId]);
 
   // Local state variables for filter values
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,23 +448,38 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
   const [secondaryCurrency, setSecondaryCurrency] = useState<AssetTicker | null>(null);
   const [isFiltersActive, setIsFiltersActive] = useState(false);
   
-  // Initialize from localStorage
+  // Initialize from widget state
   useEffect(() => {
-    try {
-      const storedSearchQuery = getLocalStorageItem<string>(storageKeys.search, '');
-      const storedQuoteAsset = getLocalStorageItem<AssetTicker | 'ALL'>(storageKeys.quoteAsset, 'ALL');
-      const storedSecondaryCurrency = getLocalStorageItem<AssetTicker | null>(storageKeys.secondaryCurrency, null);
+    if (widgetState) {
+      setSearchQuery(widgetState.searchQuery);
+      setSelectedQuoteAsset(widgetState.selectedQuoteAsset);
+      setSecondaryCurrency(widgetState.secondaryCurrency);
       
-      setSearchQuery(storedSearchQuery);
-      setSelectedQuoteAsset(storedQuoteAsset);
-      setSecondaryCurrency(storedSecondaryCurrency);
-      
-      const active = storedSearchQuery !== '' || storedQuoteAsset !== 'ALL' || storedSecondaryCurrency !== null;
+      const active = widgetState.searchQuery !== '' || 
+                    widgetState.selectedQuoteAsset !== 'ALL' || 
+                    widgetState.secondaryCurrency !== null;
+                    
       setIsFiltersActive(active);
-    } catch (error) {
-      console.error('Error loading filter state from localStorage:', error);
     }
-  }, [widgetId]);
+  }, [widgetState]);
+  
+  // Subscribe to widget state changes
+  useEffect(() => {
+    if (widgetState) {
+      return widgetState.subscribe(() => {
+        setSearchQuery(widgetState.searchQuery);
+        setSelectedQuoteAsset(widgetState.selectedQuoteAsset);
+        setSecondaryCurrency(widgetState.secondaryCurrency);
+        
+        const active = widgetState.searchQuery !== '' || 
+                      widgetState.selectedQuoteAsset !== 'ALL' || 
+                      widgetState.secondaryCurrency !== null;
+                      
+        setIsFiltersActive(active);
+      });
+    }
+    return () => {};
+  }, [widgetState]);
   
   // Check for active list 
   useEffect(() => {
@@ -188,7 +503,6 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
     const handleListChanged = (event: CustomEvent) => {
       // Only process if the event is for this widget
       if (event.detail?.instanceId === widgetId) {
-        console.log(`[MarketsWidgetHeader] Received list change event for widget ${widgetId}:`, event.detail);
         checkActiveList();
       }
     };
@@ -199,42 +513,93 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
       document.removeEventListener('markets-active-list-changed', handleListChanged as EventListener);
     };
   }, [widgetId]);
-  
-  // Update isFiltersActive whenever filters change
+
+  // Add an effect to log when the table becomes available
   useEffect(() => {
-    const active = searchQuery !== '' || selectedQuoteAsset !== 'ALL' || secondaryCurrency !== null;
-    setIsFiltersActive(active);
-  }, [searchQuery, selectedQuoteAsset, secondaryCurrency]);
+    let checkCount = 0;
+    const maxChecks = 5;
+    
+    const checkForTable = () => {
+      let tableFound = false;
+      
+      // Try direct table prop first
+      if (table) {
+        tableFound = true;
+        console.log(`[TableCheck-${widgetId}] Found direct table prop`);
+      }
+      // Then try from ref
+      else if (effectiveTableRef?.current?.getTable?.()) {
+        tableFound = true;
+        console.log(`[TableCheck-${widgetId}] Found table via ref`);
+      }
+      
+      if (tableFound) {
+        console.log(`[TableCheck-${widgetId}] Table is now available`);
+        return; // Stop checking if we found a table
+      }
+      
+      checkCount++;
+      if (checkCount < maxChecks) {
+        setTimeout(checkForTable, 500); // Check again after 500ms
+      } else {
+        console.log(`[TableCheck-${widgetId}] Gave up looking for table after ${maxChecks} attempts`);
+      }
+    };
+    
+    // Start checking
+    checkForTable();
+    
+    return () => {
+      checkCount = maxChecks; // Prevent further checks if component unmounts
+    };
+  }, [table, effectiveTableRef, widgetId]);
+
+  // Define original handlers directly without referencing themselves
+  function handleFilterDropdownOpenChange(open: boolean) {
+    setFilterDropdownOpen(open);
+    if (open) {
+      console.log('Filter dropdown opened with:',
+        `Widget ID: ${widgetId}`,
+        `Cached actualTable: ${actualTable ? 'Available' : 'Not available'}`
+      );
+    }
+  }
+
+  function handleColumnsDropdownOpenChange(open: boolean) {
+    setColumnsDropdownOpen(open);
+    if (open) {
+      console.log('Columns dropdown opened with:',
+        `Widget ID: ${widgetId}`,
+        `Cached actualTable: ${actualTable ? 'Available' : 'Not available'}`
+      );
+    }
+  }
 
   // Handle filter changes
-  const handleSearchChange = (value: string) => {
+  function handleSearchChange(value: string) {
     setSearchQuery(value);
-    setLocalStorageItem(storageKeys.search, value);
     onSearchQueryChange(value);
-  };
+  }
 
-  const handleQuoteAssetChange = (value: AssetTicker | 'ALL') => {
+  function handleQuoteAssetChange(value: AssetTicker | 'ALL') {
     setSelectedQuoteAsset(value);
-    setLocalStorageItem(storageKeys.quoteAsset, value);
     onSelectedQuoteAssetChange(value);
-  };
+  }
 
-  const handleSecondaryCurrencyChange = (value: AssetTicker | null) => {
+  function handleSecondaryCurrencyChange(value: AssetTicker | null) {
     setSecondaryCurrency(value);
-    setLocalStorageItem(storageKeys.secondaryCurrency, value);
     onSecondaryCurrencyChange(value);
-  };
+  }
 
-  const clearAllFilters = () => {
+  function clearAllFilters() {
     handleSearchChange('');
     handleQuoteAssetChange('ALL');
     handleSecondaryCurrencyChange(null);
     setFilterDropdownOpen(false);
-  };
+  }
 
   // Listen for tab click events
-  const handleTabClick = (value: string) => {
-    console.log(`[MarketsWidgetHeader] Tab clicked: ${value} for widget ${widgetId}`);
+  function handleTabClick(value: string) {
     if (value === 'markets') {
       // Deactivate any active list
       ListManager.setActiveListId(null, widgetId);
@@ -242,11 +607,30 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
       const listId = value.substring(5); // Remove 'list-' prefix
       ListManager.setActiveListId(listId, widgetId);
     }
-  };
+  }
+
+  // Get a fresh reference to the table at render time
+  function getTableForComponent() {
+    // First try direct table prop
+    if (table) {
+      return table;
+    }
+    
+    // Then try tableRef for most up-to-date reference
+    if (effectiveTableRef?.current?.getTable) {
+      const tableFromRef = effectiveTableRef.current.getTable();
+      if (tableFromRef) {
+        return tableFromRef;
+      }
+    }
+    
+    // Last resort - use cached actualTable
+    return actualTable;
+  }
 
   return (
     <div className="flex items-center gap-2">
-      <DropdownMenu open={filterDropdownOpen} onOpenChange={setFilterDropdownOpen}>
+      <DropdownMenu open={filterDropdownOpen} onOpenChange={handleFilterDropdownOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button 
             variant={isFiltersActive ? "default" : "outline"}
@@ -486,7 +870,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <DropdownMenu open={columnsDropdownOpen} onOpenChange={setColumnsDropdownOpen}>
+      <DropdownMenu open={columnsDropdownOpen} onOpenChange={handleColumnsDropdownOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button 
             variant="outline" 
@@ -501,13 +885,7 @@ export const MarketsWidgetHeader: React.FC<MarketsWidgetHeaderProps> = ({
           {actualTable ? (
             <MarketsWidgetColumnVisibility table={actualTable} />
           ) : (
-            <>
-              <DropdownMenuLabel className="  text-sm ">Column Options</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="p-2   text-sm  text-muted-foreground text-center">
-                Table not available
-              </div>
-            </>
+            <FallbackColumnVisibility id={widgetId} />
           )}
         </DropdownMenuContent>
       </DropdownMenu>

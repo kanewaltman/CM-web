@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId, CSSProperties, forwardRef, useImperativeHandle } from 'react';
 
+// TODO: Remove global declaration once fully refactored
 // Add a declaration for the global window extension
 declare global {
   interface Window {
@@ -632,7 +633,7 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
     onCustomListsChange,
     activeListId: externalActiveListId,
     onActiveListChange,
-    persistState = false,
+    persistState = true,
     isInDialog = false,
     onRemove,
   } = props;
@@ -1084,6 +1085,87 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   useEffect(() => {
     console.log(`[MarketsWidget] Widget ${id} active list changed to:`, activeListId);
   }, [activeListId, id]);
+  
+  // Listen for custom events for column visibility changes from the header component
+  useEffect(() => {
+    const handleColumnVisibilityChanged = (event: CustomEvent) => {
+      // Make sure this is for our widget
+      if (event.detail?.widgetId === id) {
+        console.log(`[MarketsWidget] Received column visibility update for ${id}:`, event.detail.visibility);
+        
+        // Update column visibility via proper channels
+        if (onColumnVisibilityChange) {
+          // External control
+          onColumnVisibilityChange(event.detail.visibility);
+        } else {
+          // Internal state
+          setInternalColumnVisibility(event.detail.visibility);
+          
+          // Save to localStorage if needed
+          if (persistState) {
+            setStoredValue(instanceStorageKeys.COLUMN_VISIBILITY, event.detail.visibility);
+          }
+          
+          // Table will pick up the changes through the columnVisibility state
+          // Trigger resize after a short delay
+          setTimeout(() => {
+            if (typeof updateColumnSizes === 'function') {
+              updateColumnSizes();
+            }
+          }, 50);
+        }
+      }
+    };
+    
+    // Handle column order changes from FallbackColumnVisibility
+    const handleColumnOrderChanged = (event: CustomEvent) => {
+      // Make sure this is for our widget
+      if (event.detail?.widgetId === id) {
+        console.log(`[MarketsWidget] Received column order update for ${id}:`, event.detail.order);
+        
+        // Update column order via proper channels
+        if (onColumnOrderChange) {
+          // External control
+          onColumnOrderChange(event.detail.order);
+        } else {
+          // Internal state
+          setInternalColumnOrder(event.detail.order);
+          
+          // Save to localStorage if needed
+          if (persistState) {
+            setStoredValue(instanceStorageKeys.COLUMN_ORDER, event.detail.order);
+          }
+          
+          // Trigger resize after a short delay
+          setTimeout(() => {
+            if (typeof updateColumnSizes === 'function') {
+              updateColumnSizes();
+            }
+          }, 50);
+        }
+      }
+    };
+    
+    // Add event listeners
+    document.addEventListener('markets-column-visibility-changed', handleColumnVisibilityChanged as EventListener);
+    document.addEventListener('markets-column-order-changed', handleColumnOrderChanged as EventListener);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('markets-column-visibility-changed', handleColumnVisibilityChanged as EventListener);
+      document.removeEventListener('markets-column-order-changed', handleColumnOrderChanged as EventListener);
+    };
+  }, [
+    id, 
+    onColumnVisibilityChange, 
+    onColumnOrderChange, 
+    setInternalColumnVisibility, 
+    setInternalColumnOrder, 
+    persistState, 
+    instanceStorageKeys?.COLUMN_VISIBILITY, 
+    instanceStorageKeys?.COLUMN_ORDER, 
+    updateColumnSizes
+  ]);
   
   // Initialize the widget
   useEffect(() => {
@@ -1548,19 +1630,11 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   
   // When in dialog mode, we need to ensure the table reference is globally available
   useEffect(() => {
-    if (isInDialog && table) {
-      console.log('[MarketsWidget] In dialog mode, setting global table reference');
-      window.__marketsWidgetDialogTable = table;
+    if (isInDialog && ref && table) {
+      // Make table available to dialog parent
+      // No need to store in window anymore since we have ref
     }
-    
-    return () => {
-      // Clean up when component unmounts
-      if (isInDialog) {
-        console.log('[MarketsWidget] Cleaning up global table reference');
-        delete window.__marketsWidgetDialogTable;
-      }
-    };
-  }, [isInDialog, table]);
+  }, [isInDialog, table, ref]);
   
   // For visual debugging
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
@@ -2034,10 +2108,10 @@ export const MarketsWidget = forwardRef<MarketsWidgetRef, MarketsWidgetProps>((p
   );
 });
 
-// Add displayName for easier debugging
+// Add proper display name
 MarketsWidget.displayName = 'MarketsWidget';
 
-export default MarketsWidget; 
+export default MarketsWidget;
 
 // Define storage key prefix for localStorage
 const STORAGE_KEY_PREFIX = 'markets-widget-';
