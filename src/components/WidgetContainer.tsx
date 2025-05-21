@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Dialog, DialogContent } from './ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { MarketsWidgetTitle } from './MarketWidget';
 import { 
   getWidgetIdFromHash, 
@@ -526,6 +526,7 @@ export const WidgetContainer = memo(function WidgetContainer({
       {(effectiveWidgetId || ((containerRef as any).current?.widgetId)) && (
         <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogContent className="DialogContent w-[var(--max-widget-width,1200px)] max-w-[95vw] h-[90vh] max-h-[90vh] p-0 overflow-hidden">
+            <DialogTitle className="sr-only">{title}</DialogTitle>
             <div className="flex flex-col h-full overflow-hidden">
               {/* Dialog Header */}
               <div className="widget-header flex items-center justify-between px-4 py-2 select-none flex-shrink-0">

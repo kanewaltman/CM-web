@@ -37,26 +37,18 @@ const MarketsWidgetContainer = ({
       onRemove={onRemove}
       widgetId={widgetId}
       headerControls={
-        <MarketsWidgetWrapper 
-          isHeader 
-          widgetId={widgetId} 
-          widgetComponent={WidgetComponent} 
+        <MarketsWidgetWrapper
+          isHeader
+          widgetId={widgetId}
+          widgetComponent={WidgetComponent}
           onRemove={onRemove}
         />
       }
-      widgetMenu={
-        <MarketsWidgetWrapper 
-          isMenu 
-          widgetId={widgetId} 
-          widgetComponent={WidgetComponent} 
-          onRemove={onRemove} 
-        />
-      }
     >
-      <MarketsWidgetWrapper 
-        widgetId={widgetId} 
-        widgetComponent={WidgetComponent} 
-        onRemove={onRemove} 
+      <MarketsWidgetWrapper
+        widgetId={widgetId}
+        widgetComponent={WidgetComponent}
+        onRemove={onRemove}
       />
     </WidgetContainer>
   );
@@ -503,3 +495,7 @@ export const updateWidgetsDataSource = (
     }
   });
 }; 
+
+function onRemove(): void {
+  throw new Error('Function not implemented.');
+}
