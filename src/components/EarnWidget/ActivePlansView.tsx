@@ -15,6 +15,8 @@ import { AssetPriceTooltip, AssetButtonWithPrice } from '../AssetPriceTooltip';
 import { AssetTicker, ASSETS } from '@/assets/AssetTicker';
 import { StakingPlan, stakingPlansManager } from '../EarnConfirmationContent'; // Assuming StakingPlan and stakingPlansManager are here or in a shared types/utils file
 import { EarnWidgetState, widgetStateRegistry, createDefaultEarnWidgetState } from '@/lib/widgetState';
+import { useAssetPrices } from '@/hooks/useAssetPrices';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 // ActivePlansView component
 export const ActivePlansView: React.FC<{ 
@@ -36,6 +38,18 @@ export const ActivePlansView: React.FC<{
 }) => {
   const { resolvedTheme } = useTheme();
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
+  
+  // Get price data with fallback
+  const { prices, loading: pricesLoading, hasProvider: hasPriceProvider } = useAssetPrices();
+  
+  // Create a safer version of the price getter
+  const getAssetPrice = useCallback((asset: AssetTicker): number => {
+    // If we don't have prices for this asset, return 0 as fallback
+    if (!prices || prices[asset] === undefined) {
+      return 0;
+    }
+    return prices[asset];
+  }, [prices]);
   
   // Get widget state or create one if it doesn't exist
   const widgetState = useMemo(() => {
@@ -631,11 +645,12 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
     };
 
     const effectiveEarnings = calculateEffectiveEarnings();
+    const eurValue = effectiveEarnings * getAssetPrice(plan.asset as AssetTicker);
 
     // Only use animated NumberFlow for active plans that are visible
     if (isVisible.current) {
       return (
-                  <div className="font-semibold text-emerald-500 flex justify-end items-center">
+        <div className="font-semibold text-emerald-500 flex justify-end items-center">
           <div className="flex items-center tabular-nums">
             <NumberFlow
               key={`earnings-${plan.id}-${plan.lastClaimedDate || 'initial'}`}
@@ -662,15 +677,128 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
         </div>
       );
     }
-  }, [calculateCurrentEarnings, isVisible, currentTime]);
+  }, [calculateCurrentEarnings, isVisible, currentTime, hasPriceProvider, getAssetPrice]);
+
+  // Calculate total staked amount across all active plans - with safe price access
+  const totalStakedInfo = useMemo(() => {
+    if (activePlans.length === 0) {
+      return { amount: 0, valueInEUR: 0 };
+    }
+
+    const total = activePlans.reduce((acc, plan) => {
+      // Get the price safely using our getter
+      const price = getAssetPrice(plan.asset as AssetTicker);
+      const valueInEUR = plan.amount * price;
+      return {
+        amount: acc.amount + plan.amount,
+        valueInEUR: acc.valueInEUR + valueInEUR
+      };
+    }, { amount: 0, valueInEUR: 0 });
+
+    return total;
+  }, [activePlans, getAssetPrice]);
+
+  // Calculate total earnings across all active plans - with safe price access
+  const totalEarningsInfo = useMemo(() => {
+    if (activePlans.length === 0) {
+      return { amount: 0, valueInEUR: 0 };
+    }
+
+    const total = activePlans.reduce((acc, plan) => {
+      const currentEarnings = calculateCurrentEarnings(plan);
+      // Calculate EUR value if price data is available
+      const price = getAssetPrice(plan.asset as AssetTicker);
+      const valueInEUR = currentEarnings * price;
+      
+      return {
+        amount: acc.amount + currentEarnings,
+        valueInEUR: acc.valueInEUR + valueInEUR
+      };
+    }, { amount: 0, valueInEUR: 0 });
+
+    return total;
+  }, [activePlans, calculateCurrentEarnings, getAssetPrice, currentTime]);
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-centeroverflow-hidden">
+    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
       <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
       <div id="earn-plans-container" className="z-10 text-center w-full max-w mx-auto p-4 relative h-full flex flex-col">
         <div className="mb-4 flex items-center justify-between w-full">
           <div className="text-lg font-semibold">
-            {showHistoric ? 'Historic Plans' : 'Your Active Plans'}
+            {showHistoric ? 'Historic Plans' : (
+              <div>
+                {/* Desktop version */}
+                <div className="hidden md:flex md:items-center md:gap-1">
+                  <span>Actively staking</span>
+                  <span className="flex items-center font-bold tabular-nums">
+                    <NumberFlow
+                      className="translate-y-[1px]"
+                      value={totalStakedInfo.valueInEUR}
+                      format={{
+                        style: 'decimal',
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      }}
+                      plugins={[continuous]}
+                      animated={true}
+                    />
+                    <span className="ml-1">EUR</span>
+                  </span>
+                  <span>earning a total of</span>
+                  <span className="flex items-center font-bold text-emerald-500 tabular-nums ml-1 mr-0">
+                    <NumberFlow
+                      className="translate-y-[1px]"
+                      value={totalEarningsInfo.valueInEUR}
+                      format={{
+                        style: 'decimal',
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      }}
+                      plugins={[continuous]}
+                      animated={true}
+                    />
+                    <span className="ml-1">EUR</span>
+                  </span>
+                </div>
+                {/* Mobile version */}
+                <div className="md:hidden flex flex-col text-left">
+                  <div className="flex items-center gap-1">
+                    <span>Actively staking</span>
+                    <span className="flex items-center font-bold tabular-nums">
+                      <NumberFlow
+                        className="translate-y-[1px]"
+                        value={totalStakedInfo.valueInEUR}
+                        format={{
+                          style: 'decimal',
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        }}
+                        plugins={[continuous]}
+                        animated={true}
+                      />
+                      <span className="ml-1">EUR</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span>Earning a total of</span>
+                    <span className="flex items-center font-bold text-emerald-500 tabular-nums">
+                      <NumberFlow
+                        className="translate-y-[1px]"
+                        value={totalEarningsInfo.valueInEUR}
+                        format={{
+                          style: 'decimal',
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        }}
+                        plugins={[continuous]}
+                        animated={true}
+                      />
+                      <span className="ml-1">EUR</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           {showHistoric ? (
             <Button 
@@ -725,7 +853,36 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                         />
                       </div>
                       <div className="flex flex-col">
-                        <div className="text-sm text-muted-foreground">Staked</div>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="text-sm text-muted-foreground cursor-help">
+                                <span className="border-b border-dotted border-muted-foreground/30 inline-block">Staked</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="bg-background text-foreground border border-border">
+                              <div className="flex flex-col gap-1">
+                                <div className="text-xs text-muted-foreground flex items-center">
+                                  <span className="w-5 h-5 rounded-full bg-indigo-500/10 flex items-center justify-center mr-1.5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-500 w-3 h-3">
+                                      <path d="M12 2v20M2 12h20"></path>
+                                    </svg>
+                                  </span>
+                                  Value on creation: ≈ {(plan.amount * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center">
+                                  <span className="w-5 h-5 rounded-full bg-violet-500/10 flex items-center justify-center mr-1.5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-500 w-3 h-3">
+                                      <circle cx="12" cy="12" r="10"></circle>
+                                      <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                  </span>
+                                  Current value: ≈ {(plan.amount * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <div className="font-medium flex items-center gap-1">
                           <span>{plan.amount}</span>
                           <AssetButtonWithPrice asset={plan.asset as AssetTicker} />
@@ -759,7 +916,39 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                     {/* Earnings */}
                     <div className="flex-shrink-0 mr-6">
                       <div className="flex flex-col">
-                        <div className="text-sm text-muted-foreground text-right">Earnings</div>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="text-sm text-muted-foreground text-right cursor-help">
+                                <span className="border-b border-dotted border-muted-foreground/30 inline-block">Earnings</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="bg-background text-foreground border border-border">
+                              {hasPriceProvider && (
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-xs text-muted-foreground flex items-center">
+                                    <span className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center mr-1.5">
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 w-3 h-3">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                      </svg>
+                                    </span>
+                                    {plan.isActive ? 'Current:' : 'Final earnings:'} ≈ {((plan.isActive 
+                                      ? calculateCurrentEarnings(plan) 
+                                      : (plan.actualEarnings || 0)) * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                                  </div>
+                                  <div className="text-xs text-muted-foreground flex items-center">
+                                    <span className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center mr-1.5">
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 w-3 h-3">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                                      </svg>
+                                    </span>
+                                    {plan.isActive ? 'Total at completion:' : 'Potential at completion:'} ≈ {(plan.estimatedEarnings * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                                  </div>
+                                </div>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         {renderCurrentEarnings(plan)}
                       </div>
                     </div>
@@ -853,8 +1042,77 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                     </div>
                     {renderMobileTotalClaimedValue(plan)}
                     <div>
-                      <div className="text-xs text-muted-foreground">Earnings</div>
-                      {renderCurrentEarnings(plan)}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="text-xs text-muted-foreground cursor-help">
+                              <span className="border-b border-dotted border-muted-foreground/30 inline-block">Staked</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="bg-background text-foreground border border-border">
+                            <div className="flex flex-col gap-1">
+                              <div className="text-xs flex items-center">
+                                <span className="w-4 h-4 rounded-full bg-indigo-500/10 flex items-center justify-center mr-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-500 w-2.5 h-2.5">
+                                    <path d="M12 2v20M2 12h20"></path>
+                                  </svg>
+                                </span>
+                                Created: ≈ {(plan.amount * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                              </div>
+                              <div className="text-xs flex items-center">
+                                <span className="w-4 h-4 rounded-full bg-violet-500/10 flex items-center justify-center mr-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-500 w-2.5 h-2.5">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                  </svg>
+                                </span>
+                                Current: ≈ {(plan.amount * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                              </div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <div className="text-sm font-medium">
+                        {plan.amount} {plan.asset}
+                      </div>
+                    </div>
+                    <div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="text-xs text-muted-foreground cursor-help">
+                              <span className="border-b border-dotted border-muted-foreground/30 inline-block">Earnings</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="bg-background text-foreground border border-border">
+                            {hasPriceProvider && (
+                              <div className="flex flex-col gap-1">
+                                <div className="text-xs flex items-center">
+                                  <span className="w-4 h-4 rounded-full bg-emerald-500/10 flex items-center justify-center mr-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 w-2.5 h-2.5">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                  </span>
+                                  {plan.isActive ? 'Current:' : 'Final:'} ≈ {((plan.isActive 
+                                    ? calculateCurrentEarnings(plan) 
+                                    : (plan.actualEarnings || 0)) * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                                </div>
+                                <div className="text-xs flex items-center">
+                                  <span className="w-4 h-4 rounded-full bg-blue-500/10 flex items-center justify-center mr-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 w-2.5 h-2.5">
+                                      <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                                    </svg>
+                                  </span>
+                                  {plan.isActive ? 'Total:' : 'Potential:'} ≈ {(plan.estimatedEarnings * getAssetPrice(plan.asset as AssetTicker)).toFixed(2)} EUR
+                                </div>
+                              </div>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <div>
+                        {renderCurrentEarnings(plan)}
+                      </div>
                     </div>
                     <div className="flex justify-end items-center">
                       {plan.isActive && (
@@ -998,9 +1256,6 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
             >
               Start new plan
             </Button>
-            <span className="text-xs text-muted-foreground mt-1">
-              explore all options below
-            </span>
           </div>
         )}
       </div>
