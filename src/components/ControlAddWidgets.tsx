@@ -4,7 +4,6 @@ import {
   RotateCcw,
   Copy,
   Clipboard,
-  Palette,
   Sun,
   Moon,
   Monitor,
@@ -357,20 +356,55 @@ export function AddWidgetButton({
           <Button
             variant="ghost"
             className={cn(
-              "px-4 text-base rounded-full",
+              "px-4 text-base rounded-full transition-all duration-200",
               "text-foreground",
               "hover:bg-accent hover:text-accent-foreground",
-              "py-5"
+              "py-5",
+              isOpen
+                ? "bg-gradient-to-r from-primary/20 to-accent shadow-lg scale-105"
+                : null
             )}
           >
-            <Plus className="h-5 w-5 mr-2 opacity-50" />
-            <span>Widgets</span>
+            <Plus
+              className={cn(
+                "h-5 w-5 mr-2 transition-all duration-300",
+                isOpen ? "rotate-45 text-primary" : "opacity-50"
+              )}
+            />
+            <div className="relative overflow-hidden w-14 h-6">
+              <span
+                className={cn(
+                  "absolute transition-all duration-300 left-0",
+                  isOpen
+                    ? "-translate-y-8 opacity-0"
+                    : "translate-y-0 opacity-100"
+                )}
+              >
+                Widgets
+              </span>
+              <span
+                className={cn(
+                  "absolute transition-all duration-300 left-1",
+                  isOpen
+                    ? "translate-y-0 opacity-100"
+                    : "translate-y-8 opacity-0"
+                )}
+              >
+                Close
+              </span>
+            </div>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="center"
-          sideOffset={8}
-          className="w-[95vw] max-w-fit min-w-[320px]"
+          sideOffset={16}
+          className="w-[95vw] max-w-fit min-w-[320px] data-[state=open]:animate-in data-[state=open]:fade-in-50 data-[state=open]:zoom-in-90 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-50 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-bottom-2 duration-300 ease-spring border-none shadow-[0_20px_70px_-15px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_70px_-15px_rgba(0,0,0,0.7)] backdrop-blur-sm"
+          style={{
+            transformOrigin: "center bottom",
+            animationFillMode: "forwards",
+            backfaceVisibility: "hidden",
+            perspective: "1000px",
+          }}
         >
           <div className="flex items-center justify-between p-3">
             <div className="flex items-center gap-4">
@@ -581,7 +615,7 @@ export function AddWidgetButton({
                   { type: "insight", title: "Insight" },
                 ];
 
-                return widgetConfigs.map(({ type, title }) => {
+                return widgetConfigs.map(({ type, title }, index) => {
                   const IconComponent =
                     {
                       balances: Wallet,
@@ -600,10 +634,15 @@ export function AddWidgetButton({
                       draggable={!isTauriEnv}
                       onDragStart={(e) => handleDragStart(e, type)}
                       onClick={() => handleWidgetClick(type)}
-                      className="relative flex flex-col bg-zinc-900 border border-zinc-800 rounded-md h-[120px] w-[180px] hover:border-primary cursor-pointer transition-all overflow-hidden group"
+                      className="relative flex flex-col bg-zinc-900 border border-zinc-800 rounded-md h-[120px] w-[180px] hover:border-primary cursor-pointer transition-all overflow-hidden group animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4"
+                      style={{
+                        animationDelay: `${index * 30}ms`,
+                        animationFillMode: "both",
+                        animationDuration: "400ms",
+                      }}
                     >
-                      <div className="p-2 flex flex-col items-start gap-3">
-                        <IconComponent className="h-5 w-5 text-primary/70" />
+                      <div className="p-4 flex flex-col items-start gap-3">
+                        <IconComponent className="h-6 w-6 text-primary/70" />
                         <div className="font-medium text-white text-sm">
                           {title}
                         </div>
