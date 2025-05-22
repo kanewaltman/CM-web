@@ -33,7 +33,8 @@ export const ActivePlansView: React.FC<{
   onShowHistoric?: () => void,
   onReturnToRippleView?: () => void,
   onShowActivePlans?: () => void,
-  widgetId?: string
+  widgetId?: string,
+  inDialog?: boolean
 }> = ({ 
   plans, 
   onNewPlan, 
@@ -41,13 +42,16 @@ export const ActivePlansView: React.FC<{
   onShowHistoric,
   onReturnToRippleView,
   onShowActivePlans,
-  widgetId
+  widgetId,
+  inDialog = false
 }) => {
   const { resolvedTheme } = useTheme();
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
   
-  // Add state for asset filtering
-  const [selectedAssetFilter, setSelectedAssetFilter] = useState<AssetTicker | 'ALL'>('ALL');
+  // Log whether we're in dialog mode
+  useEffect(() => {
+    console.log(`ActivePlansView (widgetId=${widgetId}): Rendering in ${inDialog ? 'dialog' : 'normal'} mode`);
+  }, [widgetId, inDialog]);
   
   // Get unique assets from plans
   const uniqueAssets = useMemo(() => {
@@ -57,6 +61,112 @@ export const ActivePlansView: React.FC<{
     });
     return Array.from(assets).sort();
   }, [plans]);
+  
+  // Get widget state or create one if it doesn't exist
+  const widgetState = useMemo(() => {
+    if (!widgetId) return null;
+    
+    if (!widgetStateRegistry.has(widgetId)) {
+      const newState = createDefaultEarnWidgetState('ripple', widgetId);
+      widgetStateRegistry.set(widgetId, newState);
+      if (initialShowHistoric) {
+        newState.setShowHistoricPlans(true);
+      }
+      console.log(`ActivePlansView: Created new widget state for widgetId=${widgetId}`);
+      return newState;
+    }
+    
+    console.log(`ActivePlansView: Using existing widget state for widgetId=${widgetId}`);
+    return widgetStateRegistry.get(widgetId) as EarnWidgetState;
+  }, [widgetId, initialShowHistoric]);
+  
+  // Add state for asset filtering - use widget state if available
+  const [localSelectedAssetFilter, setLocalSelectedAssetFilter] = useState<AssetTicker | 'ALL'>('ALL');
+  
+  // Use widget state if available, otherwise use local state
+  const selectedAssetFilter = useMemo(() => {
+    const result = widgetState ? widgetState.selectedAssetFilter : localSelectedAssetFilter;
+    console.log(`ActivePlansView (widgetId=${widgetId}): Using asset filter: ${result}`);
+    return result;
+  }, [widgetState, localSelectedAssetFilter, widgetId]);
+  
+  // Helper function to set asset filter that works with both widget state and local state
+  const setSelectedAssetFilter = useCallback((filter: AssetTicker | 'ALL') => {
+    console.log(`ActivePlansView (widgetId=${widgetId}): Setting asset filter to ${filter}`);
+    if (widgetState) {
+      widgetState.setSelectedAssetFilter(filter);
+      
+      // For dialog view, we need to explicitly update local state as well to ensure UI updates
+      // This is needed because the widget state update might not trigger a re-render in the dialog
+      if (inDialog) {
+        console.log(`ActivePlansView (widgetId=${widgetId}): Dialog mode - explicitly updating local state to ${filter}`);
+        setLocalSelectedAssetFilter(filter);
+        
+        // Force propagation of changes to other instances by adding a small delay
+        setTimeout(() => {
+          // Re-apply the change to ensure widget state is updated (acts as a safety net)
+          widgetState.setSelectedAssetFilter(filter);
+        }, 10);
+      }
+    } else {
+      setLocalSelectedAssetFilter(filter);
+    }
+  }, [widgetState, widgetId, inDialog]);
+  
+  // Subscribe to widget state changes to ensure both normal and dialog views stay in sync
+  useEffect(() => {
+    if (!widgetState) return;
+    
+    console.log(`ActivePlansView (widgetId=${widgetId}): Subscribing to widget state changes`);
+    
+    // Get initial state from widget state
+    if (widgetState.selectedAssetFilter !== localSelectedAssetFilter) {
+      console.log(`ActivePlansView (widgetId=${widgetId}): Initial sync from widget state: ${widgetState.selectedAssetFilter}`);
+      setLocalSelectedAssetFilter(widgetState.selectedAssetFilter);
+    }
+    
+    // Subscribe to widget state changes
+    const unsubscribe = widgetState.subscribe(() => {
+      // If the widget state's selectedAssetFilter is different from our local state,
+      // update the local state to match
+      if (widgetState.selectedAssetFilter !== localSelectedAssetFilter) {
+        console.log(`ActivePlansView (widgetId=${widgetId}): Sync local filter from widget state: ${widgetState.selectedAssetFilter}`);
+        setLocalSelectedAssetFilter(widgetState.selectedAssetFilter);
+        
+        // For dialog mode, explicitly re-apply our changes to ensure UI updates
+        if (inDialog && widgetState.selectedAssetFilter === 'ALL') {
+          console.log(`ActivePlansView (widgetId=${widgetId}): Dialog mode - detected reset to ALL, forcing refresh`);
+          
+          // Force a refresh of the filtered plans with a short delay
+          setTimeout(() => {
+            setLocalSelectedAssetFilter('ALL');
+          }, 20);
+        }
+      }
+    });
+    
+    // Set up a periodic check to ensure synchronization in dialog mode
+    let syncInterval: NodeJS.Timeout | null = null;
+    
+    if (inDialog) {
+      syncInterval = setInterval(() => {
+        if (widgetState.selectedAssetFilter !== localSelectedAssetFilter) {
+          console.log(`ActivePlansView (widgetId=${widgetId}): Dialog sync interval - detected state mismatch, fixing`);
+          setLocalSelectedAssetFilter(widgetState.selectedAssetFilter);
+        }
+      }, 500); // Check every 500ms
+    }
+    
+    // Cleanup subscription on unmount
+    return () => {
+      console.log(`ActivePlansView (widgetId=${widgetId}): Unsubscribing from widget state changes`);
+      unsubscribe();
+      
+      if (syncInterval) {
+        clearInterval(syncInterval);
+      }
+    };
+  }, [widgetState, localSelectedAssetFilter, widgetId, inDialog]);
   
   // Constants for dynamic height calculation - fine-tuned based on UI
   const ACTIVE_PLAN_CARD_HEIGHT = 75; // Active plans are taller (including margins)
@@ -76,22 +186,6 @@ export const ActivePlansView: React.FC<{
     }
     return prices[asset];
   }, [prices]);
-  
-  // Get widget state or create one if it doesn't exist
-  const widgetState = useMemo(() => {
-    if (!widgetId) return null;
-    
-    if (!widgetStateRegistry.has(widgetId)) {
-      const newState = createDefaultEarnWidgetState('ripple', widgetId);
-      widgetStateRegistry.set(widgetId, newState);
-      if (initialShowHistoric) {
-        newState.setShowHistoricPlans(true);
-      }
-      return newState;
-    }
-    
-    return widgetStateRegistry.get(widgetId) as EarnWidgetState;
-  }, [widgetId, initialShowHistoric]);
   
   // Fallback to local state when widgetState is not available
   const [localShowHistoric, setLocalShowHistoric] = useState<boolean>(initialShowHistoric);
@@ -611,6 +705,10 @@ Current earnings: ${earningsDisplay} ${plan.asset}`);
   // Handler for showing active plans
   const handleShowActiveClick = useCallback(() => {
     console.log('Active Plans click handler called', { activePlans, onShowActivePlans, onReturnToRippleView });
+    
+    // Reset asset filter when switching views
+    setSelectedAssetFilter('ALL');
+    
     if (onShowActivePlans) {
       console.log('Calling onShowActivePlans');
       onShowActivePlans();
@@ -625,11 +723,15 @@ Current earnings: ${earningsDisplay} ${plan.asset}`);
         setLocalShowHistoric(false);
       }
     }
-  }, [activePlans, onShowActivePlans, onReturnToRippleView, widgetState]);
+  }, [activePlans, onShowActivePlans, onReturnToRippleView, widgetState, setSelectedAssetFilter]);
 
   // Handler for showing historic plans
   const handleShowHistoricClick = useCallback(() => {
     console.log('Historic click handler called', { onShowHistoric });
+    
+    // Reset asset filter when switching views
+    setSelectedAssetFilter('ALL');
+    
     if (onShowHistoric) {
       console.log('Calling onShowHistoric');
       onShowHistoric();
@@ -641,7 +743,7 @@ Current earnings: ${earningsDisplay} ${plan.asset}`);
         setLocalShowHistoric(true);
       }
     }
-  }, [onShowHistoric, widgetState]);
+  }, [onShowHistoric, widgetState, setSelectedAssetFilter]);
 
   // Add a ref to track button elements
   const claimButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -1221,11 +1323,7 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => {
-                    // Clear asset filter when switching views
-                    setSelectedAssetFilter('ALL');
-                    handleShowActiveClick();
-                  }}
+                  onClick={handleShowActiveClick}
                   className="h-7 px-2.5 text-xs"
                 >
                   {plans.some(plan => plan.isActive) ? "Show Active Plans" : "Return to Earn View"}
@@ -1320,7 +1418,25 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                               "text-xs cursor-pointer",
                               selectedAssetFilter === 'ALL' ? "opacity-50" : "opacity-100"
                             )}
-                            onClick={() => setSelectedAssetFilter('ALL')}
+                            onClick={() => {
+                              console.log(`ActivePlansView (widgetId=${widgetId}): Reset filters clicked in ${inDialog ? 'dialog' : 'normal'} mode`);
+                              
+                              // Special handling for dialog mode
+                              if (inDialog) {
+                                // First update local state for immediate UI feedback
+                                setLocalSelectedAssetFilter('ALL');
+                                
+                                // Then update widget state with a delay to ensure propagation
+                                setTimeout(() => {
+                                  if (widgetState) {
+                                    widgetState.setSelectedAssetFilter('ALL');
+                                  }
+                                }, 10);
+                              } else {
+                                // Normal flow
+                                setSelectedAssetFilter('ALL');
+                              }
+                            }}
                             disabled={selectedAssetFilter === 'ALL'}
                           >
                             <RotateCcw className="mr-2 h-3.5 w-3.5 opacity-80" />
@@ -1338,11 +1454,7 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => {
-                      // Clear asset filter when switching views
-                      setSelectedAssetFilter('ALL');
-                      handleShowHistoricClick();
-                    }}
+                    onClick={handleShowHistoricClick}
                     className="h-7 px-2.5 text-xs"
                   >
                     Show Historic
@@ -1492,7 +1604,25 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                                 "text-xs cursor-pointer",
                                 selectedAssetFilter === 'ALL' ? "opacity-50" : "opacity-100"
                               )}
-                              onClick={() => setSelectedAssetFilter('ALL')}
+                              onClick={() => {
+                                console.log(`ActivePlansView (widgetId=${widgetId}): Reset filters clicked in ${inDialog ? 'dialog' : 'normal'} mode`);
+                                
+                                // Special handling for dialog mode
+                                if (inDialog) {
+                                  // First update local state for immediate UI feedback
+                                  setLocalSelectedAssetFilter('ALL');
+                                  
+                                  // Then update widget state with a delay to ensure propagation
+                                  setTimeout(() => {
+                                    if (widgetState) {
+                                      widgetState.setSelectedAssetFilter('ALL');
+                                    }
+                                  }, 10);
+                                } else {
+                                  // Normal flow
+                                  setSelectedAssetFilter('ALL');
+                                }
+                              }}
                               disabled={selectedAssetFilter === 'ALL'}
                             >
                               <RotateCcw className="mr-2 h-3.5 w-3.5 opacity-80" />

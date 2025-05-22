@@ -772,7 +772,7 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
   ) : effectiveViewMode === 'cards' ? (
     <EarnWidgetStakingOptions forcedTheme={forcedTheme} widgetId={props.widgetId} />
   ) : (
-    <StakeView forcedTheme={forcedTheme} initialAsset={initialAsset} />
+    <StakeView forcedTheme={forcedTheme} initialAsset={initialAsset} widgetId={props.widgetId} />
   );
 
   // If useContentOnly is set, render only the content without any wrapper

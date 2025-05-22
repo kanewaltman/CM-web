@@ -184,6 +184,7 @@ export class EarnWidgetState {
   private _viewMode: EarnViewMode;
   private _showHistoricPlans: boolean = false;
   private _featuredToken: string = 'XCM';
+  private _selectedAssetFilter: AssetTicker | 'ALL' = 'ALL';
   public widgetId: string;
 
   constructor(initialViewMode: EarnViewMode = 'ripple', widgetId: string) {
@@ -214,6 +215,10 @@ export class EarnWidgetState {
     return this._featuredToken;
   }
 
+  get selectedAssetFilter(): AssetTicker | 'ALL' {
+    return this._selectedAssetFilter;
+  }
+
   setViewMode(newViewMode: EarnViewMode): void {
     if (!newViewMode) return;
     this._viewMode = newViewMode;
@@ -229,6 +234,12 @@ export class EarnWidgetState {
   setFeaturedToken(token: string): void {
     if (!token || this._featuredToken === token) return;
     this._featuredToken = token;
+    this.notifyListeners();
+  }
+
+  setSelectedAssetFilter(filter: AssetTicker | 'ALL'): void {
+    if (this._selectedAssetFilter === filter) return;
+    this._selectedAssetFilter = filter;
     this.notifyListeners();
   }
 }
