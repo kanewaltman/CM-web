@@ -605,29 +605,44 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
           }
         );
 
-        // Points toast, styled and delayed like ConfirmationDialogContent
-        setTimeout(() => {
-          toast(
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                </svg>
-              </div>
-              <div>
-                <p className="font-medium text-base">Points Earned!</p>
-                <div className="flex items-center gap-1">
-                  <p className="text-sm font-medium text-orange-500">+50</p>
-                  <p className="text-sm text-muted-foreground">for claiming rewards</p>
+        // Check if we're in a batch claim process
+        const isBatchClaim = sessionStorage.getItem('batch_claim_in_progress') === 'true';
+        const showAccumulatedPoints = sessionStorage.getItem('show_accumulated_points') === 'true';
+        
+        // Only show individual points notification if not part of a batch claim
+        // or if this is the last item and we need to show accumulated points
+        if (!isBatchClaim) {
+          // Points toast, styled and delayed like ConfirmationDialogContent
+          setTimeout(() => {
+            toast(
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
                 </div>
-              </div>
-            </div>,
-            {
-              className: "bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/30",
-              duration: 3500
-            }
-          );
-        }, 1200);
+                <div>
+                  <p className="font-medium text-base">Points Earned!</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-sm font-medium text-orange-500">+50</p>
+                    <p className="text-sm text-muted-foreground">for claiming rewards</p>
+                  </div>
+                </div>
+              </div>,
+              {
+                className: "bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/30",
+                duration: 3500
+              }
+            );
+          }, 1200);
+        }
+        
+        // If this is the last item in a batch claim and showAccumulatedPoints is true,
+        // the accumulated points notification will be shown by handleClaimAllRewards
+        if (showAccumulatedPoints) {
+          // Remove the flag as it's been handled
+          sessionStorage.removeItem('show_accumulated_points');
+        }
       }).catch(err => console.error('Error showing toast notifications:', err));
     }
   }, [isPlanReadyToClaim, calculateCurrentEarnings]);
@@ -775,6 +790,120 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
     }
   }, []);
 
+  // Handle claim all rewards
+  const handleClaimAllRewards = useCallback(() => {
+    // Filter only plans that are ready to claim
+    const readyToClaimPlans = activePlans.filter(plan => isPlanReadyToClaim(plan));
+    
+    if (readyToClaimPlans.length === 0) {
+      alert("No plans ready to claim");
+      return;
+    }
+
+    // Confirm with user
+    if (confirm(`Are you sure you want to claim rewards from all ${readyToClaimPlans.length} eligible plans?`)) {
+      // Calculate total points (50 points per claim)
+      const totalPoints = readyToClaimPlans.length * 50;
+      
+      // Flag to prevent individual points notifications
+      const isMultipleClaim = readyToClaimPlans.length > 1;
+      
+      // Process all claims
+      readyToClaimPlans.forEach((plan, index) => {
+        // Create a synthetic event for the handler
+        const syntheticEvent = {
+          currentTarget: claimButtonRefs.current?.get(plan.id) || document.createElement('button'),
+          stopPropagation: () => {}
+        } as React.MouseEvent<HTMLButtonElement>;
+        
+        // For the last plan, we'll want to show the accumulated points notification
+        const isLastPlan = index === readyToClaimPlans.length - 1;
+        
+        // Modify the behavior of handleClaimRewards for batch processing
+        // Instead of creating a local function, we'll use a custom event
+        if (isMultipleClaim) {
+          // Set a flag in sessionStorage to control points notification behavior
+          if (index === 0) {
+            // First claim: disable individual points notifications
+            sessionStorage.setItem('batch_claim_in_progress', 'true');
+            sessionStorage.setItem('batch_claim_total_points', totalPoints.toString());
+          }
+          
+          // For the last claim, we'll need to show the accumulated points
+          if (isLastPlan) {
+            sessionStorage.setItem('show_accumulated_points', 'true');
+          }
+        }
+        
+        // Process the claim
+        handleClaimRewards(plan, syntheticEvent);
+        
+        // If this is the last plan and we have multiple claims, show the accumulated points notification
+        if (isLastPlan && isMultipleClaim) {
+          // Import and trigger sonner for accumulated points
+          import('sonner').then(({ toast }) => {
+            // Short delay to ensure it appears after the last transaction notification
+            setTimeout(() => {
+              toast(
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-base">Points Earned!</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm font-medium text-orange-500">+{totalPoints}</p>
+                      <p className="text-sm text-muted-foreground">for claiming rewards</p>
+                    </div>
+                  </div>
+                </div>,
+                {
+                  className: "bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/30",
+                  duration: 3500
+                }
+              );
+            }, 1500);
+            
+            // Clean up session storage
+            sessionStorage.removeItem('batch_claim_in_progress');
+            sessionStorage.removeItem('batch_claim_total_points');
+            sessionStorage.removeItem('show_accumulated_points');
+          }).catch(err => console.error('Error showing points notification:', err));
+        }
+      });
+    }
+  }, [activePlans, isPlanReadyToClaim, handleClaimRewards]);
+
+  // Handle terminate all plans
+  const handleTerminateAllPlans = useCallback(() => {
+    if (activePlans.length === 0) {
+      alert("No active plans to terminate");
+      return;
+    }
+
+    // Calculate total fees
+    const totalFee = activePlans.reduce((sum, plan) => {
+      return sum + calculateTerminationFee(plan);
+    }, 0);
+
+    // Confirm with user
+    if (confirm(`Are you sure you want to terminate all ${activePlans.length} active plans?
+
+Total termination fees: ${totalFee.toFixed(4)} ${activePlans.length > 0 ? activePlans[0].asset : ""}`)) {
+      // Process all terminations
+      activePlans.forEach(plan => {
+        // Create a synthetic event for the handler
+        const syntheticEvent = {
+          stopPropagation: () => {}
+        } as React.MouseEvent<HTMLButtonElement>;
+        
+        handleTerminatePlan(plan, syntheticEvent);
+      });
+    }
+  }, [activePlans, calculateTerminationFee, handleTerminatePlan]);
+
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
       <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
@@ -860,25 +989,58 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
               </div>
             )}
           </div>
-          {showHistoric ? (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleShowActiveClick}
-              className="h-7 px-2.5 text-xs"
-            >
-              {activePlans.length > 0 ? "Show Active Plans" : "Return to Earn View"}
-            </Button>
-          ) : historicPlans.length > 0 && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleShowHistoricClick}
-              className="h-7 px-2.5 text-xs"
-            >
-              Show Historic
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {showHistoric ? (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleShowActiveClick}
+                className="h-7 px-2.5 text-xs"
+              >
+                {activePlans.length > 0 ? "Show Active Plans" : "Return to Earn View"}
+              </Button>
+            ) : (
+              <>
+                {historicPlans.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleShowHistoricClick}
+                    className="h-7 px-2.5 text-xs"
+                  >
+                    Show Historic
+                  </Button>
+                )}
+                {activePlans.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="h-7 px-2.5 text-xs"
+                      >
+                        All
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-fit">
+                      <DropdownMenuItem
+                        className="cursor-pointer transition-colors hover:bg-[#FF4D15] hover:text-white focus:bg-[#FF4D15] focus:text-white whitespace-nowrap"
+                        onClick={handleClaimAllRewards}
+                      >
+                        Claim all rewards
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="cursor-pointer transition-colors hover:bg-destructive hover:text-white focus:bg-destructive focus:text-white whitespace-nowrap"
+                        onClick={handleTerminateAllPlans}
+                      >
+                        Terminate all plans
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Main content container with flex layout */}
