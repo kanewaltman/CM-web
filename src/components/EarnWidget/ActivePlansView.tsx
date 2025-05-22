@@ -8,7 +8,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuGroup,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '../ui/dropdown-menu';
+import { Check, Filter as FilterIcon, RotateCcw, Coins } from 'lucide-react';
 import { ShimmerButton } from '../magicui/shimmer-button';
 import NumberFlow, { continuous } from '@number-flow/react';
 import { AssetPriceTooltip, AssetButtonWithPrice } from '../AssetPriceTooltip';
@@ -38,6 +45,18 @@ export const ActivePlansView: React.FC<{
 }) => {
   const { resolvedTheme } = useTheme();
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
+  
+  // Add state for asset filtering
+  const [selectedAssetFilter, setSelectedAssetFilter] = useState<AssetTicker | 'ALL'>('ALL');
+  
+  // Get unique assets from plans
+  const uniqueAssets = useMemo(() => {
+    const assets = new Set<AssetTicker>();
+    plans.forEach(plan => {
+      assets.add(plan.asset as AssetTicker);
+    });
+    return Array.from(assets).sort();
+  }, [plans]);
   
   // Constants for dynamic height calculation - fine-tuned based on UI
   const ACTIVE_PLAN_CARD_HEIGHT = 75; // Active plans are taller (including margins)
@@ -99,13 +118,21 @@ export const ActivePlansView: React.FC<{
   // Add this state at the beginning of the ActivePlansView component (around line ~2746)
   const [hoveredPlanId, setHoveredPlanId] = useState<string | null>(null);
 
+  // Filter plans based on selected asset first
+  const filteredByAssetPlans = useMemo(() => {
+    if (selectedAssetFilter === 'ALL') {
+      return plans;
+    }
+    return plans.filter(plan => plan.asset === selectedAssetFilter);
+  }, [plans, selectedAssetFilter]);
+
   // Memoize active and historic plans to prevent recalculation on each render
   const { activePlans, historicPlans } = useMemo(() => {
     return {
-      activePlans: plans.filter(plan => plan.isActive),
-      historicPlans: plans.filter(plan => !plan.isActive)
+      activePlans: filteredByAssetPlans.filter(plan => plan.isActive),
+      historicPlans: filteredByAssetPlans.filter(plan => !plan.isActive)
     };
-  }, [plans]);
+  }, [filteredByAssetPlans]);
 
   // Create a calculation function outside of useEffect for reuse
   const calculatePlansPerPage = useCallback(() => {
@@ -1098,6 +1125,11 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
     }
   }, [activePlans, calculateTerminationFee, calculateCurrentEarnings, handleTerminatePlan]);
 
+  // Handle start new plan
+  const handleStartNewPlan = useCallback(() => {
+    onNewPlan();
+  }, [onNewPlan]);
+
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden" ref={containerRef}>
       <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
@@ -1185,21 +1217,132 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
           </div>
           <div className="flex items-center gap-2">
             {showHistoric ? (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleShowActiveClick}
-                className="h-7 px-2.5 text-xs"
-              >
-                {activePlans.length > 0 ? "Show Active Plans" : "Return to Earn View"}
-              </Button>
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    // Clear asset filter when switching views
+                    setSelectedAssetFilter('ALL');
+                    handleShowActiveClick();
+                  }}
+                  className="h-7 px-2.5 text-xs"
+                >
+                  {plans.some(plan => plan.isActive) ? "Show Active Plans" : "Return to Earn View"}
+                </Button>
+                
+                {/* Add Plans dropdown with filter for historic view */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="h-7 px-2.5 text-xs"
+                    >
+                      Plans
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-fit">
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="cursor-pointer text-xs">
+                        <FilterIcon className="mr-2 h-3.5 w-3.5" />
+                        <span>Filter</span>
+                        {selectedAssetFilter !== 'ALL' && (
+                          <div className="ml-2 py-0.5 px-1.5 rounded-sm bg-primary/10 text-[10px] font-medium">
+                            {selectedAssetFilter}
+                          </div>
+                        )}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="min-w-[200px]">
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
+                            Filter by Asset
+                          </DropdownMenuLabel>
+                          <DropdownMenuItem 
+                            className="text-xs cursor-pointer"
+                            onClick={() => setSelectedAssetFilter('ALL')}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center">
+                                <Coins className="mr-2 h-3.5 w-3.5 opacity-80" />
+                                <span>Show all assets</span>
+                              </div>
+                              <Check 
+                                className={cn(
+                                  "h-3.5 w-3.5 ml-2",
+                                  selectedAssetFilter === 'ALL' ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </div>
+                          </DropdownMenuItem>
+                          
+                          {/* Show all assets that have plans in historic view */}
+                          {uniqueAssets
+                            .filter(asset => {
+                              // Filter based on the original unfiltered plans
+                              const relevantPlans = plans.filter(plan => !plan.isActive); // All historic plans
+                              return relevantPlans.some(plan => plan.asset === asset);
+                            })
+                            .map(asset => (
+                              <DropdownMenuItem 
+                                key={asset} 
+                                className="text-xs cursor-pointer"
+                                onClick={() => setSelectedAssetFilter(asset)}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center">
+                                    {ASSETS[asset]?.icon ? (
+                                      <img 
+                                        src={ASSETS[asset].icon} 
+                                        alt={asset} 
+                                        className="w-4 h-4 mr-2 rounded-full" 
+                                      />
+                                    ) : (
+                                      <div className="w-4 h-4 mr-2 rounded-full bg-primary/20 flex items-center justify-center">
+                                        <span className="text-[10px] font-medium">{asset.charAt(0)}</span>
+                                      </div>
+                                    )}
+                                    <span>{asset}</span>
+                                  </div>
+                                  <Check 
+                                    className={cn(
+                                      "h-3.5 w-3.5 ml-2",
+                                      selectedAssetFilter === asset ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                </div>
+                              </DropdownMenuItem>
+                            ))}
+                          
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className={cn(
+                              "text-xs cursor-pointer",
+                              selectedAssetFilter === 'ALL' ? "opacity-50" : "opacity-100"
+                            )}
+                            onClick={() => setSelectedAssetFilter('ALL')}
+                            disabled={selectedAssetFilter === 'ALL'}
+                          >
+                            <RotateCcw className="mr-2 h-3.5 w-3.5 opacity-80" />
+                            <span>Reset filters</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             ) : (
               <>
-                {historicPlans.length > 0 && (
+                {plans.some(plan => !plan.isActive) && (
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={handleShowHistoricClick}
+                    onClick={() => {
+                      // Clear asset filter when switching views
+                      setSelectedAssetFilter('ALL');
+                      handleShowHistoricClick();
+                    }}
                     className="h-7 px-2.5 text-xs"
                   >
                     Show Historic
@@ -1217,6 +1360,153 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-fit">
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className="cursor-pointer text-xs">
+                          <FilterIcon className="mr-2 h-3.5 w-3.5" />
+                          <span>Filter</span>
+                          {selectedAssetFilter !== 'ALL' && (
+                            <div className="ml-2 py-0.5 px-1.5 rounded-sm bg-primary/10 text-[10px] font-medium">
+                              {selectedAssetFilter}
+                            </div>
+                          )}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="min-w-[200px]">
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
+                              Filter by Asset
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem 
+                              className="text-xs cursor-pointer"
+                              onClick={() => setSelectedAssetFilter('ALL')}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center">
+                                  <Coins className="mr-2 h-3.5 w-3.5 opacity-80" />
+                                  <span>Show all assets</span>
+                                </div>
+                                <Check 
+                                  className={cn(
+                                    "h-3.5 w-3.5 ml-2",
+                                    selectedAssetFilter === 'ALL' ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </div>
+                            </DropdownMenuItem>
+                            
+                            {/* Show all assets that have plans in either active or historic view */}
+                            {uniqueAssets
+                              .filter(asset => {
+                                // Filter based on the original unfiltered plans
+                                const relevantPlans = showHistoric 
+                                  ? plans.filter(plan => !plan.isActive) // All historic plans
+                                  : plans.filter(plan => plan.isActive);  // All active plans
+                                
+                                return relevantPlans.some(plan => plan.asset === asset);
+                              })
+                              .map(asset => (
+                                <DropdownMenuItem 
+                                  key={asset} 
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => setSelectedAssetFilter(asset)}
+                                >
+                                  <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center">
+                                      {ASSETS[asset]?.icon ? (
+                                        <img 
+                                          src={ASSETS[asset].icon} 
+                                          alt={asset} 
+                                          className="w-4 h-4 mr-2 rounded-full" 
+                                        />
+                                      ) : (
+                                        <div className="w-4 h-4 mr-2 rounded-full bg-primary/20 flex items-center justify-center">
+                                          <span className="text-[10px] font-medium">{asset.charAt(0)}</span>
+                                        </div>
+                                      )}
+                                      <span>{asset}</span>
+                                    </div>
+                                    <Check 
+                                      className={cn(
+                                        "h-3.5 w-3.5 ml-2",
+                                        selectedAssetFilter === asset ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                  </div>
+                                </DropdownMenuItem>
+                              ))}
+                            
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs px-2 py-1.5 text-muted-foreground">
+                              Sort By
+                            </DropdownMenuLabel>
+                            
+                            {/* Different sort options based on active vs historic view */}
+                            {showHistoric ? (
+                              <>
+                                {/* Historic Plans Sort Options */}
+                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>Final earnings</span>
+                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>Termination date</span>
+                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>Plan duration</span>
+                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                  </div>
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <>
+                                {/* Active Plans Sort Options */}
+                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>Current earnings</span>
+                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>Time remaining</span>
+                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                  </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>Staked amount</span>
+                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                  </div>
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className={cn(
+                                "text-xs cursor-pointer",
+                                selectedAssetFilter === 'ALL' ? "opacity-50" : "opacity-100"
+                              )}
+                              onClick={() => setSelectedAssetFilter('ALL')}
+                              disabled={selectedAssetFilter === 'ALL'}
+                            >
+                              <RotateCcw className="mr-2 h-3.5 w-3.5 opacity-80" />
+                              <span>Reset filters</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                      <DropdownMenuItem
+                        className="cursor-pointer transition-colors hover:bg-[hsl(var(--primary-foreground))] hover:text-white focus:bg-[hsl(var(--primary-foreground))] focus:text-white whitespace-nowrap"
+                        onClick={handleStartNewPlan}
+                      >
+                        Start new plan
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         className="cursor-pointer transition-colors hover:bg-[#FF4D15] hover:text-white focus:bg-[#FF4D15] focus:text-white whitespace-nowrap"
                         onClick={handleClaimAllRewards}
