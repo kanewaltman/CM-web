@@ -334,12 +334,21 @@ export const ActivePlansView: React.FC<{
     // Calculate actual earnings at termination time
     const actualEarnings = calculateCurrentEarnings(plan);
 
-    // Confirm with user
-    const earningsDisplay = actualEarnings < 1 ? actualEarnings.toFixed(8) : actualEarnings.toFixed(6);
-    if (confirm(`Are you sure you want to terminate this staking plan?
+    // Check if this is part of a batch termination
+    const isBatchTermination = sessionStorage.getItem('batch_terminate_in_progress') === 'true';
+    const showAccumulatedPoints = sessionStorage.getItem('show_accumulated_terminate_points') === 'true';
+
+    // Confirm with user (only if not part of batch termination)
+    let shouldTerminate = true;
+    if (!isBatchTermination) {
+      const earningsDisplay = actualEarnings < 1 ? actualEarnings.toFixed(8) : actualEarnings.toFixed(6);
+      shouldTerminate = confirm(`Are you sure you want to terminate this staking plan?
 
 Termination fee: ${fee.toFixed(4)} ${plan.asset}
-Current earnings: ${earningsDisplay} ${plan.asset}`)) {
+Current earnings: ${earningsDisplay} ${plan.asset}`);
+    }
+
+    if (shouldTerminate) {
       // Update the plan with termination details
       const updatedPlan = {
         ...plan,
@@ -351,6 +360,46 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
 
       // Save the updated plan
       stakingPlansManager.updatePlan(updatedPlan);
+
+      // Import and trigger sonner notifications
+      import('sonner').then(({ toast }) => {
+        // Confirmation toast for termination
+        toast(
+          `Plan terminated`, 
+          {
+            description: `${actualEarnings.toFixed(6)} ${plan.asset} earnings added to wallet`,
+            duration: 4000,
+            className: "termination-toast"
+          }
+        );
+        
+        // Only show individual points notification if not part of a batch termination
+        if (!isBatchTermination) {
+          // Points toast with negative points
+          setTimeout(() => {
+            toast(
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-base">Points Update</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-sm font-medium text-red-500">-25</p>
+                    <p className="text-sm text-muted-foreground">for early termination</p>
+                  </div>
+                </div>
+              </div>,
+              {
+                className: "bg-gradient-to-r from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-200 dark:border-red-800/30",
+                duration: 3500
+              }
+            );
+          }, 1200);
+        }
+      }).catch(err => console.error('Error showing toast notifications:', err));
 
       // Notify about plan termination
       if (typeof window !== 'undefined') {
@@ -883,26 +932,95 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
       return;
     }
 
-    // Calculate total fees
+    // Calculate total fees and prepare termination summary
     const totalFee = activePlans.reduce((sum, plan) => {
       return sum + calculateTerminationFee(plan);
     }, 0);
+    
+    // Calculate total current earnings at termination time
+    const totalCurrentEarnings = activePlans.reduce((sum, plan) => {
+      return sum + calculateCurrentEarnings(plan);
+    }, 0);
+
+    // Get the asset type (assuming all plans use the same asset)
+    const assetType = activePlans.length > 0 ? activePlans[0].asset : "";
 
     // Confirm with user
     if (confirm(`Are you sure you want to terminate all ${activePlans.length} active plans?
 
-Total termination fees: ${totalFee.toFixed(4)} ${activePlans.length > 0 ? activePlans[0].asset : ""}`)) {
+Total termination fees: ${totalFee.toFixed(4)} ${assetType}
+Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
+      // Calculate total points (-25 points per termination)
+      const totalPoints = activePlans.length * 25;
+      
+      // Flag to prevent individual points notifications
+      const isMultipleTermination = activePlans.length > 1;
+      
       // Process all terminations
-      activePlans.forEach(plan => {
+      activePlans.forEach((plan, index) => {
         // Create a synthetic event for the handler
         const syntheticEvent = {
           stopPropagation: () => {}
         } as React.MouseEvent<HTMLButtonElement>;
         
+        // For the last plan, we'll want to show the accumulated points notification
+        const isLastPlan = index === activePlans.length - 1;
+        
+        // Modify the behavior of handleTerminatePlan for batch processing
+        if (isMultipleTermination) {
+          // Set a flag in sessionStorage to control points notification behavior
+          if (index === 0) {
+            // First termination: disable individual points notifications
+            sessionStorage.setItem('batch_terminate_in_progress', 'true');
+            sessionStorage.setItem('batch_terminate_total_points', totalPoints.toString());
+          }
+          
+          // For the last plan, we'll need to show the accumulated points
+          if (isLastPlan) {
+            sessionStorage.setItem('show_accumulated_terminate_points', 'true');
+          }
+        }
+        
+        // Process the termination
         handleTerminatePlan(plan, syntheticEvent);
+        
+        // If this is the last plan and we have multiple terminations, show the accumulated points notification
+        if (isLastPlan && isMultipleTermination) {
+          // Import and trigger sonner for accumulated points
+          import('sonner').then(({ toast }) => {
+            // Short delay to ensure it appears after the last transaction notification
+            setTimeout(() => {
+              toast(
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-base">Points Update</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm font-medium text-red-500">-{totalPoints}</p>
+                      <p className="text-sm text-muted-foreground">for early termination</p>
+                    </div>
+                  </div>
+                </div>,
+                {
+                  className: "bg-gradient-to-r from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-200 dark:border-red-800/30",
+                  duration: 3500
+                }
+              );
+            }, 1500);
+            
+            // Clean up session storage
+            sessionStorage.removeItem('batch_terminate_in_progress');
+            sessionStorage.removeItem('batch_terminate_total_points');
+            sessionStorage.removeItem('show_accumulated_terminate_points');
+          }).catch(err => console.error('Error showing points notification:', err));
+        }
       });
     }
-  }, [activePlans, calculateTerminationFee, handleTerminatePlan]);
+  }, [activePlans, calculateTerminationFee, calculateCurrentEarnings, handleTerminatePlan]);
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
