@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { ChevronLeft } from './ui-icons';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ export interface ConfirmationDialogContentProps {
   className?: string;
   headerClassName?: string;
   contentClassName?: string;
+  termsText?: string;
   primaryAction?: {
     label: string;
     onClick: () => void;
@@ -34,6 +35,15 @@ export interface ConfirmationDialogContentProps {
   };
 }
 
+// Define the wiggle keyframes animation CSS
+const wiggleAnimation = {
+  '0%': { transform: 'translateX(0)' },
+  '25%': { transform: 'translateX(-5px)' },
+  '50%': { transform: 'translateX(5px)' },
+  '75%': { transform: 'translateX(-5px)' },
+  '100%': { transform: 'translateX(0)' },
+};
+
 /**
  * A component that renders confirmation content within a dialog
  * with a back button to return to the previous dialog content
@@ -45,9 +55,13 @@ export function ConfirmationDialogContent({
   className,
   headerClassName,
   contentClassName,
+  termsText = "I agree to the terms and conditions",
   primaryAction,
   secondaryAction
 }: ConfirmationDialogContentProps) {
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isWiggling, setIsWiggling] = useState(false);
+  
   // Handler for primary action that shows toast if configured
   const handlePrimaryAction = () => {
     if (primaryAction) {
@@ -116,6 +130,18 @@ export function ConfirmationDialogContent({
     }
   };
 
+  const handleButtonClick = () => {
+    if (termsAccepted) {
+      handlePrimaryAction();
+    } else {
+      // Trigger wiggle animation
+      setIsWiggling(true);
+      setTimeout(() => {
+        setIsWiggling(false);
+      }, 500);
+    }
+  };
+
   return (
     <div className={cn("flex flex-col h-full w-full", className)}>
       {/* Header with back button */}
@@ -146,24 +172,53 @@ export function ConfirmationDialogContent({
       
       {/* Actions footer */}
       {(primaryAction || secondaryAction) && (
-        <div className="p-4 border-t flex items-center justify-end space-x-3">
-          {secondaryAction && (
-            <Button
-              variant="outline"
-              onClick={secondaryAction.onClick}
-              className={secondaryAction.className}
-            >
-              {secondaryAction.label}
-            </Button>
-          )}
+        <div className="p-6 border-t">
+          {/* Terms and conditions checkbox */}
           {primaryAction && (
-            <Button
-              onClick={handlePrimaryAction}
-              className={primaryAction.className}
+            <div 
+              className={cn(
+                "flex items-start mb-4",
+                isWiggling && "animate-wiggle"
+              )}
             >
-              {primaryAction.label}
-            </Button>
+              <div className="flex items-center h-5">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="w-4 h-4 border border-gray-300 rounded"
+                />
+              </div>
+              <label htmlFor="terms" className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                {termsText}
+              </label>
+            </div>
           )}
+
+          <div className="flex items-center justify-end space-x-3">
+            {secondaryAction && (
+              <Button
+                variant="outline"
+                onClick={secondaryAction.onClick}
+                className={secondaryAction.className}
+              >
+                {secondaryAction.label}
+              </Button>
+            )}
+            {primaryAction && (
+              <Button
+                onClick={handleButtonClick}
+                className={cn(
+                  primaryAction.className,
+                  !termsAccepted && "opacity-50 cursor-not-allowed"
+                )}
+                aria-disabled={!termsAccepted}
+              >
+                {primaryAction.label}
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>
