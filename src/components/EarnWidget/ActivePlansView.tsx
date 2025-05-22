@@ -2258,7 +2258,10 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
         </div>
 
         {/* Footer with pagination and action button - fixed height */}
-        <div className="mt-4 border-t pt-4">
+        <div className={cn(
+          "mt-4 pt-4",
+          (totalPages > 1 || !showHistoric) && "border-t"
+        )}>
           {/* Pagination - only show if needed */}
           {totalPages > 1 && (
             <div className="flex justify-center mb-4">
