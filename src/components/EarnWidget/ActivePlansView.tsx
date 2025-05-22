@@ -168,6 +168,74 @@ export const ActivePlansView: React.FC<{
     };
   }, [widgetState, localSelectedAssetFilter, widgetId, inDialog]);
   
+  // Filter plans based on selected asset first
+  const filteredByAssetPlans = useMemo(() => {
+    if (selectedAssetFilter === 'ALL') {
+      return plans;
+    }
+    return plans.filter(plan => plan.asset === selectedAssetFilter);
+  }, [plans, selectedAssetFilter]);
+
+  // Add local state for sorting
+  const [localSortOption, setLocalSortOption] = useState<string>('default');
+
+  // Use widget state if available, otherwise use local state
+  const sortOption = useMemo(() => {
+    const result = widgetState ? widgetState.sortOption : localSortOption;
+    console.log(`ActivePlansView (widgetId=${widgetId}): Using sort option: ${result}`);
+    return result;
+  }, [widgetState, localSortOption, widgetId]);
+
+  // Helper function to set sort option that works with both widget state and local state
+  const setSortOption = useCallback((option: string) => {
+    console.log(`ActivePlansView (widgetId=${widgetId}): Setting sort option to ${option}`);
+    if (widgetState) {
+      widgetState.setSortOption(option);
+      
+      // For dialog view, we need to explicitly update local state as well to ensure UI updates
+      if (inDialog) {
+        console.log(`ActivePlansView (widgetId=${widgetId}): Dialog mode - explicitly updating local sort option to ${option}`);
+        setLocalSortOption(option);
+        
+        // Force propagation of changes to other instances by adding a small delay
+        setTimeout(() => {
+          // Re-apply the change to ensure widget state is updated (acts as a safety net)
+          widgetState.setSortOption(option);
+        }, 10);
+      }
+    } else {
+      setLocalSortOption(option);
+    }
+  }, [widgetState, widgetId, inDialog]);
+
+  // Subscribe to widget state changes for sorting
+  useEffect(() => {
+    if (!widgetState) return;
+    
+    console.log(`ActivePlansView (widgetId=${widgetId}): Subscribing to widget state changes for sorting`);
+    
+    // Get initial state from widget state
+    if (widgetState.sortOption !== localSortOption) {
+      console.log(`ActivePlansView (widgetId=${widgetId}): Initial sync from widget state for sorting: ${widgetState.sortOption}`);
+      setLocalSortOption(widgetState.sortOption);
+    }
+    
+    // Subscribe to widget state changes
+    const unsubscribe = widgetState.subscribe(() => {
+      // If the widget state's sortOption is different from our local state,
+      // update the local state to match
+      if (widgetState.sortOption !== localSortOption) {
+        console.log(`ActivePlansView (widgetId=${widgetId}): Sync local sort option from widget state: ${widgetState.sortOption}`);
+        setLocalSortOption(widgetState.sortOption);
+      }
+    });
+    
+    return () => {
+      console.log(`ActivePlansView (widgetId=${widgetId}): Unsubscribing from widget state changes for sorting`);
+      unsubscribe();
+    };
+  }, [widgetState, localSortOption, widgetId]);
+
   // Constants for dynamic height calculation - fine-tuned based on UI
   const ACTIVE_PLAN_CARD_HEIGHT = 75; // Active plans are taller (including margins)
   const HISTORIC_PLAN_CARD_HEIGHT = 160; // Historic plans are more compact
@@ -212,21 +280,88 @@ export const ActivePlansView: React.FC<{
   // Add this state at the beginning of the ActivePlansView component (around line ~2746)
   const [hoveredPlanId, setHoveredPlanId] = useState<string | null>(null);
 
-  // Filter plans based on selected asset first
-  const filteredByAssetPlans = useMemo(() => {
-    if (selectedAssetFilter === 'ALL') {
-      return plans;
+  // Calculate current earnings for a plan with optimized method
+  const calculateCurrentEarnings = useCallback((plan: StakingPlan): number => {
+    if (!plan.isActive) {
+      // For terminated plans, return the actual earnings or a calculated amount
+      return plan.actualEarnings || 0;
     }
-    return plans.filter(plan => plan.asset === selectedAssetFilter);
-  }, [plans, selectedAssetFilter]);
 
-  // Memoize active and historic plans to prevent recalculation on each render
+    const startDate = new Date(plan.startDate).getTime();
+    const endDate = new Date(plan.endDate).getTime();
+    const now = currentTime; // Use the state time for consistent updates
+
+    // Calculate progress as a percentage (capped at 100%)
+    const progress = Math.min(1, (now - startDate) / (endDate - startDate));
+
+    // Calculate the total duration in milliseconds
+    const totalDuration = endDate - startDate;
+
+    // Calculate milliseconds elapsed
+    const elapsedMs = now - startDate;
+
+    // Calculate earnings per millisecond
+    const msEarningRate = plan.estimatedEarnings / totalDuration;
+
+    // Calculate current earnings precisely based on exact time elapsed
+    return msEarningRate * elapsedMs;
+  }, [currentTime]);
+
+  // Sort the filtered plans based on the sort option
   const { activePlans, historicPlans } = useMemo(() => {
-    return {
-      activePlans: filteredByAssetPlans.filter(plan => plan.isActive),
-      historicPlans: filteredByAssetPlans.filter(plan => !plan.isActive)
+    const active = filteredByAssetPlans.filter(plan => plan.isActive);
+    const historic = filteredByAssetPlans.filter(plan => !plan.isActive);
+
+    // Helper function to sort plans
+    const sortPlans = (plans: StakingPlan[], sortBy: string) => {
+      return [...plans].sort((a, b) => {
+        // Active plans sorting
+        if (a.isActive && b.isActive) {
+          switch (sortBy) {
+            case 'current-earnings':
+              // Sort by current earnings (high to low)
+              return calculateCurrentEarnings(b) - calculateCurrentEarnings(a);
+            case 'time-remaining':
+              // Sort by time remaining (low to high)
+              return new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
+            case 'staked-amount':
+              // Sort by staked amount (high to low)
+              return b.amount - a.amount;
+            default:
+              // Default sort by end date
+              return new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
+          }
+        }
+        // Historic plans sorting
+        else if (!a.isActive && !b.isActive) {
+          switch (sortBy) {
+            case 'final-earnings':
+              // Sort by final earnings (high to low)
+              return (b.actualEarnings || 0) - (a.actualEarnings || 0);
+            case 'termination-date':
+              // Sort by termination date (recent first)
+              return new Date(b.terminationDate || b.endDate).getTime() - 
+                     new Date(a.terminationDate || a.endDate).getTime();
+            case 'plan-duration':
+              // Sort by plan duration (longest first)
+              const aDuration = new Date(a.endDate).getTime() - new Date(a.startDate).getTime();
+              const bDuration = new Date(b.endDate).getTime() - new Date(b.startDate).getTime();
+              return bDuration - aDuration;
+            default:
+              // Default sort by termination date
+              return new Date(b.terminationDate || b.endDate).getTime() - 
+                     new Date(a.terminationDate || a.endDate).getTime();
+          }
+        }
+        return 0;
+      });
     };
-  }, [filteredByAssetPlans]);
+
+    return {
+      activePlans: sortPlans(active, sortOption),
+      historicPlans: sortPlans(historic, sortOption)
+    };
+  }, [filteredByAssetPlans, sortOption, calculateCurrentEarnings]);
 
   // Create a calculation function outside of useEffect for reuse
   const calculatePlansPerPage = useCallback(() => {
@@ -420,33 +555,6 @@ export const ActivePlansView: React.FC<{
       }
     };
   }, []);
-
-  // Calculate current earnings for a plan with optimized method
-  const calculateCurrentEarnings = useCallback((plan: StakingPlan): number => {
-    if (!plan.isActive) {
-      // For terminated plans, return the actual earnings or a calculated amount
-      return plan.actualEarnings || 0;
-    }
-
-    const startDate = new Date(plan.startDate).getTime();
-    const endDate = new Date(plan.endDate).getTime();
-    const now = currentTime; // Use the state time for consistent updates
-
-    // Calculate progress as a percentage (capped at 100%)
-    const progress = Math.min(1, (now - startDate) / (endDate - startDate));
-
-    // Calculate the total duration in milliseconds
-    const totalDuration = endDate - startDate;
-
-    // Calculate milliseconds elapsed
-    const elapsedMs = now - startDate;
-
-    // Calculate earnings per millisecond
-    const msEarningRate = plan.estimatedEarnings / totalDuration;
-
-    // Calculate current earnings precisely based on exact time elapsed
-    return msEarningRate * elapsedMs;
-  }, [currentTime]);
 
   // Calculate remaining time for a plan - memoized to avoid recalculation
   const formatRemainingTime = useCallback((plan: StakingPlan): string => {
@@ -1555,44 +1663,92 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                             {showHistoric ? (
                               <>
                                 {/* Historic Plans Sort Options */}
-                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                <DropdownMenuItem 
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => setSortOption('final-earnings')}
+                                >
                                   <div className="flex items-center justify-between w-full">
                                     <span>Final earnings</span>
-                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                    <Check 
+                                      className={cn(
+                                        "h-3.5 w-3.5 ml-2",
+                                        sortOption === 'final-earnings' ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
                                   </div>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                <DropdownMenuItem 
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => setSortOption('termination-date')}
+                                >
                                   <div className="flex items-center justify-between w-full">
                                     <span>Termination date</span>
-                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                    <Check 
+                                      className={cn(
+                                        "h-3.5 w-3.5 ml-2",
+                                        sortOption === 'termination-date' ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
                                   </div>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                <DropdownMenuItem 
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => setSortOption('plan-duration')}
+                                >
                                   <div className="flex items-center justify-between w-full">
                                     <span>Plan duration</span>
-                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                    <Check 
+                                      className={cn(
+                                        "h-3.5 w-3.5 ml-2",
+                                        sortOption === 'plan-duration' ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
                                   </div>
                                 </DropdownMenuItem>
                               </>
                             ) : (
                               <>
                                 {/* Active Plans Sort Options */}
-                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                <DropdownMenuItem 
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => setSortOption('current-earnings')}
+                                >
                                   <div className="flex items-center justify-between w-full">
                                     <span>Current earnings</span>
-                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                    <Check 
+                                      className={cn(
+                                        "h-3.5 w-3.5 ml-2",
+                                        sortOption === 'current-earnings' ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
                                   </div>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                <DropdownMenuItem 
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => setSortOption('time-remaining')}
+                                >
                                   <div className="flex items-center justify-between w-full">
                                     <span>Time remaining</span>
-                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                    <Check 
+                                      className={cn(
+                                        "h-3.5 w-3.5 ml-2", 
+                                        sortOption === 'time-remaining' ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
                                   </div>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-xs cursor-pointer">
+                                <DropdownMenuItem 
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => setSortOption('staked-amount')}
+                                >
                                   <div className="flex items-center justify-between w-full">
                                     <span>Staked amount</span>
-                                    <Check className="h-3.5 w-3.5 ml-2 opacity-0" />
+                                    <Check 
+                                      className={cn(
+                                        "h-3.5 w-3.5 ml-2",
+                                        sortOption === 'staked-amount' ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
                                   </div>
                                 </DropdownMenuItem>
                               </>
@@ -1602,31 +1758,35 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                             <DropdownMenuItem 
                               className={cn(
                                 "text-xs cursor-pointer",
-                                selectedAssetFilter === 'ALL' ? "opacity-50" : "opacity-100"
+                                selectedAssetFilter === 'ALL' && sortOption === 'default' ? "opacity-50" : "opacity-100"
                               )}
                               onClick={() => {
                                 console.log(`ActivePlansView (widgetId=${widgetId}): Reset filters clicked in ${inDialog ? 'dialog' : 'normal'} mode`);
                                 
+                                // Reset both filter and sort options
                                 // Special handling for dialog mode
                                 if (inDialog) {
                                   // First update local state for immediate UI feedback
                                   setLocalSelectedAssetFilter('ALL');
+                                  setLocalSortOption('default');
                                   
                                   // Then update widget state with a delay to ensure propagation
                                   setTimeout(() => {
                                     if (widgetState) {
                                       widgetState.setSelectedAssetFilter('ALL');
+                                      widgetState.setSortOption('default');
                                     }
                                   }, 10);
                                 } else {
                                   // Normal flow
                                   setSelectedAssetFilter('ALL');
+                                  setSortOption('default');
                                 }
                               }}
-                              disabled={selectedAssetFilter === 'ALL'}
+                              disabled={selectedAssetFilter === 'ALL' && sortOption === 'default'}
                             >
                               <RotateCcw className="mr-2 h-3.5 w-3.5 opacity-80" />
-                              <span>Reset filters</span>
+                              <span>Reset all</span>
                             </DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuSubContent>
