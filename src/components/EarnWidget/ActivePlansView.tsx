@@ -319,14 +319,16 @@ export const ActivePlansView: React.FC<{
         if (a.isActive && b.isActive) {
           switch (sortBy) {
             case 'current-earnings':
-              // Sort by current earnings (high to low)
-              return calculateCurrentEarnings(b) - calculateCurrentEarnings(a);
+              // Sort by current earnings value (high to low)
+              return (calculateCurrentEarnings(b) * getAssetPrice(b.asset as AssetTicker)) - 
+                     (calculateCurrentEarnings(a) * getAssetPrice(a.asset as AssetTicker));
             case 'time-remaining':
               // Sort by time remaining (low to high)
               return new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
             case 'staked-amount':
-              // Sort by staked amount (high to low)
-              return b.amount - a.amount;
+              // Sort by staked value (high to low)
+              return (b.amount * getAssetPrice(b.asset as AssetTicker)) - 
+                     (a.amount * getAssetPrice(a.asset as AssetTicker));
             default:
               // Default sort by end date
               return new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
@@ -336,8 +338,9 @@ export const ActivePlansView: React.FC<{
         else if (!a.isActive && !b.isActive) {
           switch (sortBy) {
             case 'final-earnings':
-              // Sort by final earnings (high to low)
-              return (b.actualEarnings || 0) - (a.actualEarnings || 0);
+              // Sort by final earnings value (high to low)
+              return ((b.actualEarnings || 0) * getAssetPrice(b.asset as AssetTicker)) - 
+                     ((a.actualEarnings || 0) * getAssetPrice(a.asset as AssetTicker));
             case 'termination-date':
               // Sort by termination date (recent first)
               return new Date(b.terminationDate || b.endDate).getTime() - 
@@ -361,7 +364,7 @@ export const ActivePlansView: React.FC<{
       activePlans: sortPlans(active, sortOption),
       historicPlans: sortPlans(historic, sortOption)
     };
-  }, [filteredByAssetPlans, sortOption, calculateCurrentEarnings]);
+  }, [filteredByAssetPlans, sortOption, calculateCurrentEarnings, getAssetPrice]);
 
   // Create a calculation function outside of useEffect for reuse
   const calculatePlansPerPage = useCallback(() => {
