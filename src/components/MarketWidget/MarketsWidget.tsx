@@ -42,9 +42,9 @@ import { CustomList, ListManager, MarketDataAsset } from './MarketLists';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { TableWithAddAssetRow } from './TableWithAddAssetRow';
+import { DraggableMenuItem, COLUMN_TRANSITION_CLASSES } from './MarketsWidgetHeader';
 
 import ValueFlash from './ValueFlash';
-
 
 // TanStack Table imports
 import {
@@ -290,97 +290,7 @@ const SkeletonRow: React.FC<{ isMinWidth?: boolean }> = ({ isMinWidth = false })
   </TableRow>
 );
 
-// Add this CSS class at the top of the file - this will be applied to our column cells
-const COLUMN_TRANSITION_CLASSES = "transition-all duration-300 ease-in-out";
 
-// Draggable Item for column visibility menu
-const DraggableMenuItem = ({ 
-  id, 
-  children, 
-  isChecked, 
-  onCheckedChange 
-}: { 
-  id: string, 
-  children: React.ReactNode, 
-  isChecked: boolean, 
-  onCheckedChange: (checked: boolean) => void 
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-    disabled: false,
-  });
-  
-  const style: CSSProperties = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0.8 : 1,
-    position: 'relative',
-    zIndex: isDragging ? 50 : 0,
-  };
-  
-  const [internalChecked, setInternalChecked] = useState(isChecked); // For immediate checkbox interaction
-  
-  useEffect(() => {
-    setInternalChecked(isChecked);
-  }, [isChecked]);
-  
-  const handleDragHandleProps = useMemo(() => ({ ...attributes, ...listeners }), [attributes, listeners]); // Only allow drag on handle
-  
-  const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setInternalChecked(!internalChecked); // Update internal state immediately
-    requestAnimationFrame(() => { onCheckedChange(!internalChecked); }); // Debounce parent update to prevent flickering
-  }, [internalChecked, onCheckedChange]);
-  
-  return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
-      className="flex items-center justify-between rounded-sm px-1 py-0.5"
-    >
-      {/* Clickable checkbox area */}
-      <div 
-        className="flex items-center gap-3 py-1.5 px-1.5 cursor-pointer flex-1 hover:bg-accent/50 rounded-sm"
-        onClick={handleCheckboxClick}
-      >
-        <div 
-          className="flex items-center justify-center h-4 w-4 relative"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleCheckboxClick(e);
-          }}
-        >
-          {/* Custom checkbox appearance */}
-          <div 
-            className={cn(
-              "h-4 w-4 rounded-sm transition-colors flex items-center justify-center", 
-              internalChecked ? "bg-white" : "bg-muted"
-            )}
-          >
-            {internalChecked && (
-              <svg width="10" height="8" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 1L3.5 6.5L1 4" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </div>
-        </div>
-        
-        <span className="opacity-80 text-sm leading-[150%] select-none">
-          {children}
-        </span>
-      </div>
-      
-      {/* Drag handle - only this triggers dragging */}
-      <div 
-        {...handleDragHandleProps}
-        className="cursor-grab active:cursor-grabbing h-full px-2 flex items-center justify-center"
-      >
-        <GripVerticalIcon size={16} className="text-muted-foreground flex-shrink-0" />
-      </div>
-    </div>
-  );
-};
 
 // Component for column visibility to be used in widget context menu
 export const MarketsWidgetColumnVisibility: React.FC<{ 
@@ -416,6 +326,7 @@ export const MarketsWidgetColumnVisibility: React.FC<{
         
         // Update the full column order with 'pair' always at the beginning
         const fullOrder = ['pair', ...newOrder];
+        table.setColumnVisibility(table.getState().columnVisibility); // Force refresh visibility state
         table.setColumnOrder(fullOrder);
         
         return newOrder;
@@ -424,6 +335,23 @@ export const MarketsWidgetColumnVisibility: React.FC<{
   }
   
   const tableRef = (table as any)._getTableOptions?.()?.meta?.updateColumnSizes; // Get updateColumnSizes function from table context
+  
+  // On first render, make sure column visibility state is properly initialized
+  useEffect(() => {
+    const currentVisibility = table.getState().columnVisibility;
+    // Re-apply the current visibility to force proper initialization
+    table.setColumnVisibility({...currentVisibility});
+  }, []);
+  
+  // Helper function to correctly determine if a column is visible
+  const isColumnVisible = (columnId: string) => {
+    // For 'pair' column, always return true
+    if (columnId === 'pair') return true;
+    
+    // For other columns, use the table API but with explicit boolean check
+    const visibilityState = table.getState().columnVisibility;
+    return visibilityState[columnId] !== false;
+  };
   
   const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
     if (columnId === 'pair') return; // Prevent toggling off the 'pair' column
@@ -435,6 +363,9 @@ export const MarketsWidgetColumnVisibility: React.FC<{
     } else {
       newState[columnId] = false; // Set column visibility to false to hide it
     }
+    
+    // Ensure 'pair' column is always visible
+    delete newState['pair'];
     
     table.setColumnVisibility(newState); // Update the table's visibility state
     
@@ -468,12 +399,12 @@ export const MarketsWidgetColumnVisibility: React.FC<{
                 ? column.columnDef.header 
                 : columnId;
               
-              // Use column.getIsVisible() directly from the table API
+              // Use our helper function instead of column.getIsVisible()
               return (
                 <DraggableMenuItem
                   key={column.id}
                   id={column.id}
-                  isChecked={column.getIsVisible()}
+                  isChecked={isColumnVisible(column.id)}
                   onCheckedChange={(checked) => handleColumnVisibilityChange(column.id, checked)}
                 >
                   {headerLabel}

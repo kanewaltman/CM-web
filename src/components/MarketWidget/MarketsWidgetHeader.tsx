@@ -103,7 +103,7 @@ const setLocalStorageItem = <T,>(key: string, value: T): void => {
 };
 
 // Draggable Menu Item Component for FallbackColumnVisibility
-const DraggableMenuItem = ({ 
+export const DraggableMenuItem = ({ 
   id, 
   children, 
   isChecked, 
@@ -127,20 +127,17 @@ const DraggableMenuItem = ({
     zIndex: isDragging ? 50 : 0,
   };
   
-  const [internalChecked, setInternalChecked] = useState(isChecked); // For immediate checkbox interaction
+  const handleDragHandleProps = useMemo(() => ({ ...attributes, ...listeners }), [attributes, listeners]);
   
-  useEffect(() => {
-    setInternalChecked(isChecked);
-  }, [isChecked]);
-  
-  const handleDragHandleProps = useMemo(() => ({ ...attributes, ...listeners }), [attributes, listeners]); // Only allow drag on handle
-  
+  // Single handler for checkbox clicks
   const handleCheckboxClick = useCallback((e: React.MouseEvent) => {
+    // Prevent dropdown from closing
     e.stopPropagation();
     e.preventDefault();
-    setInternalChecked(!internalChecked); // Update internal state immediately
-    requestAnimationFrame(() => { onCheckedChange(!internalChecked); }); // Debounce parent update to prevent flickering
-  }, [internalChecked, onCheckedChange]);
+    
+    // Toggle the checkbox
+    onCheckedChange(!isChecked);
+  }, [isChecked, onCheckedChange]);
   
   return (
     <div 
@@ -152,22 +149,25 @@ const DraggableMenuItem = ({
       <div 
         className="flex items-center gap-3 py-1.5 px-1.5 cursor-pointer flex-1 hover:bg-accent/50 rounded-sm"
         onClick={handleCheckboxClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleCheckboxClick(e as unknown as React.MouseEvent);
+          }
+        }}
       >
         <div 
           className="flex items-center justify-center h-4 w-4 relative"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleCheckboxClick(e);
-          }}
         >
           {/* Custom checkbox appearance */}
           <div 
             className={cn(
               "h-4 w-4 rounded-sm transition-colors flex items-center justify-center", 
-              internalChecked ? "bg-white" : "bg-muted"
+              isChecked ? "bg-white" : "bg-muted"
             )}
           >
-            {internalChecked && (
+            {isChecked && (
               <svg width="10" height="8" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 1L3.5 6.5L1 4" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -209,12 +209,38 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
   ];
   
   // Get stored visibility or use defaults
-  const [columnVisibility, setColumnVisibility] = useState(() => {
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : {};
+      // Initialize with explicit boolean values for all columns to prevent "phantom click" issue
+      const defaultVisibility = standardColumns.reduce((acc, col) => {
+        acc[col.id] = true; // All columns visible by default
+        return acc;
+      }, {} as Record<string, boolean>);
+
+      // If we have stored data, merge it with defaults
+      if (stored) {
+        const parsedVisibility = JSON.parse(stored);
+        // Ensure all columns have explicit boolean values
+        return standardColumns.reduce((acc, col) => {
+          // If the column has an explicit visibility setting in storage, use that
+          if (col.id in parsedVisibility) {
+            acc[col.id] = parsedVisibility[col.id] !== false;
+          } else {
+            // Otherwise default to visible
+            acc[col.id] = true;
+          }
+          return acc;
+        }, {} as Record<string, boolean>);
+      }
+      
+      return defaultVisibility;
     } catch (e) {
-      return {};
+      // On error, ensure all columns have explicit boolean values
+      return standardColumns.reduce((acc, col) => {
+        acc[col.id] = true;
+        return acc;
+      }, {} as Record<string, boolean>);
     }
   });
   
@@ -277,7 +303,7 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
     
     // Don't allow hiding the pair column
     if (columnId === 'pair') {
-      delete newVisibility['pair'];
+      newVisibility['pair'] = true;
     }
     
     setColumnVisibility(newVisibility);
@@ -298,6 +324,15 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
     });
     document.dispatchEvent(event);
   };
+  
+  // Make sure visibility state is synced with localStorage on component mount
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
+    } catch (e) {
+      console.error('Error initializing column visibility in localStorage:', e);
+    }
+  }, []);
   
   return (
     <>
@@ -324,7 +359,7 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
                 <DraggableMenuItem
                   key={column.id}
                   id={column.id}
-                  isChecked={columnVisibility[column.id] !== false}
+                  isChecked={columnVisibility[column.id] === true}
                   onCheckedChange={(checked) => toggleVisibility(column.id)}
                 >
                   {column.label}
@@ -337,6 +372,9 @@ const FallbackColumnVisibility: React.FC<{id: string}> = ({id}) => {
     </>
   );
 };
+
+// This CSS class will be applied to our column cells for smooth transitions
+export const COLUMN_TRANSITION_CLASSES = "transition-all duration-300 ease-in-out";
 
 interface MarketsWidgetHeaderProps {
   onSearchQueryChange: (value: string) => void;
