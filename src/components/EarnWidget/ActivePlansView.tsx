@@ -746,6 +746,35 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
     return total;
   }, [activePlans, calculateCurrentEarnings, getAssetPrice, currentTime]);
 
+  // Add handler for duplicating a plan
+  const handleDuplicatePlan = useCallback((plan: StakingPlan, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Create a new plan object based on the existing one
+    const duplicatedPlan = {
+      ...plan,
+      id: undefined, // Remove ID so a new one will be generated
+      startDate: undefined, // Remove start date so it will be set when confirmed
+      endDate: undefined, // Remove end date so it will be recalculated
+      isActive: true, // Ensure it's marked as active
+      lastClaimedDate: undefined,
+      lastClaimedAmount: undefined,
+      totalClaimed: undefined,
+      claimCooldownUntil: undefined,
+      terminationDate: undefined,
+      terminationFee: undefined,
+      actualEarnings: undefined
+    };
+
+    // Dispatch event to trigger confirmation dialog
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('duplicate-staking-plan', {
+        detail: { plan: duplicatedPlan }
+      });
+      document.dispatchEvent(event);
+    }
+  }, []);
+
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
       <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
@@ -1043,6 +1072,12 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                                 Claim rewards
                               </DropdownMenuItem>
                               <DropdownMenuItem
+                                className="cursor-pointer transition-colors hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground whitespace-nowrap"
+                                onClick={(e) => handleDuplicatePlan(plan, e)}
+                              >
+                                Duplicate plan
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 className="cursor-pointer transition-colors hover:bg-destructive hover:text-white focus:bg-destructive focus:text-white whitespace-nowrap"
                                 onClick={(e) => handleTerminatePlan(plan, e as unknown as React.MouseEvent<HTMLButtonElement>)}
                               >
@@ -1052,8 +1087,40 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                           </DropdownMenu>
                         </div>
                       ) : (
-                        <div className="text-sm text-muted-foreground">
-                          {plan.terminationDate ? 'Terminated' : 'Completed'}
+                        <div className="flex items-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                              >
+                                <span className="sr-only">Open menu</span>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="w-4 h-4"
+                                >
+                                  <circle cx="12" cy="12" r="1" />
+                                  <circle cx="12" cy="5" r="1" />
+                                  <circle cx="12" cy="19" r="1" />
+                                </svg>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-fit">
+                              <DropdownMenuItem
+                                className="cursor-pointer transition-colors hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground whitespace-nowrap"
+                                onClick={(e) => handleDuplicatePlan(plan, e)}
+                              >
+                                Restart plan
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       )}
                     </div>
@@ -1146,7 +1213,7 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                       </div>
                     </div>
                     <div className="flex justify-end items-center">
-                      {plan.isActive && (
+                      {plan.isActive ? (
                         <div className="flex items-center gap-2">
                           <Button 
                             variant="outline" 
@@ -1178,6 +1245,21 @@ Current earnings: ${earningsDisplay} ${plan.asset}`)) {
                             </svg>
                           </Button>
                         </div>
+                      ) : (
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                          onClick={(e) => handleDuplicatePlan(plan, e)}
+                        >
+                          <span className="sr-only">Restart plan</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                            <path d="M3 3v5h5" />
+                            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                            <path d="M16 21h5v-5" />
+                          </svg>
+                        </Button>
                       )}
                     </div>
                   </div>

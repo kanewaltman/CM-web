@@ -677,6 +677,44 @@ export const EarnWidget: React.FC<EarnWidgetProps> = (props) => {
     }
   }, [widgetState, props.widgetId, props.onViewModeChange]);
 
+  // Add listener for plan duplication
+  useEffect(() => {
+    const handlePlanDuplication = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (!customEvent.detail?.plan) return;
+
+      console.log('📋 Handling plan duplication:', customEvent.detail.plan);
+
+      // Clear any recent closure protection
+      sessionStorage.removeItem('dialog_last_closed');
+      
+      // Force reset dialog state
+      forceResetDialogState();
+
+      // Store the plan in session storage for the confirmation dialog
+      sessionStorage.setItem('duplicate_plan_data', JSON.stringify(customEvent.detail.plan));
+
+      // Create a cleanup event to close any open dialogs
+      const closeEvent = new CustomEvent('close-widget-dialogs', {
+        bubbles: true
+      });
+      document.dispatchEvent(closeEvent);
+
+      // Open the dialog with the duplicated plan
+      setTimeout(() => {
+        // Force open the dialog with the duplicated plan
+        forceOpenDialog('earn-stake', customEvent.detail.plan.asset);
+      }, 250);
+    };
+
+    // Add event listener
+    document.addEventListener('duplicate-staking-plan', handlePlanDuplication);
+
+    return () => {
+      document.removeEventListener('duplicate-staking-plan', handlePlanDuplication);
+    };
+  }, []);
+
   // If this is being rendered for header controls only, return just the controls
   if (props.headerControls) {
     // For fixed view widgets, don't show a dropdown
