@@ -39,6 +39,13 @@ export const ActivePlansView: React.FC<{
   const { resolvedTheme } = useTheme();
   const [gradientKey, setGradientKey] = useState<number>(Date.now());
   
+  // Constants for dynamic height calculation - fine-tuned based on UI
+  const ACTIVE_PLAN_CARD_HEIGHT = 75; // Active plans are taller (including margins)
+  const HISTORIC_PLAN_CARD_HEIGHT = 160; // Historic plans are more compact
+  const HEADER_HEIGHT = 70; // Header with margins
+  const FOOTER_HEIGHT = 100; // Footer with margins and padding
+  const CONTAINER_PADDING = 32; // Total vertical padding of container
+  
   // Get price data with fallback
   const { prices, loading: pricesLoading, hasProvider: hasPriceProvider } = useAssetPrices();
   
@@ -82,7 +89,9 @@ export const ActivePlansView: React.FC<{
   const [userPlans, setUserPlans] = useState<StakingPlan[]>(plans);
   // Add pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const plansPerPage = 3; // Number of plans to show per page
+  // Add a container ref and dynamically calculate plans per page
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dynamicPlansPerPage, setDynamicPlansPerPage] = useState<number>(3);
   // Track component visibility
   const isVisible = useRef(true);
   // Track interval ID for cleanup
@@ -98,13 +107,79 @@ export const ActivePlansView: React.FC<{
     };
   }, [plans]);
 
-  // Memoize current plans based on pagination
+  // Create a calculation function outside of useEffect for reuse
+  const calculatePlansPerPage = useCallback(() => {
+    if (!containerRef.current) return;
+    
+    // Get container height
+    const containerHeight = containerRef.current.clientHeight;
+    
+    // Calculate available space for plans (accounting for all spacing)
+    const availableHeight = containerHeight - HEADER_HEIGHT - FOOTER_HEIGHT - CONTAINER_PADDING;
+    
+    // Use different card heights based on view type
+    const cardHeight = showHistoric ? HISTORIC_PLAN_CARD_HEIGHT : ACTIVE_PLAN_CARD_HEIGHT;
+    
+    // Calculate how many plans can fit, with a minimum of 1
+    // For active plans, use a slight reduction factor to be less aggressive
+    // For historic plans, use a slight increase factor to be more aggressive
+    const fittingPlans = Math.max(1, Math.floor(availableHeight / cardHeight * (showHistoric ? 1.1 : 0.85)));
+    
+    // Log calculations in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`View type: ${showHistoric ? 'Historic' : 'Active'}`);
+      console.log(`Container height: ${containerHeight}px`);
+      console.log(`Available height: ${availableHeight}px`);
+      console.log(`Card height: ${cardHeight}px`);
+      console.log(`Adjustment factor: ${showHistoric ? '1.1 (more aggressive)' : '0.85 (less aggressive)'}`);
+      console.log(`Can fit ${fittingPlans} plans`);
+    }
+    
+    // Update state if different
+    if (fittingPlans !== dynamicPlansPerPage) {
+      setDynamicPlansPerPage(fittingPlans);
+    }
+  }, [dynamicPlansPerPage, showHistoric]);
+
+  // Main effect for setting up observers and handlers
+  useEffect(() => {
+    // Initial calculation with a slight delay to ensure container is properly sized
+    const observerTimer = setTimeout(calculatePlansPerPage, 100);
+    
+    // Add resize observer to recalculate when container size changes
+    const resizeObserver = new ResizeObserver(() => {
+      calculatePlansPerPage();
+    });
+    
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    
+    // Also recalculate on window resize
+    window.addEventListener('resize', calculatePlansPerPage);
+    
+    // Cleanup
+    return () => {
+      clearTimeout(observerTimer);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', calculatePlansPerPage);
+    };
+  }, [calculatePlansPerPage]);
+
+  // Effect to recalculate when showHistoric changes
+  useEffect(() => {
+    // Small delay to ensure UI has updated before recalculating
+    const viewChangeTimer = setTimeout(calculatePlansPerPage, 50);
+    return () => clearTimeout(viewChangeTimer);
+  }, [showHistoric, calculatePlansPerPage]);
+
+  // Memoize current plans based on dynamic pagination
   const currentPlans = useMemo(() => {
     const plansToShow = showHistoric ? historicPlans : activePlans;
-    const indexOfLastPlan = currentPage * plansPerPage;
-    const indexOfFirstPlan = indexOfLastPlan - plansPerPage;
+    const indexOfLastPlan = currentPage * dynamicPlansPerPage;
+    const indexOfFirstPlan = indexOfLastPlan - dynamicPlansPerPage;
     return plansToShow.slice(indexOfFirstPlan, indexOfLastPlan);
-  }, [activePlans, historicPlans, showHistoric, currentPage, plansPerPage]);
+  }, [activePlans, historicPlans, showHistoric, currentPage, dynamicPlansPerPage]);
 
   // If no plans are available in the current view, show the empty state earlier
   const noPlansInCurrentView = useMemo(() => {
@@ -125,9 +200,10 @@ export const ActivePlansView: React.FC<{
     [showHistoric, historicPlans.length, activePlans.length]
   );
 
+  // Update totalPages calculation
   const totalPages = useMemo(() => 
-    Math.max(1, Math.ceil(totalPlans / plansPerPage)),
-    [totalPlans, plansPerPage]
+    Math.max(1, Math.ceil(totalPlans / dynamicPlansPerPage)),
+    [totalPlans, dynamicPlansPerPage]
   );
 
   // Reset to first page when switching between active/historic
@@ -1023,9 +1099,9 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
   }, [activePlans, calculateTerminationFee, calculateCurrentEarnings, handleTerminatePlan]);
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
+    <div className="relative w-full h-full flex flex-col overflow-hidden" ref={containerRef}>
       <div key={gradientKey} className="absolute inset-0 -z-10 radial-gradient-bg"></div>
-      <div id="earn-plans-container" className="z-10 text-center w-full max-w mx-auto p-4 relative h-full flex flex-col">
+      <div id="earn-plans-container" className="z-10 w-full h-full flex flex-col p-4">
         <div className="mb-4 flex items-center justify-between w-full">
           <div className="text-lg font-semibold">
             {showHistoric ? 'Historic Plans' : (
@@ -1137,7 +1213,7 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                         size="sm"
                         className="h-7 px-2.5 text-xs"
                       >
-                        All
+                        Plans
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-fit">
@@ -1161,10 +1237,10 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
           </div>
         </div>
 
-        {/* Main content container with flex layout */}
-        <div className="w-full flex flex-col flex-grow flex-shrink-0" style={{ height: "calc(100% - 100px)" }}>
-          {/* Plans list in a scrollable container */}
-          <div className="space-y-4 w-full overflow-y-auto flex-grow mb-4" style={{ minHeight: "150px" }}>
+        {/* Main content area - adjusted to precisely control height */}
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {/* Plans list without scrollbar - will only show what fits */}
+          <div className="space-y-4 flex-1">
             {currentPlans.length > 0 ? (
               currentPlans.map(plan => (
                 <Card 
@@ -1565,7 +1641,7 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
                 </Card>
               ))
             ) : (
-              <div className="flex flex-col justify-center items-center h-full min-h-[150px] text-center text-muted-foreground py-8">
+              <div className="flex flex-col justify-center items-center h-full text-center text-muted-foreground py-8">
                 {showHistoric ? (
                   <>
                     <span>No historic plans found</span>
@@ -1596,61 +1672,80 @@ Total current earnings: ${totalCurrentEarnings.toFixed(6)} ${assetType}`)) {
               </div>
             )}
           </div>
-
-          {/* Pagination controls - fixed at the bottom */}
-          <div className="w-full flex-shrink-0">
-            {totalPages > 1 && (
-              <div className="flex justify-center">
-                <div className="flex space-x-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    &lt;
-                  </Button>
-
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => handlePageChange(page)}
-                    >
-                      {page}
-                    </Button>
-                  ))}
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    &gt;
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Add a new plan button */}
-        {!showHistoric && (
-          <div className="flex flex-col items-center justify-center h-full">
-            <Button
-              className="mt-4 px-4 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 font-semibold w-fit min-w-0"
-              onClick={onNewPlan}
-              style={{ width: 'fit-content' }}
-            >
-              Start new plan
-            </Button>
-          </div>
-        )}
+        {/* Footer with pagination and action button - fixed height */}
+        <div className="mt-4 border-t pt-4">
+          {/* Pagination - only show if needed */}
+          {totalPages > 1 && (
+            <div className="flex justify-center mb-4">
+              <div className="flex space-x-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  &lt;
+                </Button>
+
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  // Show max 5 page buttons, calculate which ones to show based on current page
+                  let pageToShow;
+                  if (totalPages <= 5) {
+                    // Show all pages if 5 or fewer
+                    pageToShow = i + 1;
+                  } else if (currentPage <= 3) {
+                    // Show first 5 pages if current page is near the beginning
+                    pageToShow = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    // Show last 5 pages if current page is near the end
+                    pageToShow = totalPages - 4 + i;
+                  } else {
+                    // Show 2 before current page, current page, and 2 after current page
+                    pageToShow = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageToShow}
+                      variant={currentPage === pageToShow ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => handlePageChange(pageToShow)}
+                    >
+                      {pageToShow}
+                    </Button>
+                  );
+                })}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  &gt;
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Add a new plan button */}
+          {!showHistoric && (
+            <div className="flex justify-center">
+              <Button
+                className="px-4 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 font-semibold w-fit min-w-0"
+                onClick={onNewPlan}
+                style={{ width: 'fit-content' }}
+              >
+                Start new plan
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
