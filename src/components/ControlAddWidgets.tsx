@@ -398,7 +398,7 @@ export function AddWidgetButton({
         <DropdownMenuContent
           align="center"
           sideOffset={16}
-          className="w-[95vw] max-w-fit min-w-[320px] data-[state=open]:animate-in data-[state=open]:fade-in-50 data-[state=open]:zoom-in-90 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-50 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-bottom-2 duration-300 ease-spring border-none shadow-[0_20px_70px_-15px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_70px_-15px_rgba(0,0,0,0.7)] backdrop-blur-sm"
+          className="w-[95vw] max-w-fit min-w-[320px] data-[state=open]:animate-in data-[state=open]:fade-in-50 data-[state=open]:zoom-in-90 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-50 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-bottom-2 duration-200 ease-spring"
           style={{
             transformOrigin: "center bottom",
             animationFillMode: "forwards",
