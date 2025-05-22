@@ -1,5 +1,5 @@
 import { ChevronDown, LayoutGrid, RotateCcw, Copy, Clipboard, Palette, Sun, Moon, Monitor } from '../components/ui-icons';
-import { Lock, Unlock } from 'lucide-react';
+import { Lock, Unlock, Wallet, LineChart, PieChart, TrendingUp, Receipt, Sparkles, Users, DollarSign, PanelRight, Award } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -207,11 +207,25 @@ export function ControlBar({
 
   const handleCopyLayout = () => {
     try {
+      // Get layout data
       const layoutData = onCopyLayout();
       if (!layoutData) {
         throw new Error('No layout data available');
       }
-      navigator.clipboard.writeText(layoutData).then(() => {
+      
+      // Get custom lists from localStorage
+      const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
+      const savedLists = localStorage.getItem(MARKETS_LISTS_KEY);
+      const customLists = savedLists ? JSON.parse(savedLists) : [];
+      
+      // Create a combined data object with layout and lists
+      const combinedData = {
+        layout: JSON.parse(layoutData),
+        customLists: customLists
+      };
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(JSON.stringify(combinedData)).then(() => {
         toast.success("Layout copied", {
           description: "Layout configuration has been copied to clipboard",
         });
@@ -232,15 +246,42 @@ export function ControlBar({
   const handlePasteLayout = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      // Validate that the text is valid JSON and has the expected structure
-      const parsedLayout = JSON.parse(text);
-      if (!Array.isArray(parsedLayout)) {
+      // Parse the clipboard data
+      const clipboardData = JSON.parse(text);
+      
+      // Check if it's the new combined format
+      if (clipboardData.layout && Array.isArray(clipboardData.layout)) {
+        // Handle new format with custom lists
+        if (clipboardData.customLists && Array.isArray(clipboardData.customLists)) {
+          // Save custom lists to localStorage
+          const MARKETS_LISTS_KEY = 'markets-widget-custom-lists';
+          localStorage.setItem(MARKETS_LISTS_KEY, JSON.stringify(clipboardData.customLists));
+          
+          // Trigger a custom event to notify components that lists have been updated
+          const event = new CustomEvent('markets-lists-updated', {
+            detail: { 
+              lists: clipboardData.customLists,
+              instanceId: 'all' // Signal update to all widgets
+            },
+            bubbles: true
+          });
+          document.dispatchEvent(event);
+        }
+        
+        // Apply the layout
+        onPasteLayout(JSON.stringify(clipboardData.layout));
+        toast.success("Layout pasted", {
+          description: "New layout with custom lists has been applied",
+        });
+      } else if (Array.isArray(clipboardData)) {
+        // Handle legacy format (just layout array)
+        onPasteLayout(text);
+        toast.success("Layout pasted", {
+          description: "New layout has been applied",
+        });
+      } else {
         throw new Error('Invalid layout format');
       }
-      onPasteLayout(text);
-      toast.success("Layout pasted", {
-        description: "New layout has been applied",
-      });
     } catch (err) {
       console.error('Failed to paste layout:', err);
       toast.error("Failed to paste", {
@@ -372,47 +413,22 @@ export function ControlBar({
                 <span>Edit</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-72">
-              <div className="flex items-center justify-between p-2">
-                <div className="flex items-center gap-2">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={handleCopyLayout}>
-                          <Copy className="h-4 w-4 opacity-80" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="tooltip-content">
-                        <p>Copy Layout</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={handlePasteLayout}>
-                          <Clipboard className="h-4 w-4 opacity-80" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="tooltip-content">
-                        <p>Paste Layout</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={handleToggleLayoutLock}>
-                          {isLayoutLocked ? (
-                            <Lock className="h-4 w-4 opacity-80" />
-                          ) : (
-                            <Unlock className="h-4 w-4 opacity-80" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="tooltip-content">
-                        <p>{isLayoutLocked ? "Unlock Layout" : "Lock Layout"}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+            <DropdownMenuContent align="end" sideOffset={8} className="w-[320px]">
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCopyLayout}>
+                    <Copy className="h-4 w-4 text-gray-400" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePasteLayout}>
+                    <Clipboard className="h-4 w-4 text-gray-400" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleToggleLayoutLock}>
+                    {isLayoutLocked ? (
+                      <Lock className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Unlock className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Button>
                 </div>
 
                 <Button variant="ghost" size="sm" onClick={onResetLayout}>
@@ -421,40 +437,67 @@ export function ControlBar({
                 </Button>
               </div>
               <DropdownMenuSeparator />
-              <div className="px-3 py-2 text-sm font-medium">Available Widgets</div>
-              <div className="px-1 py-1 pb-2">
-                {(Object.entries(WIDGET_REGISTRY) as [string, { title: string }][])
-                  .filter(([type]) => type === 'balances' || type === 'performance' || type === 'treemap' || type === 'markets' || type === 'transactions' || type === 'insight' || type === 'referrals' || type === 'earn')
-                  .map(([type, config]) => (
-                  <div
-                    key={type}
-                    draggable={!isTauriEnv}
-                    onDragStart={(e) => handleDragStart(e, type)}
-                    onClick={() => handleWidgetClick(type)}
-                    className="relative flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer active:bg-accent/80"
-                  >
-                    <div
-                      className="bg-background flex size-8 items-center justify-center rounded-md border"
-                      aria-hidden="true"
-                    >
-                      <LayoutGrid className="h-4 w-4 opacity-60" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">{config.title}</div>
-                      <div className="text-muted-foreground text-xs">
-                        {isTauriEnv ? 'Click to add to dashboard' : 'Click or drag to add to dashboard'}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="p-1">
+                <div className="grid grid-cols-2 gap-1">
+                  {(() => {
+                    const widgetConfigs = [
+                      { type: 'performance', title: 'Performance' },
+                      { type: 'markets', title: 'Markets' },
+                      { type: 'balances', title: 'Balance' },
+                      { type: 'treemap', title: 'Breakdown' },
+                      { type: 'transactions', title: 'Transactions' },
+                      { type: 'earn', title: 'Earn' },
+                      { type: 'referrals', title: 'Referrals' },
+                      { type: 'insight', title: 'Insight' },
+                    ];
+                    
+                    return widgetConfigs.map(({ type, title }) => {
+                      const IconComponent = {
+                        'balances': Wallet,
+                        'performance': LineChart,
+                        'treemap': PieChart,
+                        'markets': TrendingUp,
+                        'transactions': Receipt,
+                        'insight': Sparkles,
+                        'referrals': Users,
+                        'earn': DollarSign
+                      }[type] || LayoutGrid;
+                      
+                      return (
+                        <div
+                          key={type}
+                          draggable={!isTauriEnv}
+                          onDragStart={(e) => handleDragStart(e, type)}
+                          onClick={() => handleWidgetClick(type)}
+                          className="relative flex flex-col bg-zinc-900 border border-zinc-800 rounded-md h-[120px] hover:border-primary cursor-pointer transition-all overflow-hidden group"
+                        >
+                          <div className="p-2 flex flex-col items-start gap-3">
+                            <IconComponent className="h-5 w-5 text-primary/70" />
+                            <div className="font-medium text-white text-sm">{title}</div>
+                          </div>
+                          <div className="flex-1"></div>
+                          
+                          <div className="absolute inset-0 bg-accent/90 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                            <div className="text-accent-foreground text-xs font-medium transform translate-y-4 group-hover:translate-y-0 transition-transform duration-200">
+                              {isTauriEnv ? 'Click to add' : 'Click or drag'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
               </div>
               <DropdownMenuSeparator />
               <div className="p-2">
                 <Dialog open={isAppearanceOpen} onOpenChange={setIsAppearanceOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full">
-                      <Palette className="h-4 w-4 mr-2 opacity-80" />
-                      <span>Edit Appearance</span>
+                    <Button variant="ghost" className="w-full flex items-center justify-between group/appearance py-3 h-10">
+                      <div className="flex items-center">
+                        <Palette className="h-4 w-4 mr-2 opacity-80 group-hover/appearance:opacity-100" />
+                        <span>Edit Appearance</span>
+                      </div>
+                      <PanelRight className="h-4 w-4 opacity-50" />
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px]">
@@ -516,18 +559,18 @@ export function ControlBar({
                       </div>
                       
                       <div>
-                        <div className="mb-3 text-sm font-medium">Grid Style</div>
+                        <div className="mb-2 text-sm font-medium">Grid Style</div>
                         <div className="grid grid-cols-2 gap-4">
                           <div 
                             className={cn(
-                              "border rounded-xl p-4 cursor-pointer transition-all",
+                              "border rounded-xl p-3 cursor-pointer transition-all",
                               gridStyle === 'rounded' 
                                 ? "border-primary bg-accent/50 ring-1 ring-primary" 
                                 : "hover:border-primary/50 hover:bg-accent/20"
                             )}
                             onClick={() => applyGridStyle('rounded')}
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-2">
                               <div className="text-sm font-medium">Rounded</div>
                               <div className={cn(
                                 "w-5 h-5 rounded-full",
@@ -536,23 +579,23 @@ export function ControlBar({
                                 {gridStyle === 'rounded' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 p-2">
-                              <div className="bg-primary/15 h-14 rounded-3xl"></div>
-                              <div className="bg-primary/15 h-14 rounded-3xl"></div>
+                            <div className="grid grid-cols-2 gap-4 p-1">
+                              <div className="bg-primary/15 h-8 rounded-3xl"></div>
+                              <div className="bg-primary/15 h-8 rounded-3xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-3">24px radius, 8px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-2">24px radius, 8px spacing</div>
                           </div>
                           
                           <div 
                             className={cn(
-                              "border rounded-xl p-4 cursor-pointer transition-all",
+                              "border rounded-xl p-3 cursor-pointer transition-all",
                               gridStyle === 'dense' 
                                 ? "border-primary bg-accent/50 ring-1 ring-primary" 
                                 : "hover:border-primary/50 hover:bg-accent/20"
                             )}
                             onClick={() => applyGridStyle('dense')}
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-2">
                               <div className="text-sm font-medium">Dense</div>
                               <div className={cn(
                                 "w-5 h-5 rounded-full",
@@ -561,15 +604,20 @@ export function ControlBar({
                                 {gridStyle === 'dense' && <div className="w-2.5 h-2.5 bg-background rounded-full m-auto mt-[5px]" />}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 p-2">
-                              <div className="bg-primary/15 h-14 rounded-xl"></div>
-                              <div className="bg-primary/15 h-14 rounded-xl"></div>
+                            <div className="grid grid-cols-2 gap-2 p-1">
+                              <div className="bg-primary/15 h-8 rounded-xl"></div>
+                              <div className="bg-primary/15 h-8 rounded-xl"></div>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-3">16px radius, 4px spacing</div>
+                            <div className="text-xs text-muted-foreground mt-2">16px radius, 4px spacing</div>
                           </div>
                         </div>
                       </div>
                     </div>
+                    <DialogFooter className="pt-4">
+                      <DialogClose asChild>
+                        <Button>Done</Button>
+                      </DialogClose>
+                    </DialogFooter>
                   </DialogContent>
                 </Dialog>
               </div>
