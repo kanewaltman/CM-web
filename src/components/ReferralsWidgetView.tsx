@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./ui/button";
 import { Copy, Share2, UserRoundPlus, Users, RotateCcw } from "lucide-react";
@@ -33,6 +33,174 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
   const [referrals, setReferrals] = useState<ReferralEntry[]>([]);
   const [totalBalance, setTotalBalance] = useState<number>(0);
   const [totalEarned, setTotalEarned] = useState<number>(0);
+  
+  // Claiming functionality state
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [lastClaimTime, setLastClaimTime] = useState<number>(0);
+  const [claimCooldownUntil, setClaimCooldownUntil] = useState<string | null>(null);
+  const claimButtonRef = useRef<HTMLButtonElement>(null);
+  const timeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Set up time updates for cooldown timer
+  useEffect(() => {
+    const updateTime = () => {
+      setCurrentTime(Date.now());
+    };
+
+    // Initial update
+    updateTime();
+
+    // Set interval
+    timeIntervalRef.current = setInterval(updateTime, 1000);
+
+    // Clean up
+    return () => {
+      if (timeIntervalRef.current) {
+        clearInterval(timeIntervalRef.current);
+        timeIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  // Check if claiming is available (not on cooldown and has balance)
+  const isReadyToClaim = useCallback((): boolean => {
+    if (totalEarned === 0) return false;
+
+    // Check if on cooldown
+    if (claimCooldownUntil) {
+      const cooldownTime = new Date(claimCooldownUntil).getTime();
+      if (currentTime < cooldownTime) {
+        return false; // Still on cooldown
+      }
+    }
+
+    return true;
+  }, [totalEarned, claimCooldownUntil, currentTime]);
+
+  // Format cooldown time in HH:MM:SS format
+  const formatCooldownTime = useCallback((targetDateStr: string): string => {
+    const targetDate = new Date(targetDateStr).getTime();
+    const now = currentTime;
+
+    // Calculate time remaining in milliseconds
+    let timeRemaining = Math.max(0, targetDate - now);
+
+    // Convert to hours, minutes and seconds
+    const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+    timeRemaining -= hoursRemaining * 1000 * 60 * 60;
+
+    const minutesRemaining = Math.floor(timeRemaining / (1000 * 60));
+    timeRemaining -= minutesRemaining * 1000 * 60;
+
+    const secondsRemaining = Math.floor(timeRemaining / 1000);
+
+    // Format as 00:00:00 with consistent width using monospace font
+    return `${String(hoursRemaining).padStart(2, '0')}:${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
+  }, [currentTime]);
+
+  // Handle claim button click
+  const handleClaimRewards = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (!isReadyToClaim()) return;
+
+    // Get the button element that was clicked
+    const buttonElement = e.currentTarget;
+
+    // Track the claimed amount
+    const claimedAmount = totalEarned;
+
+    // Calculate cooldown end time (15 seconds from now)
+    const now = new Date();
+    const cooldownEndTime = new Date(now.getTime() + 15 * 1000); // 15 seconds
+
+    // *** IMMEDIATE UI UPDATE ***
+    // 1. Immediately disable the button
+    buttonElement.disabled = true;
+
+    // 2. Apply immediate visual update to the button
+    buttonElement.classList.remove("bg-[#FF4D15]/10", "text-[#FF4D15]", "hover:bg-[#FF4D15]/90", "hover:text-white");
+    buttonElement.classList.add("bg-muted/30", "text-muted-foreground", "cursor-not-allowed");
+
+    // 3. Update button text immediately with cooldown timer
+    const startTime = cooldownEndTime.getTime();
+
+    // Function to update the countdown text
+    const updateCountdown = () => {
+      if (!buttonElement) return;
+
+      const timeRemaining = Math.max(0, startTime - Date.now());
+
+      // If countdown finished, reset button
+      if (timeRemaining <= 0) {
+        return;
+      }
+
+      // Calculate hours, minutes, seconds
+      const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+      const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+
+      // Update button text - ensure it stays monospace
+      buttonElement.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+      // Ensure the button stays monospaced
+      buttonElement.classList.add('font-mono');
+
+      // Schedule next update
+      if (timeRemaining > 0) {
+        setTimeout(updateCountdown, 500);
+      }
+    };
+
+    // Start countdown immediately
+    updateCountdown();
+
+    // 4. Update the React state
+    setClaimCooldownUntil(cooldownEndTime.toISOString());
+    setTotalBalance(prev => prev + claimedAmount); // Move to balance
+    setTotalEarned(0); // Reset claimable to 0
+    setLastClaimTime(Date.now());
+
+    // 5. Show success notifications
+    if (typeof window !== 'undefined') {
+      // Import and trigger sonner notifications
+      import('sonner').then(({ toast }) => {
+        // Confirmation toast
+        toast.success(
+          `Successfully claimed ${claimedAmount.toFixed(2)} XCM`, 
+          {
+            description: "Your commission rewards have been added to your wallet.",
+            duration: 4000,
+            className: "reward-toast"
+          }
+        );
+
+        // Points toast with delay
+        setTimeout(() => {
+          toast(
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+              </div>
+              <div>
+                <p className="font-medium text-base">Points Earned!</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-sm font-medium text-orange-500">+75</p>
+                  <p className="text-sm text-muted-foreground">for claiming referral rewards</p>
+                </div>
+              </div>
+            </div>,
+            {
+              className: "bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/30",
+              duration: 3500
+            }
+          );
+        }, 1200);
+      }).catch(err => console.error('Error showing toast notifications:', err));
+    }
+  }, [isReadyToClaim, totalEarned]);
 
   // Generate fake referral data
   const generateFakeReferrals = () => {
@@ -41,7 +209,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
         name: "66583e8cd8",
         tier: 1,
         verified: true,
-        needsDeposit: false,
+        needsDeposit: false, // This one completed deposit
         date: "05-30",
       },
       {
@@ -55,7 +223,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
         name: "nohukyes",
         tier: 1,
         verified: true,
-        needsDeposit: false,
+        needsDeposit: false, // This one completed deposit
         date: "05-30",
       },
       {
@@ -68,7 +236,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
       {
         name: "66504ae410",
         tier: 1,
-        verified: false,
+        verified: false, // 30% chance of unverified
         needsDeposit: true,
         date: "05-24",
       },
@@ -76,13 +244,13 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
         name: "66505041bd",
         tier: 1,
         verified: true,
-        needsDeposit: false,
+        needsDeposit: false, // This one completed deposit
         date: "05-24",
       },
       {
         name: "nonuk4",
         tier: 1,
-        verified: true,
+        verified: false, // 30% chance of unverified
         needsDeposit: true,
         date: "05-24",
       },
@@ -90,8 +258,22 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
         name: "uk3",
         tier: 1,
         verified: true,
-        needsDeposit: false,
+        needsDeposit: false, // This one completed deposit
         date: "05-24",
+      },
+      {
+        name: "crypto_user1",
+        tier: 1,
+        verified: false, // 30% chance of unverified
+        needsDeposit: true,
+        date: "05-23",
+      },
+      {
+        name: "trader_pro",
+        tier: 1,
+        verified: false, // 30% chance of unverified
+        needsDeposit: true,
+        date: "05-22",
       },
     ];
 
@@ -100,8 +282,12 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
     for (let i = 0; i < count; i++) {
       const userData = fakeUsers[Math.floor(Math.random() * fakeUsers.length)];
+      
+      // 30% chance of being unverified
+      const isVerified = Math.random() > 0.3; // 70% verified, 30% unverified
+      
       const commission =
-        userData.verified && !userData.needsDeposit
+        isVerified && !userData.needsDeposit
           ? Math.random() * 50 + 10
           : 0;
 
@@ -111,7 +297,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
         joinDate: userData.date,
         commission,
         tier: userData.tier,
-        verified: userData.verified,
+        verified: isVerified,
         needsDeposit: userData.needsDeposit,
       });
     }
@@ -155,6 +341,8 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
     setReferrals([]);
     setTotalBalance(0);
     setTotalEarned(0);
+    setClaimCooldownUntil(null);
+    setLastClaimTime(0);
   };
 
   return (
@@ -380,18 +568,23 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
                     {/* Claim Button */}
                     <div className="flex-shrink-0">
-                      <Button
-                        variant="outline"
+                      <Button 
+                        variant="outline" 
                         size="sm"
-                        disabled={totalBalance === 0}
+                        disabled={!isReadyToClaim()}
                         className={cn(
                           "h-8 text-sm font-bold border-transparent",
-                          totalBalance > 0
+                          isReadyToClaim() 
                             ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-white"
-                            : "bg-muted/30 text-muted-foreground cursor-not-allowed"
+                            : "bg-muted/30 text-muted-foreground cursor-not-allowed",
+                          claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime ? "font-mono" : ""
                         )}
+                        ref={claimButtonRef}
+                        onClick={handleClaimRewards}
                       >
-                        Claim
+                        {claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime 
+                          ? formatCooldownTime(claimCooldownUntil)
+                          : "Claim"}
                       </Button>
                     </div>
                   </div>
@@ -448,18 +641,22 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                       </div>
                     </div>
                     <div className="flex justify-end items-center col-span-2">
-                      <Button
-                        variant="outline"
+                      <Button 
+                        variant="outline" 
                         size="sm"
-                        disabled={totalBalance === 0}
+                        disabled={!isReadyToClaim()}
                         className={cn(
                           "h-7 text-xs font-bold border-transparent",
-                          totalBalance > 0
+                          isReadyToClaim() 
                             ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-white"
-                            : "bg-muted/30 text-muted-foreground cursor-not-allowed"
+                            : "bg-muted/30 text-muted-foreground cursor-not-allowed",
+                          claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime ? "font-mono" : ""
                         )}
+                        onClick={handleClaimRewards}
                       >
-                        Claim
+                        {claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime 
+                          ? formatCooldownTime(claimCooldownUntil)
+                          : "Claim"}
                       </Button>
                     </div>
                   </div>
