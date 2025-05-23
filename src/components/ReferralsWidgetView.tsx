@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./ui/button";
-import { Copy, Share2, UserRoundPlus, Users, RotateCcw } from "lucide-react";
+import { Copy, Share2, UserRoundPlus, Users, RotateCcw, Loader2, Check } from "lucide-react";
 import NumberFlow, { continuous } from "@number-flow/react";
 import { cn } from "@/lib/utils";
+import { TextShimmer } from '../../components/motion-primitives/text-shimmer';
 
 interface ReferralEntry {
   id: string;
@@ -33,6 +34,8 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
   const [referrals, setReferrals] = useState<ReferralEntry[]>([]);
   const [totalBalance, setTotalBalance] = useState<number>(0);
   const [totalEarned, setTotalEarned] = useState<number>(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isFastShimmer, setIsFastShimmer] = useState(false);
   
   // Claiming functionality state
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
@@ -326,7 +329,10 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
         `https://go.coinmetro.com/?ref=${referralCode}`
       );
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setIsFastShimmer(true);
+      
+      setTimeout(() => setCopied(false), 500);
+      setTimeout(() => setIsFastShimmer(false), 500);
     } catch (err) {
       console.error("Failed to copy: ", err);
     }
@@ -393,7 +399,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center"
               >
-                <div className="bg-muted/30 rounded-xl p-6 space-y-4">
+                <div className="rounded-xl p-6 space-y-4">
                   <input
                     type="text"
                     value={inputValue}
@@ -411,7 +417,13 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                           rotateX: -15,
                           scale: 0.95,
                         }}
-                        animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+                        animate={{ 
+                          opacity: 1, 
+                          y: 0, 
+                          rotateX: 0, 
+                          scale: isGenerating ? 0.98 : 1 
+                        }}
+                        whileTap={{ scale: 0.96 }}
                         exit={{ opacity: 0, y: -10, rotateX: 15 }}
                         transition={{ 
                           duration: 0.3,
@@ -426,15 +438,27 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                       >
                         <Button
                           onClick={() => {
-                            const code = `CM-${inputValue
-                              .trim()
-                              .toUpperCase()}`;
-                            setReferralCode(code);
-                            setStep("share");
+                            setIsGenerating(true);
+                            // Simulate loading time
+                            setTimeout(() => {
+                              const code = `CM-${inputValue
+                                .trim()
+                                .toUpperCase()}`;
+                              setReferralCode(code);
+                              setStep("share");
+                              setIsGenerating(false);
+                            }, 1500);
                           }}
-                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-5 rounded-lg"
+                          disabled={isGenerating}
+                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-5 rounded-lg disabled:opacity-80 disabled:cursor-not-allowed"
                         >
-                          Generate
+                          {isGenerating ? (
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            </div>
+                          ) : (
+                            "Generate"
+                          )}
                         </Button>
                       </motion.div>
                     )}
@@ -473,20 +497,33 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
             >
               <div className="bg-muted/50 rounded-lg p-4 border-2 border-dashed border-border">
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 text-sm break-all">
-                    https://go.coinmetro.com/?ref={referralCode}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <div className="flex-1">
+                    <TextShimmer className="font-mono text-base break-all" duration={isFastShimmer ? 0.5 : 10}>
+                      {`https://go.coinmetro.com/?ref=${referralCode}`}
+                    </TextShimmer>
+                  </div>
+                  <motion.button
                     onClick={copyToClipboard}
-                    className={`flex items-center gap-2 ${
-                      copied ? "bg-green-100 text-green-700" : ""
-                    }`}
+                    whileTap={{ scale: 0.9 }}
+                    whileHover={{ scale: 1.05 }}
+                    className={cn(
+                      "w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200",
+                      "border border-border/50 bg-background/50 hover:bg-muted/80",
+                      "hover:border-border active:bg-muted",
+                      copied && "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800/30"
+                    )}
                   >
-                    <Copy className="h-4 w-4" />
-                    {copied ? "Copied!" : "Copy"}
-                  </Button>
+                    <motion.div
+                      animate={copied ? { scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] } : {}}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {copied ? (
+                        <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <Copy className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors duration-200" />
+                      )}
+                    </motion.div>
+                  </motion.button>
                 </div>
               </div>
 
