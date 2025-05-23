@@ -26,7 +26,7 @@ import {
 } from './ui/tooltip';
 import { useTheme } from 'next-themes';
 import { cn, getThemeValues } from '@/lib/utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { WIDGET_REGISTRY } from '@/lib/widgetRegistry';
 // Import GridStack directly
@@ -34,6 +34,8 @@ import { GridStack } from 'gridstack';
 // Import Tauri API
 import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+// Import export functionality
+import { useWidgetExport } from '@/utils/exportSvg';
 
 // Custom style types for grid layout
 type GridStyle = 'rounded' | 'dense';
@@ -79,6 +81,12 @@ export function ControlBar({
   const [gridStyle, setGridStyle] = useState<GridStyle>(initialGridStyle);
   const [isTauriEnv, setIsTauriEnv] = useState(false);
   const [isLayoutLocked, setIsLayoutLocked] = useState(initialLayoutLocked);
+  
+  // Widget export state
+  const [isExportMode, setIsExportMode] = useState(false);
+  const [selectedWidget, setSelectedWidget] = useState<HTMLElement | null>(null);
+  const [highlightedWidget, setHighlightedWidget] = useState<HTMLElement | null>(null);
+  const { exportWidget } = useWidgetExport();
 
   // Check if we're in Tauri environment
   useEffect(() => {
@@ -319,6 +327,161 @@ export function ControlBar({
     });
   };
 
+  // Widget selection functionality
+  const findWidgetElements = useCallback(() => {
+    // Find all grid items that contain widgets
+    return Array.from(document.querySelectorAll('.grid-stack-item-content, [data-widget-name], .widget-container')) as HTMLElement[];
+  }, []);
+
+  const highlightWidget = useCallback((element: HTMLElement | null) => {
+    // Remove previous highlight
+    if (highlightedWidget) {
+      highlightedWidget.style.removeProperty('outline');
+      highlightedWidget.style.removeProperty('outline-offset');
+      highlightedWidget.style.removeProperty('cursor');
+    }
+    
+    // Add new highlight
+    if (element && isExportMode) {
+      element.style.outline = '2px solid #3b82f6';
+      element.style.outlineOffset = '2px';
+      element.style.cursor = 'pointer';
+      setHighlightedWidget(element);
+    } else {
+      setHighlightedWidget(null);
+    }
+  }, [highlightedWidget, isExportMode]);
+
+  const selectWidget = useCallback((element: HTMLElement) => {
+    if (!isExportMode) return;
+    
+    setSelectedWidget(element);
+    // Remove highlight when selected
+    highlightWidget(null);
+    
+    // Add selection indicator
+    element.style.outline = '3px solid #10b981';
+    element.style.outlineOffset = '2px';
+    
+    toast.success("Widget selected", {
+      description: "Click export to download as SVG",
+    });
+  }, [isExportMode, highlightWidget]);
+
+  const clearSelection = useCallback(() => {
+    if (selectedWidget) {
+      selectedWidget.style.removeProperty('outline');
+      selectedWidget.style.removeProperty('outline-offset');
+      selectedWidget.style.removeProperty('cursor');
+      setSelectedWidget(null);
+    }
+    highlightWidget(null);
+  }, [selectedWidget, highlightWidget]);
+
+  const toggleExportMode = useCallback(() => {
+    const newMode = !isExportMode;
+    setIsExportMode(newMode);
+    
+    if (!newMode) {
+      clearSelection();
+    } else {
+      toast.info("Export mode enabled", {
+        description: "Click on any widget to select it for export",
+      });
+    }
+  }, [isExportMode, clearSelection]);
+
+  const handleExportSelected = async () => {
+    if (!selectedWidget) {
+      toast.error("No widget selected");
+      return;
+    }
+
+    try {
+      // Get widget name for filename
+      const widgetName = selectedWidget.getAttribute('data-widget-name') || 
+                        selectedWidget.className.split(' ').find(cls => cls.includes('widget')) || 
+                        'widget';
+      
+      await exportWidget(selectedWidget, {
+        filename: `${widgetName}-export.svg`,
+        inlineResources: true,
+        formatted: true
+      });
+      
+      toast.success("Widget exported", {
+        description: `${widgetName} downloaded as SVG`,
+      });
+      
+      // Exit export mode after successful export
+      toggleExportMode();
+    } catch (error) {
+      toast.error("Export failed", {
+        description: (error as Error).message,
+      });
+    }
+  };
+
+  // Mouse event handlers for widget selection
+  useEffect(() => {
+    if (!isExportMode) return;
+
+    const handleMouseOver = (e: MouseEvent) => {
+      if (!isExportMode) return;
+      
+      const target = e.target as HTMLElement;
+      const widgetElements = findWidgetElements();
+      const widget = widgetElements.find(el => el.contains(target) || el === target);
+      
+      if (widget && widget !== selectedWidget) {
+        highlightWidget(widget);
+      }
+    };
+
+    const handleMouseOut = (e: MouseEvent) => {
+      if (!isExportMode) return;
+      
+      const target = e.target as HTMLElement;
+      const widgetElements = findWidgetElements();
+      const widget = widgetElements.find(el => el.contains(target) || el === target);
+      
+      if (widget && widget !== selectedWidget) {
+        highlightWidget(null);
+      }
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      if (!isExportMode) return;
+      
+      const target = e.target as HTMLElement;
+      const widgetElements = findWidgetElements();
+      const widget = widgetElements.find(el => el.contains(target) || el === target);
+      
+      if (widget) {
+        e.preventDefault();
+        e.stopPropagation();
+        selectWidget(widget);
+      }
+    };
+
+    document.addEventListener('mouseover', handleMouseOver);
+    document.addEventListener('mouseout', handleMouseOut);
+    document.addEventListener('click', handleClick, true);
+
+    return () => {
+      document.removeEventListener('mouseover', handleMouseOver);
+      document.removeEventListener('mouseout', handleMouseOut);
+      document.removeEventListener('click', handleClick, true);
+    };
+  }, [isExportMode, selectedWidget, findWidgetElements, highlightWidget, selectWidget]);
+
+  // Clean up when component unmounts
+  useEffect(() => {
+    return () => {
+      clearSelection();
+    };
+  }, [clearSelection]);
+
   return (
     <div className={cn(
       "w-full py-4",
@@ -356,6 +519,51 @@ export function ControlBar({
 
         {/* Right Section - Grid Controls */}
         <div className="flex items-center space-x-3">
+          {/* Widget Export Controls */}
+          <div className="flex items-center space-x-2">
+            <Button
+              variant={isExportMode ? "default" : "outline"}
+              className={cn(
+                "px-3 text-sm",
+                "text-foreground",
+                isExportMode && "bg-blue-500 hover:bg-blue-600 text-white",
+                "[padding-top:1.1rem] [padding-bottom:1.1rem]"
+              )}
+              onClick={toggleExportMode}
+            >
+              <svg 
+                className="h-4 w-4 mr-2" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>{isExportMode ? "Exit Export" : "Export Widget"}</span>
+            </Button>
+            
+            {selectedWidget && (
+              <Button
+                variant="default"
+                className={cn(
+                  "px-3 text-sm bg-green-500 hover:bg-green-600 text-white",
+                  "[padding-top:1.1rem] [padding-bottom:1.1rem]"
+                )}
+                onClick={handleExportSelected}
+              >
+                <svg 
+                  className="h-4 w-4 mr-2" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download SVG
+              </Button>
+            )}
+          </div>
+
           {/* Edit Dropdown Menu */}
           <DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal={false}>
             <DropdownMenuTrigger asChild>
