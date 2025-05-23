@@ -47,6 +47,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
   const [referralCode, setReferralCode] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [inputValue, setInputValue] = useState<string>("");
+  const [inputError, setInputError] = useState<string>("");
   const [referrals, setReferrals] = useState<ReferralEntry[]>([]);
   const [totalBalance, setTotalBalance] = useState<number>(0);
   const [totalEarned, setTotalEarned] = useState<number>(0);
@@ -399,6 +400,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
     setStep("generate");
     setReferralCode("");
     setInputValue("");
+    setInputError("");
     setCopied(false);
     setReferrals([]);
     setTotalBalance(0);
@@ -406,6 +408,33 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
     setClaimCooldownUntil(null);
     setLastClaimTime(0);
   };
+
+  // Validate referral code input
+  const validateInput = (value: string): string => {
+    if (!value.trim()) return "";
+    
+    if (value.includes(" ")) {
+      return "Code cannot contain spaces";
+    }
+    
+    if (value.length > 5) {
+      return "Code must be 5 characters or less";
+    }
+    
+    if (!/^[a-zA-Z0-9_-]*$/.test(value)) {
+      return "Code can only contain letters, numbers, hyphens and underscores";
+    }
+    
+    return "";
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+    setInputError(validateInput(value));
+  };
+
+  const isValidInput = inputValue.trim() && !inputError;
 
   return (
     <motion.div
@@ -459,9 +488,9 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                   <input
                     type="text"
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    onChange={handleInputChange}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && inputValue.trim() && !isGenerating) {
+                      if (e.key === 'Enter' && isValidInput && !isGenerating) {
                         setIsGenerating(true);
                         setTimeout(() => {
                           const code = `CM-${inputValue.trim().toUpperCase()}`;
@@ -476,7 +505,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                   />
 
                   <div className="h-[20px] relative">
-                    {inputValue.trim() && (
+                    {isValidInput && (
                       <motion.div
                         initial={{
                           opacity: 0,
@@ -533,20 +562,22 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                     <motion.div
                       initial={{ opacity: 1, y: 0 }}
                       animate={{
-                        opacity: inputValue.trim() ? 0 : 1,
-                        y: inputValue.trim() ? 10 : 0,
-                        rotateX: inputValue.trim() ? 15 : 0,
+                        opacity: inputValue.trim() && !inputError ? 0 : 1,
+                        y: inputValue.trim() && !inputError ? 10 : 0,
+                        rotateX: inputValue.trim() && !inputError ? 15 : 0,
                       }}
                       transition={{
                         duration: 0.3,
                         opacity: { duration: 0.25 },
                       }}
                       className={`absolute w-full ${
-                        inputValue.trim() ? "pointer-events-none" : ""
+                        inputValue.trim() && !inputError ? "pointer-events-none" : ""
                       }`}
                     >
-                      <div className="text-sm text-muted-foreground">
-                        You will not be able to change your code later.
+                      <div className={`text-sm ${
+                        inputError ? "text-orange-500 font-medium" : "text-muted-foreground"
+                      }`}>
+                        {inputError || "You will not be able to change your code later."}
                       </div>
                     </motion.div>
                   </div>
