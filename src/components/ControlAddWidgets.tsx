@@ -616,40 +616,48 @@ export function AddWidgetButton({
                 ];
 
                 return widgetConfigs.map(({ type, title }, index) => {
-                  const IconComponent =
-                    {
-                      balances: Wallet,
-                      performance: LineChart,
-                      treemap: PieChart,
-                      markets: TrendingUp,
-                      transactions: Receipt,
-                      insight: Sparkles,
-                      referrals: Users,
-                      earn: DollarSign,
-                    }[type] || LayoutGrid;
-
                   return (
                     <div
                       key={type}
                       draggable={!isTauriEnv}
                       onDragStart={(e) => handleDragStart(e, type)}
                       onClick={() => handleWidgetClick(type)}
-                      className="relative flex flex-col bg-zinc-900 border border-zinc-800 rounded-md h-[120px] w-[180px] hover:border-primary cursor-pointer transition-all overflow-hidden group animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4"
+                      className="relative flex flex-col bg-background border border-zinc-800 rounded-md h-[120px] w-[180px] hover:border-primary cursor-pointer transition-all overflow-hidden group animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4"
                       style={{
                         animationDelay: `${index * 30}ms`,
                         animationFillMode: "both",
                         animationDuration: "400ms",
                       }}
                     >
-                      <div className="p-4 flex flex-col items-start gap-3">
-                        <IconComponent className="h-6 w-6 text-primary/70" />
+                      <div className="p-2 flex flex-col items-start gap-3 h-full">
                         <div className="font-medium text-white text-sm">
                           {title}
                         </div>
+                        
+                        <div className="flex-1 flex items-end justify-end w-full relative overflow-visible">
+                          <div className="absolute -bottom-20 w-40 h-100 transform  group-hover:-translate-y-1 group-hover:rotate-[1deg] transition-all duration-300 ease-out">
+                            <img
+                              src={`/assets/widget-icons/${type}.svg`}
+                              alt={`${title} widget`}
+                              className="w-full h-full object-containtransition-opacity duration-200 rounded-sm"
+                              style={{ borderRadius: '6px' }}
+                              onError={(e) => {
+                                // Fallback to a simple colored rectangle if SVG doesn't exist
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const fallback = target.nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'block';
+                              }}
+                            />
+                            {/* Fallback element */}
+                            <div className="absolute inset-0 bg-primary/15 border border-primary/20 hidden items-center justify-center" style={{ borderRadius: '2px' }}>
+                              <div className="w-16 h-16 bg-primary/30 rounded-sm"></div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex-1"></div>
 
-                      <div className="absolute inset-0 bg-accent/90 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-accent/90 opacity-0 transition-opacity duration-200 flex items-center justify-center">
                         <div className="text-accent-foreground text-xs font-medium transform translate-y-4 group-hover:translate-y-0 transition-transform duration-200">
                           {isTauriEnv ? "Click to add" : "Click or drag"}
                         </div>
