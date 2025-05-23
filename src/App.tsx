@@ -4,6 +4,7 @@ import 'gridstack/dist/gridstack.min.css';
 import { GridStack } from 'gridstack';
 import { TopBar } from './components/TopBar';
 import { ControlBar } from './components/ControlBar';
+import { AddWidgetButton } from './components/ControlAddWidgets';
 import { Footer } from './components/Footer';
 import { Toaster } from './components/ui/sonner';
 import { DataSourceProvider, useDataSource } from './lib/DataSourceContext';
@@ -541,6 +542,31 @@ function AppContent() {
         >
           {renderResizeHandles()}
           <ControlBar
+            dataSource={dataSource}
+            onDataSourceChange={(source) => {
+              // Save the new data source to localStorage first
+              setDataSource(source);
+              localStorage.setItem('data-source', source);
+              
+              // Use window.location.reload() to refresh the entire application
+              // This ensures all components get the updated data source
+              window.location.reload();
+            }}
+            contentWidth={contentWidth}
+          />
+          <div 
+            ref={gridElementRef} 
+            className="grid-stack w-full p-4 bg-[hsl(var(--color-bg-base))]"
+            style={{ 
+              height: 'auto',
+              minHeight: '200px',
+              position: 'relative',
+              '--grid-columns': '12',
+              '--grid-row-height': '50px'
+            } as React.CSSProperties}
+          />
+          
+          <AddWidgetButton
             onResetLayout={handleResetLayout}
             onCopyLayout={handleCopyLayout}
             onPasteLayout={handlePasteLayout}
@@ -556,18 +582,8 @@ function AppContent() {
               window.location.reload();
             }}
             onToggleLayoutLock={toggleLayoutLock}
-            contentWidth={contentWidth}
-          />
-          <div 
-            ref={gridElementRef} 
-            className="grid-stack w-full p-4 bg-[hsl(var(--color-bg-base))]"
-            style={{ 
-              height: 'auto',
-              minHeight: '200px',
-              position: 'relative',
-              '--grid-columns': '12',
-              '--grid-row-height': '50px'
-            } as React.CSSProperties}
+            initialLayoutLocked={isLayoutLocked}
+            position="bottom"
           />
         </div>
         <Footer />
