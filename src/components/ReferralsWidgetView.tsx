@@ -408,7 +408,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                     className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   />
 
-                  <div className="h-[88px] relative">
+                  <div className="h-[20px] relative">
                     {inputValue.trim() && (
                       <motion.div
                         initial={{
@@ -704,48 +704,121 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
             {/* Referrals History */}
             <div className="px-8">
               {referrals.length === 0 ? (
-                <motion.div 
-                  className="text-center py-12"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ 
-                    duration: 0.4,
-                    type: "spring",
-                    stiffness: 300,
-                    damping: 25
-                  }}
-                >
+                <div className="relative">
+                  {/* Skeleton Table Background */}
+                  <div className="space-y-0 opacity-40 relative">
+                    <div className="absolute inset-0 " style={{
+                      maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
+                      WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
+                      maskComposite: 'intersect',
+                      WebkitMaskComposite: 'source-in'
+                    }}></div>
+                    
+                    <div style={{
+                      maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
+                      WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)'
+                    }}>
+                      {/* Table Header */}
+                      <div className="grid grid-cols-12 gap-4 py-2 text-xs font-medium text-foreground/70 border-b border-border/50">
+                        <div className="col-span-1">Tier</div>
+                        <div className="col-span-4">Name</div>
+                        <div className="col-span-2">Date</div>
+                        <div className="col-span-3">Status</div>
+                        <div className="col-span-2 text-right">Commission</div>
+                      </div>
+
+                      {/* Skeleton Rows */}
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <div
+                          key={index}
+                          className="grid grid-cols-12 gap-4 py-3 text-sm border-b border-border/30 last:border-b-0"
+                        >
+                          {/* Tier */}
+                          <div className="col-span-1 flex items-center">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-foreground/30"></div>
+                              <div className="w-6 h-4 bg-foreground/30 rounded"></div>
+                            </div>
+                          </div>
+
+                          {/* Name */}
+                          <div className="col-span-4 flex items-center">
+                            <div className={`h-4 bg-foreground/30 rounded ${
+                              index % 3 === 0 ? 'w-24' : index % 3 === 1 ? 'w-20' : 'w-28'
+                            }`}></div>
+                          </div>
+
+                          {/* Date */}
+                          <div className="col-span-2 flex items-center">
+                            <div className="w-12 h-4 bg-foreground/30 rounded"></div>
+                          </div>
+
+                          {/* Status */}
+                          <div className="col-span-3 flex items-center gap-2">
+                            <div className={`h-4 bg-foreground/30 rounded ${
+                              index % 2 === 0 ? 'w-20' : 'w-16'
+                            }`}></div>
+                            {index % 3 !== 0 && (
+                              <div className="w-24 h-4 bg-foreground/30 rounded"></div>
+                            )}
+                          </div>
+
+                          {/* Commission */}
+                          <div className="col-span-2 flex items-center justify-end">
+                            <div className={`h-4 bg-foreground/30 rounded ${
+                              index % 2 === 0 ? 'w-16' : 'w-14'
+                            }`}></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Centered Benefits Overlay */}
                   <motion.div 
-                    className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/20 flex items-center justify-center"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    className="absolute inset-0 flex items-center justify-center"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ 
-                      delay: 0.1,
-                      duration: 0.3,
+                      duration: 0.4,
                       type: "spring",
-                      stiffness: 400,
+                      stiffness: 300,
                       damping: 25
                     }}
                   >
-                    <Users className="w-8 h-8 text-muted-foreground/50" />
+                    <div className="">
+
+                      
+                      <motion.div 
+                        className="text-lg font-bold text-foreground mb-1 text-center"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2, duration: 0.3 }}
+                      >
+                        Start Earning
+                      </motion.div>
+
+                      {/* Benefits List */}
+                      <motion.div 
+                        className="space-y-2 text-center"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4, duration: 0.3 }}
+                      >
+                        <div className="text-xs text-foreground">
+                          <span className="font-semibold text-emerald-600">40%</span> commission from trading fees
+                        </div>
+                        <div className="text-xs text-foreground">
+                          <span className="font-semibold text-emerald-600">10%</span> from sub-referrals
+                        </div>
+                        <div className="text-xs text-foreground">
+                          <span className="font-semibold text-emerald-600">€10 + €25</span> <span className="relative group cursor-help underline decoration-dotted underline-offset-2">cashback<span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">Eearn back up to €25 in fees over 30 days from trading fees</span></span>
+                        </div>
+                      </motion.div>
+
+                    </div>
                   </motion.div>
-                  <motion.div 
-                    className="text-sm font-medium text-muted-foreground mb-1"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2, duration: 0.3 }}
-                  >
-                    No referrals yet
-                  </motion.div>
-                  <motion.div 
-                    className="text-xs text-muted-foreground"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3, duration: 0.3 }}
-                  >
-                    Share your code to start earning commissions
-                  </motion.div>
-                </motion.div>
+                </div>
               ) : (
                 <div className="space-y-0">
                   {/* Table Header */}
