@@ -21,6 +21,7 @@ import { Ripple } from './magicui/ripple';
 import { DotPattern } from './magicui/dot-pattern';
 import { ShimmerButton } from './magicui/shimmer-button';
 import { TextAnimate } from "./magicui/text-animate";
+import { ReferralsWidgetView } from './ReferralsWidgetView';
 
 // Define view modes for the Referrals widget
 export type ReferralsViewMode = 'warp' | 'grid' | 'ripple' | 'dots';
@@ -512,12 +513,25 @@ const Referrals: React.FC<{
 }> = ({ className, onRemove, forceTheme, viewMode, onViewModeChange, widgetId }) => {
   const { resolvedTheme, theme: specificTheme } = useTheme();
   const [shimmerColor, setShimmerColor] = useState<string>('#ffffff'); // Initial color
+  const [stage, setStage] = useState<'initial' | 'onboarding'>('initial');
 
   // Define constant animation props outside the component render cycle
   const textAnimateProps = useMemo(() => ({
     animation: "fadeIn" as const,
     once: true,
   }), []);
+
+  // Memoize the text content for the warp view OUTSIDE renderContent to prevent conditional hook execution
+  const warpTextContent = useMemo(() => (
+    <div className="text-center px-6 flex flex-col items-center">
+      <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
+        Trade like you have a time machine
+      </TextAnimate>
+      <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
+        Insight into the future, powered by Coinmetro.
+      </TextAnimate>
+    </div>
+  ), [textAnimateProps]);
 
   // Handler to update shimmer color based on hue from WarpBackground
   const handleActiveHueChange = useCallback((hue: number) => {
@@ -638,18 +652,7 @@ const Referrals: React.FC<{
     // Base props for animation - now using the memoized props object
     // const textAnimateProps = { ... }; // Removed from here
 
-    // Memoize the text content for the warp view
-    const warpTextContent = useMemo(() => (
-      <div className="text-center px-6 flex flex-col items-center">
-        <TextAnimate {...textAnimateProps} delay={0.6} as="h3" className="text-5xl font-bold mb-6">
-          Trade like you have a time machine
-        </TextAnimate>
-        <TextAnimate {...textAnimateProps} delay={0.7} as="p" className="text-md text-muted-foreground mb-4">
-          Insight into the future, powered by Coinmetro.
-        </TextAnimate>
-      </div>
-    ), [textAnimateProps]); // Now correctly depends on the stable props object
-
+    // Render the appropriate view based on current viewMode
     switch (validViewMode) {
       case 'warp':
         return (
@@ -671,6 +674,7 @@ const Referrals: React.FC<{
               className="flex justify-center" // Add flex container for centering if needed
             >
               <ShimmerButton
+                onClick={() => setStage('onboarding')}
                 shimmerColor={shimmerColor}
                 shimmerSize="0.05em"
                 shimmerDuration="6s"
@@ -811,10 +815,18 @@ const Referrals: React.FC<{
     <WidgetContainer 
       title="Referrals"
       onRemove={onRemove}
-      extraControls={viewController}
+      extraControls={stage === 'initial' ? viewController : undefined}
     >
       <div className="h-full w-full rounded-xl bg-card overflow-hidden border flex">
-        {renderContent() as React.ReactNode}
+        {stage === 'onboarding' ? (
+          <ReferralsWidgetView
+            onBack={() => setStage('initial')}
+            effectiveTheme={effectiveTheme}
+            className="w-full"
+          />
+        ) : (
+          renderContent() as React.ReactNode
+        )}
       </div>
     </WidgetContainer>
   );
