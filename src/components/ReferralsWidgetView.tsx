@@ -360,7 +360,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
       className={`h-full w-full flex flex-col ${className}`}
     >
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
         {step === "generate" ? (
           <div className="h-full flex flex-col items-center justify-center p-8">
             <div className="w-full max-w-md">
@@ -706,72 +706,63 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
               {referrals.length === 0 ? (
                 <div className="relative">
                   {/* Skeleton Table Background */}
-                  <div className="space-y-0 opacity-40 relative">
-                    <div className="absolute inset-0 " style={{
-                      maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
-                      WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
-                      maskComposite: 'intersect',
-                      WebkitMaskComposite: 'source-in'
-                    }}></div>
-                    
-                    <div style={{
-                      maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
-                      WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)'
-                    }}>
-                      {/* Table Header */}
-                      <div className="grid grid-cols-12 gap-4 py-2 text-xs font-medium text-foreground/70 border-b border-border/50">
-                        <div className="col-span-1">Tier</div>
-                        <div className="col-span-4">Name</div>
-                        <div className="col-span-2">Date</div>
-                        <div className="col-span-3">Status</div>
-                        <div className="col-span-2 text-right">Commission</div>
-                      </div>
+                  <div className="space-y-0 opacity-40 relative" style={{ 
+                    maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)'
+                  }}>
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 py-2 text-xs font-medium text-foreground/70 border-b border-border/50">
+                      <div className="col-span-1">Tier</div>
+                      <div className="col-span-4">Name</div>
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-3">Status</div>
+                      <div className="col-span-2 text-right">Commission</div>
+                    </div>
 
-                      {/* Skeleton Rows */}
-                      {Array.from({ length: 5 }).map((_, index) => (
-                        <div
-                          key={index}
-                          className="grid grid-cols-12 gap-4 py-3 text-sm border-b border-border/30 last:border-b-0"
-                        >
-                          {/* Tier */}
-                          <div className="col-span-1 flex items-center">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-foreground/30"></div>
-                              <div className="w-6 h-4 bg-foreground/30 rounded"></div>
-                            </div>
-                          </div>
-
-                          {/* Name */}
-                          <div className="col-span-4 flex items-center">
-                            <div className={`h-4 bg-foreground/30 rounded ${
-                              index % 3 === 0 ? 'w-24' : index % 3 === 1 ? 'w-20' : 'w-28'
-                            }`}></div>
-                          </div>
-
-                          {/* Date */}
-                          <div className="col-span-2 flex items-center">
-                            <div className="w-12 h-4 bg-foreground/30 rounded"></div>
-                          </div>
-
-                          {/* Status */}
-                          <div className="col-span-3 flex items-center gap-2">
-                            <div className={`h-4 bg-foreground/30 rounded ${
-                              index % 2 === 0 ? 'w-20' : 'w-16'
-                            }`}></div>
-                            {index % 3 !== 0 && (
-                              <div className="w-24 h-4 bg-foreground/30 rounded"></div>
-                            )}
-                          </div>
-
-                          {/* Commission */}
-                          <div className="col-span-2 flex items-center justify-end">
-                            <div className={`h-4 bg-foreground/30 rounded ${
-                              index % 2 === 0 ? 'w-16' : 'w-14'
-                            }`}></div>
+                    {/* Skeleton Rows */}
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-12 gap-4 py-3 text-sm border-b border-border/30 last:border-b-0"
+                      >
+                        {/* Tier */}
+                        <div className="col-span-1 flex items-center">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-foreground/30"></div>
+                            <div className="w-6 h-4 bg-foreground/30 rounded"></div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+
+                        {/* Name */}
+                        <div className="col-span-4 flex items-center">
+                          <div className={`h-4 bg-foreground/30 rounded ${
+                            index % 3 === 0 ? 'w-24' : index % 3 === 1 ? 'w-20' : 'w-28'
+                          }`}></div>
+                        </div>
+
+                        {/* Date */}
+                        <div className="col-span-2 flex items-center">
+                          <div className="w-12 h-4 bg-foreground/30 rounded"></div>
+                        </div>
+
+                        {/* Status */}
+                        <div className="col-span-3 flex items-center gap-2">
+                          <div className={`h-4 bg-foreground/30 rounded ${
+                            index % 2 === 0 ? 'w-20' : 'w-16'
+                          }`}></div>
+                          {index % 3 !== 0 && (
+                            <div className="w-24 h-4 bg-foreground/30 rounded"></div>
+                          )}
+                        </div>
+
+                        {/* Commission */}
+                        <div className="col-span-2 flex items-center justify-end">
+                          <div className={`h-4 bg-foreground/30 rounded ${
+                            index % 2 === 0 ? 'w-16' : 'w-14'
+                          }`}></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Centered Benefits Overlay */}
@@ -790,7 +781,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
                       
                       <motion.div 
-                        className="text-lg font-bold text-foreground mb-1 text-center"
+                        className="text-lg font-bold text-foreground mb-2 text-center"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2, duration: 0.3 }}
@@ -805,13 +796,13 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4, duration: 0.3 }}
                       >
-                        <div className="text-xs text-foreground">
+                        <div className="text-sm text-foreground">
                           <span className="font-semibold text-emerald-600">40%</span> commission from trading fees
                         </div>
-                        <div className="text-xs text-foreground">
+                        <div className="text-sm text-foreground">
                           <span className="font-semibold text-emerald-600">10%</span> from sub-referrals
                         </div>
-                        <div className="text-xs text-foreground">
+                        <div className="text-sm text-foreground">
                           <span className="font-semibold text-emerald-600">€10 + €25</span> <span className="relative group cursor-help underline decoration-dotted underline-offset-2">cashback<span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">Eearn back up to €25 in fees over 30 days from trading fees</span></span>
                         </div>
                       </motion.div>
