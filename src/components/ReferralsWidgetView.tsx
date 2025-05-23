@@ -1,0 +1,675 @@
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Button } from "./ui/button";
+import { Copy, Share2, UserRoundPlus, Users, RotateCcw } from "lucide-react";
+import NumberFlow, { continuous } from "@number-flow/react";
+import { cn } from "@/lib/utils";
+
+interface ReferralEntry {
+  id: string;
+  email: string;
+  joinDate: string;
+  commission: number;
+  tier: number;
+  verified: boolean;
+  needsDeposit: boolean;
+}
+
+export interface ReferralsWidgetViewProps {
+  onBack: () => void;
+  effectiveTheme: "light" | "dark";
+  className?: string;
+}
+
+export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
+  onBack,
+  effectiveTheme,
+  className,
+}) => {
+  const [step, setStep] = useState<"generate" | "share">("generate");
+  const [referralCode, setReferralCode] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  const [inputValue, setInputValue] = useState<string>("");
+  const [referrals, setReferrals] = useState<ReferralEntry[]>([]);
+  const [totalBalance, setTotalBalance] = useState<number>(0);
+  const [totalEarned, setTotalEarned] = useState<number>(0);
+
+  // Generate fake referral data
+  const generateFakeReferrals = () => {
+    const fakeUsers = [
+      {
+        name: "66583e8cd8",
+        tier: 1,
+        verified: true,
+        needsDeposit: false,
+        date: "05-30",
+      },
+      {
+        name: "newnonuk",
+        tier: 1,
+        verified: true,
+        needsDeposit: true,
+        date: "05-30",
+      },
+      {
+        name: "nohukyes",
+        tier: 1,
+        verified: true,
+        needsDeposit: false,
+        date: "05-30",
+      },
+      {
+        name: "niok",
+        tier: 1,
+        verified: true,
+        needsDeposit: true,
+        date: "05-30",
+      },
+      {
+        name: "66504ae410",
+        tier: 1,
+        verified: false,
+        needsDeposit: true,
+        date: "05-24",
+      },
+      {
+        name: "66505041bd",
+        tier: 1,
+        verified: true,
+        needsDeposit: false,
+        date: "05-24",
+      },
+      {
+        name: "nonuk4",
+        tier: 1,
+        verified: true,
+        needsDeposit: true,
+        date: "05-24",
+      },
+      {
+        name: "uk3",
+        tier: 1,
+        verified: true,
+        needsDeposit: false,
+        date: "05-24",
+      },
+    ];
+
+    const newReferrals: ReferralEntry[] = [];
+    const count = Math.floor(Math.random() * 4) + 3; // 3-6 referrals
+
+    for (let i = 0; i < count; i++) {
+      const userData = fakeUsers[Math.floor(Math.random() * fakeUsers.length)];
+      const commission =
+        userData.verified && !userData.needsDeposit
+          ? Math.random() * 50 + 10
+          : 0;
+
+      newReferrals.push({
+        id: `ref-${Date.now()}-${i}`,
+        email: userData.name,
+        joinDate: userData.date,
+        commission,
+        tier: userData.tier,
+        verified: userData.verified,
+        needsDeposit: userData.needsDeposit,
+      });
+    }
+
+    // Add with animation delay
+    newReferrals.forEach((referral, index) => {
+      setTimeout(() => {
+        setReferrals((prev) => [referral, ...prev]);
+        setTotalEarned((prev) => prev + referral.commission);
+        setTotalBalance((prev) => prev + referral.commission);
+      }, index * 200); // Stagger animations
+    });
+  };
+
+  // Generate a mock referral code
+  const generateReferralCode = () => {
+    const code = `CM-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+    setReferralCode(code);
+    setStep("share");
+  };
+
+  // Copy referral code to clipboard
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        `https://go.coinmetro.com/?ref=${referralCode}`
+      );
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
+  };
+
+  // Restart the process
+  const restart = () => {
+    setStep("generate");
+    setReferralCode("");
+    setInputValue("");
+    setCopied(false);
+    setReferrals([]);
+    setTotalBalance(0);
+    setTotalEarned(0);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.3 }}
+      className={`h-full w-full flex flex-col ${className}`}
+    >
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {step === "generate" ? (
+          <div className="h-full flex flex-col items-center justify-center p-8">
+            <div className="w-full max-w-md">
+              {/* Header Section */}
+              <div className="text-center">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-6"
+                >
+                  <div className="w-16 h-16 mx-auto mb-6 bg-primary/10 rounded-2xl flex items-center justify-center">
+                    <UserRoundPlus className="h-8 w-8 text-primary" />
+                  </div>
+                </motion.div>
+
+                <motion.h2
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-2xl font-semibold mb-3"
+                >
+                  Create your Code
+                </motion.h2>
+
+                <motion.p
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-muted-foreground"
+                >
+                  Choose a custom name for your referral code.
+                </motion.p>
+              </div>
+
+              {/* Input Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center"
+              >
+                <div className="bg-muted/30 rounded-xl p-6 space-y-4">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder="Enter your custom code"
+                    className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  />
+
+                  <div className="h-[88px] relative">
+                    {inputValue.trim() && (
+                      <motion.div
+                        initial={{
+                          opacity: 0,
+                          y: 10,
+                          rotateX: -15,
+                          scale: 0.95,
+                        }}
+                        animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, rotateX: 15 }}
+                        transition={{ 
+                          duration: 0.3,
+                          opacity: { duration: 0.25 },
+                          scale: {
+                            type: "spring",
+                            stiffness: 400,
+                            damping: 25,
+                          },
+                        }}
+                        className="absolute w-full"
+                      >
+                        <Button
+                          onClick={() => {
+                            const code = `CM-${inputValue
+                              .trim()
+                              .toUpperCase()}`;
+                            setReferralCode(code);
+                            setStep("share");
+                          }}
+                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-5 rounded-lg"
+                        >
+                          Generate
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    <motion.div
+                      initial={{ opacity: 1, y: 0 }}
+                      animate={{ 
+                        opacity: inputValue.trim() ? 0 : 1,
+                        y: inputValue.trim() ? 10 : 0,
+                        rotateX: inputValue.trim() ? 15 : 0,
+                      }}
+                      transition={{ 
+                        duration: 0.3,
+                        opacity: { duration: 0.25 },
+                      }}
+                      className={`absolute w-full ${
+                        inputValue.trim() ? "pointer-events-none" : ""
+                      }`}
+                    >
+                      <div className="text-sm text-muted-foreground">
+                        You will not be able to change your code later.
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 space-y-6">
+            {/* Link Display and Copy */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <div className="bg-muted/50 rounded-lg p-4 border-2 border-dashed border-border">
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-sm break-all">
+                    https://go.coinmetro.com/?ref={referralCode}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={copyToClipboard}
+                    className={`flex items-center gap-2 ${
+                      copied ? "bg-green-100 text-green-700" : ""
+                    }`}
+                  >
+                    <Copy className="h-4 w-4" />
+                    {copied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* XCM Balance Card - ActivePlansView Style */}
+              <div className="space-y-4">
+                <div className="bg-[hsl(var(--primary-foreground))] border border-[hsl(var(--color-widget-inset-border))] rounded-lg overflow-hidden">
+                  <div className="p-4 flex items-center">
+                    {/* Token Icon and Balance */}
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 flex items-center justify-center overflow-hidden mr-4">
+                        <img
+                          src="/assets/symbols/XCM.svg"
+                          alt="XCM"
+                          className="w-8 h-8 object-contain"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.outerHTML = `<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold">XCM</div>`;
+                          }}
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="text-sm text-muted-foreground">
+                          Total Earned
+                        </div>
+                        <div className="font-medium flex items-center gap-1">
+                          <NumberFlow
+                            value={totalBalance}
+                            format={{
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }}
+                            plugins={[continuous]}
+                            animated={true}
+                          />
+                          <span>XCM</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Referrals Count */}
+                    <div className="flex-shrink-0 ml-8 mr-6">
+                      <div className="flex flex-col">
+                        <div className="text-sm text-muted-foreground">
+                          Referrals
+                        </div>
+                        <div className="text-sm font-medium">
+                          <NumberFlow
+                            value={referrals.length}
+                            animated={true}
+                          />
+                        </div>
+                  </div>
+                </div>
+
+                    <div className="ml-auto"></div>
+
+                    {/* Claimable */}
+                    <div className="flex-shrink-0 mr-6">
+                      <div className="flex flex-col">
+                        <div className="text-sm text-muted-foreground text-right">
+                          Claimable
+                        </div>
+                        <div className="font-medium text-emerald-500 flex justify-end tabular-nums">
+                          <span className="flex items-center">
+                            <NumberFlow
+                              value={totalEarned}
+                              format={{
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }}
+                              plugins={[continuous]}
+                              animated={true}
+                            />
+                            <span className="ml-1">XCM</span>
+                          </span>
+                        </div>
+                      </div>
+              </div>
+
+                    {/* Claim Button */}
+                    <div className="flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={totalBalance === 0}
+                        className={cn(
+                          "h-8 text-sm font-bold border-transparent",
+                          totalBalance > 0
+                            ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-white"
+                            : "bg-muted/30 text-muted-foreground cursor-not-allowed"
+                        )}
+                      >
+                        Claim
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Mobile view - Collapse to stacked layout on small screens */}
+                  <div className="md:hidden border-t p-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Referrals
+                      </div>
+                      <div className="text-sm font-medium">
+                        <NumberFlow value={referrals.length} animated={true} />{" "}
+                        users
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Commission
+                      </div>
+                      <div className="text-sm font-medium">100%</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Total Earned
+                      </div>
+                      <div className="text-sm font-medium">
+                        <NumberFlow
+                          value={totalBalance}
+                          format={{
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }}
+                          plugins={[continuous]}
+                          animated={true}
+                        />{" "}
+                        XCM
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Claimable
+                      </div>
+                      <div className="text-sm font-medium text-emerald-500">
+                        <NumberFlow
+                          value={totalEarned}
+                          format={{
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }}
+                          plugins={[continuous]}
+                          animated={true}
+                        />{" "}
+                        XCM
+                      </div>
+                    </div>
+                    <div className="flex justify-end items-center col-span-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={totalBalance === 0}
+                        className={cn(
+                          "h-7 text-xs font-bold border-transparent",
+                          totalBalance > 0
+                            ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-white"
+                            : "bg-muted/30 text-muted-foreground cursor-not-allowed"
+                        )}
+                      >
+                        Claim
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Referrals History */}
+            <div className="px-8">
+              {referrals.length === 0 ? (
+                <motion.div 
+                  className="text-center py-12"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ 
+                    duration: 0.4,
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 25
+                  }}
+                >
+                  <motion.div 
+                    className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted/20 flex items-center justify-center"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ 
+                      delay: 0.1,
+                      duration: 0.3,
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 25
+                    }}
+                  >
+                    <Users className="w-8 h-8 text-muted-foreground/50" />
+                  </motion.div>
+                  <motion.div 
+                    className="text-sm font-medium text-muted-foreground mb-1"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2, duration: 0.3 }}
+                  >
+                    No referrals yet
+                  </motion.div>
+                  <motion.div 
+                    className="text-xs text-muted-foreground"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3, duration: 0.3 }}
+                  >
+                    Share your code to start earning commissions
+                  </motion.div>
+                </motion.div>
+              ) : (
+                <div className="space-y-0">
+                  {/* Table Header */}
+                  <div className="grid grid-cols-12 gap-4 py-2 text-xs font-medium text-foreground/70 border-b border-border/50">
+                    <div className="col-span-1">Tier</div>
+                    <div className="col-span-4">Name</div>
+                    <div className="col-span-2">Date</div>
+                    <div className="col-span-3">Status</div>
+                    <div className="col-span-2 text-right">Commission</div>
+                  </div>
+
+                  {/* Table Body */}
+                  <AnimatePresence initial={false}>
+                    {referrals.map((referral, index) => (
+                      <motion.div
+                        key={referral.id}
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        transition={{
+                          duration: 0.4,
+                          delay: index * 0.1,
+                          type: "spring",
+                          stiffness: 300,
+                          damping: 25,
+                        }}
+                        className="grid grid-cols-12 gap-4 py-3 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/20 transition-colors"
+                      >
+                        {/* Tier */}
+                        <motion.div
+                          className="col-span-1 flex items-center"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: index * 0.1 + 0.1 }}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <span className="font-medium text-foreground">
+                              T{referral.tier}
+                            </span>
+                          </div>
+                        </motion.div>
+
+                        {/* Name */}
+                        <motion.div
+                          className="col-span-4 flex items-center"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: index * 0.1 + 0.15 }}
+                        >
+                          <span className="font-medium text-foreground">
+                            {referral.email}
+                          </span>
+                        </motion.div>
+
+                        {/* Date */}
+                        <motion.div
+                          className="col-span-2 flex items-center"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: index * 0.1 + 0.2 }}
+                        >
+                          <span className="text-foreground/80">
+                            {referral.joinDate}
+                          </span>
+                        </motion.div>
+
+                        {/* Status */}
+                        <motion.div
+                          className="col-span-3 flex items-center gap-2"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: index * 0.1 + 0.25 }}
+                        >
+                          <span
+                            className={cn(
+                              "text-xs font-medium",
+                              referral.verified
+                                ? "text-emerald-500"
+                                : "text-orange-500"
+                            )}
+                          >
+                            {referral.verified
+                              ? "Fully Verified"
+                              : "Not Verified"}
+                          </span>
+                          {referral.needsDeposit && (
+                            <span className="text-xs text-foreground/70">
+                              Needs to Deposit
+                            </span>
+                          )}
+                          {!referral.needsDeposit && referral.verified && (
+                            <span className="text-xs text-emerald-500">
+                              Active
+                            </span>
+                          )}
+                        </motion.div>
+
+                        {/* Commission */}
+                        <motion.div
+                          className="col-span-2 flex items-center justify-end"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: index * 0.1 + 0.3 }}
+                        >
+                          <span
+                            className={cn(
+                              "font-semibold tabular-nums",
+                              referral.commission > 0
+                                ? "text-emerald-500"
+                                : "text-foreground/50"
+                            )}
+                          >
+                            {referral.commission > 0
+                              ? `+${referral.commission.toFixed(2)}`
+                              : "0.00"}{" "}
+                            XCM
+                          </span>
+                        </motion.div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+              </div>
+          </div>
+        )}
+      </div>
+
+      {/* Dev Tools Footer - Only show in share step */}
+      {step === "share" && (
+        <div className="border-t px-4 py-2 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+            <span className="font-mono">DEV</span>
+            <div className="w-px h-3 bg-slate-600"></div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={restart}
+              className="h-6 px-2 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 font-mono"
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Reset
+            </Button>
+            <div className="w-px h-3 bg-slate-600"></div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={generateFakeReferrals}
+              className="h-6 px-2 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 font-mono"
+            >
+              <Users className="h-3 w-3 mr-1" />
+              Add Referrals
+            </Button>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
