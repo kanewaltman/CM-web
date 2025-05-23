@@ -1,10 +1,26 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./ui/button";
-import { Copy, Share2, UserRoundPlus, Users, RotateCcw, Loader2, Check } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
+import {
+  Copy,
+  Share2,
+  UserRoundPlus,
+  Users,
+  RotateCcw,
+  Loader2,
+  Check,
+  Info,
+  GlobeIcon,
+} from "lucide-react";
 import NumberFlow, { continuous } from "@number-flow/react";
 import { cn } from "@/lib/utils";
-import { TextShimmer } from '../../components/motion-primitives/text-shimmer';
+import { TextShimmer } from "../../components/motion-primitives/text-shimmer";
 
 interface ReferralEntry {
   id: string;
@@ -36,11 +52,13 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
   const [totalEarned, setTotalEarned] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isFastShimmer, setIsFastShimmer] = useState(false);
-  
+
   // Claiming functionality state
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [lastClaimTime, setLastClaimTime] = useState<number>(0);
-  const [claimCooldownUntil, setClaimCooldownUntil] = useState<string | null>(null);
+  const [claimCooldownUntil, setClaimCooldownUntil] = useState<string | null>(
+    null
+  );
   const claimButtonRef = useRef<HTMLButtonElement>(null);
   const timeIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -81,129 +99,169 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
   }, [totalEarned, claimCooldownUntil, currentTime]);
 
   // Format cooldown time in HH:MM:SS format
-  const formatCooldownTime = useCallback((targetDateStr: string): string => {
-    const targetDate = new Date(targetDateStr).getTime();
-    const now = currentTime;
+  const formatCooldownTime = useCallback(
+    (targetDateStr: string): string => {
+      const targetDate = new Date(targetDateStr).getTime();
+      const now = currentTime;
 
-    // Calculate time remaining in milliseconds
-    let timeRemaining = Math.max(0, targetDate - now);
+      // Calculate time remaining in milliseconds
+      let timeRemaining = Math.max(0, targetDate - now);
 
-    // Convert to hours, minutes and seconds
-    const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
-    timeRemaining -= hoursRemaining * 1000 * 60 * 60;
+      // Convert to hours, minutes and seconds
+      const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+      timeRemaining -= hoursRemaining * 1000 * 60 * 60;
 
-    const minutesRemaining = Math.floor(timeRemaining / (1000 * 60));
-    timeRemaining -= minutesRemaining * 1000 * 60;
+      const minutesRemaining = Math.floor(timeRemaining / (1000 * 60));
+      timeRemaining -= minutesRemaining * 1000 * 60;
 
-    const secondsRemaining = Math.floor(timeRemaining / 1000);
+      const secondsRemaining = Math.floor(timeRemaining / 1000);
 
-    // Format as 00:00:00 with consistent width using monospace font
-    return `${String(hoursRemaining).padStart(2, '0')}:${String(minutesRemaining).padStart(2, '0')}:${String(secondsRemaining).padStart(2, '0')}`;
-  }, [currentTime]);
+      // Format as 00:00:00 with consistent width using monospace font
+      return `${String(hoursRemaining).padStart(2, "0")}:${String(
+        minutesRemaining
+      ).padStart(2, "0")}:${String(secondsRemaining).padStart(2, "0")}`;
+    },
+    [currentTime]
+  );
 
   // Handle claim button click
-  const handleClaimRewards = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    if (!isReadyToClaim()) return;
+  const handleClaimRewards = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      if (!isReadyToClaim()) return;
 
-    // Get the button element that was clicked
-    const buttonElement = e.currentTarget;
+      // Get the button element that was clicked
+      const buttonElement = e.currentTarget;
 
-    // Track the claimed amount
-    const claimedAmount = totalEarned;
+      // Track the claimed amount
+      const claimedAmount = totalEarned;
 
-    // Calculate cooldown end time (15 seconds from now)
-    const now = new Date();
-    const cooldownEndTime = new Date(now.getTime() + 15 * 1000); // 15 seconds
+      // Calculate cooldown end time (15 seconds from now)
+      const now = new Date();
+      const cooldownEndTime = new Date(now.getTime() + 15 * 1000); // 15 seconds
 
-    // *** IMMEDIATE UI UPDATE ***
-    // 1. Immediately disable the button
-    buttonElement.disabled = true;
+      // *** IMMEDIATE UI UPDATE ***
+      // 1. Immediately disable the button
+      buttonElement.disabled = true;
 
-    // 2. Apply immediate visual update to the button
-    buttonElement.classList.remove("bg-[#FF4D15]/10", "text-[#FF4D15]", "hover:bg-[#FF4D15]/90", "hover:text-white");
-    buttonElement.classList.add("bg-muted/30", "text-muted-foreground", "cursor-not-allowed");
+      // 2. Apply immediate visual update to the button
+      buttonElement.classList.remove(
+        "bg-[#FF4D15]/10",
+        "text-[#FF4D15]",
+        "hover:bg-[#FF4D15]/90",
+        "hover:text-white"
+      );
+      buttonElement.classList.add(
+        "bg-muted/30",
+        "text-muted-foreground",
+        "cursor-not-allowed"
+      );
 
-    // 3. Update button text immediately with cooldown timer
-    const startTime = cooldownEndTime.getTime();
+      // 3. Update button text immediately with cooldown timer
+      const startTime = cooldownEndTime.getTime();
 
-    // Function to update the countdown text
-    const updateCountdown = () => {
-      if (!buttonElement) return;
+      // Function to update the countdown text
+      const updateCountdown = () => {
+        if (!buttonElement) return;
 
-      const timeRemaining = Math.max(0, startTime - Date.now());
+        const timeRemaining = Math.max(0, startTime - Date.now());
 
-      // If countdown finished, reset button
-      if (timeRemaining <= 0) {
-        return;
-      }
+        // If countdown finished, reset button
+        if (timeRemaining <= 0) {
+          return;
+        }
 
-      // Calculate hours, minutes, seconds
-      const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
-      const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
-
-      // Update button text - ensure it stays monospace
-      buttonElement.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-      // Ensure the button stays monospaced
-      buttonElement.classList.add('font-mono');
-
-      // Schedule next update
-      if (timeRemaining > 0) {
-        setTimeout(updateCountdown, 500);
-      }
-    };
-
-    // Start countdown immediately
-    updateCountdown();
-
-    // 4. Update the React state
-    setClaimCooldownUntil(cooldownEndTime.toISOString());
-    setTotalBalance(prev => prev + claimedAmount); // Move to balance
-    setTotalEarned(0); // Reset claimable to 0
-    setLastClaimTime(Date.now());
-
-    // 5. Show success notifications
-    if (typeof window !== 'undefined') {
-      // Import and trigger sonner notifications
-      import('sonner').then(({ toast }) => {
-        // Confirmation toast
-        toast.success(
-          `Successfully claimed ${claimedAmount.toFixed(2)} XCM`, 
-          {
-            description: "Your commission rewards have been added to your wallet.",
-            duration: 4000,
-            className: "reward-toast"
-          }
+        // Calculate hours, minutes, seconds
+        const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+        const minutes = Math.floor(
+          (timeRemaining % (1000 * 60 * 60)) / (1000 * 60)
         );
+        const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
 
-        // Points toast with delay
-        setTimeout(() => {
-          toast(
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                </svg>
-              </div>
-              <div>
-                <p className="font-medium text-base">Points Earned!</p>
-                <div className="flex items-center gap-1">
-                  <p className="text-sm font-medium text-orange-500">+75</p>
-                  <p className="text-sm text-muted-foreground">for claiming referral rewards</p>
-                </div>
-              </div>
-            </div>,
-            {
-              className: "bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/30",
-              duration: 3500
-            }
+        // Update button text - ensure it stays monospace
+        buttonElement.textContent = `${String(hours).padStart(2, "0")}:${String(
+          minutes
+        ).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+
+        // Ensure the button stays monospaced
+        buttonElement.classList.add("font-mono");
+
+        // Schedule next update
+        if (timeRemaining > 0) {
+          setTimeout(updateCountdown, 500);
+        }
+      };
+
+      // Start countdown immediately
+      updateCountdown();
+
+      // 4. Update the React state
+      setClaimCooldownUntil(cooldownEndTime.toISOString());
+      setTotalBalance((prev) => prev + claimedAmount); // Move to balance
+      setTotalEarned(0); // Reset claimable to 0
+      setLastClaimTime(Date.now());
+
+      // 5. Show success notifications
+      if (typeof window !== "undefined") {
+        // Import and trigger sonner notifications
+        import("sonner")
+          .then(({ toast }) => {
+            // Confirmation toast
+            toast.success(
+              `Successfully claimed ${claimedAmount.toFixed(2)} XCM`,
+              {
+                description:
+                  "Your commission rewards have been added to your wallet.",
+                duration: 4000,
+                className: "reward-toast",
+              }
+            );
+
+            // Points toast with delay
+            setTimeout(() => {
+              toast(
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-white"
+                    >
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-base">Points Earned!</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm font-medium text-orange-500">+75</p>
+                      <p className="text-sm text-muted-foreground">
+                        for claiming referral rewards
+                      </p>
+                    </div>
+                  </div>
+                </div>,
+                {
+                  className:
+                    "bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800/30",
+                  duration: 3500,
+                }
+              );
+            }, 1200);
+          })
+          .catch((err) =>
+            console.error("Error showing toast notifications:", err)
           );
-        }, 1200);
-      }).catch(err => console.error('Error showing toast notifications:', err));
-    }
-  }, [isReadyToClaim, totalEarned]);
+      }
+    },
+    [isReadyToClaim, totalEarned]
+  );
 
   // Generate fake referral data
   const generateFakeReferrals = () => {
@@ -285,14 +343,12 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
     for (let i = 0; i < count; i++) {
       const userData = fakeUsers[Math.floor(Math.random() * fakeUsers.length)];
-      
+
       // 30% chance of being unverified
       const isVerified = Math.random() > 0.3; // 70% verified, 30% unverified
-      
+
       const commission =
-        isVerified && !userData.needsDeposit
-          ? Math.random() * 50 + 10
-          : 0;
+        isVerified && !userData.needsDeposit ? Math.random() * 50 + 10 : 0;
 
       newReferrals.push({
         id: `ref-${Date.now()}-${i}`,
@@ -330,7 +386,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
       );
       setCopied(true);
       setIsFastShimmer(true);
-      
+
       setTimeout(() => setCopied(false), 500);
       setTimeout(() => setIsFastShimmer(false), 500);
     } catch (err) {
@@ -404,6 +460,17 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                     type="text"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && inputValue.trim() && !isGenerating) {
+                        setIsGenerating(true);
+                        setTimeout(() => {
+                          const code = `CM-${inputValue.trim().toUpperCase()}`;
+                          setReferralCode(code);
+                          setStep("share");
+                          setIsGenerating(false);
+                        }, 1500);
+                      }
+                    }}
                     placeholder="Enter your custom code"
                     className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   />
@@ -417,15 +484,15 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                           rotateX: -15,
                           scale: 0.95,
                         }}
-                        animate={{ 
-                          opacity: 1, 
-                          y: 0, 
-                          rotateX: 0, 
-                          scale: isGenerating ? 0.98 : 1 
+                        animate={{
+                          opacity: 1,
+                          y: 0,
+                          rotateX: 0,
+                          scale: isGenerating ? 0.98 : 1,
                         }}
                         whileTap={{ scale: 0.96 }}
                         exit={{ opacity: 0, y: -10, rotateX: 15 }}
-                        transition={{ 
+                        transition={{
                           duration: 0.3,
                           opacity: { duration: 0.25 },
                           scale: {
@@ -465,12 +532,12 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
                     <motion.div
                       initial={{ opacity: 1, y: 0 }}
-                      animate={{ 
+                      animate={{
                         opacity: inputValue.trim() ? 0 : 1,
                         y: inputValue.trim() ? 10 : 0,
                         rotateX: inputValue.trim() ? 15 : 0,
                       }}
-                      transition={{ 
+                      transition={{
                         duration: 0.3,
                         opacity: { duration: 0.25 },
                       }}
@@ -498,7 +565,10 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
               <div className="bg-muted/50 rounded-lg p-4 border-2 border-dashed border-border">
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
-                    <TextShimmer className="font-mono text-base break-all" duration={isFastShimmer ? 0.5 : 10}>
+                    <TextShimmer
+                      className="font-mono text-base break-all"
+                      duration={isFastShimmer ? 0.5 : 10}
+                    >
                       {`https://go.coinmetro.com/?ref=${referralCode}`}
                     </TextShimmer>
                   </div>
@@ -510,11 +580,16 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                       "w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200",
                       "border border-border/50 bg-background/50 hover:bg-muted/80",
                       "hover:border-border active:bg-muted",
-                      copied && "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800/30"
+                      copied &&
+                        "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800/30"
                     )}
                   >
                     <motion.div
-                      animate={copied ? { scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] } : {}}
+                      animate={
+                        copied
+                          ? { scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] }
+                          : {}
+                      }
                       transition={{ duration: 0.3 }}
                     >
                       {copied ? (
@@ -575,8 +650,8 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                             animated={true}
                           />
                         </div>
-                  </div>
-                </div>
+                      </div>
+                    </div>
 
                     <div className="ml-auto"></div>
 
@@ -601,25 +676,29 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                           </span>
                         </div>
                       </div>
-              </div>
+                    </div>
 
                     {/* Claim Button */}
                     <div className="flex-shrink-0">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         disabled={!isReadyToClaim()}
                         className={cn(
                           "h-8 text-sm font-bold border-transparent",
-                          isReadyToClaim() 
+                          isReadyToClaim()
                             ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-white"
                             : "bg-muted/30 text-muted-foreground cursor-not-allowed",
-                          claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime ? "font-mono" : ""
+                          claimCooldownUntil &&
+                            new Date(claimCooldownUntil).getTime() > currentTime
+                            ? "font-mono"
+                            : ""
                         )}
                         ref={claimButtonRef}
                         onClick={handleClaimRewards}
                       >
-                        {claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime 
+                        {claimCooldownUntil &&
+                        new Date(claimCooldownUntil).getTime() > currentTime
                           ? formatCooldownTime(claimCooldownUntil)
                           : "Claim"}
                       </Button>
@@ -678,20 +757,24 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                       </div>
                     </div>
                     <div className="flex justify-end items-center col-span-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         disabled={!isReadyToClaim()}
                         className={cn(
                           "h-7 text-xs font-bold border-transparent",
-                          isReadyToClaim() 
+                          isReadyToClaim()
                             ? "bg-[#FF4D15]/10 text-[#FF4D15] hover:bg-[#FF4D15]/90 hover:text-white"
                             : "bg-muted/30 text-muted-foreground cursor-not-allowed",
-                          claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime ? "font-mono" : ""
+                          claimCooldownUntil &&
+                            new Date(claimCooldownUntil).getTime() > currentTime
+                            ? "font-mono"
+                            : ""
                         )}
                         onClick={handleClaimRewards}
                       >
-                        {claimCooldownUntil && new Date(claimCooldownUntil).getTime() > currentTime 
+                        {claimCooldownUntil &&
+                        new Date(claimCooldownUntil).getTime() > currentTime
                           ? formatCooldownTime(claimCooldownUntil)
                           : "Claim"}
                       </Button>
@@ -706,10 +789,15 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
               {referrals.length === 0 ? (
                 <div className="relative">
                   {/* Skeleton Table Background */}
-                  <div className="space-y-0 opacity-40 relative" style={{ 
-                    maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)'
-                  }}>
+                  <div
+                    className="space-y-0 opacity-40 relative"
+                    style={{
+                      maskImage:
+                        "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)",
+                      WebkitMaskImage:
+                        "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.1) 100%)",
+                    }}
+                  >
                     {/* Table Header */}
                     <div className="grid grid-cols-12 gap-4 py-2 text-xs font-medium text-foreground/70 border-b border-border/50">
                       <div className="col-span-1">Tier</div>
@@ -735,9 +823,15 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
                         {/* Name */}
                         <div className="col-span-4 flex items-center">
-                          <div className={`h-4 bg-foreground/30 rounded ${
-                            index % 3 === 0 ? 'w-24' : index % 3 === 1 ? 'w-20' : 'w-28'
-                          }`}></div>
+                          <div
+                            className={`h-4 bg-foreground/30 rounded ${
+                              index % 3 === 0
+                                ? "w-24"
+                                : index % 3 === 1
+                                ? "w-20"
+                                : "w-28"
+                            }`}
+                          ></div>
                         </div>
 
                         {/* Date */}
@@ -747,9 +841,11 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
                         {/* Status */}
                         <div className="col-span-3 flex items-center gap-2">
-                          <div className={`h-4 bg-foreground/30 rounded ${
-                            index % 2 === 0 ? 'w-20' : 'w-16'
-                          }`}></div>
+                          <div
+                            className={`h-4 bg-foreground/30 rounded ${
+                              index % 2 === 0 ? "w-20" : "w-16"
+                            }`}
+                          ></div>
                           {index % 3 !== 0 && (
                             <div className="w-24 h-4 bg-foreground/30 rounded"></div>
                           )}
@@ -757,30 +853,30 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
 
                         {/* Commission */}
                         <div className="col-span-2 flex items-center justify-end">
-                          <div className={`h-4 bg-foreground/30 rounded ${
-                            index % 2 === 0 ? 'w-16' : 'w-14'
-                          }`}></div>
+                          <div
+                            className={`h-4 bg-foreground/30 rounded ${
+                              index % 2 === 0 ? "w-16" : "w-14"
+                            }`}
+                          ></div>
                         </div>
                       </div>
                     ))}
                   </div>
 
                   {/* Centered Benefits Overlay */}
-                  <motion.div 
+                  <motion.div
                     className="absolute inset-0 flex items-center justify-center"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ 
+                    transition={{
                       duration: 0.4,
                       type: "spring",
                       stiffness: 300,
-                      damping: 25
+                      damping: 25,
                     }}
                   >
                     <div className="">
-
-                      
-                      <motion.div 
+                      <motion.div
                         className="text-lg font-bold text-foreground mb-2 text-center"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -790,23 +886,58 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                       </motion.div>
 
                       {/* Benefits List */}
-                      <motion.div 
+                      <motion.div
                         className="space-y-2 text-center"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4, duration: 0.3 }}
                       >
                         <div className="text-sm text-foreground">
-                          <span className="font-semibold text-emerald-600">40%</span> commission from trading fees
+                          <span className="font-semibold text-emerald-600">
+                            40%
+                          </span>{" "}
+                          commission from trading fees
                         </div>
                         <div className="text-sm text-foreground">
-                          <span className="font-semibold text-emerald-600">10%</span> from sub-referrals
+                          <span className="font-semibold text-emerald-600">
+                            10%
+                          </span>{" "}
+                          from sub-referrals
                         </div>
                         <div className="text-sm text-foreground">
-                          <span className="font-semibold text-emerald-600">€10 + €25</span> <span className="relative group cursor-help underline decoration-dotted underline-offset-2">cashback<span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">Eearn back up to €25 in fees over 30 days from trading fees</span></span>
+                          <span className="font-semibold text-emerald-600">
+                            €10 + €25
+                          </span>{" "}
+                          <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help underline decoration-dotted underline-offset-2">
+                                  cashback
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="dark py-3">
+                                <div className="flex gap-3">
+                                  <GlobeIcon
+                                    className="text-muted-foreground mt-0.5 shrink-0 opacity-60"
+                                    size={16}
+                                    aria-hidden="true"
+                                  />
+                                  <div className="space-y-1">
+                                    <p className="text-muted-foreground text-base font-medium">
+                                      Referral Bonus
+                                    </p>
+                                    <p className="text-muted-foreground text-sm">
+                                      €10 for you when someone signs up with your link.
+                                      <br />
+                                      Plus €25 cashback for them on trading fees.
+                                    </p>
+                                  </div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </motion.div>
-
                     </div>
                   </motion.div>
                 </div>
@@ -934,7 +1065,7 @@ export const ReferralsWidgetView: React.FC<ReferralsWidgetViewProps> = ({
                   </AnimatePresence>
                 </div>
               )}
-              </div>
+            </div>
           </div>
         )}
       </div>
